@@ -391,7 +391,7 @@ export default function BankFeed({ accounts }) {
               </button>
             </div>
           </div>
-          <div ref={listRef} tabIndex={0} onKeyDown={onListKey} className="min-h-0 flex-1 overflow-auto outline-none scrollbar-thin focus-visible:shadow-focus">
+          <div ref={listRef} role="region" aria-label="Downloaded transactions" tabIndex={0} onKeyDown={onListKey} className="min-h-0 flex-1 overflow-auto outline-none scrollbar-thin focus-visible:shadow-focus">
             <table className="qb-grid">
               <colgroup>
                 <col className="w-[30px]" />

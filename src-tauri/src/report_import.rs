@@ -920,6 +920,7 @@ fn read_items(t: &Table, accounts: &mut Accounts, items: &mut Vec<SourceItem>) {
             taxable: cell(row, tax).is_some_and(|v| matches!(key(v).as_str(), "tax" | "taxable" | "yes" | "y" | "true")),
             active: !inactive(row, status),
             custom_fields: Vec::new(),
+            percent_ppm: None,
         });
     }
 }

@@ -24,6 +24,23 @@ fn sector7_mapping_moves_the_displaced_block_into_the_trailer_window() {
     assert_eq!(all.len(), S7_LEN);
 }
 
+#[test]
+fn sector7_mapping_handles_rotations_next_to_the_sector_boundary() {
+    // Every rotation maps the 496 logical bytes onto the 496 stored data bytes.
+    for r7 in 0..SECTOR {
+        let all: std::collections::BTreeSet<usize> = (0..S7_LEN).map(|x| s7_source(x, r7)).collect();
+        assert_eq!((all.len(), all.last().copied()), (S7_LEN, Some(S7_LEN - 1)), "r7 = {r7}");
+    }
+    // r7 = 8: the trailer slot wraps, so only 8 bytes are displaced; they open the sector.
+    assert_eq!(s7_source(0, 8), 8);
+    assert_eq!(s7_source(487, 8), 495);
+    assert_eq!((488..S7_LEN).map(|x| s7_source(x, 8)).collect::<Vec<_>>(), (0..8).collect::<Vec<_>>());
+    // r7 = 505: the first 7 logical bytes are displaced to just below the trailer.
+    assert_eq!((0..7).map(|x| s7_source(x, 505)).collect::<Vec<_>>(), (489..496).collect::<Vec<_>>());
+    assert_eq!(s7_source(7, 505), 0);
+    assert_eq!(s7_source(495, 505), 488);
+}
+
 /// Why named pages (LOCALBOOKS_QBW_PAGES_PROBE) fail to decode: anchor hits in the model's
 /// sector 0, and every (step0, base, r0) recover_cipher would consider, with its header bytes.
 #[test]
@@ -93,9 +110,6 @@ fn probes_sector7_of_named_pages() {
         println!("page {pn}: q {} r0 {} rots {:?} r7 {} steps {:?} base7 {} s7 row starts {:?}", p.q, p.r0, p.rots, p.r7(), p.steps, p.base7, s7_rows);
         let mut hits = Vec::new();
         for rv in (1..SECTOR).step_by(2) {
-            if !s7_solvable(rv) {
-                continue;
-            }
             let known = s7_known(&p, rv);
             for (&key, (c_row, exact)) in &dec.c_rows {
                 for step7 in p.step7_candidates() {
@@ -114,9 +128,6 @@ fn probes_sector7_of_named_pages() {
         let raw7 = &p.raw[S7_START..S7_START + S7_LEN];
         let mut free = Vec::new();
         for rv in (1..SECTOR).step_by(2) {
-            if !s7_solvable(rv) {
-                continue;
-            }
             let known = s7_known(&p, rv);
             let Some(&(i0, b0)) = known.first() else { continue };
             for (&key, (c_row, exact)) in &dec.c_rows {
@@ -192,4 +203,112 @@ fn decodes_pages_of_a_real_file() {
         std::fs::write(&out, buf).unwrap();
     }
     println!("rows starting in sector 7: {s7_ok}/{s7_rows} chain; {} pages in {:.1}s", pages.len(), started.elapsed().as_secs_f64());
+}
+
+// Synthetic pages for the decoder's regression tests: a logical row page, stored the way the
+// page store keeps it (each sector rotated and enciphered with its own base and step). The rows
+// and values are made up for these tests.
+
+const PN: u64 = 0x0003_1A27;
+const R0: usize = 157;
+const BASE: u8 = 0x5B;
+const STEPS: [u8; 7] = [3, 3, 9, 9, 21, 21, 37];
+
+/// Rows start in every sector, and two of them in sector 7; the last runs to the end of the row
+/// area. The row at 100 holds the page number at logical offset 200, which lands on an odd
+/// stored offset of sector 0, like the real page whose row id equalled its page number.
+const ROW_STARTS: [usize; 9] = [100, 600, 1100, 1600, 2100, 2600, 3100, 3700, 3900];
+
+fn logical_page() -> Vec<u8> {
+    let mut l = vec![0u8; PAGE_SIZE];
+    l[..4].copy_from_slice(&(PN as u32).to_le_bytes());
+    l[16] = 4;
+    l[22..24].copy_from_slice(&(ROW_STARTS.len() as u16).to_le_bytes());
+    l[24..28].copy_from_slice(&812u32.to_le_bytes());
+    for (k, &st) in ROW_STARTS.iter().enumerate() {
+        l[SLOT_BASE + 2 * k..SLOT_BASE + 2 * k + 2].copy_from_slice(&((st - SLOT_BASE) as u16).to_le_bytes());
+        let next = ROW_STARTS.get(k + 1).copied().unwrap_or(ROW_AREA_END);
+        l[st..st + 2].copy_from_slice(&((next - st) as u16).to_le_bytes());
+        // Row text, kept clear of the last 12 bytes (the page header stashes those).
+        for (i, b) in l[st + 8..(next - 8).min(4080)].iter_mut().enumerate() {
+            *b = if i % 7 == 0 { 0 } else { b'0' + (i % 10) as u8 };
+        }
+    }
+    l[200..204].copy_from_slice(&(PN as u32).to_le_bytes());
+    l
+}
+
+fn rotation(s: usize) -> usize {
+    (R0 + 2 * SECTOR - 2 * (s / 2)) % SECTOR
+}
+
+/// Stores `l`: returns (raw page, the page-wide decode of sectors 0..6). Sector 7 uses its own
+/// base `base7` and no correction term.
+fn store(l: &[u8], base7: u8) -> (Vec<u8>, Vec<u8>) {
+    let mut raw = vec![0u8; PAGE_SIZE];
+    let mut dec = vec![0u8; PAGE_SIZE];
+    for s in 0..7 {
+        let rot = rotation(s);
+        for k in 0..SECTOR {
+            let plain = l[s * SECTOR + (k + SECTOR - rot) % SECTOR];
+            dec[s * SECTOR + k] = plain;
+            raw[s * SECTOR + k] = plain.wrapping_add(BASE.wrapping_add(s as u8)).wrapping_add((k as u8).wrapping_mul(STEPS[s]));
+        }
+    }
+    let r7 = rotation(6);
+    let mut plain7 = [0u8; S7_LEN];
+    for x in 0..S7_LEN {
+        plain7[s7_source(x, r7)] = l[S7_START + x];
+    }
+    for (i, &b) in plain7.iter().enumerate() {
+        raw[S7_START + i] = b.wrapping_add(base7).wrapping_add((i as u8).wrapping_mul(STEPS[6]));
+    }
+    (raw, dec)
+}
+
+#[test]
+fn a_row_that_repeats_the_page_number_does_not_hide_the_page() {
+    let l = logical_page();
+    let (raw, dec) = store(&l, BASE.wrapping_add(7));
+    let anchors = (1..SECTOR).step_by(2).filter(|&i| (0..4).all(|k| dec[(i + k) % SECTOR] == (PN as u32).to_le_bytes()[k])).count();
+    assert_eq!(anchors, 2, "the page number appears twice in sector 0");
+
+    // With the page-wide decode: each anchor is tried and the real header wins.
+    let p = lay_out(PN, raw.clone(), dec).expect("the page is laid out");
+    assert_eq!(p.r0, R0);
+    assert_eq!(p.head, l[..S7_START]);
+
+    // When the page-wide decode is wrong, the cipher is recovered from the page alone.
+    let p = lay_out(PN, raw, vec![0u8; PAGE_SIZE]).expect("the cipher is recovered");
+    assert_eq!((p.r0, p.steps), (R0, STEPS));
+    assert_eq!(p.head, l[..S7_START]);
+}
+
+#[test]
+fn sector7_with_its_own_cipher_base_is_solved_from_the_row_lengths() {
+    let l = logical_page();
+    let (raw, dec) = store(&l, BASE.wrapping_add(7).wrapping_add(50));
+    let p = lay_out(PN, raw, dec).unwrap();
+    assert_ne!(p.base7, BASE.wrapping_add(7).wrapping_add(50), "the base the other sectors imply is not sector 7's");
+
+    // The first decode, with the assumed base: the two rows in sector 7 do not chain.
+    let mut bytes = p.head.clone();
+    bytes.resize(ROW_AREA_END, 0);
+    bytes[S7_START + S7_LEN..ROW_AREA_END].copy_from_slice(&[&p.head[18..20], &p.head[6..16]].concat());
+    let rows: Vec<RowSpan> = ROW_STARTS
+        .iter()
+        .enumerate()
+        .map(|(k, &st)| {
+            let len = (ROW_STARTS.get(k + 1).copied().unwrap_or(ROW_AREA_END) - st) as u16;
+            RowSpan { start: st as u16, len, chained: u16le(&bytes, st) == len }
+        })
+        .collect();
+    let page = LogicalPage { number: PN, kind: 0, owner: 812, bytes, rows, sector7: Sector7::BestEffort, q: 0, r7: p.r7() as u16, c_exact: Some(true) };
+    let chained = |pg: &LogicalPage| pg.rows.iter().filter(|r| r.chained).count();
+    assert_eq!(chained(&page), ROW_STARTS.len() - 2);
+
+    let c_rows = HashMap::from([(p.r7(), (vec![0u8; S7_LEN], true))]);
+    let fixed = refine_sector7(&p, &c_rows, &page, &chained).expect("a better sector 7");
+    assert_eq!(chained(&fixed), ROW_STARTS.len());
+    assert_eq!(fixed.bytes, l[..ROW_AREA_END]);
 }

@@ -37,7 +37,7 @@ async fn company() -> (SqlitePool, i64, i64) {
     let april = reconcile(&pool, d(2025, 4, 30)).await;
     let may = reconcile(&pool, d(2025, 5, 31)).await;
     let office = account(&pool, "6250").await;
-    let po = |vendor: &str, date, amount| crate::workflows::PurchaseOrderInput {
+    let po = |vendor: &str, date, amount| crate::workflows::PurchaseOrderInput { form_lines: Vec::new(),
         vendor_name: vendor.into(),
         po_date: date,
         expected_date: Some(d(2026, 1, 15)),

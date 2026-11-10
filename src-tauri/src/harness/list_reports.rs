@@ -75,7 +75,7 @@ async fn company() -> SqlitePool {
     };
     crate::workflows::create_purchase_order(
         p,
-        crate::workflows::PurchaseOrderInput {
+        crate::workflows::PurchaseOrderInput { form_lines: Vec::new(),
             vendor_name: "Riverside Print Shop".into(),
             po_date: d(2025, 12, 5),
             expected_date: Some(d(2025, 12, 19)),
@@ -107,7 +107,7 @@ async fn company() -> SqlitePool {
     };
     let bill = crate::expenses::post_vendor_bill(
         p,
-        BillInput {
+        BillInput { form_lines: Vec::new(),
             terms_id: None,
             vendor_name: "Lakeside Ceramics".into(),
             bill_number: Some("LC-310".into()),
@@ -146,6 +146,29 @@ Harbor Lane, OR 97001' WHERE id = (SELECT id FROM invoices WHERE customer_id = ?
         .execute(p)
         .await
         .unwrap();
+    // A sales order for twenty mugs, more than are on hand, and a logo package: open for the sales
+    // order reports, with part of it backordered.
+    let so_line = |item, description: &str, qty: i64, rate: i64| crate::sales_orders::SalesOrderLineInput {
+        id: None,
+        line: crate::sales::SalesLineInput { product_service_id: Some(item), description: description.into(), quantity_e4: qty, rate_cents: rate, income_account_id: sales, class_id: None, is_taxable: false, service_date: None },
+    };
+    crate::sales_orders::create(
+        p,
+        &crate::sales_orders::SalesOrderInput {
+            customer_name: "Brightwater Cafe".into(),
+            order_date: d(2025, 12, 8),
+            expected_date: Some(d(2026, 1, 15)),
+            memo: Some("Holiday mugs".into()),
+            lines: vec![so_line(mugs, "Logo mugs", 200_000, 1_800), so_line(logo, "Logo refresh", 10_000, 45_000)],
+            tax_rate_id: None,
+            sales_rep_id: None,
+            ship_method_id: None,
+            customer_message_id: None,
+            header: Default::default(),
+        },
+    )
+    .await
+    .unwrap();
     pool
 }
 
@@ -183,6 +206,9 @@ fn details(report: &AccountantReport) -> impl Iterator<Item = &ReportRow> {
 #[tokio::test]
 async fn list_reports() {
     let pool = company().await;
+    // The fixture's books have no other names; one gives the Other Names Phone List a line.
+    let owner = crate::other_names::OtherNameInput { name: "Dana Hart".into(), phone: Some("555-0142".into()), ..Default::default() };
+    crate::other_names::create(&pool, &owner).await.unwrap();
     for info in list_reports::catalog() {
         let report = run(&pool, info.id).await;
         assert!(excel(info.title, &report.report).starts_with(b"PK"), "{} exports to Excel", info.id);
@@ -544,6 +570,7 @@ async fn open_purchase_orders_by_job_tie_out_and_the_job_reaches_the_bill() {
     let po = crate::workflows::create_purchase_order(
         p,
         crate::workflows::PurchaseOrderInput {
+            form_lines: Vec::new(),
             vendor_name: "Riverside Print Shop".into(),
             po_date: d(2025, 12, 9),
             expected_date: None,
@@ -571,7 +598,7 @@ async fn open_purchase_orders_by_job_tie_out_and_the_job_reaches_the_bill() {
     let twice: i64 = sqlx::query_scalar("INSERT INTO customers (name) VALUES ('Brightwater Cafe Co') RETURNING id").fetch_one(p).await.unwrap();
     crate::workflows::create_purchase_order(
         p,
-        crate::workflows::PurchaseOrderInput { vendor_name: "Riverside Print Shop".into(), po_date: d(2025, 12, 10), expected_date: None, memo: None, lines: vec![line(900, "Table cards", Some(twice))] },
+        crate::workflows::PurchaseOrderInput { form_lines: Vec::new(), vendor_name: "Riverside Print Shop".into(), po_date: d(2025, 12, 10), expected_date: None, memo: None, lines: vec![line(900, "Table cards", Some(twice))] },
     )
     .await
     .unwrap();
@@ -614,6 +641,7 @@ async fn t9_terms_unbilled_stock_and_closing_exceptions_tie_out() {
     crate::expenses::post_vendor_bill(
         p,
         BillInput {
+            form_lines: Vec::new(),
             terms_id: None,
             vendor_name: "Riverside Print Shop".into(),
             bill_number: Some("RP-77".into()),

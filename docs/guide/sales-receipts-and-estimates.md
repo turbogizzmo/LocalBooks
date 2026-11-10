@@ -23,7 +23,9 @@ Use a sales receipt when the customer pays at the time of sale, so no invoice is
 An estimate doesn't affect your books until it becomes an invoice.
 
 1. Go to **Sales › Estimates** and click **New estimate** (or **+ New › Estimate**).
-2. Enter the **Customer**, **Estimate date** and **Expiration date**, then add the line items.
+2. Enter the **Customer**, **Estimate date** and **Expiration date**, then add the line items. A
+   line can be priced at 0.00 to show something included at no charge; the estimate's total must
+   still be above zero.
 3. Click **Save Estimate**.
 4. To send it, open the estimate's menu and choose **Email…**, **Print…** or **Save as PDF…**. Estimates have
    their own form design: see [Design your invoices and estimates](custom-forms.md).
@@ -40,8 +42,13 @@ The estimate shows **Converted** with the invoice number once the invoice posts.
 form without posting, it stays open. **Convert to invoice now** skips the form: it posts the
 estimate unchanged, dated today and due in 30 days. See [Create and send an invoice](invoices.md).
 
+Lines priced at 0.00 are left off the invoice, since an invoice line needs an amount. To bring them
+over instead (and price them on the invoice), untick **Don't put zero-amount lines on the
+invoice** in **Preferences › Sales & Customers**.
+
 Invoicing an estimate in parts (progress invoicing) isn't available yet: an estimate becomes one
-invoice.
+invoice. To ship and bill an accepted estimate in parts, make it a sales order instead: choose
+**Create sales order** in its menu (see [Sales orders](sales-orders.md#from-an-estimate)).
 
 ### Turn estimates off
 

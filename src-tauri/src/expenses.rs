@@ -52,6 +52,9 @@ pub struct BillInput {
     /// The vendor's term the bill was entered with (its due date is entered with it).
     #[serde(default)]
     pub terms_id: Option<i64>,
+    /// Discount and charge lines among the split lines (`purchase_lines`).
+    #[serde(default)]
+    pub form_lines: Vec<crate::purchase_lines::PurchaseFormLineInput>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -183,10 +186,12 @@ pub fn validate_bill(input: &BillInput) -> Result<i64, String> {
             _ => return Err(format!("BILL_LINE_INCOMPLETE: split line {} needs both a quantity and a rate, or neither", idx + 1)),
         }
     }
-    let total = sum_split_lines(input.lines.iter().map(|l| l.amount_cents), "BILL")?;
+    sum_split_lines(input.lines.iter().map(|l| l.amount_cents), "BILL")?;
+    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+    let (_, total) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "BILL")?;
     if total != input.total_cents {
         return Err(format!(
-            "BILL_SPLIT_MISMATCH: split lines add up to {} but the bill total is {} ({} unallocated)",
+            "BILL_SPLIT_MISMATCH: split lines, discounts and charges add up to {} but the bill total is {} ({} unallocated)",
             format_cents(total),
             format_cents(input.total_cents),
             format_cents(input.total_cents - total)
@@ -281,6 +286,9 @@ pub(crate) async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInp
 /// kept even when it has since been made inactive.
 pub(crate) async fn write_bill_carrying(tx: &mut Transaction<'_, Sqlite>, input: &BillInput, carried_terms: Option<i64>) -> Result<i64, String> {
     let total = validate_bill(input)?;
+    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+    let (form_amounts, _) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "BILL")?;
+    crate::purchase_lines::check(tx, &input.form_lines, "BILL").await?;
     let vendor_name = input.vendor_name.trim();
     let vendor_id = find_or_create_named(tx, Party::Vendor, vendor_name).await?;
     if let Some(terms) = input.terms_id {
@@ -366,6 +374,8 @@ pub(crate) async fn write_bill_carrying(tx: &mut Transaction<'_, Sqlite>, input:
     let ap_account = system_account(tx, "ACCOUNTS_PAYABLE").await?;
     let mut lines: Vec<JournalLine> =
         debits.into_iter().map(|((account, class), cents)| JournalLine::debit(account, cents).with_class(class)).collect();
+    lines.extend(crate::purchase_lines::journal_lines(&input.form_lines, &form_amounts, true));
+    crate::purchase_lines::write(tx, crate::purchase_lines::PurchaseDoc::Bill, bill_id, &input.form_lines, &form_amounts).await?;
     lines.push(JournalLine::credit(ap_account, total));
     let receipt = crate::inventory::plan_receipt(tx, &received).await?;
     lines.extend(receipt.lines.iter().cloned());
@@ -603,6 +613,9 @@ pub struct ExpenseInput {
     /// Set when paid in a foreign currency; line amounts are then in that currency.
     #[serde(default)]
     pub currency: Option<ForeignCurrency>,
+    /// Discount and charge lines among the split lines (`purchase_lines`).
+    #[serde(default)]
+    pub form_lines: Vec<crate::purchase_lines::PurchaseFormLineInput>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -632,14 +645,14 @@ pub struct ExpenseView {
 }
 
 const EXPENSE_SELECT: &str = "
-    SELECT x.id, CASE WHEN x.is_credit = 1 THEN 'CARD_CREDIT' ELSE x.kind END AS kind, v.name AS payee_name, x.payment_account_id, x.expense_date, x.check_number,
+    SELECT x.id, CASE WHEN x.is_credit = 1 THEN 'CARD_CREDIT' ELSE x.kind END AS kind, COALESCE(v.name, o.name) AS payee_name, x.payment_account_id, x.expense_date, x.check_number,
            x.payment_method, x.payment_method_id, x.memo, x.total_cents, x.currency_code, x.exchange_rate_e6,
            COALESCE(x.home_total_cents, x.total_cents) AS home_total_cents,
            (SELECT COUNT(*) FROM expense_lines WHERE expense_id = x.id) AS line_count,
            (SELECT CASE WHEN COUNT(DISTINCT account_id) = 1 THEN MAX(account_id) END
             FROM expense_lines WHERE expense_id = x.id) AS category_account_id,
            x.journal_entry_id, x.is_voided, x.to_be_printed
-    FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id";
+    FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id LEFT JOIN other_names o ON o.id = x.other_name_id";
 
 /// Records an expense or check (Dr each split account / Cr the payment account) or a card credit
 /// (Dr the card / Cr each split account), atomically.
@@ -670,7 +683,10 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     if input.lines.is_empty() {
         return Err("EXP_NO_ITEMS: add at least one split line".into());
     }
-    let total = sum_split_lines(input.lines.iter().map(|l| l.amount_cents), "EXP")?;
+    sum_split_lines(input.lines.iter().map(|l| l.amount_cents), "EXP")?;
+    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+    let (form_amounts, total) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "EXP")?;
+    crate::purchase_lines::check(tx, &input.form_lines, "EXP").await?;
     if let Some(method) = clean(input.payment_method.as_deref()).filter(|_| input.payment_method_id.is_none()) {
         if !crate::invoices::PAYMENT_METHODS.contains(&method) {
             return Err(format!("EXP_BAD_METHOD: unknown payment method '{method}'"));
@@ -687,9 +703,14 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
         (_, true, _) => return Err("EXP_BAD_PAYMENT_ACCOUNT: a card credit goes to a Credit Card account".into()),
         _ => return Err("EXP_BAD_PAYMENT_ACCOUNT: pay expenses from a Bank or Credit Card account".into()),
     }
-    let vendor_id = match clean(input.payee_name.as_deref()) {
-        Some(name) => Some(find_or_create_named(tx, Party::Vendor, name).await?),
+    // The payee: a vendor by that name, else an other name (`other_names`), else a new vendor.
+    let other_name_id = match clean(input.payee_name.as_deref()) {
+        Some(name) => crate::other_names::payee(&mut **tx, name).await?,
         None => None,
+    };
+    let vendor_id = match (clean(input.payee_name.as_deref()), other_name_id) {
+        (Some(name), None) => Some(find_or_create_named(tx, Party::Vendor, name).await?),
+        _ => None,
     };
     let check_number = if kind == "CHECK" { clean(input.check_number.as_deref()) } else { None };
     let (method_id, method) = crate::profile_lists::resolve_payment_method(&mut **tx, input.payment_method_id, clean(input.payment_method.as_deref()), "EXP").await?;
@@ -704,6 +725,8 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     let split = |account, cents| if is_credit { JournalLine::credit(account, cents) } else { JournalLine::debit(account, cents) };
     let mut lines: Vec<JournalLine> =
         input.lines.iter().map(|line| split(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id)).collect();
+    lines.extend(crate::purchase_lines::journal_lines(&input.form_lines, &form_amounts, !is_credit));
+    // The payment line stays last: the home-currency total is read from it.
     lines.push(if is_credit { JournalLine::debit(input.payment_account_id, total) } else { JournalLine::credit(input.payment_account_id, total) });
     let home_total = match &input.currency {
         Some(currency) => {
@@ -716,8 +739,8 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     let expense_id: i64 = sqlx::query_scalar(
         "INSERT INTO expenses
             (kind, vendor_id, payment_account_id, expense_date, check_number, payment_method, memo, total_cents,
-             currency_code, exchange_rate_e6, home_total_cents, is_credit, payment_method_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) RETURNING id",
+             currency_code, exchange_rate_e6, home_total_cents, is_credit, payment_method_id, other_name_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14) RETURNING id",
     )
     .bind(kind)
     .bind(vendor_id)
@@ -732,6 +755,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     .bind(home_total)
     .bind(is_credit)
     .bind(method_id)
+    .bind(other_name_id)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -756,6 +780,8 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
         .await
         .map_err(|e| format!("{} (split line {})", db_err(e), idx + 1))?;
     }
+
+    crate::purchase_lines::write(tx, crate::purchase_lines::PurchaseDoc::Expense, expense_id, &input.form_lines, &form_amounts).await?;
 
     let payee = clean(input.payee_name.as_deref()).map(|p| format!(" - {p}")).unwrap_or_default();
     let label = match (kind, check_number) {

@@ -7,6 +7,8 @@ import RemindersPanel from './Reminders.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { CashForecastWidget } from './CashForecast.jsx';
+import { Trend } from './CompanySnapshot.jsx';
+import { periodRange } from '../lib/dates.js';
 
 function StatTile({ label, cents, emphasis }) {
   return (
@@ -94,7 +96,36 @@ function savedTab() {
   }
 }
 
-/** The Insights tab: totals, the assets and liabilities chart, the trial balance and reminders. */
+/**
+ * Income and expense by month for the last twelve months, on the Preferences report basis: the
+ * same figures as the Income & Expense graph and each month's Profit and Loss.
+ */
+function IncomeExpenseTrend({ navigate }) {
+  const [start, end] = periodRange('last12Months');
+  const { data, error } = useLedgerQuery(async () => {
+    const prefs = await api.getPreferences();
+    return api.getIncomeExpenseGraph(start, end, prefs?.report_basis === 'cash' ? 'CASH' : 'ACCRUAL');
+  });
+  return (
+    <section className="qb-panel flex flex-col px-2 py-1" aria-label="Income and expense trend">
+      <div className="flex items-baseline gap-2">
+        <h2 className="text-md font-semibold">Income and expense, last 12 months</h2>
+        {data && (
+          <span className="ml-auto text-xs text-qb-ink-muted">
+            Income {formatCents(data.totalIncomeCents)} · Expenses {formatCents(data.totalExpenseCents)} · Net {formatCents(data.netIncomeCents)}
+          </span>
+        )}
+      </div>
+      {error && <Notice kind="error" text={error} />}
+      {data && <Trend points={data.months.map((p) => ({ month: p.month, incomeCents: p.incomeCents, expenseCents: p.expenseCents, netCents: p.netIncomeCents }))} />}
+      <button type="button" className="self-start text-xs text-qb-info hover:underline" onClick={() => navigate?.('reports', 'open', { report: 'graph-ie', dates: { startDate: start, endDate: end } })}>
+        Open the Income &amp; Expense graph
+      </button>
+    </section>
+  );
+}
+
+/** The Insights tab: totals, the income and expense trend, the assets and liabilities chart, the trial balance and reminders. */
 function Insights({ navigate }) {
   const { data, error } = useLedgerQuery(api.getDashboard);
 
@@ -108,6 +139,9 @@ function Insights({ navigate }) {
         <StatTile label="Total liabilities" cents={data.totalLiabilitiesCents} />
         <StatTile label="Assets less liabilities" cents={data.totalAssetsCents - data.totalLiabilitiesCents} emphasis />
         <ArAgingWidget />
+      </div>
+      <div className="flex-none">
+        <IncomeExpenseTrend navigate={navigate} />
       </div>
       <div className="flex-none">
         <CashForecastWidget navigate={navigate} />

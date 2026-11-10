@@ -3,7 +3,7 @@
 use super::prelude::*;
 use crate::company_snapshot::{self, Period, Widget, WidgetKind};
 
-handlers![get_company_snapshot, add_snapshot_widget, remove_snapshot_widget, set_snapshot_widget_period, arrange_snapshot_widgets];
+handlers![get_company_snapshot, add_snapshot_widget, remove_snapshot_widget, set_snapshot_widget_period, set_snapshot_widget_note, arrange_snapshot_widgets];
 
 #[tauri::command]
 pub async fn get_company_snapshot(db: State<'_, Db>) -> Result<Vec<Widget>, String> {
@@ -34,6 +34,14 @@ pub async fn set_snapshot_widget_period(app: AppHandle, db: State<'_, Db>, id: i
 #[tauri::command]
 pub async fn arrange_snapshot_widgets(app: AppHandle, db: State<'_, Db>, order: Vec<i64>) -> Result<(), String> {
     company_snapshot::arrange(&db.pool().await, &order).await?;
+    notify(&app);
+    Ok(())
+}
+
+/// A note widget's text.
+#[tauri::command]
+pub async fn set_snapshot_widget_note(app: AppHandle, db: State<'_, Db>, id: i64, note: String) -> Result<(), String> {
+    company_snapshot::set_note(&db.pool().await, id, &note).await?;
     notify(&app);
     Ok(())
 }

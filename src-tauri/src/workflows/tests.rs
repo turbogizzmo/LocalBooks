@@ -100,7 +100,7 @@ async fn recurring_purchase_orders_search_attachments_and_budgets() {
     assert_eq!(enter_due(&pool, d(12, 31), Some(id)).await.unwrap(), 2, "March and April, then the end date");
     assert!(!list_recurring(&pool).await.unwrap()[0].is_active);
 
-    let po = create_purchase_order(&pool, PurchaseOrderInput { vendor_name: "Staples".into(), po_date: d(5, 1), expected_date: None, memo: None,
+    let po = create_purchase_order(&pool, PurchaseOrderInput { form_lines: Vec::new(), vendor_name: "Staples".into(), po_date: d(5, 1), expected_date: None, memo: None,
         lines: vec![PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: Some("Paper".into()), quantity_e4: Some(20_000), rate_cents: Some(2_500), amount_cents: 5_000, class_id: None, customer_id: None }] }).await.unwrap();
     assert_eq!(balance(&pool, supplies).await, 0, "a purchase order posts nothing");
     let bill = bill_purchase_order(&pool, po, d(5, 9), d(6, 8), Some("INV-77".into())).await.unwrap();

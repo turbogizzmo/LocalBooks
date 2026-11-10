@@ -1,0 +1,16 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Open Sales Orders by Customer, all dates to 2025-12-31
+
+Customer                       Item                      Order                     Date          Expected            Ordered      Invoiced          Left   Backordered   Open Amount
+Brightwater Cafe
+                               Gift Mugs                 #1                        2025-12-08    2026-01-15               20             0            20             8        360.00
+                               Logo Package              #1                        2025-12-08    2026-01-15                1             0             1             0        450.00
+Total Brightwater Cafe                                                                                                                                                        810.00
+TOTAL                                                                                                                                                                         810.00
+
+2 lines
+
+1 open sales order with something left to invoice, as of 2025-12-31. Left is ordered less invoiced; Backordered is the part of it that stock on hand can't cover, oldest orders first. Sales orders don't post, so the open amount is not in your books.

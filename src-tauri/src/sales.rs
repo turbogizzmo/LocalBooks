@@ -123,6 +123,9 @@ pub struct ProductView {
     /// Set when the charge or discount is a percentage of the line above (parts per million).
     #[sqlx(default)]
     pub percent_ppm: Option<i64>,
+    /// An Other Charge or Discount item's account on purchase forms (`purchase_lines`).
+    #[sqlx(default)]
+    pub expense_account_id: Option<i64>,
     /// The item's category (`item_categories`); `None` is Uncategorized.
     #[sqlx(default)]
     pub category_id: Option<i64>,
@@ -136,28 +139,49 @@ pub struct ItemKind {
     pub item_type: String,
     /// A charge or discount that is a percentage of the line above, in parts per million.
     pub percent_ppm: Option<i64>,
+    /// An Other Charge or Discount item's account on purchase forms: an income or expense account.
+    pub expense_account_id: Option<i64>,
 }
 
 impl Default for ItemKind {
     fn default() -> Self {
-        ItemKind { item_type: "ITEM".into(), percent_ppm: None }
+        ItemKind { item_type: "ITEM".into(), percent_ppm: None, expense_account_id: None }
     }
 }
 
 impl ItemKind {
     #[cfg(test)]
     pub fn discount(percent_ppm: Option<i64>) -> Self {
-        ItemKind { item_type: "DISCOUNT".into(), percent_ppm }
+        ItemKind { item_type: "DISCOUNT".into(), percent_ppm, expense_account_id: None }
     }
 
     pub(crate) fn validate(&self) -> Result<(), String> {
         if !matches!(self.item_type.as_str(), "ITEM" | "OTHER_CHARGE" | "DISCOUNT") {
             return Err(format!("ITEM_BAD_TYPE: '{}' is not an item type", self.item_type));
         }
+        if self.expense_account_id.is_some() && self.item_type == "ITEM" {
+            return Err("ITEM_BAD_EXPENSE_ACCOUNT: only an Other Charge or Discount item has an account for purchase forms".into());
+        }
         match self.percent_ppm {
             Some(_) if self.item_type == "ITEM" => Err("ITEM_BAD_PERCENT: only a charge or a discount can be a percentage".into()),
             Some(p) if !(1..=1_000_000).contains(&p) => Err("ITEM_BAD_PERCENT: a percentage is from 0.0001% to 100%".into()),
             _ => Ok(()),
+        }
+    }
+
+    /// Checks the purchase-form account: an active income or expense account that isn't a system one.
+    pub(crate) async fn check_account(&self, pool: &SqlitePool) -> Result<(), String> {
+        let Some(id) = self.expense_account_id else { return Ok(()) };
+        let row: Option<(String, bool, bool)> = sqlx::query_as(
+            "SELECT t.classification, a.is_active, a.is_system FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
+        match row {
+            Some((class, true, false)) if matches!(class.as_str(), "INCOME" | "EXPENSE") => Ok(()),
+            _ => Err("ITEM_BAD_EXPENSE_ACCOUNT: on purchase forms an item posts to an active income or expense account".into()),
         }
     }
 }
@@ -324,7 +348,8 @@ fn party_err(e: sqlx::Error, name: &str) -> String {
 
 pub async fn list_products(pool: &SqlitePool) -> Result<Vec<ProductView>, String> {
     sqlx::query_as::<_, ProductView>(
-        "SELECT p.id, p.name, p.description, p.rate_cents, p.income_account_id, p.is_active, p.is_taxable, i.qty_on_hand_e4, p.item_type, p.percent_ppm, p.category_id
+        "SELECT p.id, p.name, p.description, p.rate_cents, p.income_account_id, p.is_active, p.is_taxable, i.qty_on_hand_e4, p.item_type, p.percent_ppm,
+                p.expense_account_id, p.category_id
          FROM products_services p LEFT JOIN inventory_items i ON i.product_id = p.id
          ORDER BY p.name COLLATE NOCASE",
     )
@@ -341,6 +366,7 @@ pub async fn create_product(pool: &SqlitePool, input: ProductInput) -> Result<Pr
 /// Adds an item of any kind: a service or part, an other charge or a discount.
 pub async fn create_item(pool: &SqlitePool, input: ProductInput, kind: ItemKind) -> Result<ProductView, String> {
     kind.validate()?;
+    kind.check_account(pool).await?;
     let name = input.name.trim();
     if name.is_empty() {
         return Err("PRODUCT_NO_NAME: enter a product or service name".into());
@@ -349,8 +375,8 @@ pub async fn create_item(pool: &SqlitePool, input: ProductInput, kind: ItemKind)
         return Err("PRODUCT_BAD_RATE: rate must be zero or more".into());
     }
     sqlx::query_as::<_, ProductView>(
-        "INSERT INTO products_services (name, description, rate_cents, income_account_id, is_taxable, item_type, percent_ppm) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-         RETURNING id, name, description, rate_cents, income_account_id, is_active, is_taxable, item_type, percent_ppm",
+        "INSERT INTO products_services (name, description, rate_cents, income_account_id, is_taxable, item_type, percent_ppm, expense_account_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+         RETURNING id, name, description, rate_cents, income_account_id, is_active, is_taxable, item_type, percent_ppm, expense_account_id",
     )
     .bind(name)
     .bind(clean(input.description.as_deref()))
@@ -359,6 +385,7 @@ pub async fn create_item(pool: &SqlitePool, input: ProductInput, kind: ItemKind)
     .bind(input.is_taxable)
     .bind(&kind.item_type)
     .bind(kind.percent_ppm)
+    .bind(kind.expense_account_id)
     .fetch_one(pool)
     .await
     .map_err(|e| match e {

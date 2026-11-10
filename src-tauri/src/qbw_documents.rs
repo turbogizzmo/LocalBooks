@@ -18,7 +18,7 @@
 //!
 //! Signs follow the ledger lines: negative is a debit, positive a credit.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -41,6 +41,9 @@ pub struct DocumentLine {
     /// The line's class as a `Parent:Child` path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class: Option<String>,
+    /// A subtotal line: it sums the lines above it and posts nothing (no account, no amount).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub subtotal: bool,
 }
 
 /// An amount applied to another transaction.
@@ -182,14 +185,27 @@ fn quantity_and_rate(row: &Row, amount_cents: i64) -> (i64, i64) {
 }
 
 /// Form lines of a document: the lines with an amount that do not post to receivables or
-/// payables, in their order on the form.
+/// payables, in their order on the form, and the lines of the `subtotals` items (no amount).
 /// `classes` gives each class id its `Parent:Child` path (see `qbw_company::read_classes`).
-fn form_lines(rows: &[&Row], arap: &dyn Fn(i64) -> bool, classes: &HashMap<i64, String>) -> Vec<DocumentLine> {
+fn form_lines(rows: &[&Row], arap: &dyn Fn(i64) -> bool, classes: &HashMap<i64, String>, subtotals: &HashSet<i64>) -> Vec<DocumentLine> {
     let mut sorted: Vec<&&Row> = rows.iter().collect();
     sorted.sort_by_key(|r| (r.get("txn_line_order").as_int().unwrap_or(i64::MAX), r.get("target_id").as_int().unwrap_or(0)));
     sorted
         .into_iter()
         .filter_map(|r| {
+            let item_id = r.get("item_id").as_int();
+            if item_id.is_some_and(|i| subtotals.contains(&i)) {
+                return Some(DocumentLine {
+                    item_id,
+                    description: text(r, "memo"),
+                    quantity_e4: 0,
+                    rate_cents: 0,
+                    cents: 0,
+                    account_id: 0,
+                    class: None,
+                    subtotal: true,
+                });
+            }
             let account_id = r.get("account_id").as_int()?;
             let cents = r.get("amount_amt").as_cents().filter(|c| *c != 0)?;
             if arap(account_id) {
@@ -204,6 +220,7 @@ fn form_lines(rows: &[&Row], arap: &dyn Fn(i64) -> bool, classes: &HashMap<i64, 
                 cents,
                 account_id,
                 class: r.get("class_id").as_int().and_then(|c| classes.get(&c)).cloned(),
+                subtotal: false,
             })
         })
         .collect()
@@ -217,13 +234,17 @@ pub fn read_documents(
     arap: &dyn Fn(i64) -> bool,
     classes: &HashMap<i64, String>,
 ) -> HashMap<i64, SourceDocument> {
+    // Subtotal lines are kept on sales forms, where LocalBooks has subtotals too.
+    let subtotals = crate::qbw_company::subtotal_items(pages, catalog);
+    let none = HashSet::new();
     let lines_of = |table: &str| -> BTreeMap<i64, Vec<Row>> {
         // Estimates and purchase orders are non-posting throughout; elsewhere a non-posting row
         // is a memo or subtotal line.
         let non_posting = table.contains("estimate") || table.contains("purchase_order");
         let mut by: BTreeMap<i64, Vec<Row>> = BTreeMap::new();
         for r in rows_of(pages, catalog, table) {
-            if !non_posting && r.get("is_no_post_bool").as_int() == Some(1) {
+            let subtotal = r.get("item_id").as_int().is_some_and(|i| subtotals.contains(&i));
+            if !non_posting && !subtotal && r.get("is_no_post_bool").as_int() == Some(1) {
                 continue;
             }
             if let Some(t) = r.get("transaction_id").as_int() {
@@ -269,7 +290,7 @@ pub fn read_documents(
         let refs: Vec<&Row> = rows.iter().collect();
         out.insert(
             tid,
-            SourceDocument::Invoice { customer_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap, classes), sales: sales_of(h) },
+            SourceDocument::Invoice { customer_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap, classes, &subtotals), sales: sales_of(h) },
         );
     }
     let memo_headers = headers_of("abmc_credit_memo_header");
@@ -282,7 +303,7 @@ pub fn read_documents(
             SourceDocument::CreditMemo {
                 customer_id,
                 number: text(h, "doc_num"),
-                lines: form_lines(&refs, arap, classes),
+                lines: form_lines(&refs, arap, classes, &none),
                 applied_to: applied.remove(&(3, tid)).unwrap_or_default(),
             },
         );
@@ -298,7 +319,7 @@ pub fn read_documents(
                 customer_id: h.get("customer_id").as_int(),
                 number: text(h, "doc_num"),
                 method: method_of(h),
-                lines: form_lines(&refs, arap, classes),
+                lines: form_lines(&refs, arap, classes, &subtotals),
                 sales: sales_of(h),
             },
         );
@@ -315,7 +336,7 @@ pub fn read_documents(
         let Some(h) = bill_headers.get(&tid) else { continue };
         let Some(vendor_id) = h.get("vendor_id").as_int() else { continue };
         let refs: Vec<&Row> = rows.iter().collect();
-        out.insert(tid, SourceDocument::Bill { vendor_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap, classes) });
+        out.insert(tid, SourceDocument::Bill { vendor_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap, classes, &none) });
     }
     for table in ["abmc_bill_check_header", "abmc_bill_ccard_header"] {
         for (tid, h) in headers_of(table) {
@@ -335,7 +356,7 @@ pub fn read_documents(
     // Lines of non-posting documents, as positive amounts.
     let positive = |rows: &[Row]| -> Vec<DocumentLine> {
         let refs: Vec<&Row> = rows.iter().collect();
-        form_lines(&refs, &|_| false, classes).into_iter().map(|l| DocumentLine { cents: l.cents.abs(), ..l }).collect()
+        form_lines(&refs, &|_| false, classes, &none).into_iter().map(|l| DocumentLine { cents: l.cents.abs(), ..l }).collect()
     };
     let estimate_headers = headers_of("abmc_estimate_header");
     for (tid, rows) in lines_of("abmc_estimate_lineitem") {

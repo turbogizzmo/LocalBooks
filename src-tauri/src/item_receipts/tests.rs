@@ -267,3 +267,48 @@ async fn a_po_line_s_job_carries_through_the_receipt_to_the_bill() {
     let billed: Vec<(Option<i64>, bool)> = sqlx::query_as("SELECT customer_id, is_billable FROM bill_lines WHERE bill_id = ?1 ORDER BY line_number").bind(bill).fetch_all(&s.pool).await.unwrap();
     assert_eq!(billed, vec![(Some(job), true), (None, false)], "the job's line is billable by the company's preference; a line for no one never is");
 }
+
+#[tokio::test]
+async fn a_receipts_bill_takes_the_orders_discounts_and_charges_once() {
+    let s = shop().await;
+    // 10 widgets at $10.00 with 10% off, and $20.00 freight with a $5.00 handling charge.
+    let input: crate::workflows::PurchaseOrderInput = serde_json::from_value(json!({
+        "vendorName": "Supplier", "poDate": "2026-04-01", "memo": null,
+        "lines": [
+            { "accountId": s.inventory, "productServiceId": s.product, "description": "Widget", "quantityE4": 100_000, "rateCents": 1_000, "amountCents": 10_000 },
+            { "accountId": s.freight, "description": "Freight", "amountCents": 2_000 }
+        ],
+        "formLines": [
+            { "afterLine": 1, "kind": "DISCOUNT", "percentPpm": 100_000, "accountId": s.sales, "description": "Volume discount" },
+            { "afterLine": 2, "kind": "CHARGE", "amountCents": 500, "accountId": s.freight, "description": "Handling" }
+        ]
+    }))
+    .unwrap();
+    let po = crate::workflows::create_purchase_order(&s.pool, input).await.unwrap();
+    let lines = order_receiving(&s.pool, po).await.unwrap();
+    let freight = |cents: i64| ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: cents, class_id: None };
+
+    // First shipment: 4 widgets and half the freight. The bill takes 10% of $40.00 and the handling.
+    let first = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 4), freight(1_000)])).await.unwrap();
+    let preview = receipt_bill_form_lines(&s.pool, first.id).await.unwrap();
+    assert_eq!(preview.iter().map(|f| (f.after_line, f.description.as_str())).collect::<Vec<_>>(), [(1, "Volume discount"), (2, "Handling")]);
+    let bill = bill_for(&s, &first, &[4_000, 1_000]).await.unwrap();
+    let carried = crate::purchase_lines::lines_of(&s.pool, crate::purchase_lines::PurchaseDoc::Bill, bill).await.unwrap();
+    assert_eq!(carried.iter().map(|f| (f.after_line, f.amount_cents)).collect::<Vec<_>>(), [(1, 400), (2, 500)]);
+    let total: i64 = sqlx::query_scalar("SELECT total_cents FROM bills WHERE id = ?1").bind(bill).fetch_one(&s.pool).await.unwrap();
+    assert_eq!(total, 4_000 + 1_000 - 400 + 500);
+    assert_eq!(gl(&s.pool, s.ap).await, -5_100);
+    assert_eq!(gl(&s.pool, s.sales).await, -400, "the discount is credited to its account");
+
+    // The rest: 10% of $60.00 again, but the fixed handling charge is already on the first bill.
+    let second = receive_items(&s.pool, receive(&s, Some(po), d(6), vec![widgets(&s, Some(lines[0].id), 6), freight(1_000)])).await.unwrap();
+    assert_eq!(receipt_bill_form_lines(&s.pool, second.id).await.unwrap().len(), 1);
+    let bill2 = bill_for(&s, &second, &[6_000, 1_000]).await.unwrap();
+    let carried = crate::purchase_lines::lines_of(&s.pool, crate::purchase_lines::PurchaseDoc::Bill, bill2).await.unwrap();
+    assert_eq!(carried.iter().map(|f| (f.kind.as_str(), f.amount_cents)).collect::<Vec<_>>(), [("DISCOUNT", 600)]);
+    assert_eq!(gl(&s.pool, s.ap).await, -5_100 - 6_400);
+
+    // A receipt not against an order takes nothing.
+    let loose = receive_items(&s.pool, receive(&s, None, d(7), vec![widgets(&s, None, 1)])).await.unwrap();
+    assert!(receipt_bill_form_lines(&s.pool, loose.id).await.unwrap().is_empty());
+}

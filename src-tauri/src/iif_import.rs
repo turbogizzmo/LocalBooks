@@ -402,6 +402,7 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                     taxable: row.yes("TAXABLE"),
                     active: !row.yes("HIDDEN"),
                     custom_fields: Vec::new(),
+                    percent_ppm: None,
                 });
                 item_fields.push((items.len() - 1, custom_values(&row, 5)));
             }
@@ -597,6 +598,7 @@ impl Transactions {
             cents,
             account_id: account.or(item.and_then(|i| i.1)).unwrap_or(0),
             class: raw.class.as_deref().and_then(class_path),
+            subtotal: false,
         }
     }
 

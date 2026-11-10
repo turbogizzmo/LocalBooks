@@ -21,6 +21,30 @@ pay it.
 
 The **Bills tracker** lists every bill with its due date, open balance and status.
 
+## Discounts and charges on bills, checks, credits and orders
+
+Bills, checks and expenses, vendor credits and purchase orders can take a discount or a charge
+after any split line, such as 2% off the parts or a freight charge on top:
+
+1. Under the split lines, click **Add a discount or charge**.
+2. Choose **Discount** or **Charge**, and the split line it follows (it applies to that line).
+3. Pick a Discount or Other Charge **item** to fill in the account, text and amount, or choose the
+   **Account** yourself. A discount or charge posts to an income or expense account.
+4. Enter an amount, or a percent of the line above such as `2%` (rounded to the cent).
+
+A discount comes off the total and a charge is added to it, so on a bill the split lines, less the
+discounts, plus the charges, must add up to the bill total. On a bill or check a discount is
+credited to its account and a charge is debited, like the split lines; on a vendor credit or a card
+credit both post the other way round. Only one discount or charge can follow each split line, and a
+discount can't be more than its line.
+
+A purchase order's discounts and charges print on the order and carry over to the bill made from it
+with **Create Bill**, or to the bills entered from received items (see [Receive items before the
+bill](#receive-items-before-the-bill)).
+To give an Other Charge or Discount item its own account on purchase forms (for example a freight
+expense account, while its income account is used on invoices), open the item in **Products and
+Services** and choose **Expense account on bills and checks**.
+
 ## Attach the vendor's invoice
 
 Keep the vendor's invoice (a PDF, a scan or a photo, up to 25 MB) with the bill:
@@ -107,6 +131,12 @@ for the units still on hand and to Cost of Goods Sold for any already sold.
 A purchase order line's **Customer:Job** shows on the receipt and carries to the bill line, which is
 billable when Preferences › Time & Expenses marks expenses billable, as on a bill entered by hand.
 
+The purchase order's discounts and charges come over to the bill too, listed under the lines: a
+percent is taken of each bill's line for that order line, so every part shipment gets its share, and
+a fixed amount goes on the first bill that has that order line. A fixed discount more than a part
+shipment's line waits for a later bill whose line can take it; the bill says so. If no more is
+coming, enter the discount as a vendor credit.
+
 To undo a receipt, click **Void** beside it: its stock leaves inventory. A billed receipt can't be
 voided; void its bill first, which makes the receipt wait for a bill again. A bill entered for a
 receipt isn't edited like other bills: void it and enter it again from the receipt.
@@ -173,6 +203,16 @@ Discounts). Then, when the payment date is on or before the discount's last day,
 the discount off a bill nothing has been paid on yet and pays the rest. The discount is recorded
 as a vendor credit to the discount account, used on that bill, so it shows in the vendor's
 history and reports like any other credit.
+
+### Set the discount or credits on one bill
+
+Click a bill in Pay Bills and its information shows under the list. **Set Discount** lets you
+choose the discount to take on that bill, up to what its terms offer on the payment date (0.00
+takes none); it needs a **Discount account** in **Preferences › Bills**. **Set Credits** lists the
+vendor's open credits with what is left of each; enter how much of each to use on this bill. Click
+**Done** and the bill is ticked, its **Payment** becomes what is left, and the totals update. What
+you set replaces what the automatic preferences would take on that bill, works with them turned off
+too, and is forgotten if you untick the bill. Neither is offered when paying by ACH file.
 
 ## Pay bills by ACH file
 

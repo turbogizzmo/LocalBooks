@@ -16,6 +16,7 @@ handlers![
     delete_library_attachment,
     restore_attachment,
     purge_attachment,
+    get_form_print_files,
 ];
 
 /// Attaches a file chosen in the open dialog to a customer, vendor, item, account, estimate,
@@ -48,7 +49,7 @@ pub async fn list_attachment_library(db: State<'_, Db>, query: Option<String>, i
 pub struct AttachmentPreview {
     pub file_name: String,
     pub media_type: String,
-    /// The bytes the preview pane shows, base64: a picture whole, a text file's first
+    /// The bytes the preview pane shows, base64: a picture or PDF whole, a text file's first
     /// [`TEXT_PREVIEW_BYTES`]; `None` for every other kind (the pane offers Save a copy instead).
     pub data_base64: Option<String>,
 }
@@ -108,4 +109,24 @@ pub async fn purge_attachment(app: AppHandle, db: State<'_, Db>, file: FileRef) 
     library::purge(&db.pool().await, file).await?;
     notify(&app);
     Ok(())
+}
+
+/// A file printed after a form: one marked Send with the form (see `attachments_library::files_to_send`).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintFile {
+    pub file_name: String,
+    pub media_type: String,
+    pub data_base64: String,
+}
+
+/// The files marked Send with the form for a form being printed, oldest first. The printout shows
+/// pictures and PDF pages after the form's own pages; other kinds are listed by name.
+#[tauri::command]
+pub async fn get_form_print_files(db: State<'_, Db>, kind: crate::forms::FormKind, id: i64) -> Result<Vec<PrintFile>, String> {
+    let files = crate::attachments_library::files_to_send(&db.pool().await, kind, id).await?;
+    Ok(files
+        .into_iter()
+        .map(|(file_name, bytes, media_type)| PrintFile { file_name, media_type: media_type.to_string(), data_base64: base64::engine::general_purpose::STANDARD.encode(bytes) })
+        .collect())
 }

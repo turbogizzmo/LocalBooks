@@ -923,6 +923,7 @@ fn check(ledger: &Ledger) {
                 cents: 10_000,
                 account_id: consulting,
                 class: None,
+                subtotal: false,
             }],
             sales: Default::default(),
         })

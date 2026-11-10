@@ -63,5 +63,18 @@ Open an item's record (double-click it in **Products & Services**, or **Edit…*
   reorder when none is left.
 
 Both show on the item's information panel beside the list. When the quantity on hand is at or
-below the reorder point, the panel marks it **time to reorder**.
+below the reorder point, the panel marks it **time to reorder**, and **Reminders** (on the
+Dashboard) lists it under **Inventory to reorder**, with what is already on open purchase orders.
+**Customize** in Reminders hides that list if you don't want it; it is empty while inventory is
+turned off.
+
+## Inventory Activities
+
+**Vendors › Inventory Activities** gathers the inventory work in one place:
+
+- **Inventory Center** opens **Products & Services**.
+- **Adjust Quantity/Value on Hand…** asks which tracked item, then opens its stock adjustment.
+- **Change Item Prices** and **Create Purchase Orders**.
+- **Inventory to Reorder** opens Reminders.
+- **Inventory Stock Status by Item** and **Inventory Valuation Summary** open those reports.
 

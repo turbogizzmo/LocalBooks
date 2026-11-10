@@ -14,6 +14,7 @@ import { UsersSettings } from './Users.jsx';
 import AccountantsCopy from './AccountantsCopy.jsx';
 import QbwImporter from './QbwImporter.jsx';
 import OffsiteBackup from './OffsiteBackup.jsx';
+import BackupSafety, { useTestRestore } from './BackupSafety.jsx';
 import { canOpen, findNav } from './Sidebar.jsx';
 import PreferencesWindow, { Group } from './PreferencesWindow.jsx';
 import Diagnostics from './Diagnostics.jsx';
@@ -199,6 +200,7 @@ function RestoreConfirm({ info, onConfirm, onCancel, busy }) {
 function FileAndData({ companyName, isAdmin, navigate }) {
   const backups = useLedgerQuery(api.listBackups);
   const [notice, setNotice] = useState(null);
+  const [testRestore, testing] = useTestRestore(setNotice);
   const [pending, setPending] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -370,6 +372,7 @@ function FileAndData({ companyName, isAdmin, navigate }) {
       <AccountantsCopy isAdmin={isAdmin} />
       <CompanyFileLocation />
       <OffsiteBackup isAdmin={isAdmin} onRestored={backups.reload} />
+      <BackupSafety />
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       <section className="qb-panel flex min-h-0 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
@@ -385,7 +388,7 @@ function FileAndData({ companyName, isAdmin, navigate }) {
             <col className="w-[120px]" />
             <col />
             <col className="w-[90px]" />
-            <col className="w-[90px]" />
+            <col className="w-[140px]" />
           </colgroup>
           <thead>
             <tr>
@@ -419,9 +422,14 @@ function FileAndData({ companyName, isAdmin, navigate }) {
                       Open
                     </button>
                   ) : (
-                    <button type="button" className="qb-btn qb-btn-secondary h-[20px] w-full" onClick={() => prepareRestore(b.path)} disabled={busy}>
-                      Restore
-                    </button>
+                    <div className="flex gap-1">
+                      <button type="button" className="qb-btn qb-btn-secondary h-[20px] flex-1" onClick={() => testRestore(b.path)} disabled={busy || testing} title="Open this backup and check it, without replacing your books">
+                        Test
+                      </button>
+                      <button type="button" className="qb-btn qb-btn-secondary h-[20px] flex-1" onClick={() => prepareRestore(b.path)} disabled={busy || testing}>
+                        Restore
+                      </button>
+                    </div>
                   )}
                 </td>
               </tr>

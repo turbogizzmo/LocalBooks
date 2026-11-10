@@ -207,6 +207,9 @@ struct Exception {
     source_type: String,
     memo: Option<String>,
     created_at: String,
+    /// Who posted it, as the hash-chained audit trail records it (an External Accountant, or the
+    /// user who moved the closing date back).
+    entered_by: Option<String>,
     closed_at: String,
     amount_cents: i64,
 }
@@ -220,10 +223,11 @@ pub(super) async fn closing_date_exceptions(pool: &SqlitePool, start: NaiveDate,
         Some(lock) => sqlx::query_as(
             "SELECT * FROM (
                 SELECT e.id, e.entry_number, e.entry_date, e.source_type, e.memo, e.created_at,
+                       (SELECT a.actor FROM ledger_audit_log a WHERE a.action_type = 'POST' AND a.target_entity_id = e.id ORDER BY a.id LIMIT 1) AS entered_by,
                        (SELECT MIN(k.set_at) FROM closing_locks k WHERE k.lock_date >= e.entry_date) AS closed_at,
                        (SELECT COALESCE(SUM(l.debit_cents), 0) FROM journal_lines l WHERE l.journal_entry_id = e.id) AS amount_cents
                 FROM journal_entries e
-                WHERE e.entry_date <= ?1 AND e.entry_date BETWEEN ?2 AND ?3
+                WHERE e.status = 'POSTED' AND e.entry_date <= ?1 AND e.entry_date BETWEEN ?2 AND ?3
              ) WHERE closed_at IS NOT NULL AND created_at > closed_at
              ORDER BY entry_date, entry_number",
         )
@@ -241,6 +245,7 @@ pub(super) async fn closing_date_exceptions(pool: &SqlitePool, start: NaiveDate,
         head("Entry No.", ColumnKind::Number),
         head("Memo", ColumnKind::Text),
         head("Entered", ColumnKind::Text),
+        head("Entered By", ColumnKind::Text),
         head("Date Closed Since", ColumnKind::Text),
         head("Amount", ColumnKind::Money),
     ];
@@ -253,7 +258,7 @@ pub(super) async fn closing_date_exceptions(pool: &SqlitePool, start: NaiveDate,
         let mut r = row(
             RowKind::Detail,
             0,
-            vec![json!(x.entry_date), json!(type_label(&x.source_type)), json!(x.entry_number), json!(x.memo), json!(shown(&x.created_at)), json!(shown(&x.closed_at)), json!(x.amount_cents)],
+            vec![json!(x.entry_date), json!(type_label(&x.source_type)), json!(x.entry_number), json!(x.memo), json!(shown(&x.created_at)), json!(x.entered_by), json!(shown(&x.closed_at)), json!(x.amount_cents)],
         );
         r.journal_entry_id = Some(x.id);
         rows.push(r);

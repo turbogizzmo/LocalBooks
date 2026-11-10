@@ -108,8 +108,8 @@ jobs:
     # No matrix: with one, GitHub appends "(macos-latest)" to the name and it no longer matches the
     # required check "Test (macos-latest)".
     runs-on: macos-latest
-    # The macOS runners take about 41 minutes for the full suite (Nov 2026), so 45 left no room.
-    timeout-minutes: 75
+    # The full suite took 70 to 85 minutes on the macOS runner in Nov 2026, so 75 left no room.
+    timeout-minutes: 110
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -130,6 +130,9 @@ jobs:
         with:
           workspaces: src-tauri -> target
           shared-key: test-macos-latest
+          # Saving the macOS cache once hung for 30 minutes after the tests passed and timed the
+          # job out (batch #330). Pull requests read the cache; only main, tags and manual runs save it.
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Run ledger test suite
         working-directory: src-tauri

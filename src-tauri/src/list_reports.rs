@@ -23,6 +23,7 @@ use crate::statements::LineKind;
 mod more_reports;
 mod parity;
 mod profitability;
+mod sales_orders;
 
 // ------------------------------------------------------------------------------------------------
 // Catalog
@@ -68,6 +69,9 @@ pub fn catalog() -> Vec<ListReportInfo> {
         r("unpaid-bills-job", "Unpaid Bills by Job", "What you owe", AsOf, ""),
         r("unbilled-costs-job", "Unbilled Costs by Job", "Jobs", Now, ""),
         r("open-po-detail", "Open Purchase Orders Detail", "Expenses and vendors", AsOf, ""),
+        r("open-so-customer", "Open Sales Orders by Customer", "Sales and customers", Now, ""),
+        r("open-so-item", "Open Sales Orders by Item", "Sales and customers", Now, ""),
+        r("pending-sales", "Pending Sales", "Sales and customers", Now, ""),
         r("open-po-job", "Open Purchase Orders by Job", "Jobs", AsOf, ""),
         r("time-job-summary", "Time by Job Summary", "Jobs", Range, "thisMonth"),
         r("time-job-detail", "Time by Job Detail", "Jobs", Range, "thisMonth"),
@@ -82,6 +86,7 @@ pub fn catalog() -> Vec<ListReportInfo> {
         r("customer-contact", "Customer Contact List", LISTS, Now, ""),
         r("vendor-phone", "Vendor Phone List", LISTS, Now, ""),
         r("vendor-contact", "Vendor Contact List", LISTS, Now, ""),
+        r("other-phone", "Other Names Phone List", LISTS, Now, ""),
         r("item-listing", "Item Listing", LISTS, Now, ""),
         r("account-listing", "Account Listing", LISTS, Now, ""),
         r("todo-notes", "To Do Notes", LISTS, Now, ""),
@@ -114,6 +119,9 @@ pub async fn run(pool: &SqlitePool, id: &str, start: Option<NaiveDate>, end: Opt
         "invoice-profit-detail" => profitability::invoice_profitability_detail(pool, start, end).await,
         "unpaid-bills-job" => unpaid_bills_by_job(pool, end).await,
         "open-po-detail" => open_po_detail(pool, end).await,
+        "open-so-customer" => sales_orders::open_by_customer(pool, today).await,
+        "open-so-item" => sales_orders::open_by_item(pool, today).await,
+        "pending-sales" => sales_orders::pending(pool, today).await,
         "open-po-job" => open_po_by_job(pool, end).await,
         "time-job-summary" => time_summary(pool, TimeBy::Job, start, end).await,
         "time-job-detail" => time_by_job_detail(pool, start, end).await,
@@ -126,6 +134,7 @@ pub async fn run(pool: &SqlitePool, id: &str, start: Option<NaiveDate>, end: Opt
         "customer-contact" => contact_list(pool, NameKind::Customer, today).await,
         "vendor-phone" => phone_list(pool, NameKind::Vendor, today).await,
         "vendor-contact" => contact_list(pool, NameKind::Vendor, today).await,
+        "other-phone" => phone_list(pool, NameKind::Other, today).await,
         "item-listing" => item_listing(pool, today).await,
         "account-listing" => account_listing(pool, today).await,
         "todo-notes" => more_reports::todo_notes(pool, today).await,
@@ -225,6 +234,9 @@ async fn parties(pool: &SqlitePool, kind: NameKind) -> Result<Vec<Party>, String
         NameKind::Vendor => "SELECT id, name, company_name, phone, email, address, terms_days, is_1099
                              FROM vendors WHERE is_active = 1 ORDER BY name COLLATE NOCASE, id"
             .to_string(),
+        NameKind::Other => "SELECT id, name, company_name, phone, email, address, NULL AS terms_days, 0 AS is_1099
+                            FROM other_names WHERE is_active = 1 ORDER BY name COLLATE NOCASE, id"
+            .to_string(),
     };
     sqlx::query_as(&sql).fetch_all(pool).await.map_err(db_err)
 }
@@ -233,6 +245,7 @@ fn noun(kind: NameKind) -> (&'static str, &'static str) {
     match kind {
         NameKind::Customer => ("Customer", "customers"),
         NameKind::Vendor => ("Vendor", "vendors"),
+        NameKind::Other => ("Other name", "other names"),
     }
 }
 
@@ -250,6 +263,8 @@ async fn balances(pool: &SqlitePool, kind: NameKind, as_of: NaiveDate) -> Result
     let id = match kind {
         NameKind::Customer => "customer-balance-summary",
         NameKind::Vendor => "vendor-balance-summary",
+        // Other names have no balance: nothing is owed to or by them on account.
+        NameKind::Other => return Ok((BTreeMap::new(), 0)),
     };
     let mut settings = custom_reports::presets().into_iter().find(|p| p.id == id).ok_or("RPT_UNKNOWN: balance summary")?.settings;
     settings.end_date = Some(as_of);

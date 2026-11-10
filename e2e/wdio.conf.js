@@ -14,6 +14,7 @@ const COMPANIES = {
   'seeded-users': 'Edge Cases.localbooks',
   'taxed-invoice-edit': 'Edge Cases.localbooks',
   'windows-inside': 'No Users.localbooks',
+  accessibility: 'Edge Cases.localbooks',
 };
 
 const TAURI_DRIVER = process.env.TAURI_DRIVER || path.join(os.homedir(), '.cargo', 'bin', process.platform === 'win32' ? 'tauri-driver.exe' : 'tauri-driver');

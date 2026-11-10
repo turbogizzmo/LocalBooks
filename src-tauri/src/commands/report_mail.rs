@@ -47,7 +47,7 @@ pub async fn email_report_with_mail_app(app: AppHandle, db: State<'_, Db>, sheet
     let (to, subject, body) = email.checked()?;
     let (_, file_name, bytes) = pdf_of(&db, &sheet, pdf_password.as_deref()).await?;
     let outgoing = app.path().app_cache_dir().map_err(|e| format!("MAIL_STAGE: {e}"))?.join("outgoing");
-    let message = mail_app::Compose { to, subject, body, attachment: Default::default() };
+    let message = mail_app::Compose { to, subject, body, attachment: Default::default(), more: Vec::new() };
     tauri::async_runtime::spawn_blocking(move || {
         let attachment = mail_app::stage_attachment(&outgoing, &file_name, &bytes)?;
         mail_app::compose(&mail_app::Compose { attachment, ..message })

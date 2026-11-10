@@ -35,22 +35,34 @@ const ACCOUNT_TYPES: [&str; 15] = [
     "OTHER_EXPENSE",
 ];
 
-/// Transaction kinds by line-item table, with a readable name.
-const TRANSACTION_TABLES: [(&str, &str); 14] = [
-    ("invoice", "Invoice"),
-    ("credit_memo", "Credit memo"),
-    ("sales_receipt", "Sales receipt"),
-    ("received_payment", "Payment"),
-    ("deposit", "Deposit"),
-    ("transfer", "Transfer"),
-    ("check", "Check"),
-    ("credit_cardcharge", "Credit card charge"),
-    ("bill", "Bill"),
-    ("bill_check", "Bill payment"),
-    ("bill_ccard", "Bill payment (card)"),
-    ("customer_refund", "Refund"),
-    ("general_journal", "Journal entry"),
-    ("inventory_adjust", "Inventory adjustment"),
+/// Transaction kinds by table stem (lines in `<stem>_lineitem`, headers in `<stem>_header`),
+/// with a readable name. Payroll keeps its paychecks and liability payments in tables of its own.
+const TRANSACTION_TABLES: [(&str, &str); 16] = [
+    ("abmc_invoice", "Invoice"),
+    ("abmc_credit_memo", "Credit memo"),
+    ("abmc_sales_receipt", "Sales receipt"),
+    ("abmc_received_payment", "Payment"),
+    ("abmc_deposit", "Deposit"),
+    ("abmc_transfer", "Transfer"),
+    ("abmc_check", "Check"),
+    ("abmc_credit_cardcharge", "Credit card charge"),
+    ("abmc_bill", "Bill"),
+    ("abmc_bill_check", "Bill payment"),
+    ("abmc_bill_ccard", "Bill payment (card)"),
+    ("abmc_customer_refund", "Refund"),
+    ("abmc_general_journal", "Journal entry"),
+    ("abmc_inventory_adjust", "Inventory adjustment"),
+    ("es_paycheck", "Paycheck"),
+    ("es_liability_payment", "Payroll liability payment"),
+];
+
+/// Where the cost of inventory sold on a form is kept, and the form's line table. Each sold
+/// line has a pair of cost rows, cost of goods sold and the inventory asset it came out of,
+/// keyed by the form line's `target_id` rather than by transaction.
+const INVENTORY_COST_TABLES: [(&str, &str); 3] = [
+    ("abmc_invoice_inventory_lineitem", "abmc_invoice_lineitem"),
+    ("abmc_sale_receipt_inventory_lineitem", "abmc_sales_receipt_lineitem"),
+    ("abmc_credit_memo_inventory_lineitem", "abmc_credit_memo_lineitem"),
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -227,6 +239,8 @@ pub struct SourceItem {
     pub active: bool,
     /// Custom fields with a value, as (label, value).
     pub custom_fields: Vec<(String, String)>,
+    /// A percent discount or charge, in parts per million of the line it applies to.
+    pub percent_ppm: Option<i64>,
 }
 
 /// The file's sales rep and shipping method lists, by name, with whether each is active. They are
@@ -330,31 +344,89 @@ impl Ledger {
     }
 }
 
+/// Adds the cost of inventory sold to the forms it was sold on. `form_lines` maps a form line's
+/// `target_id` to its transaction and class. A line's cost rows are used only together and only
+/// when they net to zero, so they never unbalance their transaction; others are rejected.
+fn add_inventory_cost(
+    transactions: &mut BTreeMap<i64, SourceTransaction>,
+    form_lines: &HashMap<i64, (i64, Option<String>)>,
+    cost_rows: &[Row],
+    known_accounts: &HashSet<i64>,
+    quality: &mut LedgerQuality,
+) {
+    let mut by_line: BTreeMap<i64, Vec<(i64, i64)>> = BTreeMap::new();
+    for r in cost_rows {
+        let (Some(target), Some(account_id), Some(cents)) = (r.get("target_id").as_int(), r.get("account_id").as_int(), r.get("amount_amt").as_cents()) else {
+            continue;
+        };
+        if cents != 0 {
+            by_line.entry(target).or_default().push((account_id, cents));
+        }
+    }
+    for (target, rows) in by_line {
+        let reason = if rows.iter().map(|(_, c)| *c).sum::<i64>() != 0 {
+            "inventory cost does not net to zero"
+        } else if rows.iter().any(|(a, _)| !known_accounts.contains(a)) {
+            "unknown account"
+        } else {
+            match form_lines.get(&target).and_then(|(tid, class)| Some((transactions.get_mut(tid)?, class))) {
+                Some((txn, class)) => {
+                    txn.lines.extend(rows.iter().map(|&(account_id, cents)| SourceLine { account_id, cents, memo: None, class: class.clone() }));
+                    continue;
+                }
+                None => "inventory cost of a form line that was not read",
+            }
+        };
+        quality.rejected_lines += rows.len();
+        *quality.rejected_by_reason.entry(reason).or_default() += rows.len();
+    }
+}
+
 /// Decodes the file's pages, re-solving the last sector of pages whose rows do not decode.
 pub fn read_pages(path: &Path) -> Result<(Vec<LogicalPage>, Catalog, DecodeStats, usize), String> {
     let mut decoder = PageDecoder::open(path)?;
     let (mut pages, stats) = decoder.decode_all();
-    let catalog = read_catalog(&pages);
+    let (catalog, refined) = repair_pages(&mut pages, &|page, score| decoder.refine(page, score));
+    Ok((pages, catalog, stats, refined))
+}
+
+/// Re-solves the last sector of pages whose rows do not read, and reads the catalog. Catalog
+/// pages go first, scored by the catalog rows they yield: a column definition lost to a few
+/// wrong bytes would otherwise leave its table's rows unreadable. Then each table page whose
+/// rows in sector 7 do not walk, scored by the rows that walk. `refine` returns a better
+/// decode of a page, or `None`. Returns the catalog and how many pages were re-solved.
+pub(crate) fn repair_pages(pages: &mut [LogicalPage], refine: &Refine) -> (Catalog, usize) {
     let mut refined = 0;
+    let ends_in_s7 = |r: &crate::qbw_pages::RowSpan| (r.start + r.len) as usize > S7_START;
+    for page in pages.iter_mut().filter(|p| crate::qbw_records::is_catalog_page(p)) {
+        let score = crate::qbw_records::catalog_rows_read;
+        if page.rows.iter().any(|r| ends_in_s7(r) && !crate::qbw_records::catalog_row_reads(page, r)) {
+            if let Some(better) = refine(page, &score) {
+                *page = better;
+                refined += 1;
+            }
+        }
+    }
+    let catalog = read_catalog(pages);
     for page in pages.iter_mut() {
         let Some(cols) = catalog.columns.get(&page.owner) else { continue };
         if page.owner < 3 || CHUNK_KINDS.contains(&page.kind) {
             continue;
         }
         let walks = |p: &LogicalPage| p.rows.iter().filter(|r| r.chained && walk_row(p.row(r), cols).is_some()).count();
-        let failing_in_s7 = page
-            .rows
-            .iter()
-            .any(|r| (r.start + r.len) as usize > S7_START && !(r.chained && walk_row(page.row(r), cols).is_some()));
+        let failing_in_s7 = page.rows.iter().any(|r| ends_in_s7(r) && !(r.chained && walk_row(page.row(r), cols).is_some()));
         if failing_in_s7 {
-            if let Some(better) = decoder.refine(page, &walks) {
+            if let Some(better) = refine(page, &walks) {
                 *page = better;
                 refined += 1;
             }
         }
     }
-    Ok((pages, catalog, stats, refined))
+    (catalog, refined)
 }
+
+/// Re-solves one page's last sector for a score (see `PageDecoder::refine`).
+pub(crate) type Refine<'a> = dyn Fn(&LogicalPage, &dyn Fn(&LogicalPage) -> usize) -> Option<LogicalPage> + 'a;
 
 pub(crate) fn text(row: &Row, column: &str) -> Option<String> {
     row.get(column).as_text().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
@@ -690,6 +762,27 @@ fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<S
     out
 }
 
+/// An item's kind by the file's item type code, or `None` for the kinds that are not things
+/// LocalBooks sells: subtotals (a form line, not an item), groups, payments, and sales tax items
+/// and groups (sales tax rates come in with the tax settings).
+pub(crate) fn item_kind(code: Option<i64>) -> Option<&'static str> {
+    match code {
+        Some(0) => Some("Service"),
+        Some(1 | 2) => Some("Inventory part"),
+        Some(3) => Some("Non-inventory part"),
+        Some(4) => Some("Fixed asset"),
+        Some(5) => Some("Other charge"),
+        Some(8) => Some("Discount"),
+        Some(6 | 7 | 9 | 10 | 11) => None,
+        _ => Some("Item"),
+    }
+}
+
+/// Ids of the file's subtotal items: a form line that sums the lines above it.
+pub(crate) fn subtotal_items(pages: &[LogicalPage], catalog: &Catalog) -> HashSet<i64> {
+    rows_of(pages, catalog, "abmc_item_user").iter().filter(|r| r.get("item_type").as_int() == Some(6)).filter_map(|r| r.get("item_id").as_int()).collect()
+}
+
 fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
     let taxable_codes: HashSet<i64> = rows_of(pages, catalog, "abmc_sales_tax_code")
         .iter()
@@ -705,19 +798,15 @@ fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
         .iter()
         .filter_map(|r| {
             let id = r.get("item_id").as_int()?;
+            let kind = item_kind(r.get("item_type").as_int())?;
             Some(SourceItem {
                 id,
                 name: full.get(&id)?.clone(),
                 description: text(r, "description"),
                 rate_cents: r.get("sales_price_amt").as_cents().map(i64::abs).unwrap_or(0),
                 income_account_id: r.get("post_account_id").as_int(),
-                kind: match r.get("item_type").as_int() {
-                    Some(0) => "Service",
-                    Some(1) => "Inventory part",
-                    Some(3) => "Non-inventory part",
-                    Some(4) => "Other charge",
-                    _ => "Item",
-                },
+                percent_ppm: if matches!(kind, "Discount" | "Other charge") { r.get("sales_price_pct").as_percent_ppm() } else { None },
+                kind,
                 taxable: r.get("sales_tax_code_id").as_int().is_some_and(|c| taxable_codes.contains(&c)),
                 active: r.get("is_hidden_bool").as_int() != Some(1) && r.get("is_deleted_bool").as_int() != Some(1),
                 custom_fields: r.get("item_abm_id").as_text().and_then(|a| custom.get(&a).cloned()).unwrap_or_default(),
@@ -753,6 +842,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     let known_accounts: HashSet<i64> = accounts.iter().map(|a| a.id).collect();
     let customers = names(&pages, &catalog, "abmc_customer_user", "customer_id");
     let vendors = names(&pages, &catalog, "abmc_vendor_user", "vendor_id");
+    let employees = names(&pages, &catalog, "abmc_employee", "employee_id");
     let (class_paths, class_list) = read_classes(&pages, &catalog);
     let class_of = |row: &Row| row.get("class_id").as_int().and_then(|c| class_paths.get(&c)).cloned();
     let earliest = NaiveDate::from_ymd_opt(1980, 1, 1).expect("valid date");
@@ -764,8 +854,8 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     let mut salvage: HashMap<i64, Vec<SourceLine>> = HashMap::new();
     let mut unreadable: Vec<UnreadableLine> = Vec::new();
     for (stem, kind) in TRANSACTION_TABLES {
-        let Some(line_table) = catalog.table_id(&format!("abmc_{stem}_lineitem")) else { continue };
-        let headers: HashMap<i64, Row> = rows_of(&pages, &catalog, &format!("abmc_{stem}_header"))
+        let Some(line_table) = catalog.table_id(&format!("{stem}_lineitem")) else { continue };
+        let headers: HashMap<i64, Row> = rows_of(&pages, &catalog, &format!("{stem}_header"))
             .into_iter()
             .filter_map(|r| Some((r.get("transaction_id").as_int()?, r)))
             .collect();
@@ -776,6 +866,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
                 .as_int()
                 .and_then(|id| customers.get(&id))
                 .or_else(|| row.get("vendor_id").as_int().and_then(|id| vendors.get(&id)))
+                .or_else(|| row.get("employee_id").as_int().and_then(|id| employees.get(&id)))
                 .cloned()
         };
         for r in &lines.partial {
@@ -867,6 +958,23 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
                 txn.lines.push(SourceLine { account_id, cents, memo: text(&r, "memo"), class: class_of(&r) });
             }
         }
+    }
+
+    for (cost_table, line_table) in INVENTORY_COST_TABLES {
+        let (Some(cost_table), Some(line_table)) = (catalog.table_id(cost_table), catalog.table_id(line_table)) else { continue };
+        let form_lines: HashMap<i64, (i64, Option<String>)> = table_rows(&pages, &catalog, line_table)
+            .rows
+            .iter()
+            .filter_map(|r| Some((r.get("target_id").as_int()?, (r.get("transaction_id").as_int()?, class_of(r)))))
+            .collect();
+        let costs = table_rows(&pages, &catalog, cost_table);
+        // Not transaction lines, so not listed with them; a lost row leaves its pair out below.
+        let lost = costs.unchained + costs.unwalkable;
+        if lost > 0 {
+            quality.rejected_lines += lost;
+            *quality.rejected_by_reason.entry("inventory cost row not read").or_default() += lost;
+        }
+        add_inventory_cost(&mut transactions, &form_lines, &costs.rows, &known_accounts, &mut quality);
     }
 
     for (tid, line) in recover_damaged_lines(&mut transactions, salvage) {

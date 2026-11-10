@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatCompactCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
@@ -13,6 +13,11 @@ export const WIDGETS = {
   TOP_CUSTOMERS: { title: 'Top customers', total: 'Total income', report: 'Sales by Customer Summary' },
   TOP_ITEMS: { title: 'Top items', total: 'Total sales', report: 'Sales by Product/Service Summary' },
   TOP_VENDORS: { title: 'Top vendors', total: 'Total expenses', report: 'Expenses by Vendor Summary' },
+  INCOME_BREAKDOWN: { title: 'Income breakdown', total: 'Total income', report: 'Profit and Loss' },
+  EXPENSE_BREAKDOWN: { title: 'Expense breakdown', total: 'Total expenses', report: 'Profit and Loss' },
+  YEAR_OVER_YEAR: { title: 'Year over year', total: 'Net income', report: 'Profit and Loss' },
+  TODOS: { title: 'To-dos', total: 'Open to-dos', report: 'To Do Notes', asOf: true, count: true },
+  NOTES: { title: 'Note', note: true },
 };
 
 const PERIODS = [
@@ -30,7 +35,7 @@ const GREEN = '#2ca01c';
 const BLUE = '#0077c5';
 
 /** Income and expense columns by month, with the month's net under each pair in the tooltip. */
-function Trend({ points }) {
+export function Trend({ points }) {
   const w = 360;
   const h = 120;
   const max = Math.max(1, ...points.flatMap((p) => [p.incomeCents, p.expenseCents]));
@@ -55,7 +60,57 @@ function Trend({ points }) {
   );
 }
 
-function WidgetCard({ widget, index, count, onMove, onRemove, onPeriod, onOpen }) {
+/** The note widget's text box; it saves when it loses focus. */
+function NoteBox({ widget, onSave }) {
+  const [text, setText] = useState(widget.note ?? '');
+  useEffect(() => setText(widget.note ?? ''), [widget.note]);
+  return (
+    <textarea
+      className="qb-input min-h-24 w-full resize-y text-sm"
+      aria-label="Note"
+      maxLength={2000}
+      placeholder="Write a note to keep on this page"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        if (text.trim() !== (widget.note ?? '')) onSave(text);
+      }}
+    />
+  );
+}
+
+/** Year over year: this period, the same dates a year earlier, and the change. */
+function YearOverYear({ lines }) {
+  return (
+    <table className="w-full">
+      <thead>
+        <tr className="text-xs text-qb-ink-muted">
+          <th className="py-0.5 text-left font-normal" />
+          <th className="py-0.5 text-right font-normal">This period</th>
+          <th className="py-0.5 text-right font-normal">A year earlier</th>
+          <th className="py-0.5 text-right font-normal">Change</th>
+        </tr>
+      </thead>
+      <tbody>
+        {lines.map((l) => {
+          const change = l.amountCents - (l.previousCents ?? 0);
+          // More expenses is the worse way; for income and net, less is.
+          const worse = l.label === 'Expenses' ? change > 0 : change < 0;
+          return (
+            <tr key={l.label}>
+              <td className="py-0.5">{l.label}</td>
+              <td className="num py-0.5 text-right">{formatCents(l.amountCents)}</td>
+              <td className="num py-0.5 text-right text-qb-ink-muted">{formatCents(l.previousCents ?? 0)}</td>
+              <td className={`num py-0.5 text-right ${worse ? 'text-qb-negative' : ''}`}>{formatCents(change)}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function WidgetCard({ widget, index, count, onMove, onRemove, onPeriod, onOpen, onNote }) {
   const meta = WIDGETS[widget.kind];
   // The aging widgets have an overdue column between the name and the amount.
   const aging = widget.kind === 'WHO_OWES' || widget.kind === 'VENDORS_TO_PAY';
@@ -68,17 +123,23 @@ function WidgetCard({ widget, index, count, onMove, onRemove, onPeriod, onOpen }
         <button type="button" className="qb-btn qb-btn-secondary h-[20px] px-1.5" aria-label={`Move ${meta.title} later`} disabled={index === count - 1} onClick={() => onMove(1)}>↓</button>
         <button type="button" className="qb-btn qb-btn-secondary h-[20px] px-1.5" aria-label={`Remove ${meta.title}`} onClick={onRemove}>✕</button>
       </div>
-      <div className="flex items-center gap-2 px-2 py-1 text-xs text-qb-ink-muted">
+      {!meta.note && <div className="flex items-center gap-2 px-2 py-1 text-xs text-qb-ink-muted">
         <select className="qb-input h-row text-xs" aria-label={`Period for ${meta.title}`} value={widget.period} onChange={(e) => onPeriod(e.target.value)}>
           {PERIODS.map(([id, label]) => (
             <option key={id} value={id}>{label}</option>
           ))}
         </select>
         <span>{dates}</span>
-      </div>
+      </div>}
       <div className="flex-1 px-2 pb-1 text-sm">
-        {widget.kind === 'INCOME_EXPENSE_TREND' ? (
+        {meta.note ? (
+          <div className="pt-1">
+            <NoteBox widget={widget} onSave={onNote} />
+          </div>
+        ) : widget.kind === 'INCOME_EXPENSE_TREND' ? (
           <Trend points={widget.trend} />
+        ) : widget.kind === 'YEAR_OVER_YEAR' ? (
+          <YearOverYear lines={widget.lines} />
         ) : (
           <table className="w-full">
             <tbody>
@@ -88,7 +149,11 @@ function WidgetCard({ widget, index, count, onMove, onRemove, onPeriod, onOpen }
                   {l.overdueCents !== null && l.overdueCents !== undefined && (
                     <td className={`py-0.5 text-right text-xs ${l.overdueCents > 0 ? 'text-qb-negative' : 'text-qb-ink-muted'}`}>{l.overdueCents > 0 ? `${formatCompactCents(l.overdueCents)} overdue` : ''}</td>
                   )}
-                  <td className="num py-0.5 text-right">{formatCents(l.amountCents)}</td>
+                  {meta.count ? (
+                    <td className={`py-0.5 text-right text-xs ${l.date && l.date < widget.endDate ? 'text-qb-negative' : 'text-qb-ink-muted'}`}>{l.date ? `due ${formatDate(l.date)}` : 'no date'}</td>
+                  ) : (
+                    <td className="num py-0.5 text-right">{formatCents(l.amountCents)}</td>
+                  )}
                 </tr>
               ))}
               {widget.othersCents !== 0 && (
@@ -99,20 +164,24 @@ function WidgetCard({ widget, index, count, onMove, onRemove, onPeriod, onOpen }
               )}
               {widget.lines.length === 0 && (
                 <tr>
-                  <td className="py-1 text-qb-ink-muted" colSpan={aging ? 3 : 2}>Nothing in these dates.</td>
+                  <td className="py-1 text-qb-ink-muted" colSpan={aging ? 3 : 2}>{meta.count ? 'Nothing to do.' : 'Nothing in these dates.'}</td>
                 </tr>
               )}
             </tbody>
           </table>
         )}
       </div>
-      <div className="flex items-center gap-2 border-t border-qb-border px-2 py-1 text-sm">
-        <span className="font-semibold">{meta.total}</span>
-        <span className="num ml-auto font-semibold">{formatCents(widget.totalCents)}</span>
-      </div>
-      <button type="button" className="mx-2 mb-1 self-start text-xs text-qb-info hover:underline" onClick={onOpen}>
-        Open {meta.report}
-      </button>
+      {!meta.note && (
+        <>
+          <div className="flex items-center gap-2 border-t border-qb-border px-2 py-1 text-sm">
+            <span className="font-semibold">{meta.total}</span>
+            <span className="num ml-auto font-semibold">{meta.count ? widget.totalCents : formatCents(widget.totalCents)}</span>
+          </div>
+          <button type="button" className="mx-2 mb-1 self-start text-xs text-qb-info hover:underline" onClick={onOpen}>
+            Open {meta.report}
+          </button>
+        </>
+      )}
     </section>
   );
 }
@@ -171,6 +240,7 @@ export default function CompanySnapshot({ onOpenReport }) {
             onMove={(by) => act(() => api.arrangeSnapshotWidgets(moveWidget(list.map((x) => x.id), i, by)))}
             onRemove={() => act(() => api.removeSnapshotWidget(w.id))}
             onPeriod={(period) => act(() => api.setSnapshotWidgetPeriod(w.id, period))}
+            onNote={(text) => act(() => api.setSnapshotWidgetNote(w.id, text))}
             onOpen={() => onOpenReport?.(w.report, WIDGETS[w.kind].asOf ? { asOf: w.endDate, endDate: w.endDate } : { startDate: w.startDate, endDate: w.endDate })}
           />
         ))}

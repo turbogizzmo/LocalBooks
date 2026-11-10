@@ -11,11 +11,139 @@ people using LocalBooks.
   each job.
 - **Jobs on received items.** Receiving items from a purchase order keeps each line's customer or
   job, and the bill entered for the received items carries it, ready to bill to the customer.
+- **Discounts and charges on credit memos.** Credit memos and refund receipts take subtotals,
+  discount lines, percentage charges and groups, as invoices do. They print in their places, and a
+  discount lowers the credit and the sales tax given back.
+- **More on Company Snapshot, the money bars and Insights.** Company Snapshot can now show income and
+  expense breakdowns, year over year beside the same dates a year earlier, your open to-dos, and a
+  note you type. The bars on All Sales and Bills add Unbilled, Estimates, Purchase orders and Card
+  balances; click one to list its transactions and open them. The Dashboard's Insights tab shows
+  income and expense for the last 12 months.
+- **Discounts and charges on bills, checks, vendor credits and purchase orders.** Add a discount or
+  a charge after any split line, as an amount or a percent of that line, from a Discount or Other
+  Charge item or straight to an account. A purchase order's discounts and charges print on it and
+  carry over to its bill, including bills entered for received items. Other Charge and Discount
+  items can have their own expense account for these forms.
+  carry over to its bill. Other Charge and Discount items can have their own expense account for
+  these forms.
+- **Discounts come in as discount lines from QuickBooks Desktop files.** A company file's
+  discount items become LocalBooks discount items (a percent one keeps its percent), and a full
+  import keeps an invoice's or sales receipt's subtotal and discount lines where they were, instead
+  of folding the discount into one amount off the whole form. Subtotal, group, payment and sales
+  tax items are no longer added to your item list as things to sell.
+- **Payroll and cost of goods sold come in from QuickBooks Desktop files.** Importing a company
+  file now brings its paychecks and payroll liability payments, so payroll expense and liability
+  accounts match QuickBooks. Invoices and sales receipts that sold inventory also bring the cost
+  of what they sold, moving it from Inventory Asset to Cost of Goods Sold as QuickBooks did.
+- **Company-file imports read more of older files, and say which balances don't match.**
+  LocalBooks now reads pages it used to skip in some QuickBooks Desktop company files, so
+  invoices and other transactions on those pages come in. And if an account's imported balance
+  still differs from the balance QuickBooks stored, step 2 of the import lists it with the
+  file's balance, the imported balance and the difference, before and after you post.
+- **More check lines come in from older company files.** When the part of a QuickBooks
+  Desktop file that describes its tables was itself slightly damaged, LocalBooks couldn't read
+  some tables' rows at all, such as the check lines of a file upgraded from an older version.
+  LocalBooks now repairs that part first, so those transactions import.
+- **Slower password guessing.** After four wrong passwords for a user name, each next sign-in try
+  waits a little longer (30 seconds up to 5 minutes). Wrong recovery keys wait the same way. Nobody
+  is ever locked out, and other users can still sign in.
+- **Ready for encrypting the whole company file.** LocalBooks' database engine now includes
+  SQLCipher, the groundwork for an optional setting that encrypts the whole company file and its
+  backups. Nothing changes in your files yet, and Help › Save diagnostics lists the SQLCipher
+  version.
+- **Sales orders.** Record what a customer has ordered before you ship it, in **Sales › Sales
+  Orders**. An order doesn't touch your books; invoice it all at once or in parts as you ship, and
+  it keeps track of what is left. Voiding one of its invoices puts the quantities back. Stock Status
+  and an item's information panel now show what is on sales orders and what is available, and the
+  Open by customer, Open by item and Pending sales reports list what is still to ship.
+- **Payouts fetched on a schedule.** An Admin can set each payout feed in Banking › Payout Feeds
+  to fetch every hour, 6 hours, 12 hours or once a day while LocalBooks is open. New payouts wait
+  for you to record them, and the feed shows what its last automatic fetch found.
+- **Shopify Payments payouts with their fees.** Banking › Payout Feeds connects a Shopify store
+  too, with a custom app that can only read payouts. Each payout to your bank comes in as a deposit
+  of its sales, less Shopify's fees, refunds and chargebacks.
+- **PayPal payouts with their fees.** Banking › Payout Feeds now connects a PayPal business account
+  too, with a PayPal app's client id and secret that only read your transactions. Each withdrawal to
+  your bank comes in as a deposit of the payments it carried, less PayPal's fees, refunds and
+  chargebacks, so it matches the bank line.
+- **Print, email and estimate sales orders.** A sales order prints, saves as a PDF and emails like
+  an invoice, with its own design in Settings › Custom Forms. An accepted estimate becomes a sales
+  order with **Create sales order**. Open Sales Orders by Customer and by Item and Pending Sales are
+  in Reports › Sales, and Preferences › Sales & Customers can turn sales orders off.
+- **External Accountant users.** Add your accountant as an External Accountant user: they work
+  like a Standard user, can post adjusting entries dated on or before your closing date without
+  you moving it, and never see sensitive data such as full tax IDs. The Closing Date Exceptions
+  report now shows who entered each change.
+- **Payments, sales tax and discounts from a spreadsheet.** A customer payments or bill payments
+  sheet pays invoices and bills already in your books: every row is checked against them first,
+  and Post payments records them all at once. Invoice and sales receipt sheets take a sales tax
+  and a discount for each document.
+- **Billable costs in other currencies.** Sales › Bill Costs lists costs on expenses in another
+  currency and bills them at their home amount, at the expense's own exchange rate. Editing an
+  invoice that billed costs can move a reimbursed line to another expense account.
+- **Other Names list.** Expenses › Other Names keeps people and businesses who are neither customers
+  nor vendors, such as an owner taking a draw. A check or expense typed to one is paid to them, and
+  the list has an information panel with what was paid, contact details, notes and recent
+  transactions.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
   in a file only your account can read rather than a system keychain. **Remember me on this Mac** is
   now **Remember me on this computer**, since it works on Windows and Linux too.
+- **Tab stays in the window you're working in.** Pressing Tab past the last field of a form (for
+  example Billed amount in Receive Items) used to bring another window to the front. Tab now goes
+  round the active window's own fields, as in the desktop program, and windows hidden behind a
+  maximized one can't take focus.
+- **Edit dialogs are shown whole.** The vendor and customer Edit dialog and the other record dialogs
+  no longer open with their title row hidden under the toolbar.
+- **Keyboard and screen-reader fixes.** A list row's ▾ menu now works with the arrow keys, Home
+  and End, and Esc returns you to its button. The bank feed's list and every pop-up menu can take
+  focus and are named for screen readers.
+- **Set Discount and Set Credits in Pay Bills.** Click a bill to choose the early-payment discount
+  and the vendor credits to use on it, instead of what the automatic preferences would take.
+- **Income account column off by default on sales forms.** The item fills it in; turn it on from
+  **Columns ▾**, and it shows by itself while a line still needs an account.
+- **Customize Columns on Reconcile and form lines.** Reconcile and the line grids on sales, purchase
+  and banking forms now have **Columns ▾** to hide columns you don't use and put the rest in your own
+  order.
+- **Included extras on estimates, and a usual F.O.B.** An estimate line can be priced at 0.00, and
+  such lines are left off the invoice the estimate becomes (Preferences › Sales & Customers can
+  bring them over instead). A usual F.O.B. set there fills in on new invoices, sales receipts and
+  estimates.
+- **Four more reports.** Terms Listing, Unbilled Costs by Job, Inventory Stock Status by Vendor and
+  Closing Date Exceptions are in the Reports menu and the Report Center.
+- **Report columns by class, customer, job or vendor.** In a customized summary report, Columns by
+  name gives a column for each class, customer, Customer:Job or vendor, with a total, for example a
+  profit and loss by job.
+- **Go back to the previous version.** Help › Reinstall Previous Version… backs up your books and
+  reinstalls the release before this one through the signed updater. If that version couldn't open
+  your company file, it says so and leaves the version as it is.
+- **PDF previews, and attachments on printouts and mail-app emails.** The Attachments Library and
+  the Document Inbox show PDFs page by page. Files marked Send with the form now print after the
+  form and go with it when the email opens in your mail app, not only when LocalBooks sends it.
+- **A group's quantity on the form.** The heading of an item group on an invoice, sales receipt or
+  estimate has a Qty: change it and every item in the group changes in proportion.
+- **Inventory to reorder.** Reminders lists tracked items at or below their reorder point, with
+  what is already on order, and Vendors › Inventory Activities gathers the inventory screens:
+  the item list, Adjust Quantity/Value on Hand, Change Item Prices, purchase orders and the stock
+  reports.
+- **Slower password guessing.** After four wrong passwords for a user name, each next sign-in try
+  waits a little longer (30 seconds up to 5 minutes). Wrong recovery keys wait the same way. Nobody
+  is ever locked out, and other users can still sign in.
+- **Backup safety.** File & Data Controls shows when a backup was last copied off this computer
+  and last test-restored. Reminders lists either one when it hasn't been done in 30 days, and Test
+  beside a snapshot (or Test restore a backup…) checks a backup without replacing your books.
+- **Lists from the keyboard.** Tab to a list, move with ↑ and ↓, and press Enter to open a row, as
+  a double-click does.
+- **Easier-to-read green buttons.** Save buttons and other green buttons and badges are a darker
+  green, so their white text has enough contrast to read comfortably.
+- **Shopify Payments payouts with their fees.** Banking › Payout Feeds connects a Shopify store
+  too, with a custom app that can only read payouts. Each payout to your bank comes in as a deposit
+  of its sales, less Shopify's fees, refunds and chargebacks.
+- **PayPal payouts with their fees.** Banking › Payout Feeds now connects a PayPal business account
+  too, with a PayPal app's client id and secret that only read your transactions. Each withdrawal to
+  your bank comes in as a deposit of the payments it carried, less PayPal's fees, refunds and
+  chargebacks, so it matches the bank line.
 - **Four more reports.** Terms Listing, Unbilled Costs by Job, Inventory Stock Status by Vendor and
   Closing Date Exceptions are in the Reports menu and the Report Center.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
@@ -77,6 +205,8 @@ people using LocalBooks.
 - **Duplicate on every form.** Sales receipts, estimates, credit memos, refund receipts, vendor
   credits, purchase orders, deposits and transfers now have **Duplicate** (Ctrl+O) too: open a saved
   one and the copy starts as a new form dated today.
+
+
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

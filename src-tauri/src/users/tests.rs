@@ -214,3 +214,24 @@ async fn turns_users_on_in_a_copy_of_a_real_company_file() {
     }
     println!("{} tax ID(s) encrypted, none left in plain; {} entries intact; trial balance {} / {}", plain.len(), verification.entries_checked, tb_after.total_debit_cents, tb_after.total_credit_cents);
 }
+
+#[tokio::test]
+async fn an_external_accountant_never_holds_the_data_key() {
+    let (pool, admin, _) = with_admin().await;
+    assert!(add(&pool, &admin, new_user("cpa", Role::ExternalAccountant, true)).await.unwrap_err().starts_with("USER_EXTERNAL_NO_SENSITIVE"));
+    let cpa = add(&pool, &admin, new_user("cpa", Role::ExternalAccountant, false)).await.unwrap();
+    assert_eq!((cpa.role, cpa.can_see_sensitive), (Role::ExternalAccountant, false));
+    assert!(sign_in(&pool, "cpa", "temporary pw").await.unwrap().key.is_none());
+    let grant = UserUpdate { can_see_sensitive: true, new_password: Some("another pw".into()), ..unchanged(&cpa) };
+    assert!(update(&pool, &admin, cpa.id, grant).await.unwrap_err().starts_with("USER_EXTERNAL_NO_SENSITIVE"));
+    // The file refuses it too.
+    assert!(sqlx::query("UPDATE users SET can_see_sensitive = 1 WHERE id = ?1").bind(cpa.id).execute(&pool).await.is_err());
+
+    // A bookkeeper who could see sensitive data loses it, and their key slot, on becoming one.
+    let books = add(&pool, &admin, new_user("books", Role::Standard, true)).await.unwrap();
+    assert!(update(&pool, &admin, books.id, UserUpdate { role: Role::ExternalAccountant, ..unchanged(&books) }).await.unwrap_err().starts_with("USER_EXTERNAL_NO_SENSITIVE"));
+    let moved = update(&pool, &admin, books.id, UserUpdate { role: Role::ExternalAccountant, can_see_sensitive: false, ..unchanged(&books) }).await.unwrap();
+    assert!(!moved.can_see_sensitive);
+    let slots: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM key_slots WHERE user_id = ?1").bind(books.id).fetch_one(&pool).await.unwrap();
+    assert_eq!(slots, 0);
+}

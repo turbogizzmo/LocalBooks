@@ -311,7 +311,7 @@ function CustomFields() {
               type="button"
               role="tab"
               aria-selected={list === l.key}
-              className={`px-2 py-0.5 text-xs ${list === l.key ? 'bg-qb-green text-white' : 'bg-white hover:bg-qb-canvas'}`}
+              className={`px-2 py-0.5 text-xs ${list === l.key ? 'bg-qb-green-active text-white' : 'bg-white hover:bg-qb-canvas'}`}
               onClick={() => {
                 setList(l.key);
                 setEditing(null);
