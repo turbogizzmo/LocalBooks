@@ -37,6 +37,7 @@ pub const DEFAULTS: &[(&str, &str)] = &[
     // batch 4
     (crate::sales_prefs::PRICE_LEVELS, "true"),
     (crate::sales_prefs::ESTIMATES, "true"),
+    (crate::sales_prefs::SALES_ORDERS, "true"),
     (crate::sales_prefs::DEFAULT_SHIP_METHOD, ""),
     (crate::sales_prefs::DEFAULT_FOB, ""),
     (crate::sales_prefs::DEFAULT_MARKUP, "0"),

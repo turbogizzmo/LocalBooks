@@ -703,7 +703,11 @@ function SalesCompany({ field }) {
           children: flag("Don't put zero-amount lines on the invoice"),
         })}
       </Group>
-      <Nothing>Sales orders and the Collections Center are not part of LocalBooks, so their options are not here.</Nothing>
+      <Group title="Sales orders">
+        {field({ label: 'Sales orders', prefKey: 'sales_orders_enabled', hint: 'Off hides Sales Orders from the menus and the side bar; orders already saved are kept, and invoices made from them are unchanged', children: flag('Use sales orders') })}
+        <Always label="Sales order numbers">Each sales order gets the next number, so no two share one.</Always>
+      </Group>
+      <Nothing>The Collections Center is not part of LocalBooks, so its options are not here.</Nothing>
     </>
   );
 }

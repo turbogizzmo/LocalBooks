@@ -207,6 +207,7 @@ export default function Estimates(props) {
 
 function EstimateList({ accounts, intent, navigate }) {
   const { data, error } = useLedgerQuery(api.listEstimates);
+  const { salesOrders } = useSalesPrefs();
   const [composing, setComposing] = useState(intent?.action === 'estimate');
   const [notice, setNotice] = useState(null);
   // Duplicate: the saved estimate the new one on the form starts from (and a key to start afresh).
@@ -221,6 +222,15 @@ function EstimateList({ accounts, intent, navigate }) {
   const setStatus = async (estimate, status) => {
     try {
       await api.setEstimateStatus(estimate.id, status);
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
+  const toOrder = async (estimate) => {
+    try {
+      const made = await api.createSalesOrderFromEstimate(estimate.id, today);
+      const left = made.leftOut.length ? ` Left on the estimate (add them on the invoice): ${made.leftOut.join('; ')}.` : '';
+      setNotice({ kind: 'success', text: `Estimate #${estimate.estimateNumber} became sales order #${made.order.orderNumber}. Invoice it from Sales › Sales Orders.${left}` });
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
     }
@@ -365,7 +375,8 @@ function EstimateList({ accounts, intent, navigate }) {
               )}
               {shown.map((e) => {
                 const expired = e.status !== 'CONVERTED' && e.expirationDate && e.expirationDate < today;
-                const open = e.status !== 'CONVERTED';
+                // An estimate that became a sales order is invoiced through the order.
+                const open = e.status !== 'CONVERTED' && !e.salesOrderNumber;
                 return (
                   <tr key={e.id} className="qb-grid-row cursor-pointer" {...rowKeys({ first: e === shown[0], open: () => openEstimate(e) })}>
                     <td className="qb-grid-cell">
@@ -379,6 +390,7 @@ function EstimateList({ accounts, intent, navigate }) {
                     <td className={`qb-grid-cell ${STATUS[e.status].className}`}>
                       {STATUS[e.status].label}
                       {e.status === 'CONVERTED' && e.invoiceNumber ? ` #${e.invoiceNumber}` : ''}
+                      {e.salesOrderNumber ? ` · sales order #${e.salesOrderNumber}` : ''}
                       {expired ? ' · expired' : ''}
                     </td>
                     <td className="qb-grid-cell cell-tight text-center">
@@ -404,10 +416,16 @@ function EstimateList({ accounts, intent, navigate }) {
                             },
                             onSelect: () => convert(e),
                           },
+                          salesOrders && {
+                            label: 'Create sales order',
+                            disabled: !open || e.status === 'REJECTED',
+                            hint: e.salesOrderNumber ? `Already sales order #${e.salesOrderNumber}` : e.status === 'REJECTED' ? 'Mark it pending or accepted first' : 'The customer ordered: ship and invoice it in parts from Sales › Sales Orders',
+                            onSelect: () => toOrder(e),
+                          },
                           { label: 'Mark accepted', disabled: !open || e.status === 'ACCEPTED', onSelect: () => setStatus(e, 'ACCEPTED') },
                           { label: 'Mark rejected', disabled: !open || e.status === 'REJECTED', onSelect: () => setStatus(e, 'REJECTED') },
                           { label: 'Mark pending', disabled: !open || e.status === 'PENDING', onSelect: () => setStatus(e, 'PENDING') },
-                        ]}
+                        ].filter(Boolean)}
                       />
                     </td>
                   </tr>

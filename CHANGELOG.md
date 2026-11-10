@@ -50,6 +50,10 @@ people using LocalBooks.
   too, with a PayPal app's client id and secret that only read your transactions. Each withdrawal to
   your bank comes in as a deposit of the payments it carried, less PayPal's fees, refunds and
   chargebacks, so it matches the bank line.
+- **Print, email and estimate sales orders.** A sales order prints, saves as a PDF and emails like
+  an invoice, with its own design in Settings › Custom Forms. An accepted estimate becomes a sales
+  order with **Create sales order**. Open Sales Orders by Customer and by Item and Pending Sales are
+  in Reports › Sales, and Preferences › Sales & Customers can turn sales orders off.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept

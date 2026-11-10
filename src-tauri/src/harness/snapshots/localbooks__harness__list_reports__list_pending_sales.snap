@@ -1,0 +1,13 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Pending Sales, all dates to 2025-12-31
+
+Customer                         Open Orders Not Yet Invoiced
+Brightwater Cafe                           1        810.00
+TOTAL                                               810.00
+
+1 lines
+
+Sales agreed on sales orders and not yet invoiced, as of 2025-12-31, before tax: 1 customer. Nothing here has posted; each sale posts when its invoice does.

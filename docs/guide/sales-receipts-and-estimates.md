@@ -47,7 +47,8 @@ over instead (and price them on the invoice), untick **Don't put zero-amount lin
 invoice** in **Preferences › Sales & Customers**.
 
 Invoicing an estimate in parts (progress invoicing) isn't available yet: an estimate becomes one
-invoice.
+invoice. To ship and bill an accepted estimate in parts, make it a sales order instead: choose
+**Create sales order** in its menu (see [Sales orders](sales-orders.md#from-an-estimate)).
 
 ### Turn estimates off
 

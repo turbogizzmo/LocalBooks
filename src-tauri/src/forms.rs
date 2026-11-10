@@ -32,11 +32,13 @@ pub enum FormKind {
     /// A bill payment's stub (remittance advice) for the vendor; its document id is one of the
     /// payment's bill payments, and the stub lists every bill paid on the same check.
     BillPayment,
+    /// A sales order (`sales_orders`): what the customer ordered, with what is still to ship.
+    SalesOrder,
 }
 
 impl FormKind {
     #[cfg(test)]
-    pub const ALL: [FormKind; 6] = [FormKind::Invoice, FormKind::Estimate, FormKind::SalesReceipt, FormKind::Statement, FormKind::CreditMemo, FormKind::BillPayment];
+    pub const ALL: [FormKind; 7] = [FormKind::Invoice, FormKind::Estimate, FormKind::SalesReceipt, FormKind::Statement, FormKind::CreditMemo, FormKind::BillPayment, FormKind::SalesOrder];
 
     pub(crate) fn key(self) -> &'static str {
         match self {
@@ -46,6 +48,7 @@ impl FormKind {
             FormKind::Statement => "STATEMENT",
             FormKind::CreditMemo => "CREDIT_MEMO",
             FormKind::BillPayment => "BILL_PAYMENT",
+            FormKind::SalesOrder => "SALES_ORDER",
         }
     }
 
@@ -57,6 +60,7 @@ impl FormKind {
             FormKind::Statement => "Statement",
             FormKind::CreditMemo => "Credit Memo",
             FormKind::BillPayment => "Bill Payment",
+            FormKind::SalesOrder => "Sales Order",
         }
     }
 }
@@ -251,6 +255,7 @@ impl FormTemplate {
             FormKind::Statement => "Please contact us with any questions about your account.",
             FormKind::CreditMemo => "This credit can be applied to an open invoice or refunded. Please keep it for your records.",
             FormKind::BillPayment => "This payment covers the bills listed. Please contact us with any questions.",
+            FormKind::SalesOrder => "Thank you for your order. We will invoice each part as it ships.",
         };
         let (subject, body) = match kind {
             FormKind::Invoice => (
@@ -262,6 +267,7 @@ impl FormTemplate {
             FormKind::Statement => ("Statement from {company}", "Dear {customer},\n\nPlease find attached your statement as of {date}. The amount due is {balance}.\n\n{company}"),
             FormKind::CreditMemo => ("Credit memo {number} from {company}", "Dear {customer},\n\nPlease find attached credit memo {number} for {total}.\n\n{company}"),
             FormKind::BillPayment => ("Payment from {company}", "Dear {customer},\n\nPlease find attached the details of our payment of {total} on {date}, and the bills it pays.\n\n{company}"),
+            FormKind::SalesOrder => ("Sales order {number} from {company}", "Dear {customer},\n\nPlease find attached our confirmation of your order {number} for {total}.\n\nThank you for your business.\n{company}"),
         };
         let template = FormTemplate {
             title: kind.default_title().into(),
@@ -856,6 +862,72 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
     })
 }
 
+/// A sales order as a form: its lines as ordered, with sales tax worked out at the order's rate
+/// (each invoice works it out again for what it ships).
+pub async fn sales_order_doc(pool: &SqlitePool, order_id: i64, symbol: &str) -> Result<FormDoc, String> {
+    type Header = (i64, i64, String, String, Option<String>, Option<String>, Option<String>, Option<i64>);
+    let header: Option<Header> = sqlx::query_as(
+        "SELECT o.order_number, o.customer_id, c.name, o.order_date, o.expected_date, o.memo, t.name, t.rate_ppm
+         FROM sales_orders o JOIN customers c ON c.id = o.customer_id LEFT JOIN tax_rates t ON t.id = o.tax_rate_id
+         WHERE o.id = ?1",
+    )
+    .bind(order_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    let (number, customer_id, name, date, expected, memo, tax_name, rate_ppm) = header.ok_or("FORM_NOT_FOUND: that sales order no longer exists")?;
+    let rows: Vec<ItemRow> = sqlx::query_as(
+        "SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, NULL AS percent_ppm, NULL AS service_date
+         FROM sales_order_lines WHERE sales_order_id = ?1 ORDER BY line_number",
+    )
+    .bind(order_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let taxable = taxable_flags(pool, "sales_order_lines", "sales_order_id", order_id).await?;
+    let overflow = || "FORM_OVERFLOW: amount out of range".to_string();
+    let subtotal = rows.iter().try_fold(0_i64, |sum, r| sum.checked_add(r.3)).ok_or_else(overflow)?;
+    let taxable_cents = rows.iter().zip(&taxable).filter(|(_, t)| **t).try_fold(0_i64, |sum, (r, _)| sum.checked_add(r.3)).ok_or_else(overflow)?;
+    let tax = match rate_ppm {
+        Some(ppm) => crate::ledger::mul_div_round(taxable_cents, ppm, 1_000_000).ok_or_else(overflow)?,
+        None => 0,
+    };
+    let total = subtotal.checked_add(tax).ok_or_else(overflow)?;
+    let money = |cents: i64| format_money(cents, None, symbol);
+    let cust = customer(pool, Some(customer_id), &name, false).await?;
+    let sales = crate::sales_orders::details_view(pool, order_id).await?;
+    let mut meta = vec![("Order date".to_string(), format_date(&date), false)];
+    if let Some(expected) = &expected {
+        meta.push(("Expected".into(), format_date(expected), false));
+    }
+    meta.push(("Total".into(), money(total), true));
+    let mut totals = Vec::new();
+    breakdown(&mut totals, total, tax, 0, tax_name.as_deref(), &money);
+    totals.push(TotalRow { label: "Total".into(), value: money(total), grand: true, payment: false });
+    let mark = marks_taxable(pool, tax_name.is_some()).await?;
+    Ok(FormDoc {
+        kind: FormKind::SalesOrder,
+        number: number.to_string(),
+        subtitle: None,
+        voided: false,
+        customer_id: Some(customer_id),
+        customer_name: name.clone(),
+        customer_details: bill_to_details(&name, &sales.header, &cust),
+        customer_email: cust.email,
+        meta,
+        lines: with_form_lines(mark_taxable(lines_of(pool, rows, &money).await?, &taxable, mark), &[], &money, mark),
+        totals,
+        memo: memo.filter(|m| !m.trim().is_empty()),
+        date: format_date(&date),
+        due_date: expected.as_deref().map(format_date).unwrap_or_default(),
+        total: money(total),
+        balance: money(total),
+        statement: None,
+        sales: FormSales::of(&sales),
+        form_style_id: None,
+    })
+}
+
 const PAYMENT_METHODS: &[(&str, &str)] =
     &[("CASH", "Cash"), ("CHECK", "Check"), ("CREDIT_CARD", "Credit card"), ("ACH", "ACH / bank transfer"), ("WIRE", "Wire"), ("OTHER", "Other")];
 
@@ -1237,6 +1309,15 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
             vec![
                 ("Estimate date".to_string(), "10/01/2026".to_string(), false),
                 ("Expires".to_string(), "10/31/2026".to_string(), false),
+                ("Total".to_string(), money(total), true),
+            ],
+            vec![TotalRow { label: "Total".into(), value: money(total), grand: true, payment: false }],
+            money(total),
+        ),
+        FormKind::SalesOrder => (
+            vec![
+                ("Order date".to_string(), "10/01/2026".to_string(), false),
+                ("Expected".to_string(), "10/15/2026".to_string(), false),
                 ("Total".to_string(), money(total), true),
             ],
             vec![TotalRow { label: "Total".into(), value: money(total), grand: true, payment: false }],
@@ -1645,6 +1726,7 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
         FormKind::Statement => "STATEMENT FOR",
         FormKind::CreditMemo => "CREDIT TO",
         FormKind::BillPayment => "PAID TO",
+        FormKind::SalesOrder => "ORDERED BY",
     };
     let label_color = if modern { accent } else { MUTED };
     let start = l.y;
@@ -1921,6 +2003,7 @@ pub(crate) async fn document(pool: &SqlitePool, kind: FormKind, document_id: Opt
         (FormKind::SalesReceipt, Some(id)) => sales_receipt_doc(pool, id, symbol).await,
         (FormKind::CreditMemo, Some(id)) => credit_memo_doc(pool, id, symbol).await,
         (FormKind::BillPayment, Some(id)) => bill_payment_doc(pool, id, symbol).await,
+        (FormKind::SalesOrder, Some(id)) => sales_order_doc(pool, id, symbol).await,
         (FormKind::Statement, Some(id)) => statement_doc(pool, id, period.unwrap_or_else(|| Period::last_month(chrono::Local::now().date_naive())), symbol).await,
     }
 }

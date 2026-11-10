@@ -103,8 +103,9 @@ All run, export and print like other reports, and tie out to the order lines.
   kind of unposted sale, since a sales order covers the same need and keeps every invoice a posted
   one. If testers ask for pending invoices, they get a row of their own.
 
-The reports are tabs on the Sales Orders screen, so they don't touch the report screen's list of
-cases while #276 moves it; they join the Report Center once that has merged.
+The reports are list reports (`list_reports/sales_orders.rs`), so they appear in the Report Center
+and the Reports menu, and as tabs on the Sales Orders screen, without a case of their own in the
+report screen.
 
 ## Screens and the rest
 
@@ -125,8 +126,11 @@ cases while #276 moves it; they join the Report Center once that has merged.
    list and invoice-part dialog; Open Sales Orders by Customer and by Item and Pending Sales; On
    Sales Order and Available in Stock Status and the information panel; Help, guide, README,
    CHANGELOG.
-3. Printing and email, Create Sales Order from an estimate, the preference, offering a customer's
-   open orders in Create Invoices, and the reports in the Report Center.
+3. Printing and email (migration 0154 adds `SALES_ORDER` to the form tables), Create Sales Order
+   from an estimate (`sales_orders.estimate_id`; the estimate is then invoiced through the order),
+   the preference, and the reports as list reports (`list_reports/sales_orders.rs`) in the Report
+   Center and the Sales Orders tabs. Offering a customer's open orders in Create Invoices, and a
+   packing slip, are left for later.
 
 ## Tests the build must pass
 

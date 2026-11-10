@@ -120,7 +120,7 @@ export const topics = [
   {
     id: 'sales-order', area: 'sales', views: ['sales/orders', 'sales/invoices', 'sales/products'],
     title: 'Take a sales order and invoice it in parts',
-    body: 'A sales order records what a customer ordered before you ship it, and posts nothing. From its menu, Create invoice for all that is left, or for part of it, opens the invoice form with those quantities; posting takes them off the order, and voiding that invoice puts them back. On sales orders and Available show stock already promised, and the Open by customer, Open by item and Pending sales tabs list what is still to ship.',
+    body: 'A sales order records what a customer ordered before you ship it, and posts nothing. From its menu, Create invoice for all that is left, or for part of it, opens the invoice form with those quantities; posting takes them off the order, and voiding that invoice puts them back. Print, save or email an order from the same menu, or make one from an accepted estimate (Create sales order in the estimate’s menu). On sales orders and Available show stock already promised, and Open Sales Orders by Customer and by Item and Pending Sales (Reports › Sales) list what is still to ship. Preferences › Sales & Customers turns sales orders off.',
     keywords: 'sales order so backorder back order partial invoice pending sales open orders fulfil fulfill ship',
     go: { label: 'New sales order', view: 'sales/orders', action: 'sales-order' },
     guide: 'sales-orders',

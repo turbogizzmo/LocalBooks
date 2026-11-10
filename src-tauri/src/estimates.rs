@@ -43,12 +43,15 @@ pub struct EstimateSummary {
     pub converted_to_invoice_id: Option<i64>,
     pub invoice_number: Option<i64>,
     pub line_count: i64,
+    /// The sales order this estimate became, if it did.
+    pub sales_order_number: Option<i64>,
 }
 
 const SUMMARY_SELECT: &str = "
     SELECT e.id, e.estimate_number, c.name AS customer_name, e.estimate_date, e.expiration_date, e.status, e.memo,
            e.total_cents, e.tax_rate_id, e.tax_cents, e.discount_cents, e.converted_to_invoice_id, i.invoice_number,
-           (SELECT COUNT(*) FROM estimate_lines WHERE estimate_id = e.id) AS line_count
+           (SELECT COUNT(*) FROM estimate_lines WHERE estimate_id = e.id) AS line_count,
+           (SELECT o.order_number FROM sales_orders o WHERE o.estimate_id = e.id) AS sales_order_number
     FROM estimates e
     JOIN customers c ON c.id = e.customer_id
     LEFT JOIN invoices i ON i.id = e.converted_to_invoice_id";
@@ -175,6 +178,11 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
 pub async fn set_estimate_status(pool: &SqlitePool, estimate_id: i64, status: &str) -> Result<EstimateSummary, String> {
     if !matches!(status, "PENDING" | "ACCEPTED" | "REJECTED") {
         return Err(format!("EST_BAD_STATUS: '{status}' is not a status you can set; convert to invoice to close"));
+    }
+    // An estimate that became a sales order goes on through the order; its status stays.
+    let ordered: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM sales_orders WHERE estimate_id = ?1)").bind(estimate_id).fetch_one(pool).await.map_err(db_err)?;
+    if ordered {
+        return Err("EST_ORDERED: this estimate became a sales order; its status no longer changes".into());
     }
     let result = sqlx::query("UPDATE estimates SET status = ?1 WHERE id = ?2 AND status <> 'CONVERTED'")
         .bind(status)
@@ -326,6 +334,10 @@ async fn check_convertible(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64) -
     .await
     .map_err(db_err)?;
     let (customer_name, status) = header.ok_or_else(|| format!("EST_NOT_FOUND: estimate {estimate_id} does not exist"))?;
+    let ordered: Option<i64> = sqlx::query_scalar("SELECT order_number FROM sales_orders WHERE estimate_id = ?1").bind(estimate_id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    if let Some(number) = ordered {
+        return Err(format!("EST_ORDERED: this estimate became sales order #{number}; invoice the order instead"));
+    }
     match status.as_str() {
         "CONVERTED" => Err("EST_CONVERTED: this estimate has already been converted to an invoice".to_string()),
         "REJECTED" => Err("EST_REJECTED: a rejected estimate cannot be invoiced; mark it pending or accepted first".to_string()),
