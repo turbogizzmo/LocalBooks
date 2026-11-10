@@ -496,7 +496,8 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
     if let Some(terms) = input.terms_id {
         crate::profile_lists::check_terms(&mut **tx, terms, None, "BILL").await?;
     }
-    // A line's customer or job is its purchase order line's (an order with receipts can't be edited).
+    // A line's customer or job is its purchase order line's: order lines are never edited, and a
+    // merge moves the job on the order line to the one kept.
     type LineRow = (i64, i64, i64, Option<i64>, String, Option<i64>, i64, Option<i64>, Option<i64>);
     let lines: Vec<LineRow> = sqlx::query_as(
         "SELECT l.id, l.line_number, l.account_id, l.product_service_id, l.description, l.quantity_e4, l.amount_cents, l.class_id, o.customer_id
