@@ -711,6 +711,7 @@ async fn open_po_detail(pool: &SqlitePool, as_of: NaiveDate) -> Result<Accountan
 
 #[derive(Debug, sqlx::FromRow)]
 struct PoJobLine {
+    customer_id: Option<i64>,
     job: Option<String>,
     vendor: String,
     po_number: i64,
@@ -727,13 +728,13 @@ struct PoJobLine {
 async fn open_po_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<AccountantReport, String> {
     let lines: Vec<PoJobLine> = sqlx::query_as(&format!(
         "{CUSTOMER_NAMES}
-         SELECT cn.full_name AS job, v.name AS vendor, p.po_number, p.po_date, p.expected_date, ps.name AS item, l.description, l.amount_cents
+         SELECT l.customer_id, cn.full_name AS job, v.name AS vendor, p.po_number, p.po_date, p.expected_date, ps.name AS item, l.description, l.amount_cents
          FROM purchase_orders p JOIN vendors v ON v.id = p.vendor_id
          JOIN purchase_order_lines l ON l.purchase_order_id = p.id
          LEFT JOIN products_services ps ON ps.id = l.product_service_id
          LEFT JOIN cn ON cn.id = l.customer_id
          WHERE p.status = 'OPEN' AND p.po_date <= ?1
-         ORDER BY cn.full_name IS NULL, cn.full_name COLLATE NOCASE, p.po_date, p.po_number, l.line_number"
+         ORDER BY l.customer_id IS NULL, cn.full_name COLLATE NOCASE, l.customer_id, p.po_date, p.po_number, l.line_number"
     ))
     .bind(as_of)
     .fetch_all(pool)
@@ -754,11 +755,12 @@ async fn open_po_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<Accountan
     let mut total: i64 = 0;
     let mut i = 0;
     while i < lines.len() {
-        let job = lines[i].job.clone();
-        let name = job.clone().unwrap_or_else(|| "No customer or job".into());
+        // Grouped by the customer or job itself, so two that share a name (as during a merge) stay apart.
+        let customer = lines[i].customer_id;
+        let name = lines[i].job.clone().unwrap_or_else(|| "No customer or job".into());
         rows.push(section(0, w, &name));
         let mut sub: i64 = 0;
-        while i < lines.len() && lines[i].job == job {
+        while i < lines.len() && lines[i].customer_id == customer {
             let l = &lines[i];
             rows.push(row(
                 RowKind::Detail,
