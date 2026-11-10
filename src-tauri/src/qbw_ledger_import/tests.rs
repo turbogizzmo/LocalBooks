@@ -1240,6 +1240,8 @@ async fn receipts_and_discounts_the_form_cannot_show_as_they_were() {
         active: true,
         custom_fields: Vec::new(),
         percent_ppm: None,
+        purchase_description: None,
+        purchase_cost_cents: None,
     };
     let mut l = ledger();
     l.accounts.extend([
@@ -1318,6 +1320,8 @@ async fn older_desktop_batches_get_their_fixed_assets_back() {
         active: true,
         custom_fields: Vec::new(),
         percent_ppm: None,
+        purchase_description: None,
+        purchase_cost_cents: None,
     }];
     let desktop = stage(&pool, Path::new("/books/Old.QBB"), 1, &l).await.unwrap();
     let iif = stage(&pool, Path::new("/books/Lists.iif"), 1, &l).await.unwrap();
