@@ -17,6 +17,7 @@ import { ratePercent, useSalesTax } from './SalesTax.jsx';
 import { CustomFieldInputs } from './SalesLists.jsx';
 import { ProfileEntrySelect, TermsSelect } from './ProfileFields.jsx';
 import { CustomerPriceLevelField } from './PriceLevels.jsx';
+import PartyContacts, { contactsPayload, usePartyContacts } from './PartyContacts.jsx';
 import { CustomerAccountFields, CustomerAddressFields, CustomerContactFields, customerRecordForm, customerRecordPayload } from './CustomerRecordFields.jsx';
 import { JOB_STATUSES, useSalesPrefs } from '../lib/salesPrefs.js';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -196,7 +197,7 @@ function BankDetailsFields({ bank, setBank }) {
   );
 }
 
-/** The full customer or vendor record: contact details, default terms, type and (vendors) 1099 status. */
+/** The full customer or vendor record: contact details and contacts, default terms, type and (vendors) 1099 status. */
 export function PartyDialog({ kind, id, onClose, onSaved }) {
   const noun = CONFIG[kind].noun;
   const [form, setForm] = useState(null);
@@ -206,6 +207,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
   const { data: formStyles } = useLedgerQuery(api.listFormStyles);
   const reps = useLedgerQuery(api.listSalesReps).data ?? [];
   const [fields, setFields] = useState([]);
+  const contactList = usePartyContacts(kind, id);
   // Vendors' bank details: `view` as stored, `draft` while being changed (undefined = unchanged).
   const [bank, setBank] = useState({ view: null, draft: undefined });
   // Preferences › Tax: 1099 › "Do you file 1099s?" off hides the 1099 box.
@@ -264,6 +266,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
         jobStatus: form.jobStatus || null,
         customFields: fields.map(({ fieldId, value }) => ({ fieldId, value })),
       });
+      if (contactList.contacts) await api.savePartyContacts(kind, id, contactsPayload(contactList.contacts));
       if (kind === 'vendor' && accountNumber.draft.trim() !== (accountNumber.stored ?? '')) {
         await api.setVendorAccountNumber(id, accountNumber.draft);
       }
@@ -296,6 +299,8 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
             {field('Company name', 'companyName')}
             {field('Email', 'email', { type: 'email' })}
             {field('Phone', 'phone', { type: 'tel' })}
+            {contactList.contacts && <PartyContacts kind={kind} contacts={contactList.contacts} setContacts={contactList.setContacts} />}
+            {contactList.error && <Notice kind="error" text={contactList.error} />}
             {kind === 'customer' && <CustomerContactFields form={form} setForm={setForm} />}
             {kind === 'customer' ? (
               <CustomerAddressFields form={form} setForm={setForm} />

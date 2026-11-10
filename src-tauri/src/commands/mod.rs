@@ -102,6 +102,7 @@ features![
     migration,
     mileage,
     payout_feeds,
+    party_contacts,
     payroll_import,
     offsite,
     preferences,

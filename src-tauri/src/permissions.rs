@@ -170,6 +170,7 @@ const READ: &[&str] = &[
     "list_statement_charges",
     "get_list_order",
     "get_customer_credit",
+    "list_party_contacts",
     "save_form_pdf",
     "get_envelope_layout",
     "render_envelope",

@@ -74,6 +74,7 @@ mod money;
 mod mail_app;
 mod offsite;
 mod parties;
+mod party_contacts;
 mod payroll_import;
 mod payout_feeds;
 mod permissions;
