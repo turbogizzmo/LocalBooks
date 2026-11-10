@@ -15,7 +15,7 @@ and the order.
   `report_pdf::to_pdf`, used only by tests; `party_contacts::statement_contact`, used nowhere;
   `CustomerFacts::name`; a Shopify constant). Each dead item is either connected to the screen
   it was written for or kept as test-only with `#[cfg(test)]`. That is a decision, not a mechanical fix.
-- **A6b and A6c, done** in one PR (#PRNUM): the 45 complex types became local `type` aliases next to
+- **A6b and A6c, done** in one PR (#343): the 45 complex types became local `type` aliases next to
   their query, `record_movement` takes a `Movement` struct, `Cleared::Cleared` keeps its name (it is
   the JSON value) with the lint allowed on that enum, and the dead code went: three test-only
   helpers (`suggested_pattern`, `reconcile::start`, `report_pdf::to_pdf`) are `#[cfg(test)]`, and
