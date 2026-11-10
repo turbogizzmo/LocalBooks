@@ -7,8 +7,6 @@ const MAX_SHOWN = 12;
 
 const sameName = (a, b) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
 
-const NOUNS = { vendor: 'vendor', customer: 'customer' };
-
 /**
  * The name box on forms: Vendor on bills, checks, expenses, purchase orders and vendor credits,
  * Customer on invoices, sales receipts, estimates and credit memos. Typing shows the names that
@@ -23,7 +21,7 @@ const NOUNS = { vendor: 'vendor', customer: 'customer' };
  * still does.
  */
 export default function NameField({ kind, names, value, onChange, inputRef, className = 'qb-input w-[200px]', placeholder, autoFocus = false, label }) {
-  const noun = NOUNS[kind];
+  const noun = kind;
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -87,7 +85,8 @@ export default function NameField({ kind, names, value, onChange, inputRef, clas
   const onBlur = () => {
     setOpen(false);
     // Switching to another app isn't leaving the box.
-    if (!document.hasFocus() || busy || typed === '' || exact) return;
+    // An empty list is one still loading: saving asks if the name really is new.
+    if (!document.hasFocus() || busy || typed === '' || exact || names.length === 0) return;
     if (declined.current === typed.toLocaleLowerCase()) return;
     // After this event: a form closing takes the box with it, and then there is nothing to ask.
     setTimeout(() => {

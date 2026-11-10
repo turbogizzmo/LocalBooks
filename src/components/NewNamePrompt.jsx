@@ -17,7 +17,6 @@ import { api, errorText } from '../lib/api.js';
  * person typed a new name and clicked Save), they share one question.
  */
 
-const NOUNS = { customer: 'customer', vendor: 'vendor' };
 const create = { customer: (name) => api.createCustomer(name, null), vendor: (name) => api.createVendor(name, null) };
 
 const pending = new Map();
@@ -63,7 +62,7 @@ function show(render) {
 }
 
 function NewNameDialog({ kind, name, start, onDone }) {
-  const noun = NOUNS[kind];
+  const noun = kind;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // The record being set up: { id, name } once the name has been added.
