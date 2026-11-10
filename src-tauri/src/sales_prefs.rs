@@ -40,8 +40,9 @@ pub const BILL_DISCOUNT_ACCOUNT: &str = "bill_discount_account_id";
 pub const PAYMENT_AUTO_DISCOUNTS: &str = "payment_auto_apply_discounts";
 pub const PAYMENT_DISCOUNT_ACCOUNT: &str = "payment_discount_account_id";
 pub const DEFAULT_DELIVERY: &str = "default_delivery_method";
-/// The F.O.B. text printed on a sales form, as the schema allows it.
-pub const MAX_FOB_CHARS: usize = 30;
+/// The longest usual F.O.B.: what a sales form's F.O.B. box takes (`sales_header`), so the default
+/// it fills in can always be saved.
+pub const MAX_FOB_CHARS: usize = crate::sales_header::MAX_SHORT_FIELD;
 /// Most days a bill can be due after its date, as for vendor terms.
 pub const MAX_BILL_DUE_DAYS: u32 = 365;
 /// A markup above 1,000% is almost certainly a typing slip.
