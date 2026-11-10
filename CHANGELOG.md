@@ -40,6 +40,10 @@ people using LocalBooks.
   it keeps track of what is left. Voiding one of its invoices puts the quantities back. Stock Status
   and an item's information panel now show what is on sales orders and what is available, and the
   Open by customer, Open by item and Pending sales reports list what is still to ship.
+- **PayPal payouts with their fees.** Banking › Payout Feeds now connects a PayPal business account
+  too, with a PayPal app's client id and secret that only read your transactions. Each withdrawal to
+  your bank comes in as a deposit of the payments it carried, less PayPal's fees, refunds and
+  chargebacks, so it matches the bank line.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
