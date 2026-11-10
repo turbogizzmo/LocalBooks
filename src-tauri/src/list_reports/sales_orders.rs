@@ -3,6 +3,8 @@
 //! Status and each other. Sales orders post nothing, so none of these ties to the ledger: what they
 //! add up to is what is left to invoice on open orders, at the orders' rates, before tax.
 
+use std::collections::BTreeMap;
+
 use chrono::NaiveDate;
 use serde_json::{json, Value};
 use sqlx::SqlitePool;
@@ -68,16 +70,13 @@ pub(super) async fn open_by_customer(pool: &SqlitePool, today: NaiveDate) -> Res
     let open = open_lines(pool).await?;
     let columns = columns("Customer", "Item");
     let w = columns.len();
-    let mut groups: Vec<(String, i64, Vec<&OpenLine>)> = Vec::new();
+    // By name, then id; each customer's lines keep their order (oldest order first).
+    let mut groups: BTreeMap<(String, i64), (String, Vec<&OpenLine>)> = BTreeMap::new();
     for l in &open.lines {
-        match groups.iter_mut().find(|g| g.1 == l.customer_id) {
-            Some(g) => g.2.push(l),
-            None => groups.push((l.customer_name.clone(), l.customer_id, vec![l])),
-        }
+        groups.entry((l.customer_name.to_lowercase(), l.customer_id)).or_insert_with(|| (l.customer_name.clone(), Vec::new())).1.push(l);
     }
-    groups.sort_by_key(|g| (g.0.to_lowercase(), g.1));
     let mut rows = Vec::new();
-    for (name, _, lines) in &groups {
+    for (name, lines) in groups.values() {
         rows.push(section(0, w, name));
         rows.extend(lines.iter().map(|l| line_row(l, item_of(l))));
         rows.push(labeled(RowKind::Subtotal, 0, w, &format!("Total {name}"), &[json!(sum(lines.iter().map(|l| l.open_cents))?)]));
@@ -96,17 +95,15 @@ pub(super) async fn open_by_item(pool: &SqlitePool, today: NaiveDate) -> Result<
     let open = open_lines(pool).await?;
     let columns = columns("Item", "Customer");
     let w = columns.len();
-    let mut groups: Vec<(String, Option<i64>, Vec<&OpenLine>)> = Vec::new();
+    // By item (lines without one, by their description), name order.
+    let mut groups: BTreeMap<(String, Option<i64>, String), (String, Option<i64>, Vec<&OpenLine>)> = BTreeMap::new();
     for l in &open.lines {
         let name = item_of(l);
-        match groups.iter_mut().find(|g| g.1 == l.product_service_id && (g.1.is_some() || g.0 == name)) {
-            Some(g) => g.2.push(l),
-            None => groups.push((name, l.product_service_id, vec![l])),
-        }
+        let own = if l.product_service_id.is_some() { String::new() } else { name.clone() };
+        groups.entry((name.to_lowercase(), l.product_service_id, own)).or_insert_with(|| (name.clone(), l.product_service_id, Vec::new())).2.push(l);
     }
-    groups.sort_by_key(|g| (g.0.to_lowercase(), g.1));
     let mut rows = Vec::new();
-    for (name, product, lines) in &groups {
+    for (name, product, lines) in groups.values() {
         let stock = product.and_then(|p| open.items.iter().find(|i| i.product_service_id == p));
         let heading = match stock {
             Some(s) if s.on_hand_e4.is_some() => format!(

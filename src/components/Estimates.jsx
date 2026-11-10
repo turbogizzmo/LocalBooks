@@ -197,6 +197,7 @@ export default function Estimates(props) {
 
 function EstimateList({ accounts, intent, navigate }) {
   const { data, error } = useLedgerQuery(api.listEstimates);
+  const { salesOrders } = useSalesPrefs();
   const [composing, setComposing] = useState(intent?.action === 'estimate');
   const [notice, setNotice] = useState(null);
   const today = todayIso();
@@ -373,7 +374,7 @@ function EstimateList({ accounts, intent, navigate }) {
                             },
                             onSelect: () => convert(e),
                           },
-                          {
+                          salesOrders && {
                             label: 'Create sales order',
                             disabled: !open || e.status === 'REJECTED',
                             hint: e.salesOrderNumber ? `Already sales order #${e.salesOrderNumber}` : e.status === 'REJECTED' ? 'Mark it pending or accepted first' : 'The customer ordered: ship and invoice it in parts from Sales › Sales Orders',
@@ -382,7 +383,7 @@ function EstimateList({ accounts, intent, navigate }) {
                           { label: 'Mark accepted', disabled: !open || e.status === 'ACCEPTED', onSelect: () => setStatus(e, 'ACCEPTED') },
                           { label: 'Mark rejected', disabled: !open || e.status === 'REJECTED', onSelect: () => setStatus(e, 'REJECTED') },
                           { label: 'Mark pending', disabled: !open || e.status === 'PENDING', onSelect: () => setStatus(e, 'PENDING') },
-                        ]}
+                        ].filter(Boolean)}
                       />
                     </td>
                   </tr>

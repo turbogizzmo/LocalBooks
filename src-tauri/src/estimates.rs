@@ -179,6 +179,11 @@ pub async fn set_estimate_status(pool: &SqlitePool, estimate_id: i64, status: &s
     if !matches!(status, "PENDING" | "ACCEPTED" | "REJECTED") {
         return Err(format!("EST_BAD_STATUS: '{status}' is not a status you can set; convert to invoice to close"));
     }
+    // An estimate that became a sales order goes on through the order; its status stays.
+    let ordered: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM sales_orders WHERE estimate_id = ?1)").bind(estimate_id).fetch_one(pool).await.map_err(db_err)?;
+    if ordered {
+        return Err("EST_ORDERED: this estimate became a sales order; its status no longer changes".into());
+    }
     let result = sqlx::query("UPDATE estimates SET status = ?1 WHERE id = ?2 AND status <> 'CONVERTED'")
         .bind(status)
         .bind(estimate_id)

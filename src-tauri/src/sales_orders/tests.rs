@@ -282,4 +282,16 @@ async fn an_estimate_becomes_an_order_once_and_is_then_invoiced_through_it() {
     assert!(crate::estimates::convert_to_invoice(&s.pool, estimate.id, d(5), d(30)).await.unwrap_err().starts_with("EST_ORDERED"));
     let listed = crate::estimates::list_estimates(&s.pool).await.unwrap();
     assert_eq!(listed[0].sales_order_number, Some(made.order.order_number));
+    assert!(crate::estimates::set_estimate_status(&s.pool, estimate.id, "REJECTED").await.unwrap_err().starts_with("EST_ORDERED"));
+
+    // Deleting the order (nothing invoiced) frees the estimate again.
+    delete(&s.pool, made.order.id).await.unwrap();
+    assert_eq!(crate::estimates::list_estimates(&s.pool).await.unwrap()[0].sales_order_number, None);
+    let again = create_from_estimate(&s.pool, estimate.id, d(4)).await.unwrap();
+    assert_eq!(again.order.order_number, 1, "the deleted order's number is free again");
+
+    // With sales orders off, an estimate can't become one.
+    crate::preferences::set(&s.pool, crate::sales_prefs::SALES_ORDERS, "false").await.unwrap();
+    delete(&s.pool, again.order.id).await.unwrap();
+    assert!(create_from_estimate(&s.pool, estimate.id, d(4)).await.unwrap_err().starts_with("SO_OFF"));
 }

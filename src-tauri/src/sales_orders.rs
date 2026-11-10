@@ -251,6 +251,9 @@ pub struct OrderFromEstimate {
 /// The order keeps the estimate it came from (`estimate_id`), and the estimate can then only be
 /// invoiced through the order.
 pub async fn create_from_estimate(pool: &SqlitePool, estimate_id: i64, order_date: NaiveDate) -> Result<OrderFromEstimate, String> {
+    if !crate::preferences::flag(pool, crate::sales_prefs::SALES_ORDERS).await? {
+        return Err("SO_OFF: sales orders are turned off (Preferences › Sales & Customers)".into());
+    }
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     match write_from_estimate(&mut tx, estimate_id, order_date).await {
         Ok((id, left_out)) => {
