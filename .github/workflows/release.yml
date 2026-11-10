@@ -101,8 +101,9 @@ jobs:
     name: Test (macos-latest)
     # macOS runners are few and slow (about 41 minutes for the suite), and a queue of per-PR runs
     # held batch PRs for hours. So on a pull request the macOS suite runs only for batch branches
-    # (`batch/*`, which merge every feature PR) or a PR labelled `macos`. Pushes to main, tags and
-    # manual runs always run it. A skipped job counts as passing for required checks.
+    # (`batch/*`, which merge every feature PR) or a PR labelled `macos` (adding the label runs the
+    # suite at once through macos-label.yml). Pushes to main, tags and manual runs always run it. A
+    # skipped job counts as passing for required checks.
     if: >-
       github.event_name != 'pull_request' ||
       startsWith(github.head_ref, 'batch/') ||

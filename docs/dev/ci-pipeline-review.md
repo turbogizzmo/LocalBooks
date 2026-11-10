@@ -194,9 +194,14 @@ Left as is: Linux and Windows Rust tests, end-to-end, Clippy and the JS checks s
 feature PR. They are the signal a session needs before its PR goes into a batch, and after the
 test-time fix they are short.
 
-A label added to an open PR (`macos`, `codeql`) takes effect on its next push, since the workflows
-do not trigger on `labeled`; adding that trigger would re-run every check whenever any label is
-added.
+Adding the `codeql` or `macos` label to an open PR starts that run at once (the `labeled` trigger,
+found by the Claude review of #332). Only that label starts anything: each job checks the label's
+name, and any other label (the `review:*` ones included) runs in a concurrency group of its own, so
+it cancels nothing. CodeQL takes `labeled` in `codeql.yml`. The macOS run is a separate workflow,
+`macos-label.yml`, with its own job name (`Test on macOS (label)`): a `labeled` trigger in
+`release.yml` would start a whole Release run, cancel the PR's run in progress, and post skipped
+`Test (ubuntu-latest)` / `Test (windows-latest)` checks that could stand in for a failed required
+check. After the label is on, `release.yml` runs `Test (macos-latest)` on each later push as before.
 
 ### 5. Other findings
 
