@@ -31,6 +31,8 @@ people using LocalBooks.
   such lines are left off the invoice the estimate becomes (Preferences › Sales & Customers can
   bring them over instead). A usual F.O.B. set there fills in on new invoices, sales receipts and
   estimates.
+- **Four more reports.** Terms Listing, Unbilled Costs by Job, Inventory Stock Status by Vendor and
+  Closing Date Exceptions are in the Reports menu and the Report Center.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

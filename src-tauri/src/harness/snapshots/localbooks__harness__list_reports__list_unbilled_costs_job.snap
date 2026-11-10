@@ -1,0 +1,12 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Unbilled Costs by Job, all dates to 2025-12-31
+
+                               Type                      Date          Source Name               Account                   Memo                             Amount
+TOTAL                                                                                                                                                         0.00
+
+0 lines
+
+0 costs on 0 customers and jobs: billable expense and bill lines not yet on an invoice (Customers › Bill Costs puts them on one).
