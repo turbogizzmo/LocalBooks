@@ -110,18 +110,21 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
   const multi = !byName && (split !== 'total' || compare !== 'none');
   const heading = title ?? (byClass ? 'Profit and Loss by Class' : byName === 'job' ? 'Profit and Loss by Job' : 'Profit and Loss');
   const fileBase = byName === 'job' ? 'Profit-and-Loss-by-Job' : 'Profit-and-Loss';
+  // Which layout a result belongs to, so a reload after a Columns change never draws the old one.
+  const layout = byName ?? (multi ? 'periods' : 'total');
   const { data: fetched, error, reload } = useLedgerQuery(() => {
     if (!prefsReady && !chosenBasis) return Promise.resolve(null); // wait for the default basis (accrual if it can't load)
-    if (byName === 'class') return api.getProfitAndLossByClass(start, end);
-    if (byName === 'job') return api.getProfitAndLossByJob(start, end);
-    if (!multi) return api.getProfitAndLoss(start, end, classFilter, basis);
+    const tag = (d) => d && { ...d, layout };
+    if (byName === 'class') return api.getProfitAndLossByClass(start, end).then(tag);
+    if (byName === 'job') return api.getProfitAndLossByJob(start, end).then(tag);
+    if (!multi) return api.getProfitAndLoss(start, end, classFilter, basis).then(tag);
     const columns = periodColumns();
     if (columns.length > 36) return Promise.reject(new Error('RPT_BAD_COLUMNS: choose a shorter range or quarters (at most 36 columns)'));
-    return api.getProfitAndLossPeriods({ columns, total: split !== 'total', compare: split === 'total' && compare !== 'none', basis, classFilter });
+    return api.getProfitAndLossPeriods({ columns, total: split !== 'total', compare: split === 'total' && compare !== 'none', basis, classFilter }).then(tag);
   });
 
-  // Until a reload after a Columns change finishes, `fetched` has the old layout's shape; show nothing then.
-  const data = fetched && Boolean(fetched.columns) === Boolean(byName || multi) ? fetched : null;
+  // Until a reload after a Columns change finishes, `fetched` is the old layout's; show nothing then.
+  const data = fetched?.layout === layout ? fetched : null;
 
   // Once the fiscal calendar loads (or changes in Settings), re-resolve the selected preset.
   useEffect(() => {
@@ -220,7 +223,7 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
             onNotice={setNotice}
             onCsv={() => {
               if (byName === 'class') return saveCsv('profit_and_loss_by_class', { startDate: start, endDate: end }, `Profit-and-Loss-by-Class_${start}_to_${end}.csv`, setNotice);
-              if (!multi && basis === 'ACCRUAL') return saveCsv('profit_and_loss', { startDate: start, endDate: end, classFilter }, `Profit-and-Loss_${start}_to_${end}.csv`, setNotice);
+              if (!byName && !multi && basis === 'ACCRUAL') return saveCsv('profit_and_loss', { startDate: start, endDate: end, classFilter }, `Profit-and-Loss_${start}_to_${end}.csv`, setNotice);
               // Cash basis, multi-column and Customer:Job layouts export what is on screen.
               const columns = data.columns ?? [{ label: 'Total' }];
               const rows = [
@@ -239,7 +242,7 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
             }}
             onXlsx={() => {
               if (byName === 'class') return saveReportXlsx('profit_and_loss_by_class', { startDate: start, endDate: end }, `Profit-and-Loss-by-Class_${start}_to_${end}.xlsx`, setNotice);
-              if (!multi && basis === 'ACCRUAL') return saveReportXlsx('profit_and_loss', { startDate: start, endDate: end, classFilter }, `Profit-and-Loss_${start}_to_${end}.xlsx`, setNotice);
+              if (!byName && !multi && basis === 'ACCRUAL') return saveReportXlsx('profit_and_loss', { startDate: start, endDate: end, classFilter }, `Profit-and-Loss_${start}_to_${end}.xlsx`, setNotice);
               const sheet = statementSheet({
                 company: company.name,
                 title: heading,
