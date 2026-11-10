@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTime};
 
 use chrono::{DateTime, Local};
 use serde::Serialize;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::SqlitePool;
 
 use crate::db::{self, Db, MIGRATOR};
