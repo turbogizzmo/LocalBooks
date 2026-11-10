@@ -127,6 +127,24 @@ async fn company() -> SqlitePool {
     crate::expenses::pay_vendor_bill(p, BillPaymentInput { bill_id: bill, payment_account_id: account(p, "1010").await, payment_date: d(2025, 12, 10), amount_cents: 5_000, reference: None, to_be_printed: false })
         .await
         .unwrap();
+
+    // For the T36 reports: a budget, two to-dos, a memorized transaction and a ship-to address.
+    let budget = crate::statements::create_budget(p, "Plan 2025", d(2025, 6, 1)).await.unwrap().id;
+    let rent = account(p, "6300").await;
+    let amounts: Vec<crate::statements::BudgetAmount> = (1..=12)
+        .map(|period| crate::statements::BudgetAmount { account_id: sales, period, amount_cents: 1_000_000 })
+        .chain((1..=12).map(|period| crate::statements::BudgetAmount { account_id: rent, period, amount_cents: 250_000 }))
+        .collect();
+    crate::statements::set_budget_amounts(p, budget, &amounts).await.unwrap();
+    sqlx::query("INSERT INTO todos (title, note, due_date, customer_id) VALUES ('Call about the patio menu', 'Ask for the final copy', '2025-12-20', ?1)").bind(cafe).execute(p).await.unwrap();
+    sqlx::query("INSERT INTO todos (title, is_done, done_at) VALUES ('Order mug stock', 1, '2025-12-01T10:00:00.000Z')").execute(p).await.unwrap();
+    sqlx::query("INSERT INTO recurring_templates (name, kind, payload, frequency, every, next_date) VALUES ('Monthly rent', 'EXPENSE', '{}', 'MONTHLY', 1, '2026-01-01')").execute(p).await.unwrap();
+    sqlx::query("UPDATE invoices SET ship_to = '8 Pier Road
+Harbor Lane, OR 97001' WHERE id = (SELECT id FROM invoices WHERE customer_id = ?1 AND is_voided = 0 ORDER BY id LIMIT 1)")
+        .bind(cafe)
+        .execute(p)
+        .await
+        .unwrap();
     pool
 }
 
@@ -170,8 +188,9 @@ async fn list_reports() {
         if info.id == "audit-trail" {
             continue;
         }
-        // The fixture closes no period and marks no cost billable; `t9_…` below fills those two.
-        if !matches!(info.id, "closing-date-exceptions" | "unbilled-costs-job") {
+        // The fixture closes no period, marks no cost billable and has no home currency adjustment
+        // (one would change every other report here); `t9_…` and `t36_reports_tie_out` fill those.
+        if !matches!(info.id, "closing-date-exceptions" | "unbilled-costs-job" | "unrealized-gains") {
             assert!(report.report.line_count > 0, "{} has lines", info.id);
         }
         let shown = format!("{}\n{}", render(info.title, &report.report), report.notes.join("\n"));
@@ -342,6 +361,77 @@ async fn several_reports_make_one_workbook() {
         "A report title much longer (2)".into(),
     ]);
     assert!(crate::xlsx_export::to_xlsx_book(&[], "$").is_err());
+}
+
+#[tokio::test]
+async fn t36_reports_tie_out() {
+    let pool = company().await;
+    let p = &pool;
+    let (start, end) = (d(2025, 1, 1), d(2025, 12, 31));
+    let run_on = |id: &'static str| {
+        let p = p.clone();
+        async move { list_reports::run(&p, id, Some(start), Some(end), today()).await.unwrap_or_else(|e| panic!("{id}: {e}")) }
+    };
+
+    // Sales Tax Revenue Summary: the Sales Tax Liability report's sales, taxable plus non-taxable.
+    let revenue = run_on("sales-tax-revenue").await;
+    let liability = crate::sales_tax::tax_liability(p, start, end).await.unwrap();
+    let taxable: i64 = liability.rows.iter().map(|r| r.taxable_sales_cents).sum();
+    let other: i64 = liability.rows.iter().map(|r| r.non_taxable_sales_cents).sum();
+    let totals: Vec<i64> = total(&revenue).cells[1..].iter().map(cents).collect();
+    assert_eq!(totals, vec![taxable + other, other, taxable]);
+
+    // Sales by Ship To Address: every invoice and sales receipt's income, grouped; the one with an
+    // address is under it.
+    let ship = run_on("sales-ship-to").await;
+    let income: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(l.credit_cents - l.debit_cents), 0) FROM journal_lines l
+         JOIN journal_entries e ON e.id = l.journal_entry_id JOIN v_chart_of_accounts a ON a.id = l.account_id
+         WHERE a.classification = 'INCOME' AND e.status = 'POSTED' AND e.entry_date BETWEEN '2025-01-01' AND '2025-12-31'
+           AND e.id IN (SELECT journal_entry_id FROM invoices WHERE is_voided = 0 UNION SELECT journal_entry_id FROM sales_receipts WHERE is_voided = 0)",
+    )
+    .fetch_one(p)
+    .await
+    .unwrap();
+    assert_eq!(last(total(&ship)), income);
+    assert!(ship.report.rows.iter().any(|r| r.kind == RowKind::Section && text(&r.cells[0]) == "8 Pier Road, Harbor Lane, OR 97001"));
+
+    // A home currency adjustment at the end of November on the euro invoice still open.
+    let rates: std::collections::BTreeMap<String, i64> = [("EUR".to_string(), 1_120_000)].into();
+    crate::revaluation::post(p, d(2025, 11, 30), &rates).await.unwrap();
+    let adjustments = run_on("unrealized-gains").await;
+
+    // Each ties out to what its account shows in the ledger for the range.
+    let posted = |name: &'static str| {
+        let p = p.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COALESCE(SUM(l.credit_cents - l.debit_cents), 0) FROM journal_lines l
+                 JOIN journal_entries e ON e.id = l.journal_entry_id JOIN chart_of_accounts a ON a.id = l.account_id
+                 WHERE a.name = ?1 AND a.parent_id IS NULL AND e.status = 'POSTED' AND e.entry_date BETWEEN '2025-01-01' AND '2025-12-31'",
+            )
+            .bind(name)
+            .fetch_one(&p)
+            .await
+            .unwrap()
+        }
+    };
+    assert_eq!(last(total(&run_on("realized-gains").await)), posted("Exchange Gain or Loss").await);
+    assert_eq!(last(total(&adjustments)), posted("Unrealized Exchange Gain or Loss").await);
+    assert_eq!(adjustments.report.line_count, 2, "the November 30 adjustment and its December 1 reversal, which net to zero over the year");
+
+    // Budget Overview: the amounts as entered, and net income = income less expenses.
+    let budget = list_reports::run(p, "budget-overview", None, Some(d(2025, 6, 30)), today()).await.unwrap();
+    let net = total(&budget);
+    assert_eq!(last(net), 12 * (1_000_000 - 250_000));
+    assert_eq!(details(&budget).count(), 2);
+
+    // To Do Notes and the memorized transaction listing list what was entered.
+    let todos = run_on("todo-notes").await;
+    assert_eq!(text(&todos.report.rows[0].cells[2]), "Call about the patio menu", "open to-dos first");
+    assert_eq!(text(&todos.report.rows[0].cells[4]), "Brightwater Cafe");
+    let memorized = run_on("memorized-transactions").await;
+    assert!(memorized.report.rows.iter().any(|r| text(&r.cells[0]) == "Monthly rent" && text(&r.cells[2]) == "Every month"));
 }
 
 #[tokio::test]

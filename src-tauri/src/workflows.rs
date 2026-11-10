@@ -628,6 +628,15 @@ pub async fn purchase_order_lines(pool: &SqlitePool, id: i64) -> Result<Vec<Purc
 /// Records a purchase order. It posts nothing; the bill does when the order arrives.
 pub async fn create_purchase_order(pool: &SqlitePool, input: PurchaseOrderInput) -> Result<i64, String> {
     crate::inventory::require_enabled(pool).await?;
+    let total = validate_purchase_order(&input)?;
+    run(pool, async |tx| write_purchase_order(tx, &input, total).await).await
+}
+
+/// A purchase order's total, or why it can't be recorded.
+pub fn validate_purchase_order(input: &PurchaseOrderInput) -> Result<i64, String> {
+    if input.vendor_name.trim().is_empty() {
+        return Err("PO_NO_VENDOR: enter a vendor".into());
+    }
     if input.lines.is_empty() {
         return Err("PO_NO_ITEMS: add at least one line".into());
     }
@@ -638,7 +647,12 @@ pub async fn create_purchase_order(pool: &SqlitePool, input: PurchaseOrderInput)
         }
         total = total.checked_add(line.amount_cents).filter(|t| *t <= MAX_LINE_CENTS).ok_or_else(|| format!("PO_TOO_LARGE: the order exceeds {}", format_cents(MAX_LINE_CENTS)))?;
     }
-    run(pool, async |tx| {
+    Ok(total)
+}
+
+/// Writes a validated purchase order (`total` from [`validate_purchase_order`]) in `tx`.
+pub(crate) async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, input: &PurchaseOrderInput, total: i64) -> Result<i64, String> {
+    {
         let vendor = crate::sales::find_or_create_named(tx, crate::sales::Party::Vendor, &input.vendor_name).await?;
         let id: i64 = sqlx::query_scalar(
             "INSERT INTO purchase_orders (po_number, vendor_id, po_date, expected_date, memo, total_cents)
@@ -671,8 +685,7 @@ pub async fn create_purchase_order(pool: &SqlitePool, input: PurchaseOrderInput)
             .map_err(db_err)?;
         }
         Ok(id)
-    })
-    .await
+    }
 }
 
 /// Closes an open order without billing it, or reopens a closed one.
@@ -704,6 +717,9 @@ pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDat
         let (vendor, total, status, memo, number) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
         if status != "OPEN" {
             return Err("PO_NOT_OPEN: only an open purchase order can be billed".into());
+        }
+        if crate::item_receipts::order_has_receipts(tx, id).await? {
+            return Err(format!("PO_HAS_RECEIPTS: items on purchase order #{number} have been received; enter the bill from Enter Bill for Received Items"));
         }
         let bill = BillInput {
             terms_id: None,
