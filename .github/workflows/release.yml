@@ -1,6 +1,7 @@
 # LocalBooks CI/CD
 #
-# pull request   → run the Rust test suite on macOS, Windows and Linux (no secrets, read-only).
+# pull request   → run the Rust test suite on Windows and Linux, and on macOS for batch/* branches
+#                  or a PR labelled `macos` (no secrets, read-only).
 # push to main   → same tests.
 # manual run     → run tests, then build installers; keep workflow artifacts for 7 days.
 # push tag v*    → same gates, then build and upload the installers and latest.json to a DRAFT
@@ -62,7 +63,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, windows-latest, ubuntu-latest]
+        platform: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.platform }}
     # The macOS runners take about 41 minutes for the full suite (Nov 2026), so 45 left no room.
     timeout-minutes: 75
@@ -91,9 +92,52 @@ jobs:
         working-directory: src-tauri
         run: cargo test --locked
 
+  test-macos:
+    # A fixed name, so a skipped run still reports as "Test (macos-latest)" for required checks.
+    name: Test (macos-latest)
+    # macOS runners are few and slow (about 41 minutes for the suite), and a queue of per-PR runs
+    # held batch PRs for hours. So on a pull request the macOS suite runs only for batch branches
+    # (`batch/*`, which merge every feature PR) or a PR labelled `macos`. Pushes to main, tags and
+    # manual runs always run it. A skipped job counts as passing for required checks.
+    if: >-
+      github.event_name != 'pull_request' ||
+      startsWith(github.head_ref, 'batch/') ||
+      contains(github.event.pull_request.labels.*.name, 'macos')
+    permissions:
+      contents: read
+    # No matrix: with one, GitHub appends "(macos-latest)" to the name and it no longer matches the
+    # required check "Test (macos-latest)".
+    runs-on: macos-latest
+    # The macOS runners take about 41 minutes for the full suite (Nov 2026), so 45 left no room.
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $LINUX_DEPS
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: test-macos-latest
+
+      - name: Run ledger test suite
+        working-directory: src-tauri
+        run: cargo test --locked
+
   build:
     name: Build (${{ matrix.name }})
-    needs: test
+    needs: [test, test-macos]
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     # Holds the updater signing key; its deployment rules (tags only, required reviewer) gate this job.
     environment: release

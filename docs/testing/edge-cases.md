@@ -123,7 +123,7 @@ Before starting, note the items in Keychain Access whose name starts with `Local
 |---|---|---|
 | F1 | File › Close Company, then reopen from the list | Back to the sign-in screen (users on) or the books |
 | F2 | Settings › File & Data Controls › Back up now; restore it as a new file | Restored file opens and verifies |
-| F3 | File Dentist check-up, then Rebuild on Edge Cases | Check-up passes; rebuild keeps users, sign-in and tax IDs |
+| F3 | File Check & Repair check-up, then Rebuild on Edge Cases | Check-up passes; rebuild keeps users, sign-in and tax IDs |
 | F4 | Open a company file made by an older LocalBooks (keep one per release) | Upgrades after a backup; verifies |
 
 ## Speed and size (Five Years)
