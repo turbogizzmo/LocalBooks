@@ -189,6 +189,13 @@ export const topics = [
     title: 'Export lists to an IIF file, or addresses to a text file',
     body: 'File › Utilities › Export › Lists to IIF Files saves the chart of accounts, customers and jobs, vendors, items and classes as an IIF file, which Import / Convert (and the desktop products) read, to start another company with the same lists. Addresses to Text File saves each active customer’s and vendor’s name, address, phone and email as tab-separated text for mail merges and labels.',
     keywords: 'export lists iif file utilities chart of accounts customers vendors items addresses text file mail merge labels tab delimited',
+  },
+  {
+    id: 'backup-safety', area: 'company', views: ['settings/data', 'dashboard'],
+    title: 'Keep a backup off this computer, and test that it restores',
+    body: 'Backup safety in File & Data Controls shows when a backup was last copied off this computer (Back up to… on another drive, a network or synced folder, or the offsite backup) and last test-restored. Test beside a snapshot, or Test restore a backup…, opens a backup and checks it as a restore would without replacing your books. Reminders lists either one after 30 days; change the days in Preferences › Reminders.',
+    keywords: 'backup safety offsite another drive usb test restore verify check reminder disk failure',
+    go: { label: 'Go to File & Data Controls', view: 'settings/data' },
     guide: 'backups-and-company-files',
   },
   {

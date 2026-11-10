@@ -181,9 +181,9 @@ async fn settings_are_per_user_validated_and_choose_the_categories() {
     invoice(&pool, "Acme", d(1, 1), d(1, 31), 5_000).await;
     bill(&pool, "Staples", "S-1", d(3, 5), 3_000).await;
     let keys = |groups: Vec<ReminderGroup>| groups.into_iter().map(|g| g.key).collect::<Vec<_>>();
-    assert_eq!(keys(reminders(&pool, d(3, 1), ann_view, None).await.unwrap()), vec!["OVERDUE_INVOICES", "BILLS_DUE", "BACKUP"], "April 15 is past the 30-day look-ahead");
+    assert_eq!(keys(reminders(&pool, d(3, 1), ann_view, None).await.unwrap()), vec!["OVERDUE_INVOICES", "BILLS_DUE", "BACKUP", "BACKUP_SAFETY"], "April 15 is past the 30-day look-ahead; no copy off this computer or test restore yet");
 
-    let mine = ReminderSettings { overdue_invoices: Category { show: false, days: 0 }, bills_due: Category { show: true, days: 2 }, tax_dates: Category { show: true, days: 60 }, backup: Category { show: true, days: 30 }, ..Default::default() };
+    let mine = ReminderSettings { overdue_invoices: Category { show: false, days: 0 }, bills_due: Category { show: true, days: 2 }, tax_dates: Category { show: true, days: 60 }, backup: Category { show: true, days: 30 }, backup_safety: Category { show: false, days: 30 }, ..Default::default() };
     save_settings(&pool, ann_view, &mine).await.unwrap();
     assert_eq!(settings(&pool, ann_view).await.unwrap(), mine);
     assert_eq!(settings(&pool, NOBODY).await.unwrap(), ReminderSettings::default(), "settings are the user's own");

@@ -73,6 +73,8 @@ pub struct ReminderSettings {
     pub backup: Category,
     /// Tracked items at or below their reorder point (its days are not used).
     pub inventory_reorder: Category,
+    /// A backup copied off this computer and a test restore (`backup_safety`): days before each is due.
+    pub backup_safety: Category,
 }
 
 impl Default for ReminderSettings {
@@ -87,6 +89,7 @@ impl Default for ReminderSettings {
             tax_dates: shown(30),
             backup: shown(7),
             inventory_reorder: shown(0),
+            backup_safety: shown(30),
         }
     }
 }
@@ -102,6 +105,7 @@ impl ReminderSettings {
             ("tax dates", self.tax_dates),
             ("backup", self.backup),
             ("inventory to reorder", self.inventory_reorder),
+            ("backup safety", self.backup_safety),
         ]
     }
 
@@ -113,6 +117,9 @@ impl ReminderSettings {
         }
         if self.backup.days < 1 {
             return Err("REMINDER_BAD_DAYS: a backup is due after at least 1 day".into());
+        }
+        if self.backup_safety.days < 1 {
+            return Err("REMINDER_BAD_DAYS: backup safety (a copy off this computer, a test restore) is due after at least 1 day".into());
         }
         Ok(())
     }
@@ -780,6 +787,10 @@ pub async fn reminders(pool: &SqlitePool, as_of: NaiveDate, viewer: Viewer, newe
     }
     if s.backup.show {
         groups.push(group("BACKUP", "Backup".into(), backup_due(newest_backup, as_of, s.backup.days)));
+    }
+    if s.backup_safety.show {
+        let safety = crate::backup_safety::status(pool).await?;
+        groups.push(group("BACKUP_SAFETY", "Backup safety".into(), crate::backup_safety::due(&safety, as_of, s.backup_safety.days)));
     }
     groups.retain(|g| !g.items.is_empty());
     Ok(groups)
