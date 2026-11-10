@@ -92,6 +92,9 @@ so the suite ran three or four tests at a time, each waiting on the others.
 - `src-tauri/.cargo/config.toml` sets `LIBSQLITE3_FLAGS = "-DSQLITE_DEFAULT_MEMSTATUS=0"` for every
   build of the bundled SQLite. LocalBooks never reads SQLite's memory statistics or sets heap
   limits, and SQLite lists this among its recommended options.
+  Cargo reads that file when it runs inside `src-tauri`, as `cargo test` does; whether `tauri
+  build` (installers, the e2e app) also picks it up was not checked. It only affects speed.
+  rust-cache hashes `.cargo/config.toml` into its key, so main's caches are rebuilt with the flag.
 - `db::test_pool` applies the migrations once per test binary, keeps the database's bytes
   (`sqlite3_serialize`), and gives each test its own copy (`sqlite3_deserialize`). A copy is the same
   file a fresh migration writes, audit trail included; the only difference is that every copy has
