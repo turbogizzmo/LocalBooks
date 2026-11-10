@@ -65,3 +65,31 @@ fn escapes_literal_strings() {
     assert_eq!(num(0.006), "0.01");
     assert_eq!(num(-0.001), "0");
 }
+
+#[test]
+fn a_protected_pdf_opens_only_with_its_password() {
+    let page = Page {
+        width: 612.0,
+        height: 792.0,
+        ops: vec![Op::Text { x: 50.0, y: 60.0, text: "Profit and Loss 2026".into(), family: FontFamily::Helvetica, bold: false, size: 12.0, color: Rgb(0, 0, 0), align: Align::Left }],
+    };
+    let plain = write_protected_pdf(std::slice::from_ref(&page), None, "Profit and Loss", None).unwrap();
+    assert_eq!(plain, write_pdf(std::slice::from_ref(&page), None, "Profit and Loss"), "no password: the usual file");
+    let plain_text = String::from_utf8_lossy(&plain);
+    assert!(plain_text.starts_with("%PDF-1.4") && plain_text.contains("/Producer (LocalBooks) /Creator (LocalBooks)") && !plain_text.contains("/Encrypt"));
+
+    let pdf = write_protected_pdf(&[page.clone(), page], None, "Profit and Loss", Some("c0rrect horse")).unwrap();
+    let raw = String::from_utf8_lossy(&pdf);
+    assert!(raw.starts_with("%PDF-1.7") && raw.contains("/Encrypt ") && raw.contains("/ID ["));
+    assert!(!raw.contains("LocalBooks") && !raw.contains("Profit"), "the title and producer are encrypted too");
+
+    // A reader opens it with the password and sees the text.
+    let doc = lopdf::Document::load_mem_with_password(&pdf, "c0rrect horse").expect("opens with the password");
+    assert_eq!(doc.get_pages().len(), 2);
+    assert!(doc.extract_text(&[1]).unwrap().contains("Profit and Loss 2026"));
+    // And not without it, or with the wrong one.
+    assert!(lopdf::Document::load_mem_with_password(&pdf, "wrong").is_err());
+    let locked = lopdf::Document::load_mem(&pdf);
+    assert!(locked.is_err() || locked.unwrap().extract_text(&[1]).map_or(true, |t| !t.contains("Profit")));
+    assert!(write_protected_pdf(&[], None, "x", Some(String::new().as_str())).unwrap_err().starts_with("PDF_PASSWORD_EMPTY"));
+}
