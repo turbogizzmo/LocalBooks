@@ -23,6 +23,9 @@ Only the latest release receives fixes. Installed copies offer updates automatic
   require a random per-install token.
 - SimpleFIN bank access is read-only and kept in the operating system's credential store, never in
   the company file.
+- Payout feeds (Stripe) use a restricted, read-only key kept in the operating system's credential
+  store (`src-tauri/src/payout_feeds.rs`); LocalBooks calls Stripe's API only when the user clicks
+  Get payouts.
 - Emailed forms open in the user's own mail app by default. Sending over SMTP is optional, uses
   STARTTLS or TLS whenever a password is involved, and keeps the password in the operating system's
   credential store, never in the company file.

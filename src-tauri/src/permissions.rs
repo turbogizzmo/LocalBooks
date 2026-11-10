@@ -101,6 +101,10 @@ const ADMIN: &[&str] = &[
     "reject_request",
     "add_approval_rule",
     "delete_approval_rule",
+    // Payout feeds: connecting a processor account and its key.
+    "connect_stripe_feed",
+    "update_payout_feed",
+    "disconnect_payout_feed",
     "file_dentist_rebuild",
     "condense_company_file",
     "apply_forensic_correction",

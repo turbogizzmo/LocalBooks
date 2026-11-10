@@ -31,7 +31,11 @@ export const screens = {
     guide: 'expenses-and-checks',
   },
   'expenses/purchase-orders': {
-    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines in one step.',
+    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines in one step, or receive the goods first with Receive Items.',
+  },
+  'expenses/item-receipts': {
+    help: 'Goods received from a purchase order before the vendor’s bill: the stock is on hand, and its cost waits in Items Received Not Billed until you enter the bill here.',
+    guide: 'bills',
   },
 };
 
@@ -48,6 +52,14 @@ export const topics = [
     keywords: 'other names other name list owner draw partner payee not a vendor one-off payee information panel notes',
     go: { label: 'Go to Other Names', view: 'expenses/other-names' },
     guide: 'customers-and-products',
+  },
+  {
+    id: 'receive-items', area: 'expenses', views: ['expenses/item-receipts', 'expenses/purchase-orders'],
+    title: 'Receive items before the bill',
+    body: 'Vendors › Receive Items brings goods from an open purchase order into stock before the bill comes; their cost waits in Items Received Not Billed, not Accounts Payable. When the bill arrives, Enter Bill for Received Items posts it at the vendor’s prices, and any price difference goes to the stock, Cost of Goods Sold or the line’s expense account.',
+    keywords: 'item receipt receive items received not billed packing slip partial shipment enter bill for received items purchase order',
+    go: { label: 'Go to Receive Items', view: 'expenses/item-receipts' },
+    guide: 'bills',
   },
   {
     id: 'document-inbox', area: 'expenses', views: ['expenses/inbox', 'expenses/bills', 'expenses/expenses'],

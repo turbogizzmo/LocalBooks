@@ -88,6 +88,9 @@ pub async fn replace_invoice(pool: &SqlitePool, invoice_id: i64, input: InvoiceI
 pub async fn replace_bill(pool: &SqlitePool, bill_id: i64, input: BillInput) -> Result<i64, String> {
     run(pool, async |tx| {
         let old = live_entry(tx, "bills", bill_id, "bill").await?;
+        if crate::item_receipts::is_receipt_bill(tx, bill_id).await? {
+            return Err("EDIT_RECEIPT_BILL: this bill was entered for an item receipt; void it and enter it again from Enter Bill for Received Items".into());
+        }
         let carried_terms: Option<i64> = sqlx::query_scalar("SELECT terms_id FROM bills WHERE id = ?1").bind(bill_id).fetch_one(&mut **tx).await.map_err(db_err)?;
         crate::ledger::void_for_replacement(tx, old).await?;
         let new_id = crate::expenses::write_bill_carrying(tx, &input, carried_terms).await?;
@@ -236,6 +239,7 @@ pub async fn replace_journal_entry_flagged(pool: &SqlitePool, journal_entry_id: 
                 AND NOT EXISTS (SELECT 1 FROM sales_tax_payments WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM bounced_checks WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM bounced_sales_receipts WHERE journal_entry_id = e.id)
+                AND NOT EXISTS (SELECT 1 FROM item_receipts WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM fx_revaluations WHERE journal_entry_id = e.id OR reversal_entry_id = e.id)
              , e.is_adjusting FROM journal_entries e WHERE e.id = ?1",
         )

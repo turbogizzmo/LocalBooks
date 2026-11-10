@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::expenses::{ExpenseInput, ExpenseView};
-use crate::invoices::{InvoiceInput, InvoiceSummary};
+use crate::invoices::{InvoiceInput, InvoiceSummary, PaidNow};
 use crate::ledger::{db_err, rollback};
 
 /// Preference keys holding each form's "Print later" default (the last choice saved).
@@ -168,12 +168,16 @@ pub async fn post_expense(pool: &SqlitePool, mut input: ExpenseInput, to_be_prin
     all.pop().ok_or_else(|| "EXP_NOT_FOUND: the saved check could not be read back".into())
 }
 
-/// Creates and posts an invoice, queued for printing when `to_be_printed`. One transaction.
-pub async fn create_invoice(pool: &SqlitePool, input: InvoiceInput, to_be_printed: bool) -> Result<InvoiceSummary, String> {
+/// Creates and posts an invoice, queued for printing when `to_be_printed`, with the payment taken
+/// on it when `paid` is given. One transaction: a payment that can't be recorded saves nothing.
+pub async fn create_invoice(pool: &SqlitePool, input: InvoiceInput, to_be_printed: bool, paid: Option<&PaidNow>) -> Result<InvoiceSummary, String> {
     let id = run(pool, async |tx| {
         let id = crate::invoices::write_invoice(tx, &input).await?;
         if to_be_printed {
             set_in_tx(tx, Form::Invoice, id, true).await?;
+        }
+        if let Some(paid) = paid {
+            crate::invoices::write_payment(tx, &paid.payment_for(id, input.issue_date), None).await?;
         }
         Ok(id)
     })
