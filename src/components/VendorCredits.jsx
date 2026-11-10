@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
 import { accountLabel } from './AccountSelect.jsx';
@@ -383,7 +384,7 @@ export default function VendorCredits({ accounts, intent }) {
                 </tr>
               )}
               {sorter.sorted.map((c) => (
-                <tr key={c.id} className={`qb-grid-row cursor-pointer ${c.isVoided ? 'text-qb-ink-faint' : ''}`} onDoubleClick={() => openCredit(c)}>
+                <tr key={c.id} className={`qb-grid-row cursor-pointer ${c.isVoided ? 'text-qb-ink-faint' : ''}`} {...rowKeys({ first: c === sorter.sorted[0], open: () => openCredit(c) })}>
                   <td className="qb-grid-cell">{formatDate(c.creditDate)}</td>
                   <td className="qb-grid-cell font-semibold">{c.vendorName}</td>
                   <td className="qb-grid-cell">{c.reference ?? ''}</td>

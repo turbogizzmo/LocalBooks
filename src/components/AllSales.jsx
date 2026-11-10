@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import { layoutMessage } from '../lib/itemTypes.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import { attachPicked, PendingAttachments, useAttachmentRows } from './Attachments.jsx';
@@ -332,11 +333,12 @@ export default function AllSales({ accounts, intent }) {
                 </tr>
               )}
               {visible.map((r) => {
+                const firstReceipt = visible.find((x) => x.kind === 'SALES_RECEIPT');
                 const isOverdue = !r.isVoided && r.kind === 'INVOICE' && r.balanceCents > 0 && r.dueDate < today;
                 const what = `${KIND_LABEL[r.kind]} #${r.number}${r.customerName ? ` for ${r.customerName}` : ''} (${formatMoney(r.totalCents, r.currencyCode)}).`;
                 return (
                   <Fragment key={`${r.kind}-${r.id}`}>
-                  <tr className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint' : ''} ${r.kind === 'SALES_RECEIPT' ? 'cursor-pointer' : ''}`} onDoubleClick={r.kind === 'SALES_RECEIPT' ? () => openReceipt(r) : undefined}>
+                  <tr className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint' : ''} ${r.kind === 'SALES_RECEIPT' ? 'cursor-pointer' : ''}`} {...(r.kind === 'SALES_RECEIPT' ? rowKeys({ first: r === firstReceipt, open: () => openReceipt(r) }) : {})}>
                     <td className="qb-grid-cell">{formatDate(r.date)}</td>
                     <td className="qb-grid-cell">{KIND_LABEL[r.kind]}</td>
                     <td className="qb-grid-cell">

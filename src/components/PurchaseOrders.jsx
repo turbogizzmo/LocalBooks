@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
 import Notice from './Notice.jsx';
@@ -389,7 +390,7 @@ export default function PurchaseOrders({ accounts, intent }) {
                 </tr>
               )}
               {list.map((o) => (
-                <tr key={o.id} className="qb-grid-row cursor-pointer" onDoubleClick={() => openOrder(o)}>
+                <tr key={o.id} className="qb-grid-row cursor-pointer" {...rowKeys({ first: o === list[0], open: () => openOrder(o) })}>
                   <td className="qb-grid-cell font-semibold">{o.poNumber}</td>
                   <td className="qb-grid-cell">{formatDate(o.poDate)}</td>
                   <td className="qb-grid-cell">{o.vendorName}</td>

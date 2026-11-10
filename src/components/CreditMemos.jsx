@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
@@ -486,7 +487,7 @@ export default function CreditMemos({ accounts, intent }) {
                 const refund = m.refundAccountId !== null;
                 const status = m.isVoided ? 'Voided' : refund ? 'Refunded' : m.remainingCents === 0 ? 'Used' : m.remainingCents < m.totalCents ? 'Partly used' : 'Open';
                 return (
-                  <tr key={m.id} className={`qb-grid-row cursor-pointer ${m.isVoided ? 'text-qb-ink-faint' : ''}`} onDoubleClick={() => openMemo(m)}>
+                  <tr key={m.id} className={`qb-grid-row cursor-pointer ${m.isVoided ? 'text-qb-ink-faint' : ''}`} {...rowKeys({ first: m === sorter.sorted[0], open: () => openMemo(m) })}>
                     <td className="qb-grid-cell">{m.creditNumber}</td>
                     <td className="qb-grid-cell">{formatDate(m.creditDate)}</td>
                     <td className="qb-grid-cell font-semibold">{m.customerName}</td>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ChangePrices from './ChangePrices.jsx';
 import PriceLevels from './PriceLevels.jsx';
@@ -516,7 +517,7 @@ export default function Products({ accounts, intent }) {
                     className={`qb-grid-row ${p.id === selected ? 'is-active' : ''} ${p.isActive ? '' : 'text-qb-ink-faint'}`}
                     aria-selected={p.id === selected}
                     onClick={() => setSelected(p.id)}
-                    onDoubleClick={() => setDialog({ mode: 'edit', product: p })}
+                    {...rowKeys({ first: p === shownItems[0]?.row, open: () => setDialog({ mode: 'edit', product: p }), select: () => setSelected(p.id) })}
                   >
                     {cols.columns.map((c) => itemCell(c, p, item))}
                     <td className="qb-grid-cell cell-tight">

@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import { layoutMessage } from '../lib/itemTypes.js';
 import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
@@ -678,11 +679,10 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit, onDuplicate }) {
                     className={`qb-grid-row ${isActive ? 'is-active' : ''} ${inv.isVoided ? 'text-qb-ink-faint' : ''}`}
                     onMouseDown={() => setActiveId(open && activeId !== inv.id ? inv.id : null)}
                     // Double-click opens the invoice to edit, as Edit… in its menu does.
-                    onDoubleClick={() =>
+                    {...rowKeys({ first: inv === shown[0], open: () =>
                       inv.isVoided
                         ? onNotice({ kind: 'info', text: `Invoice #${inv.invoiceNumber} is voided, so it can't be edited.` })
-                        : onEdit(inv)
-                    }
+                        : onEdit(inv) })}
                     title={open ? 'Click to receive a payment, double-click to edit' : 'Double-click to edit'}
                   >
                     <td className="qb-grid-cell">

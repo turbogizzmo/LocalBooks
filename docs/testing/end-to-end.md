@@ -11,6 +11,7 @@ Linux only. CI runs them on every pull request (`.github/workflows/e2e.yml`).
 | Spec | Company | Steps |
 | --- | --- | --- |
 | `users-from-scratch` | `No Users` | Post an invoice without signing in; turn users on and save the recovery key; add a View only user; sign in as them and choose a new password; their vendor tax ID shows masked (`***-**-4321`) and read-only, and saving is refused ("view only"); Settings shows only Users & Passwords and Updates; sign out and recover the Admin with the recovery key. |
+| `accessibility` | `Edge Cases` | axe-core (WCAG 2.1 A and AA) finds nothing critical or serious on Invoices, Customers, Bills, Vendors, Expenses & Checks and Products & Services (moderate and minor findings are printed in the log); Enter on a focused invoice row opens it. |
 | `seeded-users` | `Edge Cases` | The seeded View only user sees `***-**-6789`, read-only, and cannot save; the Admin sees the full tax ID with Show. |
 
 The rules underneath (roles, encryption, the ledger) are covered by `cargo test`; these specs check

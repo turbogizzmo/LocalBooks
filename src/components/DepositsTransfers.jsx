@@ -1,4 +1,5 @@
 import { Fragment, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import { useAttachmentRows } from './Attachments.jsx';
 import AccountSelect, { accountLabel, EndingBalance } from './AccountSelect.jsx';
@@ -563,7 +564,7 @@ export default function DepositsTransfers({ accounts, intent }) {
               )}
               {sorter.sorted.map((r) => (
                 <Fragment key={`${r.kind}-${r.id}`}>
-                <tr className={`qb-grid-row cursor-pointer ${r.isVoided ? 'text-qb-ink-faint' : ''}`} onDoubleClick={() => openRow(r)}>
+                <tr className={`qb-grid-row cursor-pointer ${r.isVoided ? 'text-qb-ink-faint' : ''}`} {...rowKeys({ first: r === sorter.sorted[0], open: () => openRow(r) })}>
                   <td className="qb-grid-cell">{formatDate(r.date)}</td>
                   <td className="qb-grid-cell">
                     {r.kind === 'DEPOSIT' ? 'Deposit' : 'Transfer'}

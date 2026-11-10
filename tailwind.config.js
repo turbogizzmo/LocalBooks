@@ -190,6 +190,8 @@ export default {
             backgroundColor: qb.rowSelected,
             boxShadow: theme('boxShadow.row-active'),
           },
+          // A row reached with the keyboard (Tab, ↑ ↓) shows where focus is (R19).
+          '&:focus-visible': { outline: `2px solid ${qb.green}`, outlineOffset: '-2px' },
         },
         '.qb-grid-cell': {
           height: theme('height.row'),
