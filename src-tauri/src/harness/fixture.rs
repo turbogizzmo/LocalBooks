@@ -16,8 +16,8 @@ use crate::banking::{DepositInput, DepositItemRef, TransferInput};
 use crate::expenses::{BillInput, BillLineInput, BillPaymentInput, ExpenseInput, SplitLineInput};
 use crate::invoices::{InvoiceInput, InvoiceLineInput, PaymentInput};
 use crate::ledger::{ForeignCurrency, JournalEntry, JournalLine};
-use crate::sales::{SalesLineInput, SalesReceiptInput};
 use crate::money::Cents;
+use crate::sales::{SalesLineInput, SalesReceiptInput};
 
 pub(crate) fn d(year: i32, month: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(year, month, day).expect("valid fixture date")

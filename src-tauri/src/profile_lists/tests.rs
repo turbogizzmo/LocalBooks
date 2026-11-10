@@ -2,9 +2,9 @@ use super::*;
 use crate::db::test_pool;
 use crate::expenses::{post_vendor_bill, BillInput, BillLineInput};
 use crate::invoices::{create_and_post_invoice, InvoiceInput, InvoiceLineInput};
+use crate::money::Cents;
 use crate::sales::{post_sales_receipt, SalesLineInput, SalesReceiptInput};
 use crate::sales_lists::{document_details, SalesDetails, SalesDoc};
-use crate::money::Cents;
 
 fn d(month: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, month, day).unwrap()

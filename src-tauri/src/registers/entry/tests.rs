@@ -1,8 +1,8 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 use crate::registers::account_register;
 use crate::registers::history::transaction_history;
-use crate::money::Cents;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()

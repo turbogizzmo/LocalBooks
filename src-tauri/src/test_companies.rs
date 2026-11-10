@@ -26,12 +26,12 @@ use crate::credits::{self, ApplyCreditInput, CreditMemoInput};
 use crate::expenses::{self, BillInput, BillLineInput, BillPaymentInput, ExpenseInput, SplitLineInput};
 use crate::invoices::{self, InvoiceInput, InvoiceLineInput, PaymentInput};
 use crate::ledger::{self, ForeignCurrency, JournalEntry, JournalLine};
+use crate::money::Cents;
 use crate::parties::{self, PartyDetailsInput};
 use crate::sales::{self, SalesLineInput};
 use crate::sales_tax::{self, TaxRateInput};
 use crate::tax_ids::Access;
 use crate::users::{self, NewUserInput, Role};
-use crate::money::Cents;
 
 /// The Admin's password in every seeded company with users (test value).
 pub const ADMIN_PASSWORD: &str = "owner password";

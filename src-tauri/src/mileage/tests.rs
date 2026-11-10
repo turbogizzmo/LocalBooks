@@ -1,7 +1,7 @@
 use super::*;
 use crate::db::test_pool;
-use crate::sales::{create_customer, create_product, ProductInput};
 use crate::money::Cents;
+use crate::sales::{create_customer, create_product, ProductInput};
 
 fn d(month: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, month, day).unwrap()

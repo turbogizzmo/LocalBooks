@@ -1,11 +1,11 @@
 use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, invoice_detail, InvoiceInput, InvoiceLineInput};
+use crate::money::Cents;
 use crate::sales::{post_sales_receipt, SalesLineInput, SalesReceiptInput};
 use crate::sales_lists::SalesDetails;
 use chrono::NaiveDate;
 use sqlx::SqlitePool;
-use crate::money::Cents;
 
 fn d(day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, 10, day).expect("valid date")

@@ -20,8 +20,8 @@ use crate::estimates::EstimateInput;
 use crate::expenses::{BillInput, BillLineInput, ExpenseInput, SplitLineInput};
 use crate::invoices::{InvoiceInput, InvoiceLineInput};
 use crate::job_reports::{self, Breakdown, JobFilter, JobReport, JobReportKind, JobReportParams};
-use crate::sales::{SalesLineInput, SalesReceiptInput};
 use crate::money::Cents;
+use crate::sales::{SalesLineInput, SalesReceiptInput};
 
 const LAKEVIEW: &str = "Kestrel Homes:Lakeview Remodel";
 const MAPLE: &str = "Kestrel Homes:Maple St Addition";

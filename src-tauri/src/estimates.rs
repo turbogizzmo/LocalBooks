@@ -7,8 +7,8 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::invoices::{validate_line, InvoiceInput, InvoiceLineInput};
 use crate::ledger::{db_err, format_cents, rollback, MAX_LINE_CENTS};
-use crate::sales::{find_or_create_named, Party, SalesLineInput};
 use crate::money::Cents;
+use crate::sales::{find_or_create_named, Party, SalesLineInput};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

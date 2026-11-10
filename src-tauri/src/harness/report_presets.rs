@@ -21,8 +21,8 @@ use crate::custom_reports::{self, Column, ColumnKind, CustomReport, Filters, Gro
 use crate::credits::{ApplyCreditInput, CreditMemoInput, VendorCreditInput, VendorCreditLineInput};
 use crate::expenses::{BillInput, BillLineInput};
 use crate::invoices::{InvoiceInput, InvoiceLineInput};
-use crate::sales::SalesLineInput;
 use crate::money::Cents;
+use crate::sales::SalesLineInput;
 
 /// The date the reports run as of (stands in for "today").
 const TODAY: (i32, u32, u32) = (2025, 12, 31);

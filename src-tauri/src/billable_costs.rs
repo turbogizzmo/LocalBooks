@@ -33,8 +33,8 @@ use chrono::NaiveDate;
 
 use crate::invoices::{InvoiceInput, InvoiceLineInput, InvoiceSummary};
 use crate::ledger::{db_err, mul_div_round, rollback, MAX_LINE_CENTS, QUANTITY_SCALE};
-use crate::preferences::tax_time;
 use crate::money::Cents;
+use crate::preferences::tax_time;
 
 /// A billable cost not yet on a live invoice.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, sqlx::FromRow)]

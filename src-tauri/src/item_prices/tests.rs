@@ -1,8 +1,8 @@
 use super::*;
 use crate::db::test_pool;
 use crate::inventory::{adjust, track_product, AdjustInput, TrackInput};
-use crate::sales::{create_product, ProductInput};
 use crate::money::Cents;
+use crate::sales::{create_product, ProductInput};
 
 const PCT: fn(i64) -> Adjustment = |percent_milli| Adjustment::Percent { percent_milli };
 const AMT: fn(i64) -> Adjustment = |amount_cents| Adjustment::Amount { amount_cents };

@@ -5,8 +5,8 @@ use crate::estimates::{convert_to_invoice, create_estimate, invoice_from_estimat
 use crate::expenses::{post_vendor_bill, BillInput, BillLineInput, BillPaymentInput};
 use crate::guards::{self, warnings_in, WARN_OVERDUE_CUSTOMER};
 use crate::invoices::{create_and_post_invoice, invoice_detail, InvoiceInput, InvoiceLineInput};
-use crate::sales::SalesLineInput;
 use crate::money::Cents;
+use crate::sales::SalesLineInput;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.expect("seeded account")
