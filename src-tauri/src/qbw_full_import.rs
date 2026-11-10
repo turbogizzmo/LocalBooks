@@ -24,6 +24,7 @@ use serde::Serialize;
 use sqlx::{Sqlite, Transaction};
 
 use crate::invoices::line_amount;
+use crate::item_types::{FormLineInput, ItemAmount, Layout};
 use crate::ledger::{self, db_err, EntrySource, JournalEntry, JournalLine};
 use crate::qbw_documents::{DocumentLine, SourceDocument, SourceSales};
 use crate::sales_lists::SalesDoc;
@@ -94,6 +95,8 @@ struct Books {
     vendors: HashMap<i64, (i64, String)>,
     /// source item → (product, name)
     products: HashMap<i64, (i64, String)>,
+    /// LocalBooks discount items, by product id.
+    discounts: HashSet<i64>,
     /// lowercased class path → class
     classes: HashMap<String, i64>,
 }
@@ -158,17 +161,16 @@ async fn load_books(tx: &mut Transaction<'_, Sqlite>, batch_id: i64) -> Result<B
     .into_iter()
     .map(|(s, id, name)| (s, (id, name)))
     .collect();
-    let products = sqlx::query_as::<_, (i64, i64, String)>(
-        "SELECT i.source_id, p.id, p.name FROM ledger_import_items i JOIN products_services p ON p.id = i.product_id WHERE i.batch_id = ?1",
+    let rows = sqlx::query_as::<_, (i64, i64, String, String)>(
+        "SELECT i.source_id, p.id, p.name, p.item_type FROM ledger_import_items i JOIN products_services p ON p.id = i.product_id WHERE i.batch_id = ?1",
     )
     .bind(batch_id)
     .fetch_all(&mut **tx)
     .await
-    .map_err(db_err)?
-    .into_iter()
-    .map(|(s, id, name)| (s, (id, name)))
-    .collect();
-    Ok(Books { accounts, customers, vendors, products, classes: HashMap::new() })
+    .map_err(db_err)?;
+    let discounts = rows.iter().filter(|r| r.3 == "DISCOUNT").map(|r| r.1).collect();
+    let products = rows.into_iter().map(|(s, id, name, _)| (s, (id, name))).collect();
+    Ok(Books { accounts, customers, vendors, products, discounts, classes: HashMap::new() })
 }
 
 fn entry_lines(lines: &[Line]) -> Vec<JournalLine> {
@@ -205,9 +207,12 @@ struct FormLine {
     class_id: Option<i64>,
 }
 
-/// A document's form: its item lines, the discount and the sales tax.
+/// A document's form: its item lines, its subtotal and discount lines laid out among them, the
+/// document discount and the sales tax.
 struct Form {
     lines: Vec<FormLine>,
+    form_lines: Vec<FormLineInput>,
+    layout: Option<Layout>,
     discount: i64,
     tax: i64,
 }
@@ -217,10 +222,21 @@ struct Form {
 /// liability accounts are the sales tax; item lines the other way are the discount; cost of
 /// goods sold and the inventory it came out of stay in the entry only, and must net to zero.
 /// The form must add up to `total`.
-fn form(lines: &[DocumentLine], map: &HashMap<i64, i64>, books: &Books, sign: i64, total: i64) -> Result<Form, String> {
-    let mut out = Form { lines: Vec::new(), discount: 0, tax: 0 };
+///
+/// With `form_lines` (invoices and sales receipts), a line of a discount item to an income
+/// account becomes a discount line where it stood, and subtotal lines are kept, so the form reads
+/// as it did. If they cannot be laid out as LocalBooks lays out a form (a discount larger than
+/// the line above it, say), they fall back to the document discount.
+fn form(lines: &[DocumentLine], map: &HashMap<i64, i64>, books: &Books, sign: i64, total: i64, form_lines: bool) -> Result<Form, String> {
+    let mut out = Form { lines: Vec::new(), form_lines: Vec::new(), layout: None, discount: 0, tax: 0 };
     let mut cost = 0;
     for l in lines {
+        if l.subtotal {
+            if form_lines {
+                out.form_lines.push(FormLineInput { description: l.description.clone().unwrap_or_default(), ..FormLineInput::subtotal(out.lines.len()) });
+            }
+            continue;
+        }
         let account = *map.get(&l.account_id).ok_or("a line's account is not mapped")?;
         let cents = l.cents * sign;
         match books.kind(account) {
@@ -243,7 +259,29 @@ fn form(lines: &[DocumentLine], map: &HashMap<i64, i64>, books: &Books, sign: i6
                     class_id: books.class(l.class.as_deref()),
                 });
             }
+            "INCOME" | "OTHER_INCOME"
+                if form_lines && l.item_id.and_then(|i| books.products.get(&i)).is_some_and(|p| books.discounts.contains(&p.0)) =>
+            {
+                let product = l.item_id.and_then(|i| books.products.get(&i));
+                out.form_lines.push(FormLineInput {
+                    description: l.description.clone().or_else(|| product.map(|p| p.1.clone())).unwrap_or_default(),
+                    product_service_id: product.map(|p| p.0),
+                    class_id: books.class(l.class.as_deref()),
+                    ..FormLineInput::discount(out.lines.len(), account, None, Some(-cents), false)
+                });
+            }
             _ => out.discount -= cents,
+        }
+    }
+    if !out.form_lines.is_empty() {
+        let amounts: Vec<ItemAmount> = out.lines.iter().map(|l| ItemAmount { amount_cents: l.amount_cents, is_taxable: false }).collect();
+        match crate::item_types::lay_out(&amounts, &out.form_lines, "INV") {
+            Ok(layout) => out.layout = Some(layout),
+            // Not a form LocalBooks can show: the discounts come off the whole document instead.
+            Err(_) => {
+                out.discount += out.form_lines.iter().filter_map(|f| f.amount_cents).sum::<i64>();
+                out.form_lines.clear();
+            }
         }
     }
     if cost != 0 {
@@ -255,7 +293,7 @@ fn form(lines: &[DocumentLine], map: &HashMap<i64, i64>, books: &Books, sign: i6
     if out.lines.is_empty() {
         return Err("it has no item lines".into());
     }
-    let subtotal: i64 = out.lines.iter().map(|l| l.amount_cents).sum();
+    let subtotal: i64 = out.layout.as_ref().map_or_else(|| out.lines.iter().map(|l| l.amount_cents).sum(), |l| l.lines_cents);
     if out.discount > subtotal || subtotal - out.discount + out.tax != total {
         return Err("its form lines do not add up to its total".into());
     }
@@ -299,14 +337,26 @@ fn single_credit(t: &Staged) -> Result<(i64, i64), String> {
     }
 }
 
+/// A form's item lines and, laid out among them, its subtotal and discount lines.
+async fn insert_form(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, table: &str, fk: &str, id: i64, form: &Form) -> Result<(), String> {
+    let Some(layout) = &form.layout else { return insert_lines(tx, table, fk, id, &form.lines).await };
+    insert_numbered(tx, table, fk, id, &form.lines, &layout.item_numbers()).await?;
+    crate::item_types::write_form_lines(tx, doc, id, &form.form_lines, layout, false).await
+}
+
 async fn insert_lines(tx: &mut Transaction<'_, Sqlite>, table: &str, fk: &str, id: i64, lines: &[FormLine]) -> Result<(), String> {
-    for (n, l) in lines.iter().enumerate() {
+    let numbers: Vec<i64> = (1..=lines.len() as i64).collect();
+    insert_numbered(tx, table, fk, id, lines, &numbers).await
+}
+
+async fn insert_numbered(tx: &mut Transaction<'_, Sqlite>, table: &str, fk: &str, id: i64, lines: &[FormLine], numbers: &[i64]) -> Result<(), String> {
+    for (l, n) in lines.iter().zip(numbers) {
         sqlx::query(&format!(
             "INSERT INTO {table} ({fk}, line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
         ))
         .bind(id)
-        .bind(n as i64 + 1)
+        .bind(n)
         .bind(l.description.trim())
         .bind(l.quantity_e4)
         .bind(l.rate_cents)
@@ -364,7 +414,7 @@ async fn write_invoice(
     if total <= 0 {
         return Err("it does not charge the customer".into());
     }
-    let form = form(lines, map, books, 1, total)?;
+    let form = form(lines, map, books, 1, total, true)?;
     let number = number(tx, "invoices", "invoice_number", 1000, doc_num.as_deref()).await?;
     let due = due_date.filter(|d| *d >= t.date).unwrap_or(t.date);
     let id: i64 = sqlx::query_scalar(
@@ -382,7 +432,7 @@ async fn write_invoice(
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
-    insert_lines(tx, "invoice_items", "invoice_id", id, &form.lines).await?;
+    insert_form(tx, SalesDoc::Invoice, "invoice_items", "invoice_id", id, &form).await?;
     write_sales(tx, SalesDoc::Invoice, id, sales).await?;
     let entry = post(tx, t, format!("Invoice #{number} - {customer_name}"), &t.lines, EntrySource::Invoice(id)).await?;
     sqlx::query("UPDATE invoices SET status = 'UNPAID', journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut **tx).await.map_err(db_err)?;
@@ -402,7 +452,7 @@ async fn write_credit_memo(
     if total <= 0 {
         return Err("it does not credit the customer".into());
     }
-    let form = form(lines, map, books, -1, total)?;
+    let form = form(lines, map, books, -1, total, false)?;
     if form.discount != 0 {
         return Err("it has a line the other way (credit memos have no discount)".into());
     }
@@ -427,7 +477,12 @@ async fn write_credit_memo(
 
 /// The one debit of a receipt, payment or deposit: the account the money went into.
 fn single_debit(t: &Staged) -> Result<(i64, i64), String> {
-    let debits: Vec<&Line> = t.lines.iter().filter(|l| l.1 < 0).collect();
+    debit_into(t, |_| true)
+}
+
+/// The one debit of `t` among the lines `keep` accepts.
+fn debit_into(t: &Staged, keep: impl Fn(&Line) -> bool) -> Result<(i64, i64), String> {
+    let debits: Vec<&Line> = t.lines.iter().filter(|l| l.1 < 0 && keep(l)).collect();
     match debits.as_slice() {
         [(account, cents, _, _)] => Ok((*account, -cents)),
         _ => Err("the money went into more than one account".into()),
@@ -442,7 +497,9 @@ async fn write_sales_receipt(
     books: &Books,
 ) -> Result<(i64, i64, i64, i64), String> {
     let SourceDocument::SalesReceipt { customer_id, number: doc_num, method, lines, sales } = doc else { unreachable!() };
-    let (into, total) = single_debit(t)?;
+    // The money went into a bank or Undeposited Funds; a discount line and the cost of inventory
+    // sold are debits too, but not the money.
+    let (into, total) = debit_into(t, |l| matches!(books.kind(l.0), "BANK" | "OTHER_CURRENT_ASSET"))?;
     if !matches!(books.kind(into), "BANK" | "OTHER_CURRENT_ASSET") {
         return Err("the money did not go into a bank or Undeposited Funds account".into());
     }
@@ -451,7 +508,7 @@ async fn write_sales_receipt(
         None => None,
     };
     let lines: Vec<DocumentLine> = lines.iter().filter(|l| !(l.cents < 0 && map.get(&l.account_id) == Some(&into))).cloned().collect();
-    let form = form(&lines, map, books, 1, total)?;
+    let form = form(&lines, map, books, 1, total, true)?;
     let number = number(tx, "sales_receipts", "receipt_number", 0, doc_num.as_deref()).await?;
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO sales_receipts (receipt_number, customer_id, receipt_date, deposit_account_id, payment_method, reference, memo, total_cents, tax_cents, discount_cents)
@@ -470,7 +527,7 @@ async fn write_sales_receipt(
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
-    insert_lines(tx, "sales_receipt_lines", "sales_receipt_id", id, &form.lines).await?;
+    insert_form(tx, SalesDoc::SalesReceipt, "sales_receipt_lines", "sales_receipt_id", id, &form).await?;
     write_sales(tx, SalesDoc::SalesReceipt, id, sales).await?;
     let who = customer.map(|c| format!(" - {}", c.1)).unwrap_or_default();
     let entry = post(tx, t, format!("Sales receipt #{number}{who}"), &t.lines, EntrySource::SalesReceipt(id)).await?;
@@ -997,7 +1054,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, doc: &SourceDocument, 
     let (customer, _) = books.customer(*customer_id)?.clone();
     // Lines are positive here, so the total is their sum (sales tax included).
     let total: i64 = lines.iter().map(|l| l.cents).sum();
-    let form = form(lines, map, books, 1, total)?;
+    let form = form(lines, map, books, 1, total, false)?;
     let number = number(tx, "estimates", "estimate_number", 1000, doc_num.as_deref()).await?;
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO estimates (estimate_number, customer_id, estimate_date, expiration_date, memo, total_cents, tax_cents)

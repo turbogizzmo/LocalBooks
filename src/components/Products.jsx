@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ChangePrices from './ChangePrices.jsx';
 import PriceLevels from './PriceLevels.jsx';
@@ -135,6 +136,8 @@ import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
 import { parentByName } from '../lib/listOrder.js';
 
 const incomeOnly = (a) => a.classification === 'INCOME';
+/** An Other Charge or Discount item's account on purchase forms: any income or expense account. */
+const purchaseAccount = (a) => !a.isSystem && (a.classification === 'INCOME' || a.classification === 'EXPENSE');
 
 /** The kinds of item, as the Type box offers them (see docs/plans/item-types.md). */
 export const ITEM_TYPES = [
@@ -178,6 +181,7 @@ function ProductDialog({ product, products = [], accounts, categories, onClose, 
   const [itemType, setItemType] = useState(product.itemType || 'ITEM');
   const [rate, setRate] = useState(product.percentPpm ? percentText(product.percentPpm) : product.rateCents ? (product.rateCents / 100).toFixed(2) : '');
   const [accountId, setAccountId] = useState(product.incomeAccountId);
+  const [purchaseAccountId, setPurchaseAccountId] = useState(product.expenseAccountId ?? null);
   const [taxable, setTaxable] = useState(product.isTaxable !== false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -214,7 +218,7 @@ function ProductDialog({ product, products = [], accounts, categories, onClose, 
     try {
       if (await mergeOffer.check(fullName)) return setBusy(false);
       const input = { name: fullName, description: description.trim() || null, rateCents: read.rateCents, incomeAccountId: accountId, isTaxable: taxable };
-      const saved = await api.updateProduct(product.id, input, read.kind);
+      const saved = await api.updateProduct(product.id, input, { ...read.kind, expenseAccountId: itemType === 'ITEM' ? null : purchaseAccountId });
       if ((purchaseDescription.trim() || null) !== (product.purchaseDescription ?? null) || costCents !== (product.purchaseCostCents ?? null)) {
         await api.setItemPurchaseDetails(product.id, purchaseDescription.trim() || null, costCents);
       }
@@ -282,6 +286,12 @@ function ProductDialog({ product, products = [], accounts, categories, onClose, 
             <span className="font-semibold text-qb-ink-muted">{itemType === 'DISCOUNT' ? 'Discount account (debited)' : 'Income account'}</span>
             <AccountSelect accounts={accounts} filter={incomeOnly} value={accountId} onChange={setAccountId} />
           </label>
+          {itemType !== 'ITEM' && (
+            <label className="col-span-2 flex flex-col gap-0.5">
+              <span className="font-semibold text-qb-ink-muted">{itemType === 'DISCOUNT' ? 'Account on bills and checks (credited)' : 'Expense account on bills and checks'}</span>
+              <AccountSelect accounts={accounts} filter={purchaseAccount} value={purchaseAccountId} onChange={setPurchaseAccountId} placeholder="Same as above" />
+            </label>
+          )}
           <label className="col-span-2 flex items-center gap-1.5 text-sm">
             <input type="checkbox" className="accent-qb-green" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} />
             {itemType === 'DISCOUNT' ? 'Taxable: the discount lowers the taxable amount' : 'Taxable: charge sales tax when this is sold'}
@@ -320,6 +330,48 @@ function ProductDialog({ product, products = [], accounts, categories, onClose, 
           <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={busy}>Save</button>
         </div>
         {mergeOffer.panel}
+      </form>
+    </Dialog>
+  );
+}
+
+/** Adjust Quantity/Value on Hand from the menu bar: which tracked item to adjust. */
+function PickAdjustDialog({ products, items, onClose, onPick }) {
+  const names = new Map(products.map((p) => [p.id, p.name]));
+  const tracked = items.filter((i) => names.has(i.productId)).sort((a, b) => names.get(a.productId).localeCompare(names.get(b.productId)));
+  const [chosen, setChosen] = useState(tracked[0]?.id ?? null);
+  return (
+    <Dialog title="Adjust quantity or value on hand" onClose={onClose}>
+      <form
+        className="flex flex-col gap-2 px-3 py-2 text-xs"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const item = tracked.find((i) => i.id === chosen);
+          if (item) onPick(item);
+        }}
+      >
+        {tracked.length === 0 ? (
+          <p className="text-qb-ink-muted">No items are tracked in stock yet. Choose Track stock… on an item first.</p>
+        ) : (
+          <label className="flex flex-col gap-0.5">
+            <span className="font-semibold text-qb-ink-muted">Item</span>
+            <select className="qb-input" value={chosen ?? ''} onChange={(e) => setChosen(Number(e.target.value))} autoFocus>
+              {tracked.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {names.get(i.productId)} · {formatQuantity(i.qtyOnHandE4)} on hand
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
+          <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={tracked.length === 0}>
+            Next
+          </button>
+        </div>
       </form>
     </Dialog>
   );
@@ -470,6 +522,8 @@ export default function Products({ accounts, intent }) {
   // Customers › Change Item Prices (menu bar) opens the price changer.
   useEffect(() => {
     if (intent?.action === 'change-prices') setChangingPrices(true);
+    // Vendors › Inventory Activities › Adjust Quantity/Value on Hand: pick the item first.
+    if (intent?.action === 'adjust-stock') setDialog({ mode: 'pick-adjust' });
     if (intent?.action === 'price-levels') setPricingLevels(true);
   }, [intent]);
   useEffect(() => {
@@ -605,6 +659,14 @@ export default function Products({ accounts, intent }) {
             setDialog(null);
             setNotice({ kind: 'success', text });
           }}
+        />
+      )}
+      {dialog?.mode === 'pick-adjust' && (
+        <PickAdjustDialog
+          products={data ?? []}
+          items={stock.data ?? []}
+          onClose={() => setDialog(null)}
+          onPick={(item) => setDialog({ mode: 'adjust', item })}
         />
       )}
       {dialog?.mode === 'adjust' && (
@@ -806,7 +868,7 @@ export default function Products({ accounts, intent }) {
                     className={`qb-grid-row ${p.id === selected ? 'is-active' : ''} ${p.isActive ? '' : 'text-qb-ink-faint'}`}
                     aria-selected={p.id === selected}
                     onClick={() => setSelected(p.id)}
-                    onDoubleClick={() => setDialog({ mode: 'edit', product: p })}
+                    {...rowKeys({ first: p === shownItems[0]?.row, open: () => setDialog({ mode: 'edit', product: p }), select: () => setSelected(p.id) })}
                   >
                     {cols.columns.map((c) => itemCell(c, p, item))}
                     <td className="qb-grid-cell cell-tight">

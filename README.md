@@ -158,7 +158,9 @@ before it cannot be posted, from any screen. Voids are blocked too, because a re
 original date. The ledger checks this before every post, and a database trigger enforces it as a
 backstop. Moving or removing the date requires the passcode, which is stored as a salted
 PBKDF2-HMAC-SHA256 hash. Every change is appended to `closing_locks`, whose rows can't be edited or
-deleted.
+deleted. An External Accountant user may post and void in a closed period (the trigger lets one write
+transaction through, and the ledger clears that before commit), and the **Closing Date Exceptions**
+report lists every such change with who made it.
 
 ### Online snapshots with `VACUUM INTO`
 
@@ -287,6 +289,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Desktop Migration Wizard | Settings › Import & Migration; File › Utilities › Import / Convert… | `.qbw`, QuickBooks for Mac 2012, IIF, QIF, QuickBooks report and GnuCash import, and lists, transactions or journal entries from a spreadsheet you laid out, through a staging sandbox; payroll posted from a payroll service's journal export | [guide](docs/guide/desktop-migration.md) |
 | Export from installed QuickBooks (Preview) | Settings › Import & Migration › step 1 | Asks a running QuickBooks Desktop (Mac or Windows) for its lists and Journal, read-only | [guide](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it) |
 | Estimates | Sales › Estimates | Non-posting quotes, converted to an invoice in one step | [guide](docs/guide/sales-receipts-and-estimates.md) |
+| Sales orders | Sales › Sales Orders | Non-posting orders invoiced whole or in parts, made from estimates, printed and emailed; backorders, Open Sales Orders by Customer and by Item, Pending Sales | [guide](docs/guide/sales-orders.md) |
 | Expenses & checks | Expenses › Expenses & Checks | Split expenses and checks with auto-numbering | [guide](docs/guide/expenses-and-checks.md) |
 | Finance charges | Sales › Assess Finance Charges | Interest on overdue invoices (rate, minimum, grace days), in integer cents | [guide](docs/guide/customer-payments.md) |
 | Find Transactions | Accounting › Find Transactions; Edit › Find… | Search by text, dates, number, amount, type, name and account | [guide](docs/guide/journal-entries-and-voids.md#find-a-transaction) |
@@ -300,7 +303,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Journal entries | Accounting › Journal Entries | Balanced manual entries; register with void/reversal pairs | [guide](docs/guide/journal-entries-and-voids.md) |
 | New Company setup | File › New Company… | QuickBooks-style setup: 33 industries with suggested charts of accounts, equity by tax form, sales tax and inventory | [guide](docs/guide/getting-started.md#create-a-new-company) |
 | Account registers | Accounting › Account Registers; Ctrl+R | Running balance, a blank row to type checks, deposits, card charges and credits (Record / Restore, Splits), Go To, date filter, one- or two-line view | [guide](docs/guide/expenses-and-checks.md#type-a-check-or-deposit-into-a-register) |
-| Payout feeds | Banking › Payout Feeds | Stripe payouts as deposits of their gross sales, less fees, refunds and chargebacks, with a read-only key in the OS credential store | [guide](docs/guide/bank-feeds.md#payouts-from-stripe) |
+| Payout feeds | Banking › Payout Feeds | Stripe and Shopify Payments payouts and PayPal withdrawals as deposits of their gross sales, less fees, refunds and chargebacks, with read-only credentials in the OS credential store, fetched by hand or on a schedule | [guide](docs/guide/bank-feeds.md#payouts-from-stripe) |
 | Price levels | Sales › Products & Services · Customers; Reports | Fixed % and per-item price levels, a default level per customer that fills in sales form rates, the Item Price List, imported from IIF and QuickBooks files | [guide](docs/guide/customers-and-products.md#price-levels) |
 | Print later | File › Print Forms › Checks… · Invoices… | Queue checks and invoices to print in a batch; checks are numbered in order as they print, after you confirm they all printed | [guide](docs/guide/expenses-and-checks.md#print-checks-later-in-a-batch) |
 | Profile lists | Lists › Customer & Vendor Profile Lists | Terms (with early-payment discounts) that set due dates, payment methods, customer / vendor / job types and customer messages printed on sales forms | [guide](docs/guide/customers-and-products.md#customer--vendor-profile-lists) |
@@ -318,7 +321,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Sales tax | Sales › Sales Tax | Rates by agency, combined rates split by agency, accrual or cash basis, a filing period and reminder, the liability report and a sales tax return per agency | [guide](docs/guide/getting-started.md#sales-tax-rates-combined-rates-and-the-sales-tax-return) |
 | Sortable lists | Any list, account registers, Reconcile | Click a column heading to sort by it; click again to reverse; transactions start newest first and each list remembers its order; double-click a register row to open its transaction | [guide](docs/guide/getting-started.md#sort-a-list) |
 | Time tracking | Employees › Time Tracking | Single activities and weekly timesheets (billable hours, rates) | [guide](docs/guide/time-tracking.md) |
-| Users & passwords | Settings › Users & Passwords | Optional users with roles, sign-in, idle sign-out, recovery key, encrypted vendor tax IDs and bank details | [guide](docs/guide/users-and-passwords.md) |
+| Users & passwords | Settings › Users & Passwords | Optional users with roles (including External Accountant), sign-in, idle sign-out, recovery key, encrypted vendor tax IDs and bank details | [guide](docs/guide/users-and-passwords.md) |
 | FTC Safeguards Rule map | Help › The FTC Safeguards Rule and LocalBooks | Each Safeguards Rule duty mapped to a LocalBooks feature or a stated limit, for tax preparers and bookkeepers | [guide](docs/guide/safeguards-rule.md) |
 | Windows & saved desktop | Window and View menus; Edit › Preferences › Desktop View | QuickBooks-style windows inside LocalBooks (move, resize, minimize, maximize), One Window or Multiple Windows, Close All, Cascade, Tile, Open Window List, Ctrl+F6, and the windows you had reopening with the company | [guide](docs/guide/getting-started.md#work-in-more-than-one-window) |
 
@@ -384,8 +387,11 @@ current fiscal year as Net Income. The fiscal year start month is a preference.
 
 Platform notes:
 
-- **macOS:** Xcode Command Line Tools (`xcode-select --install`).
-- **Windows:** Microsoft C++ Build Tools and WebView2 (preinstalled on Windows 10/11).
+- **macOS:** Xcode Command Line Tools (`xcode-select --install`). SQLCipher uses Apple's
+  CommonCrypto; leave `OPENSSL_DIR` unset, or the build links a Homebrew OpenSSL that other Macs
+  don't have (`npm run build:mac` unsets it).
+- **Windows:** Microsoft C++ Build Tools, WebView2 (preinstalled on Windows 10/11) and Perl
+  ([Strawberry Perl](https://strawberryperl.com)), which builds the OpenSSL that SQLCipher uses.
 - **Linux:** `webkit2gtk-4.1`, `libssl`, `librsvg` and build essentials (package names per distro in the Tauri guide).
 
 ### Run in development

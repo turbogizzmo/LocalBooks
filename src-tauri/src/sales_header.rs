@@ -143,7 +143,7 @@ pub(crate) async fn resolve(tx: &mut Transaction<'_, Sqlite>, customer_id: Optio
 /// Writes a document's header copy, after its row is inserted (before a sales receipt posts).
 /// `table` is `invoices`, `sales_receipts`, `estimates` or `credit_memos`.
 pub(crate) async fn write(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64, header: &SalesHeader) -> Result<(), String> {
-    debug_assert!(matches!(table, "invoices" | "sales_receipts" | "estimates" | "credit_memos"));
+    debug_assert!(matches!(table, "invoices" | "sales_receipts" | "estimates" | "credit_memos" | "sales_orders"));
     let customer_id: Option<i64> = sqlx::query_scalar(&format!("SELECT customer_id FROM {table} WHERE id = ?1")).bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
     let (bill_to, ship_to, po_number, fob) = resolve(tx, customer_id, header).await?;
     sqlx::query(&format!("UPDATE {table} SET bill_to = ?1, ship_to = ?2, po_number = ?3, fob = ?4 WHERE id = ?5"))
@@ -161,7 +161,7 @@ pub(crate) async fn write(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64
 /// A document's header copy, to load into its form, print, or carry to another document. The
 /// addresses are `None` only on documents written before they were kept.
 pub async fn read<'e, E: sqlx::SqliteExecutor<'e>>(executor: E, table: &str, id: i64) -> Result<SalesHeader, String> {
-    debug_assert!(matches!(table, "invoices" | "sales_receipts" | "estimates" | "credit_memos"));
+    debug_assert!(matches!(table, "invoices" | "sales_receipts" | "estimates" | "credit_memos" | "sales_orders"));
     let row: Option<(Option<String>, Option<String>, Option<String>, Option<String>)> =
         sqlx::query_as(&format!("SELECT bill_to, ship_to, po_number, fob FROM {table} WHERE id = ?1")).bind(id).fetch_optional(executor).await.map_err(db_err)?;
     let (bill_to, ship_to, po_number, fob) = row.unwrap_or_default();

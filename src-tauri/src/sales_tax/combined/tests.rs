@@ -106,6 +106,7 @@ async fn a_credit_memo_at_a_combined_rate_takes_back_each_part() {
             tax_rate_id: Some(combined.id),
             lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 10_000, income_account_id: services, class_id: None, is_taxable: true, service_date: None }],
             header: Default::default(),
+            form_lines: Vec::new(),
         },
     )
     .await

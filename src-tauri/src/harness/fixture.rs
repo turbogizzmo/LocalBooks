@@ -94,7 +94,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, te
     let total = lines.iter().map(|l| l.1).sum();
     let summary = crate::expenses::post_vendor_bill(
         pool,
-        BillInput {
+        BillInput { form_lines: Vec::new(),
             terms_id: None,
             vendor_name: vendor.into(),
             bill_number: Some(number.into()),
@@ -132,7 +132,7 @@ async fn pay_bill(pool: &SqlitePool, bill_id: i64, date: NaiveDate, amount_cents
 async fn expense(pool: &SqlitePool, kind: &str, payee: &str, from: i64, date: NaiveDate, check_number: Option<&str>, lines: Vec<(i64, i64, &str)>) -> i64 {
     crate::expenses::post_expense(
         pool,
-        ExpenseInput {
+        ExpenseInput { form_lines: Vec::new(),
             payment_method_id: None,
             kind: kind.into(),
             payee_name: Some(payee.into()),

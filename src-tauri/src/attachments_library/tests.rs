@@ -147,10 +147,12 @@ async fn a_preview_reads_only_what_it_shows() {
     let text = add_record_file(&pool, "CUSTOMER", customer, "notes.txt", b"0123456789").await.unwrap();
     let picture = add_record_file(&pool, "CUSTOMER", customer, "logo.png", b"png bytes").await.unwrap();
     let pdf = add_record_file(&pool, "CUSTOMER", customer, "scan.pdf", b"%PDF synthetic").await.unwrap();
+    let sheet = add_record_file(&pool, "CUSTOMER", customer, "prices.xlsx", b"PK zip").await.unwrap();
     let shown = |id| preview(&pool, FileRef { source: Source::Record, id }, 4);
     assert_eq!(shown(text.id).await.unwrap().2, Some(b"0123".to_vec()), "a text file is cut in SQL");
     assert_eq!(shown(picture.id).await.unwrap().2, Some(b"png bytes".to_vec()), "a picture is whole");
     let (name, media, bytes) = shown(pdf.id).await.unwrap();
-    assert_eq!((name.as_str(), media.as_str(), bytes), ("scan.pdf", "application/pdf", None));
+    assert_eq!((name.as_str(), media.as_str(), bytes.as_deref()), ("scan.pdf", "application/pdf", Some(&b"%PDF synthetic"[..])), "a PDF is whole: the screen draws its pages");
+    assert_eq!(shown(sheet.id).await.unwrap().2, None, "other kinds aren't read");
     assert!(shown(99_999).await.unwrap_err().starts_with("ATTACH_NOT_FOUND"));
 }

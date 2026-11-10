@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import { useVendorRecall } from '../lib/recall.js';
 import NameField from './NameField.jsx';
@@ -10,6 +11,8 @@ import RowMenu, { voidItem } from './RowMenu.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
 import { useTransactionReports } from './TransactionHistory.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
+import PurchaseFormLines, { usePurchaseFormLines } from './PurchaseFormLines.jsx';
+import { purchaseLineMessage } from '../lib/purchaseLines.js';
 import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { PaymentMethodSelect, usePaymentMethodChoice } from './ProfileFields.jsx';
@@ -44,6 +47,13 @@ const PAY_FROM = {
  * today, and a check takes the next check number.
  */
 function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, onNew, editing = null, copyOf = null, fromInbox = null, onDuplicate, onOpenSaved, onPrintCheck }) {
+  // The payee box offers vendors and other names (Expenses › Other Names); a check typed to an
+  // other name is paid to them, not to a new vendor.
+  const otherNames = useLedgerQuery(api.listOtherNames).data ?? [];
+  const payees = useMemo(
+    () => [...vendors, ...otherNames.filter((o) => o.isActive && !vendors.some((v) => v.name.toLowerCase() === o.name.toLowerCase())).map((o) => ({ ...o, listLabel: 'Other name' }))],
+    [vendors, otherNames],
+  );
   const payFrom = PAY_FROM[kind];
   const isCredit = kind === 'CARD_CREDIT';
   // Checks open on the account chosen in Preferences › Checking (My Preferences), else the first bank.
@@ -90,7 +100,6 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   // A new check can wait in File › Print Forms › Checks; it gets its number when it prints.
   const printLater = usePrintLater('CHECK', kind === 'CHECK' && !editing);
   // Closing the window asks first while the entry has amounts or a payee not yet saved.
-  const dirty = useDirtySince('expense', { payee, date, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) }, Boolean(copyOf));
 
   useEffect(() => payeeRef.current?.focus(), [kind]);
   // My Preferences › General › recall: a known payee's last check or expense fills the rows.
@@ -131,7 +140,11 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     if (current && !payFrom(current)) setAccountId(defaultPayFrom);
   }, [kind, accountId, accounts, defaultPayFrom, payFrom]);
 
-  const { lines, invalid, total } = summarizeSplits(rows);
+  const { lines, invalid, total: splitTotal } = summarizeSplits(rows);
+  // Discounts and charges among the split lines (an edited or copied one starts with its own).
+  const [formRows, setFormRows, laid, formTouched] = usePurchaseFormLines(lines, from ? { doc: 'EXPENSE', id: from.id } : null);
+  const dirty = useDirtySince('expense', { payee, date, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]), formTouched }, Boolean(copyOf));
+  const total = laid.error ? splitTotal : laid.total;
 
   const [memorizing, setMemorizing] = useState(null);
   const save = async (mode) => {
@@ -139,6 +152,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
       return setError(kind === 'CHECK' ? 'Choose the bank account the check is drawn on.' : isCredit ? 'Choose the credit card the credit goes to.' : 'Choose the payment account.');
     if (invalid > 0) return setError(`${invalid} split row(s) need a category and an amount above zero.`);
     if (lines.length === 0) return setError('Add at least one split row with an amount.');
+    if (laid.error && formRows.length > 0) return setError(purchaseLineMessage(laid.error));
     if (lines.some((l) => l.accountId === accountId)) return setError(`A split row cannot use the ${isCredit ? 'card' : 'payment account'} itself.`);
     if (currency && rateE6 === null) return setError(`Enter the ${currency} to ${homeCurrency} exchange rate.`);
     const postedLines = formClass.apply(lines);
@@ -155,6 +169,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         ...(kind === 'EXPENSE' ? method.payload() : { paymentMethod: null, paymentMethodId: null }),
         memo: memo.trim() || null,
         lines: postedLines,
+        formLines: laid.formLines ?? [],
         currency: currency ? { code: currency, exchangeRateE6: rateE6 } : null,
       };
       if (mode === 'memorize') return setMemorizing({ ...input, checkNumber: null });
@@ -176,6 +191,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
       setPayee('');
       setMemo('');
       setRows([blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+      setFormRows([]);
       formClass.reset();
       setError(attachError);
       payeeRef.current?.focus();
@@ -195,6 +211,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     setPayee('');
     setMemo('');
     setRows([blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+    setFormRows([]);
     formClass.reset();
     setError(null);
     payeeRef.current?.focus();
@@ -293,7 +310,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         </div>
         <label>
           <span className="qb-label">Payee</span>
-          <NameField kind="vendor" inputRef={payeeRef} names={vendors} value={payee} onChange={setPayee} placeholder={isCredit ? 'Who gave the credit?' : 'Who did you pay?'} />
+          <NameField kind="vendor" inputRef={payeeRef} names={payees} value={payee} onChange={setPayee} placeholder={isCredit ? 'Who gave the credit?' : 'Who did you pay?'} />
         </label>
         <label>
           <span className="qb-label">{kind === 'CHECK' ? 'Bank account' : isCredit ? 'Credit card' : 'Payment account'}</span>
@@ -330,6 +347,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         </div>
       </div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={(a) => isSplitAccount(a) && a.id !== accountId} defaultAccountId={defaultCategory} withClasses withJobs currency={currency || null} />
+      <PurchaseFormLines rows={formRows} setRows={setFormRows} laid={laid} lines={lines} accounts={accounts} />
       {!editing && (
         <div className="border-t border-qb-border px-2 py-1">
           <PendingAttachments paths={files} onChange={setFiles} label={files.length ? 'Attach another…' : 'Attach a receipt…'} />
@@ -525,7 +543,7 @@ export default function ExpensesChecks({ accounts, intent }) {
                 <tr
                   className={`qb-grid-row cursor-pointer ${x.isVoided ? 'text-qb-ink-faint' : ''}`}
                   // Double-click opens it to edit, as Edit… in its menu does.
-                  onDoubleClick={() => (x.isVoided ? setNotice({ kind: 'info', text: 'That entry is voided, so it can’t be edited.' }) : openExpense(x))}
+                  {...rowKeys({ first: x === sorter.sorted[0], open: () => (x.isVoided ? setNotice({ kind: 'info', text: 'That entry is voided, so it can’t be edited.' }) : openExpense(x)) })}
                   title="Double-click to edit"
                 >
                   <td className="qb-grid-cell">{formatDate(x.expenseDate)}</td>

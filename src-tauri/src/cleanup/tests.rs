@@ -26,7 +26,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: &str, due: &str, cent
 async fn credit_memo(pool: &SqlitePool, customer: &str, date: &str, cents: i64) -> i64 {
     let services = account(pool, "4100").await;
     let line = SalesLineInput { product_service_id: None, description: "Credit".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
-    crate::credits::create_credit_memo(pool, CreditMemoInput { customer_name: customer.into(), credit_date: d(date), memo: None, refund_account_id: None, lines: vec![line], tax_rate_id: None, header: Default::default() })
+    crate::credits::create_credit_memo(pool, CreditMemoInput { form_lines: Vec::new(), customer_name: customer.into(), credit_date: d(date), memo: None, refund_account_id: None, lines: vec![line], tax_rate_id: None, header: Default::default() })
         .await
         .unwrap()
         .id
@@ -63,7 +63,7 @@ async fn unapplied_credits_are_listed_beside_open_documents_and_applied_oldest_f
     let bill = crate::expenses::post_vendor_bill(&pool, bill).await.unwrap().id;
     let vendor_credit = crate::credits::create_vendor_credit(
         &pool,
-        crate::credits::VendorCreditInput {
+        crate::credits::VendorCreditInput { form_lines: Vec::new(),
             vendor_name: "Paper Co".into(),
             reference: Some("RMA 7".into()),
             credit_date: d("2026-02-10"),
@@ -318,7 +318,7 @@ async fn list_changes_come_from_creation_dates_and_the_audit_trail() {
     sqlx::query("UPDATE customers SET name = 'Acme Corp' WHERE id = ?1").bind(customer).execute(&pool).await.unwrap();
     sqlx::query("UPDATE customers SET phone = '555-0100' WHERE id = ?1").bind(customer).execute(&pool).await.unwrap();
     sqlx::query("UPDATE vendors SET is_active = 0 WHERE id = ?1").bind(vendor).execute(&pool).await.unwrap();
-    sqlx::query("UPDATE products_services SET rate_cents = 12_500 WHERE id = ?1").bind(product).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE products_services SET rate_cents = 12500 WHERE id = ?1").bind(product).execute(&pool).await.unwrap();
     crate::accounts::set_account_active(&pool, account(&pool, "6600").await, false).await.unwrap();
     // A change to a field nobody reviews writes nothing.
     let rows = || async { sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'LIST_CHANGE'").fetch_one(&pool).await.unwrap() };

@@ -922,6 +922,7 @@ fn read_items(t: &Table, accounts: &mut Accounts, items: &mut Vec<SourceItem>) {
             custom_fields: Vec::new(),
             purchase_description: None,
             purchase_cost_cents: None,
+            percent_ppm: None,
         });
     }
 }

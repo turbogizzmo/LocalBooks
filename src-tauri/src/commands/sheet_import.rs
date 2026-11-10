@@ -7,7 +7,7 @@ use super::report_export::choose_export_path;
 use crate::bank::DateOrder;
 use crate::sheet_import::{self as sheet, Check, Field, Mapping, SheetKind};
 
-handlers![read_import_sheet, check_import_sheet, stage_import_sheet, save_import_template];
+handlers![read_import_sheet, check_import_sheet, stage_import_sheet, post_payment_sheet, save_import_template];
 
 /// How many rows of the sheet the mapping step shows.
 const PREVIEW_ROWS: usize = 6;
@@ -56,15 +56,36 @@ pub async fn read_import_sheet(file_path: String, kind: SheetKind) -> Result<She
     .map_err(|e| format!("SHEET_UNREADABLE: {e}"))?
 }
 
-/// Checks every row with the mapping chosen; lists each row that would fail.
+/// Checks every row with the mapping chosen; lists each row that would fail. A payments sheet is
+/// also checked against the books (the invoices and bills it pays).
 #[tauri::command]
-pub async fn check_import_sheet(file_path: String, kind: SheetKind, mapping: Mapping, date_order: Option<DateOrder>) -> Result<Check, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let (_, _, s) = read_sheet(&file_path)?;
-        Ok(sheet::check(kind, &s, &mapping, date_order))
-    })
-    .await
-    .map_err(|e| format!("SHEET_UNREADABLE: {e}"))?
+pub async fn check_import_sheet(db: State<'_, Db>, file_path: String, kind: SheetKind, mapping: Mapping, date_order: Option<DateOrder>) -> Result<Check, String> {
+    let path = file_path.clone();
+    let s = tauri::async_runtime::spawn_blocking(move || read_sheet(&path).map(|(_, _, s)| s)).await.map_err(|e| format!("SHEET_UNREADABLE: {e}"))??;
+    if sheet::payments::is_payments(kind) {
+        return sheet::payments::check_against_books(&db.pool().await, kind, &s, &mapping, date_order).await;
+    }
+    Ok(sheet::check(kind, &s, &mapping, date_order))
+}
+
+/// Posts a customer or bill payments sheet against the invoices and bills it names: every row, in
+/// one transaction, or nothing while any row would fail.
+#[tauri::command]
+pub async fn post_payment_sheet(
+    app: AppHandle,
+    db: State<'_, Db>,
+    file_path: String,
+    kind: SheetKind,
+    mapping: Mapping,
+    date_order: Option<DateOrder>,
+) -> Result<sheet::payments::Posted, String> {
+    if !sheet::payments::is_payments(kind) {
+        return Err("SHEET_NOT_PAYMENTS: only a payments sheet is posted directly; other sheets go to the import review".into());
+    }
+    let s = tauri::async_runtime::spawn_blocking(move || read_sheet(&file_path).map(|(_, _, s)| s)).await.map_err(|e| format!("SHEET_UNREADABLE: {e}"))??;
+    let posted = sheet::payments::post(&db.pool().await, kind, &s, &mapping, date_order).await?;
+    notify(&app);
+    Ok(posted)
 }
 
 /// Stages a sheet with no problems as a new import, for the same review as every other import.

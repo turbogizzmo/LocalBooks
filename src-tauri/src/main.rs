@@ -13,6 +13,7 @@ mod attachment_export;
 mod attachments_library;
 mod audit_chain;
 mod backup;
+mod backup_safety;
 mod bank;
 mod bank_pdf;
 mod banking;
@@ -56,6 +57,7 @@ mod frontend_checks;
 mod iif_import;
 mod installed_qb;
 mod export_engine;
+mod file_cipher;
 mod file_menu;
 mod file_repair;
 mod finance_charges;
@@ -77,6 +79,7 @@ mod list_reports;
 mod money;
 mod mail_app;
 mod offsite;
+mod other_names;
 mod parties;
 mod party_contacts;
 mod payroll_import;
@@ -86,12 +89,14 @@ mod pdf;
 mod mcp_server;
 mod merges;
 mod mileage;
+mod money_bars;
 mod nacha;
 mod preferences;
 mod price_levels;
 mod print_batches;
 mod print_queue;
 mod profile_lists;
+mod purchase_lines;
 mod qbmac_import;
 mod qbw_backup;
 mod qbw_company;
@@ -110,10 +115,12 @@ mod report_center;
 mod report_comments;
 mod release_check;
 mod reports;
+mod rollback;
 mod revaluation;
 mod sales;
 mod sales_header;
 mod sales_lists;
+mod sales_orders;
 mod sales_prefs;
 mod sales_tax;
 mod tax_ids;
@@ -122,6 +129,7 @@ mod temp_files;
 #[cfg(test)]
 mod test_companies;
 mod secrets;
+mod sign_in_throttle;
 mod simplefin;
 mod smtp;
 mod statements;
@@ -268,6 +276,17 @@ fn main() {
                 loop {
                     commands::run_due_schedules(&schedules).await;
                     tokio::time::sleep(std::time::Duration::from_secs(10 * 60)).await;
+                }
+            });
+
+            // Payout feeds an Admin set to fetch automatically: checked every 15 minutes while the
+            // app is open, each fetched when its interval has passed (`payout_feeds::fetch_due`).
+            let payouts = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                loop {
+                    commands::run_due_payout_fetches(&payouts).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
                 }
             });
 

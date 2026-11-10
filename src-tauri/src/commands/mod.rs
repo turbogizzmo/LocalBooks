@@ -53,6 +53,7 @@ features![
     approvals,
     attachments,
     attachments_library,
+    backup_safety,
     backups,
     bank_feeds,
     bank_matching,
@@ -105,6 +106,8 @@ features![
     merges,
     migration,
     mileage,
+    money_bars,
+    other_names,
     payout_feeds,
     party_contacts,
     payroll_import,
@@ -114,6 +117,7 @@ features![
     print_batches,
     print_queue,
     profile_lists,
+    purchase_lines,
     purchase_orders,
     reconcile,
     recurring,
@@ -124,9 +128,11 @@ features![
     report_export,
     report_mail,
     revaluation,
+    rollback,
     sales,
     sales_header,
     sales_lists,
+    sales_orders,
     sales_prefs,
     sales_tax,
     search,
@@ -144,6 +150,7 @@ features![
 
 pub use company_files::{close_company, company_changed, handle_hand_off, record_startup_failure, StartupFailure};
 pub use offsite::offsite_secrets;
+pub use payout_feeds::run_due_payout_fetches;
 pub use report_mail::run_due_schedules;
 pub use users::sign_out_after_idle;
 

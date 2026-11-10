@@ -53,3 +53,14 @@ Only **journal entries and new accounts** come back. Anything else the accountan
 copy: the export lists what it left out so they can tell you. **Cancel the copy** ends it without
 importing anything; its changes are then refused.
 
+## Let your accountant work in a closed period
+
+Add your accountant as an **External Accountant** user (see
+[Users and passwords](users-and-passwords.md#add-a-user)). They can post and void entries dated
+on or before the closing date without moving it; everyone else still can't.
+
+## Closing Date Exceptions
+
+**Reports › Accountant & Taxes › Closing Date Exceptions** lists everything posted in a period
+after it was closed, with when it was entered and **who entered it**: an External Accountant's
+adjusting entries, or changes made while the closing date was moved back.

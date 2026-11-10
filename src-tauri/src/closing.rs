@@ -79,13 +79,24 @@ async fn current(tx: &mut sqlx::SqliteConnection) -> Result<Option<(Option<Naive
         .map_err(db_err)
 }
 
-/// Refuses an entry dated on or before the closing date in force.
+/// Refuses an entry dated on or before the closing date in force, unless an External Accountant
+/// is signed in (their postings appear in the Closing Date Exceptions report, with who made them).
 pub async fn check_open(tx: &mut Transaction<'_, Sqlite>, date: NaiveDate) -> Result<(), String> {
-    match current(&mut **tx).await? {
-        Some((Some(lock_date), _)) if date <= lock_date => Err(CLOSED_MESSAGE.to_string()),
-        // An Accountant's Copy's dividing date: the client's side of it, or the copy's.
-        _ => crate::accountants_copy::check_posting(tx, date).await,
+    let closed = matches!(current(&mut **tx).await?, Some((Some(lock_date), _)) if date <= lock_date);
+    let exception = closed && crate::permissions::may_post_in_closed_period();
+    // Lets this transaction past the database's closed-period backstop (migration 0137);
+    // `ledger::commit_write` clears it again before committing.
+    sqlx::query("UPDATE closing_exception_in_progress SET value = ?1 WHERE value IS NOT ?1")
+        .bind(exception.then_some(1_i64))
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
+    if closed && !exception {
+        return Err(CLOSED_MESSAGE.to_string());
     }
+    // An Accountant's Copy's dividing date (the client's side of it, or the copy's) holds for an
+    // External Accountant too: their pass is only past the closing date.
+    crate::accountants_copy::check_posting(tx, date).await
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]

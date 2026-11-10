@@ -181,9 +181,9 @@ async fn settings_are_per_user_validated_and_choose_the_categories() {
     invoice(&pool, "Acme", d(1, 1), d(1, 31), 5_000).await;
     bill(&pool, "Staples", "S-1", d(3, 5), 3_000).await;
     let keys = |groups: Vec<ReminderGroup>| groups.into_iter().map(|g| g.key).collect::<Vec<_>>();
-    assert_eq!(keys(reminders(&pool, d(3, 1), ann_view, None).await.unwrap()), vec!["OVERDUE_INVOICES", "BILLS_DUE", "BACKUP"], "April 15 is past the 30-day look-ahead");
+    assert_eq!(keys(reminders(&pool, d(3, 1), ann_view, None).await.unwrap()), vec!["OVERDUE_INVOICES", "BILLS_DUE", "BACKUP", "BACKUP_SAFETY"], "April 15 is past the 30-day look-ahead; no copy off this computer or test restore yet");
 
-    let mine = ReminderSettings { overdue_invoices: Category { show: false, days: 0 }, bills_due: Category { show: true, days: 2 }, tax_dates: Category { show: true, days: 60 }, backup: Category { show: true, days: 30 }, ..Default::default() };
+    let mine = ReminderSettings { overdue_invoices: Category { show: false, days: 0 }, bills_due: Category { show: true, days: 2 }, tax_dates: Category { show: true, days: 60 }, backup: Category { show: true, days: 30 }, backup_safety: Category { show: false, days: 30 }, ..Default::default() };
     save_settings(&pool, ann_view, &mine).await.unwrap();
     assert_eq!(settings(&pool, ann_view).await.unwrap(), mine);
     assert_eq!(settings(&pool, NOBODY).await.unwrap(), ReminderSettings::default(), "settings are the user's own");
@@ -241,4 +241,40 @@ async fn view_only_users_complete_only_their_own_todos() {
     let reopened = set_done(&pool, own.id, false, vic).await.unwrap();
     assert!(!reopened.is_done && reopened.done_at.is_none());
     assert!(set_done(&pool, theirs.id, true, Viewer { user_id: Some(viewer), role: Some(Role::Standard) }).await.unwrap().is_done, "a Standard user completes anyone's");
+}
+
+#[tokio::test]
+async fn items_at_or_below_their_reorder_point_are_listed_to_reorder() {
+    let pool = test_pool().await;
+    let sales = account(&pool, "4100").await;
+    let equity: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'EQUITY' ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
+    let mut items = Vec::new();
+    for (name, on_hand, reorder) in [("Bolts", 4, Some(5)), ("Nuts", 5, Some(5)), ("Washers", 9, Some(5)), ("Rivets", 1, None)] {
+        let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: name.into(), description: None, rate_cents: 100, income_account_id: sales, is_taxable: false })
+            .await
+            .unwrap()
+            .id;
+        let item = crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap();
+        let stock = crate::inventory::AdjustInput { item_id: item.id, date: d(1, 2), qty_change_e4: on_hand * 10_000, total_cost_cents: Some(on_hand * 50), offset_account_id: equity, memo: None };
+        crate::inventory::adjust(&pool, &stock).await.unwrap();
+        crate::info_panel::set_item_purchasing(&pool, product, reorder.map(|r| r * 10_000), None).await.unwrap();
+        items.push(product);
+    }
+    let listed = inventory_to_reorder(&pool).await.unwrap();
+    let names: Vec<(&str, &str)> = listed.iter().map(|i| (i.label.as_str(), i.detail.as_str())).collect();
+    assert_eq!(names, [("Bolts", "4 on hand, reorder at 5"), ("Nuts", "5 on hand, reorder at 5")], "at or below the point; no point, no reminder");
+
+    // Inactive items and a company with inventory turned off list nothing.
+    crate::parties::set_product_active(&pool, items[0], false).await.unwrap();
+    assert_eq!(inventory_to_reorder(&pool).await.unwrap().len(), 1);
+    crate::preferences::set(&pool, "inventory_enabled", "false").await.unwrap();
+    assert!(inventory_to_reorder(&pool).await.unwrap().is_empty());
+
+    // It is a category of its own that can be hidden.
+    let viewer = Viewer { user_id: None, role: None };
+    let mut settings = ReminderSettings::default();
+    assert!(settings.inventory_reorder.show);
+    settings.inventory_reorder.show = false;
+    save_settings(&pool, viewer, &settings).await.unwrap();
+    assert!(!super::settings(&pool, viewer).await.unwrap().inventory_reorder.show);
 }

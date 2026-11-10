@@ -23,7 +23,7 @@ async fn download(pool: &SqlitePool, bank: i64, date: &str, description: &str, a
 
 async fn check(pool: &SqlitePool, number: Option<&str>, date: &str, cents: i64) -> i64 {
     let (checking, rent) = (account(pool, "1010").await, account(pool, "6300").await);
-    let input = ExpenseInput {
+    let input = ExpenseInput { form_lines: Vec::new(),
         payment_method_id: None,
         kind: "CHECK".into(),
         payee_name: Some("Landlord".into()),

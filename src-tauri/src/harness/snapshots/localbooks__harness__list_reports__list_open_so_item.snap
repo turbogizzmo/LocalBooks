@@ -1,0 +1,18 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Open Sales Orders by Item, all dates to 2025-12-31
+
+Item                           Customer                  Order                     Date          Expected            Ordered      Invoiced          Left   Backordered   Open Amount
+Gift Mugs · on hand 12 ·
+                               Brightwater Cafe          #1                        2025-12-08    2026-01-15               20             0            20             8        360.00
+Total Gift Mugs                                                                                                                                       20             8        360.00
+Logo Package
+                               Brightwater Cafe          #1                        2025-12-08    2026-01-15                1             0             1             0        450.00
+Total Logo Package                                                                                                                                     1             0        450.00
+TOTAL                                                                                                                                                                         810.00
+
+2 lines
+
+2 items on open sales orders, as of 2025-12-31. Available is on hand less what is left on open orders; below zero, that much is backordered. Stock leaves only when an order is invoiced.

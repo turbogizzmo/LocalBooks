@@ -280,6 +280,8 @@ export function ItemInfoPanel({ product, onHide }) {
           ? [
               ['On hand', formatQuantity(data.qtyOnHandE4), null],
               ['On order', formatQuantity(data.qtyOnOrderE4), data.nextDelivery ? `next ${formatDate(data.nextDelivery)}` : null],
+              ['On sales orders', formatQuantity(data.qtyOnSalesOrderE4), null],
+              ['Available', formatQuantity(data.qtyAvailableE4), data.qtyAvailableE4 < 0 ? 'backordered' : null],
               ['Average cost', data.averageCostCents === null ? '—' : formatCents(data.averageCostCents), null],
               ['Value', formatCents(data.assetValueCents), null],
               ['Reorder point', data.reorderPointE4 === null ? 'None' : formatQuantity(data.reorderPointE4), data.atReorderPoint ? 'time to reorder' : null],
@@ -325,4 +327,106 @@ export function FormInfoPanel({ kind, name, names }) {
     );
   }
   return <PartyInfoPanel kind={kind} id={party.id} onHide={info.hide} />;
+}
+
+/**
+ * The information panel for an other name (Expenses › Other Names): what has been paid to them,
+ * their contact details, notes (with Date Stamp) and recent transactions.
+ */
+export function OtherNameInfoPanel({ id, onHide }) {
+  const record = useLedgerQuery(() => api.getOtherName(id));
+  const recent = useLedgerQuery(() =>
+    api.findTransactions({ filters: { names: [{ kind: 'other', id }], excludeVoided: true, transactionTypes: [] }, startDate: null, endDate: '9999-12-31', limit: RECENT }),
+  );
+  const { reload: reloadRecord } = record;
+  const { reload: reloadRecent } = recent;
+  useEffect(() => {
+    reloadRecord();
+    reloadRecent();
+  }, [id, reloadRecord, reloadRecent]);
+  const openFromList = useOpenFromList();
+  const [tab, setTab] = useState('Summary');
+  useEffect(() => setTab('Summary'), [id]);
+  const [notes, setNotes] = useState('');
+  const [message, setMessage] = useState(null);
+  const p = record.data;
+  useEffect(() => setNotes(p?.notes ?? ''), [p?.notes]);
+  const rows = [...(recent.data?.rows ?? [])].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, RECENT);
+  const saveNotes = async () => {
+    try {
+      await api.updateOtherName(id, { name: p.name, companyName: p.companyName, email: p.email, phone: p.phone, address: p.address, notes });
+      setMessage({ kind: 'success', text: 'Notes saved.' });
+      reloadRecord();
+    } catch (err) {
+      setMessage({ kind: 'error', text: errorText(err) });
+    }
+  };
+  return (
+    <Shell title={p?.name ?? 'Other name'} onHide={onHide}>
+      <div role="tablist" className="-mx-2 -mt-2 flex border-b border-qb-border bg-qb-canvas px-1">
+        {['Summary', 'Notes'].map((t) => (
+          <button key={t} type="button" role="tab" aria-selected={tab === t} className={`px-2 py-1 text-xs font-semibold ${tab === t ? 'border-b-2 border-qb-green text-qb-ink' : 'text-qb-ink-muted'}`} onClick={() => setTab(t)}>
+            {t}
+          </button>
+        ))}
+      </div>
+      {(record.error || recent.error) && <Notice kind="error" text={errorText(record.error || recent.error)} />}
+      {tab === 'Notes' && p && (
+        <div className="flex flex-col gap-1">
+          <textarea className="qb-input h-[160px] py-1" value={notes} maxLength={10000} onChange={(e) => setNotes(e.target.value)} aria-label="Notes" />
+          <div className="flex gap-2">
+            <button type="button" className="qb-btn qb-btn-secondary h-row px-2" onClick={() => setNotes((t) => stampNotes(t, formatDate(todayIso())))} title="Start a new first line with today's date">
+              Date Stamp
+            </button>
+            <button type="button" className="qb-btn qb-btn-primary h-row px-2" onClick={saveNotes} disabled={notes === (p.notes ?? '')}>
+              Save notes
+            </button>
+          </div>
+          {message && <Notice kind={message.kind} text={message.text} onDismiss={() => setMessage(null)} />}
+        </div>
+      )}
+      {tab === 'Summary' && p && (
+        <>
+          <Section title="Summary">
+            <Figures lines={[['Paid to them', formatCents(p.paidCents), `${p.paymentCount} check${p.paymentCount === 1 ? '' : 's'} or expense${p.paymentCount === 1 ? '' : 's'}`]]} />
+          </Section>
+          <Section title="Contact">
+            {p.companyName && <div>{p.companyName}</div>}
+            {p.phone ? <div><span className="text-qb-ink-muted">Phone: </span>{p.phone}</div> : <div className="text-qb-ink-faint">No phone</div>}
+            {p.email ? (
+              <div>
+                <span className="text-qb-ink-muted">Email: </span>
+                <a className="text-qb-link hover:underline" href={`mailto:${p.email}`}>{p.email}</a>
+              </div>
+            ) : (
+              <div className="text-qb-ink-faint">No email</div>
+            )}
+            {p.address && <div className="whitespace-pre-wrap">{p.address}</div>}
+          </Section>
+          {p.notes && (
+            <Section title="Notes">
+              <p className="line-clamp-4 whitespace-pre-wrap">{p.notes}</p>
+            </Section>
+          )}
+          <Section title="Recent transactions">
+            {rows.length === 0 && recent.data && <span className="text-qb-ink-muted">None yet.</span>}
+            <ul>
+              {rows.map((r) => (
+                <li key={r.journalEntryId ?? `${r.typeLabel}-${r.num}-${r.date}`}>
+                  <button type="button" className="flex w-full items-baseline gap-1 rounded-sm px-0.5 text-left hover:bg-qb-row-hover" onClick={() => openFromList(...transactionTarget(r))} title="Open it">
+                    <span className="w-[72px] flex-none text-xs text-qb-ink-muted">{formatDate(r.date)}</span>
+                    <span className="truncate">
+                      {r.typeLabel}
+                      {r.num ? ` ${r.num}` : ''}
+                    </span>
+                    <span className="num ml-auto">{r.amountCents !== null && r.amountCents !== undefined ? formatCents(r.amountCents) : ''}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        </>
+      )}
+    </Shell>
+  );
 }

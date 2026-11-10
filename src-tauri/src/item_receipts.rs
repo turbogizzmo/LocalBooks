@@ -471,7 +471,7 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
     .fetch_optional(&mut **tx)
     .await
     .map_err(db_err)?;
-    let (number, vendor_id, vendor, receipt_total, voided, _order) = head.ok_or("RECEIPT_NOT_FOUND: that item receipt does not exist")?;
+    let (number, vendor_id, vendor, receipt_total, voided, order) = head.ok_or("RECEIPT_NOT_FOUND: that item receipt does not exist")?;
     if voided {
         return Err(format!("RECEIPT_VOIDED: item receipt #{number} is voided"));
     }
@@ -489,9 +489,9 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
     if let Some(terms) = input.terms_id {
         crate::profile_lists::check_terms(&mut **tx, terms, None, "BILL").await?;
     }
-    type LineRow = (i64, i64, i64, Option<i64>, String, Option<i64>, i64, Option<i64>);
+    type LineRow = (i64, i64, i64, Option<i64>, String, Option<i64>, i64, Option<i64>, Option<i64>);
     let lines: Vec<LineRow> = sqlx::query_as(
-        "SELECT id, line_number, account_id, product_service_id, description, quantity_e4, amount_cents, class_id
+        "SELECT id, line_number, account_id, product_service_id, description, quantity_e4, amount_cents, class_id, purchase_order_line_id
          FROM item_receipt_lines WHERE item_receipt_id = ?1 ORDER BY line_number",
     )
     .bind(input.item_receipt_id)
@@ -504,7 +504,7 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
 
     let mut total: i64 = 0;
     let mut billed_lines = Vec::with_capacity(lines.len());
-    for (id, n, account, product, description, quantity, received, class) in &lines {
+    for (id, n, account, product, description, quantity, received, class, _) in &lines {
         let amount = input.lines.iter().find(|b| b.receipt_line_id == *id).map(|b| b.amount_cents).unwrap_or(*received);
         if !(1..=MAX_LINE_CENTS).contains(&amount) {
             return Err(format!("RECEIPT_BAD_AMOUNT: line {n} needs an amount above zero"));
@@ -512,6 +512,12 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
         total = total.checked_add(amount).filter(|t| *t <= MAX_LINE_CENTS).ok_or("RECEIPT_TOO_LARGE: the bill is too large")?;
         billed_lines.push((*n, *account, *product, description.clone(), *quantity, *received, amount, *class));
     }
+    // The order's discounts and charges, after the lines received from their order lines (T21).
+    let splits: Vec<i64> = billed_lines.iter().map(|l| l.6).collect();
+    let po_lines: Vec<Option<i64>> = lines.iter().map(|l| l.8).collect();
+    let form = crate::purchase_lines::fit_carried(carried_form_lines(tx, order, &po_lines).await?, &splits);
+    let (form_amounts, total) = crate::purchase_lines::lay_out(&splits, &form, "BILL")?;
+    crate::purchase_lines::check(tx, &form, "BILL").await?;
 
     let bill_id: i64 = sqlx::query_scalar(
         "INSERT INTO bills (vendor_id, bill_number, bill_date, due_date, memo, total_cents, status, terms_id)
@@ -528,6 +534,7 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
     .await
     .map_err(db_err)?;
 
+    crate::purchase_lines::write(tx, crate::purchase_lines::PurchaseDoc::Bill, bill_id, &form, &form_amounts).await?;
     let clearing = clearing_account(tx).await?;
     let ap: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'ACCOUNTS_PAYABLE' AND is_system = 1 ORDER BY id LIMIT 1")
         .fetch_optional(&mut **tx)
@@ -576,6 +583,7 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
             None => journal.push(JournalLine::credit(*account, -diff).with_class(*class)),
         }
     }
+    journal.extend(crate::purchase_lines::journal_lines(&form, &form_amounts, true));
     journal.push(JournalLine::credit(ap, total));
     let reference = clean(input.bill_number.as_deref()).map(|n| format!(" #{n}")).unwrap_or_default();
     let entry = JournalEntry { id: None, date: input.bill_date, description: format!("Bill{reference} - {vendor} (item receipt #{number})"), lines: journal, currency: None };
@@ -586,6 +594,81 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
     sqlx::query("UPDATE bills SET status = 'UNPAID', journal_entry_id = ?1 WHERE id = ?2").bind(entry_id).bind(bill_id).execute(&mut **tx).await.map_err(db_err)?;
     sqlx::query("INSERT INTO item_receipt_bills (item_receipt_id, bill_id) VALUES (?1, ?2)").bind(input.item_receipt_id).bind(bill_id).execute(&mut **tx).await.map_err(db_err)?;
     Ok(bill_id)
+}
+
+/// The purchase order's discounts and charges a receipt's bill takes, placed after the receipt lines
+/// received from their order lines (`po_lines`, in receipt line order). A percent line applies to
+/// every bill's line for that order line; a fixed amount goes on the first live bill that has the
+/// order line (and [`crate::purchase_lines::fit_carried`] holds back a fixed discount the line can't take).
+async fn carried_form_lines(tx: &mut Transaction<'_, Sqlite>, order: Option<i64>, po_lines: &[Option<i64>]) -> Result<Vec<crate::purchase_lines::PurchaseFormLineInput>, String> {
+    let Some(order) = order else { return Ok(Vec::new()) };
+    let views: Vec<crate::purchase_lines::PurchaseFormLineView> = sqlx::query_as(
+        "SELECT after_line, kind, description, product_service_id, percent_ppm, amount_cents, account_id, class_id
+         FROM purchase_form_lines WHERE purchase_order_id = ?1 ORDER BY after_line",
+    )
+    .bind(order)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    if views.is_empty() {
+        return Ok(Vec::new());
+    }
+    let numbers: Vec<(i64, i64)> =
+        sqlx::query_as("SELECT id, line_number FROM purchase_order_lines WHERE purchase_order_id = ?1").bind(order).fetch_all(&mut **tx).await.map_err(db_err)?;
+    let inputs = crate::purchase_lines::inputs_of(&views);
+    let mut out = Vec::new();
+    let mut fixed_here: Vec<i64> = Vec::new();
+    for (i, po_line) in po_lines.iter().enumerate() {
+        let Some(po_line) = *po_line else { continue };
+        let Some(&(_, number)) = numbers.iter().find(|(id, _)| *id == po_line) else { continue };
+        for (view, input) in views.iter().zip(&inputs) {
+            if view.after_line != number {
+                continue;
+            }
+            if input.percent_ppm.is_none() {
+                // Already on a live bill for this order line (an earlier part shipment), or on this one.
+                let carried: bool = sqlx::query_scalar(
+                    "SELECT EXISTS (
+                         SELECT 1 FROM purchase_form_lines f
+                         JOIN item_receipt_bills rb ON rb.bill_id = f.bill_id
+                         JOIN bills b ON b.id = f.bill_id
+                         JOIN journal_entries e ON e.id = b.journal_entry_id
+                         JOIN item_receipt_lines l ON l.item_receipt_id = rb.item_receipt_id AND l.line_number = f.after_line
+                         WHERE e.is_voided = 0 AND l.purchase_order_line_id = ?1 AND f.kind = ?2 AND f.percent_ppm IS NULL
+                           AND f.amount_cents = ?3 AND f.account_id = ?4)",
+                )
+                .bind(po_line)
+                .bind(&view.kind)
+                .bind(view.amount_cents)
+                .bind(view.account_id)
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(db_err)?;
+                if carried || fixed_here.contains(&po_line) {
+                    continue;
+                }
+                fixed_here.push(po_line);
+            }
+            out.push(crate::purchase_lines::PurchaseFormLineInput { after_line: i + 1, ..input.clone() });
+        }
+    }
+    Ok(out)
+}
+
+/// What Enter Bill for Received Items shows it will take from the receipt's purchase order: the
+/// discounts and charges [`carried_form_lines`] places, before the billed amounts are known.
+pub async fn receipt_bill_form_lines(pool: &SqlitePool, item_receipt_id: i64) -> Result<Vec<crate::purchase_lines::PurchaseFormLineInput>, String> {
+    let mut tx = pool.begin().await.map_err(db_err)?;
+    let order: Option<Option<i64>> = sqlx::query_scalar("SELECT purchase_order_id FROM item_receipts WHERE id = ?1").bind(item_receipt_id).fetch_optional(&mut *tx).await.map_err(db_err)?;
+    let order = order.ok_or("RECEIPT_NOT_FOUND: that item receipt does not exist")?;
+    let po_lines: Vec<Option<i64>> = sqlx::query_scalar("SELECT purchase_order_line_id FROM item_receipt_lines WHERE item_receipt_id = ?1 ORDER BY line_number")
+        .bind(item_receipt_id)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    let lines = carried_form_lines(&mut tx, order, &po_lines).await?;
+    tx.rollback().await.map_err(db_err)?;
+    Ok(lines)
 }
 
 /// Whether a bill was entered for an item receipt (such a bill is voided and entered again, not

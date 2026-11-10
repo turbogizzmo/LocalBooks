@@ -4,8 +4,8 @@
 //!
 //! `LOCALBOOKS_SEED_DIR=<folder> cargo test --release -- --ignored seed_test_companies --nocapture`
 //! writes, replacing earlier copies of these names only:
-//! - `Edge Cases.localbooks`: users on (Admin, Standard, View only), encrypted tax IDs, sales tax,
-//!   a foreign-currency invoice, partial payments, credits, a voided entry, a job, unusual names,
+//! - `Edge Cases.localbooks`: users on (Admin, Standard, View only, External Accountant), encrypted
+//!   tax IDs, sales tax, a foreign-currency invoice, partial payments, credits, a voided entry, a job, unusual names,
 //!   leap-day and year-end dates, a closed period;
 //! - `No Users.localbooks`: a small company without users whose vendor has a plain tax ID, for
 //!   turning users on;
@@ -75,7 +75,7 @@ async fn pay(pool: &SqlitePool, invoice_id: i64, bank: i64, date: NaiveDate, cen
 async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, account_id: i64, cents: i64) -> i64 {
     expenses::post_vendor_bill(
         pool,
-        BillInput {
+        BillInput { form_lines: Vec::new(),
             terms_id: None,
             vendor_name: vendor.into(),
             bill_number: Some(number.into()),
@@ -98,7 +98,7 @@ async fn pay_bill(pool: &SqlitePool, bill_id: i64, bank: i64, date: NaiveDate, c
 async fn expense(pool: &SqlitePool, kind: &str, payee: &str, paid_from: i64, date: NaiveDate, account_id: i64, cents: i64) {
     expenses::post_expense(
         pool,
-        ExpenseInput {
+        ExpenseInput { form_lines: Vec::new(),
             payment_method_id: None,
             kind: kind.into(),
             payee_name: Some(payee.into()),
@@ -159,6 +159,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
         ("clerk", "Casey Clerk", Role::Standard, false),
         ("bookkeeper", "Billie Books", Role::Standard, true),
         ("viewer", "Vic Viewer", Role::ViewOnly, false),
+        ("accountant", "Ari Accountant", Role::ExternalAccountant, false),
     ] {
         users::add(&pool, &admin, NewUserInput { username: username.into(), display_name: Some(display.into()), role, can_see_sensitive: sensitive, password: format!("{username} temp pw") })
             .await
@@ -206,7 +207,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     let credited = invoices::create_and_post_invoice(&pool, invoice("Zed's 50% Off <Outlet>", d(2025, 5, 5), vec![line("Clearance", 20_000, 5_000, sales_acct, false)])).await.expect("invoice to credit");
     let credit = credits::create_credit_memo(
         &pool,
-        CreditMemoInput {
+        CreditMemoInput { form_lines: Vec::new(),
             customer_name: "Zed's 50% Off <Outlet>".into(),
             credit_date: d(2025, 5, 20),
             memo: Some("Damaged goods".into()),
@@ -311,7 +312,7 @@ async fn seed_test_companies() {
         "Test companies made by `seed_test_companies` (src-tauri/src/test_companies.rs). Test values only.\n\n\
          Edge Cases.localbooks\n  owner / {ADMIN_PASSWORD} (Admin)\n  clerk / clerk temp pw (Standard; must choose a new password)\n  \
          bookkeeper / bookkeeper temp pw (Standard, can see sensitive data; must choose a new password)\n  \
-         viewer / viewer temp pw (View only; must choose a new password)\n  recovery key: {recovery}\n  closing passcode: {CLOSING_PASSCODE}\n\n\
+         viewer / viewer temp pw (View only; must choose a new password)\n  accountant / accountant temp pw (External Accountant; must choose a new password)\n  recovery key: {recovery}\n  closing passcode: {CLOSING_PASSCODE}\n\n\
          No Users.localbooks: no sign-in.\n{}",
         if large { "Five Years.localbooks: no sign-in.\n" } else { "" }
     );

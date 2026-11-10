@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import { layoutMessage } from '../lib/itemTypes.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import LineItemGrid, { blankLine, linesFromDocument, summarizeLines } from './LineItemGrid.jsx';
@@ -7,7 +8,7 @@ import { useSalesDetails } from './SalesDetails.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
-import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useEditIntent, useOpenFromList } from '../lib/windows.js';
 import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
 import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu from './RowMenu.jsx';
@@ -22,8 +23,8 @@ import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
 import { FormInfoPanel } from './InfoPanel.jsx';
 
-/** Estimate lines priced at 0.00: on with the estimate_lines rebuild in migration 0072. */
-const ZERO_LINES = false;
+/** Estimate lines may be priced at 0.00 (an included extra): migration 0112. */
+const ZERO_LINES = true;
 
 const STATUS = {
   PENDING: { label: '○ Pending', className: 'text-qb-ink' },
@@ -89,7 +90,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep, copyOf = 
   const save = async (mode) => {
     if (!customer.trim()) return setError('Enter a customer.');
     if (filled.length === 0) return setError('Add at least one line.');
-    if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.`);
+    if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate (0.00 for an included extra).`);
     if (expires && expires < date) return setError('The expiration date is before the estimate date.');
     if (layoutError) return setError(layoutMessage(layoutError));
     if (discountCents === null) return setError('Enter the discount as an amount or a percentage such as 10%.');
@@ -206,6 +207,7 @@ export default function Estimates(props) {
 
 function EstimateList({ accounts, intent, navigate }) {
   const { data, error } = useLedgerQuery(api.listEstimates);
+  const { salesOrders } = useSalesPrefs();
   const [composing, setComposing] = useState(intent?.action === 'estimate');
   const [notice, setNotice] = useState(null);
   // Duplicate: the saved estimate the new one on the form starts from (and a key to start afresh).
@@ -220,6 +222,15 @@ function EstimateList({ accounts, intent, navigate }) {
   const setStatus = async (estimate, status) => {
     try {
       await api.setEstimateStatus(estimate.id, status);
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
+  const toOrder = async (estimate) => {
+    try {
+      const made = await api.createSalesOrderFromEstimate(estimate.id, today);
+      const left = made.leftOut.length ? ` Left on the estimate (add them on the invoice): ${made.leftOut.join('; ')}.` : '';
+      setNotice({ kind: 'success', text: `Estimate #${estimate.estimateNumber} became sales order #${made.order.orderNumber}. Invoice it from Sales › Sales Orders.${left}` });
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
     }
@@ -254,6 +265,8 @@ function EstimateList({ accounts, intent, navigate }) {
     saved.open(e);
     setComposing(true);
   };
+  // An estimate opened from elsewhere (the sales money bar's Estimates list).
+  useEditIntent(intent, 'estimateId', data, openEstimate, () => setNotice({ kind: 'error', text: 'That estimate is no longer in the books.' }));
   const duplicate = (e) =>
     api.getCopySource('ESTIMATE', e.id).then(
       (copy) => {
@@ -362,9 +375,10 @@ function EstimateList({ accounts, intent, navigate }) {
               )}
               {shown.map((e) => {
                 const expired = e.status !== 'CONVERTED' && e.expirationDate && e.expirationDate < today;
-                const open = e.status !== 'CONVERTED';
+                // An estimate that became a sales order is invoiced through the order.
+                const open = e.status !== 'CONVERTED' && !e.salesOrderNumber;
                 return (
-                  <tr key={e.id} className="qb-grid-row cursor-pointer" onDoubleClick={() => openEstimate(e)}>
+                  <tr key={e.id} className="qb-grid-row cursor-pointer" {...rowKeys({ first: e === shown[0], open: () => openEstimate(e) })}>
                     <td className="qb-grid-cell">
                       {e.estimateNumber}
                       <EmailMarks status={emailed.get(e.id)} />
@@ -376,6 +390,7 @@ function EstimateList({ accounts, intent, navigate }) {
                     <td className={`qb-grid-cell ${STATUS[e.status].className}`}>
                       {STATUS[e.status].label}
                       {e.status === 'CONVERTED' && e.invoiceNumber ? ` #${e.invoiceNumber}` : ''}
+                      {e.salesOrderNumber ? ` · sales order #${e.salesOrderNumber}` : ''}
                       {expired ? ' · expired' : ''}
                     </td>
                     <td className="qb-grid-cell cell-tight text-center">
@@ -401,10 +416,16 @@ function EstimateList({ accounts, intent, navigate }) {
                             },
                             onSelect: () => convert(e),
                           },
+                          salesOrders && {
+                            label: 'Create sales order',
+                            disabled: !open || e.status === 'REJECTED',
+                            hint: e.salesOrderNumber ? `Already sales order #${e.salesOrderNumber}` : e.status === 'REJECTED' ? 'Mark it pending or accepted first' : 'The customer ordered: ship and invoice it in parts from Sales › Sales Orders',
+                            onSelect: () => toOrder(e),
+                          },
                           { label: 'Mark accepted', disabled: !open || e.status === 'ACCEPTED', onSelect: () => setStatus(e, 'ACCEPTED') },
                           { label: 'Mark rejected', disabled: !open || e.status === 'REJECTED', onSelect: () => setStatus(e, 'REJECTED') },
                           { label: 'Mark pending', disabled: !open || e.status === 'PENDING', onSelect: () => setStatus(e, 'PENDING') },
-                        ]}
+                        ].filter(Boolean)}
                       />
                     </td>
                   </tr>

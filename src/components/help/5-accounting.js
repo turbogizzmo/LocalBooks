@@ -57,8 +57,8 @@ export const topics = [
   {
     id: 'reminders', area: 'company', views: ['dashboard', 'accounting/todos'],
     title: 'See what needs attention: Reminders',
-    body: 'The Reminders panel on the Dashboard counts overdue invoices, bills due soon, to-dos due, recurring transactions to enter, forms to email, upcoming tax dates and an overdue backup; click a line to see its items. Customize chooses which show, how many days each looks ahead, and whether Reminders open with the company; the choices are each user’s own.',
-    keywords: 'reminders alerts due overdue bills to pay invoices past due to do tax dates backup startup customize look ahead',
+    body: 'The Reminders panel on the Dashboard counts overdue invoices, bills due soon, to-dos due, recurring transactions to enter, forms to email, upcoming tax dates, inventory to reorder (tracked items at or below their reorder point) and an overdue backup; click a line to see its items. Customize chooses which show, how many days each looks ahead, and whether Reminders open with the company; the choices are each user’s own.',
+    keywords: 'reminders alerts due overdue bills to pay invoices past due to do tax dates backup startup customize look ahead inventory to reorder reorder point low stock',
     go: { label: 'Go to the Dashboard', view: 'dashboard' },
     guide: 'reminders-and-todos',
   },

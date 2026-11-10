@@ -626,6 +626,7 @@ fn items(book: &Book, known: &HashSet<i64>) -> Vec<SourceItem> {
                 custom_fields: Vec::new(),
                 purchase_description: None,
                 purchase_cost_cents: None,
+                percent_ppm: None,
             })
         })
         .collect();
@@ -741,7 +742,7 @@ pub fn ledger(book: &Book) -> Ledger {
                     let account_id = t.account.filter(|a| known.contains(a))?;
                     let c = cents(t.amount.as_deref()).ok().flatten().filter(|c| *c != 0)?.abs();
                     let (quantity_e4, rate_cents) = quantity_and_rate(t, c);
-                    Some(DocumentLine { item_id: t.item, description: t.memo.clone(), quantity_e4, rate_cents, cents: c, account_id, class: None })
+                    Some(DocumentLine { item_id: t.item, description: t.memo.clone(), quantity_e4, rate_cents, cents: c, account_id, class: None, subtotal: false })
                 })
                 .collect();
             let document = match (view, customer, vendor) {
@@ -853,7 +854,7 @@ pub fn ledger(book: &Book) -> Ledger {
                 .filter(|(t, a, _)| !is_arap(*a) && (all || !t.is_source))
                 .map(|(t, a, c)| {
                     let (quantity_e4, rate_cents) = quantity_and_rate(t, *c);
-                    DocumentLine { item_id: t.item.filter(|i| items_by.contains_key(i)), description: t.memo.clone(), quantity_e4, rate_cents, cents: *c, account_id: *a, class: None }
+                    DocumentLine { item_id: t.item.filter(|i| items_by.contains_key(i)), description: t.memo.clone(), quantity_e4, rate_cents, cents: *c, account_id: *a, class: None, subtotal: false }
                 })
                 .collect()
         };

@@ -40,6 +40,18 @@ fn every_role_gets_what_it_should() {
     assert!(check(&signed_in(Role::Standard), Need::Write).is_ok());
     assert!(check(&signed_in(Role::Standard), Need::Admin).unwrap_err().starts_with("ROLE_ADMIN_ONLY"));
     assert!(check(&signed_in(Role::Admin), Need::Admin).is_ok());
+    assert!(check(&signed_in(Role::ExternalAccountant), Need::Read).is_ok());
+    assert!(check(&signed_in(Role::ExternalAccountant), Need::Write).is_ok(), "an External Accountant posts like a Standard user");
+    assert!(check(&signed_in(Role::ExternalAccountant), Need::Admin).unwrap_err().starts_with("ROLE_ADMIN_ONLY"), "and can't change the closing date or users");
+}
+
+#[test]
+fn only_an_external_accountant_may_post_in_a_closed_period() {
+    for (role, may) in [(None, false), (Some(Role::Admin), false), (Some(Role::Standard), false), (Some(Role::ExternalAccountant), true)] {
+        set_signed_in_role(role);
+        assert_eq!(may_post_in_closed_period(), may, "{role:?}");
+    }
+    set_signed_in_role(None);
 }
 
 #[tokio::test]

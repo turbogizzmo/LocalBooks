@@ -23,7 +23,7 @@ fn d(day: u32) -> NaiveDate {
 }
 
 fn bill(vendor: &str, lines: Vec<(i64, i64)>) -> BillInput {
-    BillInput {
+    BillInput { form_lines: Vec::new(),
         terms_id: None,
         vendor_name: vendor.into(),
         bill_number: Some("INV-778".into()),
@@ -77,7 +77,7 @@ async fn a_bill_can_be_paid_before_its_date() {
     // Paying a vendor ahead of the bill's date is recorded on the day it was paid, as QuickBooks allows.
     let pool = test_pool().await;
     let (ap, checking, rent) = (account_id(&pool, "2000").await, account_id(&pool, "1010").await, account_id(&pool, "6300").await);
-    let later = BillInput { bill_date: d(15), ..bill("Landlord LLC", vec![(rent, 90_000)]) };
+    let later = BillInput { form_lines: Vec::new(), bill_date: d(15), ..bill("Landlord LLC", vec![(rent, 90_000)]) };
     let posted = post_vendor_bill(&pool, later).await.expect("bill posts");
 
     let paid = pay_vendor_bill(&pool, pay(posted.id, checking, 90_000)).await.expect("a payment dated the 10th pays a bill dated the 15th");
@@ -154,7 +154,7 @@ async fn expenses_and_checks_credit_the_payment_account() {
     let pool = test_pool().await;
     let (checking, card, rent, fuel, ar) =
         (account_id(&pool, "1010").await, account_id(&pool, "2100").await, account_id(&pool, "6300").await, account_id(&pool, "6100").await, account_id(&pool, "1200").await);
-    let input = |kind: &str, account: i64, lines: Vec<(i64, i64)>| ExpenseInput {
+    let input = |kind: &str, account: i64, lines: Vec<(i64, i64)>| ExpenseInput { form_lines: Vec::new(),
         payment_method_id: None,
         kind: kind.into(),
         payee_name: Some("Shell".into()),
@@ -216,7 +216,7 @@ async fn foreign_expense_credits_the_bank_in_home_currency() {
     let (checking, travel, meals) = (account_id(&pool, "1010").await, account_id(&pool, "6450").await, account_id(&pool, "6200").await);
     let posted = post_expense(
         &pool,
-        ExpenseInput {
+        ExpenseInput { form_lines: Vec::new(),
             payment_method_id: None,
             kind: "EXPENSE".into(),
             payee_name: Some("Hotel Tokyo".into()),
@@ -266,7 +266,7 @@ async fn card_credits_debit_the_card_and_credit_the_splits() {
     let pool = test_pool().await;
     let (checking, card, office, fuel) =
         (account_id(&pool, "1010").await, account_id(&pool, "2100").await, account_id(&pool, "6250").await, account_id(&pool, "6100").await);
-    let input = |kind: &str, account: i64, lines: Vec<(i64, i64)>| ExpenseInput {
+    let input = |kind: &str, account: i64, lines: Vec<(i64, i64)>| ExpenseInput { form_lines: Vec::new(),
         payment_method_id: None,
         kind: kind.into(),
         payee_name: Some("Office Depot".into()),
@@ -346,7 +346,7 @@ async fn the_database_holds_card_credits_to_their_rules() {
     // A posted charge cannot be turned into a credit.
     let charge = post_expense(
         &pool,
-        ExpenseInput {
+        ExpenseInput { form_lines: Vec::new(),
             payment_method_id: None,
             kind: "EXPENSE".into(),
             payee_name: None,
@@ -371,7 +371,7 @@ async fn foreign_card_credit_debits_the_card_in_home_currency() {
     let (card, travel) = (account_id(&pool, "2100").await, account_id(&pool, "6450").await);
     let posted = post_expense(
         &pool,
-        ExpenseInput {
+        ExpenseInput { form_lines: Vec::new(),
             payment_method_id: None,
             kind: "CARD_CREDIT".into(),
             payee_name: Some("Hotel Tokyo".into()),

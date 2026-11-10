@@ -316,6 +316,10 @@ pub async fn sales_by_product(pool: &SqlitePool, start_date: NaiveDate, end_date
             SELECT cl.product_service_id, -cl.quantity_e4, -cl.amount_cents
             FROM credit_memo_lines cl JOIN credit_memos m ON m.id = cl.credit_memo_id
             WHERE m.is_voided = 0 AND m.journal_entry_id IS NOT NULL AND m.credit_date BETWEEN ?1 AND ?2
+            UNION ALL
+            SELECT fl.product_service_id, 0, -fl.amount_cents
+            FROM credit_memo_form_lines fl JOIN credit_memos m ON m.id = fl.credit_memo_id
+            WHERE fl.kind = 'DISCOUNT' AND m.is_voided = 0 AND m.journal_entry_id IS NOT NULL AND m.credit_date BETWEEN ?1 AND ?2
          ) x LEFT JOIN products_services p ON p.id = x.product
          GROUP BY x.product
          HAVING SUM(x.amount) <> 0 OR SUM(x.qty) <> 0
@@ -522,6 +526,10 @@ pub struct StockStatusRow {
     /// Units sold in the period (sales less voided sales).
     pub qty_sold_e4: i64,
     pub sales_per_week_e4: i64,
+    /// Left to invoice on open sales orders (`sales_orders`).
+    pub qty_on_sales_order_e4: i64,
+    /// On hand less on sales order.
+    pub qty_available_e4: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -532,15 +540,15 @@ pub struct StockStatus {
     pub rows: Vec<StockStatusRow>,
 }
 
-/// Per tracked item: on hand at the end date, on order from open purchase orders, and the average
-/// units sold per week over the period.
+/// Per tracked item: on hand at the end date, on order from open purchase orders, on open sales
+/// orders and so available, and the average units sold per week over the period.
 pub async fn stock_status(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate) -> Result<StockStatus, String> {
     if end_date < start_date {
         return Err("RPT_BAD_RANGE: the end date is before the start date".into());
     }
     let names = crate::preferences::ItemNames::load(pool).await?;
-    let items: Vec<(i64, String, Option<String>, Option<String>, bool, i64, i64, Option<NaiveDate>, i64)> = sqlx::query_as(
-        "SELECT i.id, p.name, i.sku, p.description, p.is_active,
+    let items: Vec<(i64, i64, String, Option<String>, Option<String>, bool, i64, i64, Option<NaiveDate>, i64)> = sqlx::query_as(
+        "SELECT i.id, i.product_id, p.name, i.sku, p.description, p.is_active,
                 COALESCE((SELECT SUM(s.qty_change_e4) FROM stock_ledger_entries s WHERE s.item_id = i.id AND s.movement_date <= ?2), 0),
                 COALESCE((SELECT SUM(l.quantity_e4) FROM purchase_order_lines l JOIN purchase_orders o ON o.id = l.purchase_order_id
                           WHERE o.status = 'OPEN' AND l.product_service_id = i.product_id), 0),
@@ -559,12 +567,27 @@ pub async fn stock_status(pool: &SqlitePool, start_date: NaiveDate, end_date: Na
     .map_err(db_err)?;
     let days = (end_date - start_date).num_days() + 1;
     let mut rows = Vec::with_capacity(items.len());
-    for (item_id, name, sku, description, is_active, on_hand, on_order, next_delivery, sold) in items {
-        if !is_active && on_hand == 0 && on_order == 0 && sold == 0 {
+    let on_sales_order = crate::sales_orders::on_sales_order(&mut *pool.acquire().await.map_err(db_err)?).await?;
+    for (item_id, product_id, name, sku, description, is_active, on_hand, on_order, next_delivery, sold) in items {
+        let ordered = on_sales_order.get(&product_id).copied().unwrap_or(0);
+        if !is_active && on_hand == 0 && on_order == 0 && sold == 0 && ordered == 0 {
             continue;
         }
         let sales_per_week_e4 = mul_div_round(sold, 7, days).ok_or("RPT_OVERFLOW: quantity out of range")?;
-        rows.push(StockStatusRow { item_id, name: names.label(&name, description.as_deref()), sku, description, qty_on_hand_e4: on_hand, qty_on_order_e4: on_order, next_delivery, qty_sold_e4: sold, sales_per_week_e4 });
+        let qty_available_e4 = on_hand.checked_sub(ordered).ok_or("RPT_OVERFLOW: quantity out of range")?;
+        rows.push(StockStatusRow {
+            item_id,
+            name: names.label(&name, description.as_deref()),
+            sku,
+            description,
+            qty_on_hand_e4: on_hand,
+            qty_on_order_e4: on_order,
+            next_delivery,
+            qty_sold_e4: sold,
+            sales_per_week_e4,
+            qty_on_sales_order_e4: ordered,
+            qty_available_e4,
+        });
     }
     Ok(StockStatus { start_date, end_date, rows })
 }
@@ -643,9 +666,9 @@ pub async fn missing_checks(pool: &SqlitePool, account_id: i64, start_date: Opti
         .ok_or("ACCOUNT_NOT_FOUND: that account does not exist")?;
     let all: Vec<CheckRow> = sqlx::query_as(
         "SELECT * FROM (
-            SELECT trim(x.check_number) AS number, x.expense_date AS date, 'Check' AS kind, v.name AS party_name, x.memo,
+            SELECT trim(x.check_number) AS number, x.expense_date AS date, 'Check' AS kind, COALESCE(v.name, o.name) AS party_name, x.memo,
                    x.total_cents AS amount_cents, x.is_voided, x.journal_entry_id
-            FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id
+            FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id LEFT JOIN other_names o ON o.id = x.other_name_id
             WHERE x.kind = 'CHECK' AND x.payment_account_id = ?1 AND x.journal_entry_id IS NOT NULL
               AND x.journal_entry_id NOT IN (SELECT old_entry_id FROM transaction_edits)
             UNION ALL

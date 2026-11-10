@@ -3,7 +3,7 @@ import Notice from './Notice.jsx';
 import DateBox from './DateBox.jsx';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
-import { formatCents, formatQuantity } from '../lib/money.js';
+import { formatCents, formatMoney, formatQuantity } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 
 const key = (c) => `${c.source}:${c.lineId}`;
@@ -32,11 +32,15 @@ const markupOf = (cents, milli) => Math.round((cents * milli) / 100_000);
  * customer) to that customer, with the markup from Preferences › Time & Expenses, and billable time
  * from the timesheet (one line per entry: its service item, hours and rate; no markup).
  */
-export default function BillCosts({ navigate }) {
+export default function BillCosts({ navigate, intent }) {
   const costs = useLedgerQuery(() => api.listUnbilledCosts(null));
   const time = useLedgerQuery(() => api.listUnbilledTime(null));
   const defaults = useLedgerQuery(api.getBillingDefaults).data;
-  const [customerId, setCustomerId] = useState(null);
+  // Opened from the sales money bar's Unbilled list: start on that row's customer.
+  const [customerId, setCustomerId] = useState(intent?.data?.customerId ?? null);
+  useEffect(() => {
+    if (intent?.data?.customerId != null) setCustomerId(intent.data.customerId);
+  }, [intent]);
   const [picked, setPicked] = useState(() => new Set());
   const [markup, setMarkup] = useState('');
   const [issueDate, setIssueDate] = useState(todayIso);
@@ -51,8 +55,11 @@ export default function BillCosts({ navigate }) {
     return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [all, allTime]);
   useEffect(() => {
-    if (customerId === null && customers.length) setCustomerId(customers[0][0]);
-  }, [customers, customerId]);
+    // No customer yet, or one with nothing left to bill (opened from a list that has since changed).
+    // Waits for both lists, so a customer with only unbilled time isn't passed over.
+    if (!costs.data || !time.data) return;
+    if (customers.length && !customers.some(([id]) => id === customerId)) setCustomerId(customers[0][0]);
+  }, [customers, customerId, costs.data, time.data]);
   useEffect(() => {
     if (defaults && markup === '') setMarkup(percentText(defaults.markupMilliPercent));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -216,7 +223,10 @@ export default function BillCosts({ navigate }) {
                   <td className="qb-grid-cell">{c.vendorName ?? '—'}</td>
                   <td className="qb-grid-cell">{c.accountName}</td>
                   <td className="qb-grid-cell">{c.memo ?? ''}</td>
-                  <td className="qb-grid-cell num">{formatCents(c.amountCents)}</td>
+                  <td className="qb-grid-cell num" title={c.currencyCode ? `${formatMoney(c.foreignAmountCents, c.currencyCode)} at the expense's rate` : undefined}>
+                    {formatCents(c.amountCents)}
+                    {c.currencyCode && <div className="text-2xs text-qb-ink-muted">{formatMoney(c.foreignAmountCents, c.currencyCode)}</div>}
+                  </td>
                   <td className="qb-grid-cell num text-qb-ink-muted">{badMarkup ? '—' : formatCents(markupOf(c.amountCents, milli))}</td>
                 </tr>
               ))}

@@ -83,3 +83,40 @@ async fn closed_periods_refuse_posts_and_voids_until_reopened_with_the_passcode(
     assert!(set_closing_date(&pool, &lock(Some("2026-01-31"), None, Some("abc"))).await.unwrap_err().starts_with("CLOSE_PASSCODE_SHORT"));
     assert!(set_closing_date(&pool, &lock(None, None, None)).await.unwrap_err().starts_with("CLOSE_UNCHANGED"));
 }
+
+#[tokio::test]
+async fn an_external_accountant_posts_in_a_closed_period_and_the_report_says_who() {
+    let pool = test_pool().await;
+    let d = |t: &str| t.parse::<NaiveDate>().unwrap();
+    let report = |pool: &SqlitePool| {
+        let pool = pool.clone();
+        async move { crate::list_reports::run(&pool, "closing-date-exceptions", Some(d("2026-01-01")), Some(d("2026-12-31")), d("2026-12-31")).await.unwrap() }
+    };
+    post(&pool, "2026-02-10").await.unwrap();
+    set_closing_date(&pool, &lock(Some("2026-03-31"), None, None)).await.unwrap();
+    assert_eq!(report(&pool).await.report.line_count, 0, "entries made before the closing date was set aren't exceptions");
+    assert_eq!(post(&pool, "2026-03-15").await.unwrap_err(), CLOSED_MESSAGE);
+
+    crate::permissions::set_signed_in_role(Some(crate::users::Role::ExternalAccountant));
+    crate::audit_chain::set_signed_in(Some("cpa".into()));
+    let adjusting = post(&pool, "2026-03-15").await.expect("an External Accountant posts in the closed period");
+    crate::permissions::set_signed_in_role(None);
+    crate::audit_chain::set_signed_in(None);
+    post(&pool, "2026-04-02").await.unwrap();
+    assert_eq!(post(&pool, "2026-03-15").await.unwrap_err(), CLOSED_MESSAGE, "closed again for everyone else");
+
+    // The database backstop is back for everyone once that transaction committed.
+    let flag: Option<i64> = sqlx::query_scalar("SELECT value FROM closing_exception_in_progress").fetch_one(&pool).await.unwrap();
+    assert_eq!(flag, None, "commit_write clears the pass");
+    let draft: i64 = sqlx::query_scalar("INSERT INTO journal_entries (entry_number, entry_date) VALUES (98, '2026-03-20') RETURNING id").fetch_one(&pool).await.unwrap();
+    let refused = sqlx::query("UPDATE journal_entries SET status = 'POSTED' WHERE id = ?1").bind(draft).execute(&pool).await.unwrap_err().to_string();
+    assert!(refused.contains("PERIOD_CLOSED"), "{refused}");
+
+    // Closing Date Exceptions lists it, with who entered it.
+    let found = report(&pool).await;
+    let rows: Vec<_> = found.report.rows.iter().filter(|r| r.kind == crate::custom_reports::RowKind::Detail).collect();
+    assert_eq!(rows.len(), 1, "{:?}", found.notes);
+    assert_eq!(rows[0].journal_entry_id, Some(adjusting));
+    let by = found.report.columns.iter().position(|c| c.label == "Entered By").unwrap();
+    assert!(rows[0].cells[by].as_str().is_some_and(|who| who.starts_with("cpa as ")), "{:?}", rows[0].cells);
+}

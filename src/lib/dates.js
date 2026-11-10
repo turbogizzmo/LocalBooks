@@ -58,6 +58,11 @@ export function periodRange(period, iso = todayIso()) {
     }
     case 'lastYear':
       return [`${y - 1}-01-01`, `${y - 1}-12-31`];
+    case 'last12Months': {
+      // This month and the eleven before it, whole months.
+      const [sy, sm] = m === 12 ? [y, 1] : [y - 1, m + 1];
+      return [`${sy}-${pad(sm)}-01`, last(y, m)];
+    }
     case 'thisYearToDate':
       return [`${y}-01-01`, iso];
     default:

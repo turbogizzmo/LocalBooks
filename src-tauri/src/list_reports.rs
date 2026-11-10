@@ -21,7 +21,9 @@ use crate::preferences::{fiscal_start_month, fiscal_year_bounds};
 use crate::statements::LineKind;
 
 mod more_reports;
+mod parity;
 mod profitability;
+mod sales_orders;
 
 // ------------------------------------------------------------------------------------------------
 // Catalog
@@ -65,18 +67,25 @@ pub fn catalog() -> Vec<ListReportInfo> {
         r("invoice-profit-customer", "Invoice Profitability by Customer", "Sales and customers", Range, "fiscalYearToDate"),
         r("invoice-profit-detail", "Invoice Profitability Detail", "Sales and customers", Range, "fiscalYearToDate"),
         r("unpaid-bills-job", "Unpaid Bills by Job", "What you owe", AsOf, ""),
+        r("unbilled-costs-job", "Unbilled Costs by Job", "Jobs", Now, ""),
         r("open-po-detail", "Open Purchase Orders Detail", "Expenses and vendors", AsOf, ""),
+        r("open-so-customer", "Open Sales Orders by Customer", "Sales and customers", Now, ""),
+        r("open-so-item", "Open Sales Orders by Item", "Sales and customers", Now, ""),
+        r("pending-sales", "Pending Sales", "Sales and customers", Now, ""),
         r("time-job-summary", "Time by Job Summary", "Jobs", Range, "thisMonth"),
         r("time-job-detail", "Time by Job Detail", "Jobs", Range, "thisMonth"),
         r("time-name", "Time by Name", "Jobs", Range, "thisMonth"),
         r("time-item", "Time by Item", "Jobs", Range, "thisMonth"),
         r("physical-inventory", "Physical Inventory Worksheet", "Inventory", Now, ""),
         r("inventory-turnover", "Inventory Turnover by Item", "Inventory", Range, "fiscalYearToDate"),
+        r("stock-status-vendor", "Inventory Stock Status by Vendor", "Inventory", Now, ""),
         r("audit-trail", "Audit Trail", custom_reports::ACCOUNTANT, Range, "thisMonth"),
+        r("closing-date-exceptions", "Closing Date Exceptions", custom_reports::ACCOUNTANT, Range, "fiscalYearToDate"),
         r("customer-phone", "Customer Phone List", LISTS, Now, ""),
         r("customer-contact", "Customer Contact List", LISTS, Now, ""),
         r("vendor-phone", "Vendor Phone List", LISTS, Now, ""),
         r("vendor-contact", "Vendor Contact List", LISTS, Now, ""),
+        r("other-phone", "Other Names Phone List", LISTS, Now, ""),
         r("item-listing", "Item Listing", LISTS, Now, ""),
         r("account-listing", "Account Listing", LISTS, Now, ""),
         r("todo-notes", "To Do Notes", LISTS, Now, ""),
@@ -86,6 +95,7 @@ pub fn catalog() -> Vec<ListReportInfo> {
         r("memorized-transactions", "Memorized Transaction Listing", custom_reports::ACCOUNTANT, Now, ""),
         r("realized-gains", "Realized Gains & Losses", custom_reports::ACCOUNTANT, Range, "fiscalYearToDate"),
         r("unrealized-gains", "Unrealized Gains & Losses", custom_reports::ACCOUNTANT, Range, "fiscalYearToDate"),
+        r("terms-listing", "Terms Listing", LISTS, Now, ""),
     ]
 }
 
@@ -108,6 +118,9 @@ pub async fn run(pool: &SqlitePool, id: &str, start: Option<NaiveDate>, end: Opt
         "invoice-profit-detail" => profitability::invoice_profitability_detail(pool, start, end).await,
         "unpaid-bills-job" => unpaid_bills_by_job(pool, end).await,
         "open-po-detail" => open_po_detail(pool, end).await,
+        "open-so-customer" => sales_orders::open_by_customer(pool, today).await,
+        "open-so-item" => sales_orders::open_by_item(pool, today).await,
+        "pending-sales" => sales_orders::pending(pool, today).await,
         "time-job-summary" => time_summary(pool, TimeBy::Job, start, end).await,
         "time-job-detail" => time_by_job_detail(pool, start, end).await,
         "time-name" => time_summary(pool, TimeBy::Name, start, end).await,
@@ -119,6 +132,7 @@ pub async fn run(pool: &SqlitePool, id: &str, start: Option<NaiveDate>, end: Opt
         "customer-contact" => contact_list(pool, NameKind::Customer, today).await,
         "vendor-phone" => phone_list(pool, NameKind::Vendor, today).await,
         "vendor-contact" => contact_list(pool, NameKind::Vendor, today).await,
+        "other-phone" => phone_list(pool, NameKind::Other, today).await,
         "item-listing" => item_listing(pool, today).await,
         "account-listing" => account_listing(pool, today).await,
         "todo-notes" => more_reports::todo_notes(pool, today).await,
@@ -128,6 +142,10 @@ pub async fn run(pool: &SqlitePool, id: &str, start: Option<NaiveDate>, end: Opt
         "memorized-transactions" => more_reports::memorized_transactions(pool, today).await,
         "realized-gains" => more_reports::currency_gains(pool, start, end, false).await,
         "unrealized-gains" => more_reports::currency_gains(pool, start, end, true).await,
+        "terms-listing" => parity::terms_listing(pool, today).await,
+        "unbilled-costs-job" => parity::unbilled_costs_by_job(pool, today).await,
+        "stock-status-vendor" => parity::stock_status_by_vendor(pool, today).await,
+        "closing-date-exceptions" => parity::closing_date_exceptions(pool, start, end).await,
         _ => Err(format!("RPT_UNKNOWN: no report named {id}")),
     }
 }
@@ -183,10 +201,9 @@ fn one_line(text: Option<&str>) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(", "))
 }
 
-/// Customers with jobs shown as `Customer:Job`, as the customer list does.
-const CUSTOMER_NAMES: &str = "WITH RECURSIVE cn(id, full_name) AS (
-        SELECT id, name FROM customers WHERE parent_id IS NULL
-        UNION ALL SELECT c.id, cn.full_name || ':' || c.name FROM customers c JOIN cn ON c.parent_id = cn.id)";
+/// Customers with jobs shown as `Customer:Job`, as the customer list does. That is how a job's
+/// name is stored (`sales::customer_path`), so it is used as it is, not built again from parents.
+const CUSTOMER_NAMES: &str = "WITH cn(id, full_name) AS (SELECT id, name FROM customers)";
 
 // ------------------------------------------------------------------------------------------------
 // Lists
@@ -215,6 +232,9 @@ async fn parties(pool: &SqlitePool, kind: NameKind) -> Result<Vec<Party>, String
         NameKind::Vendor => "SELECT id, name, company_name, phone, email, address, terms_days, is_1099
                              FROM vendors WHERE is_active = 1 ORDER BY name COLLATE NOCASE, id"
             .to_string(),
+        NameKind::Other => "SELECT id, name, company_name, phone, email, address, NULL AS terms_days, 0 AS is_1099
+                            FROM other_names WHERE is_active = 1 ORDER BY name COLLATE NOCASE, id"
+            .to_string(),
     };
     sqlx::query_as(&sql).fetch_all(pool).await.map_err(db_err)
 }
@@ -223,6 +243,7 @@ fn noun(kind: NameKind) -> (&'static str, &'static str) {
     match kind {
         NameKind::Customer => ("Customer", "customers"),
         NameKind::Vendor => ("Vendor", "vendors"),
+        NameKind::Other => ("Other name", "other names"),
     }
 }
 
@@ -240,6 +261,8 @@ async fn balances(pool: &SqlitePool, kind: NameKind, as_of: NaiveDate) -> Result
     let id = match kind {
         NameKind::Customer => "customer-balance-summary",
         NameKind::Vendor => "vendor-balance-summary",
+        // Other names have no balance: nothing is owed to or by them on account.
+        NameKind::Other => return Ok((BTreeMap::new(), 0)),
     };
     let mut settings = custom_reports::presets().into_iter().find(|p| p.id == id).ok_or("RPT_UNKNOWN: balance summary")?.settings;
     settings.end_date = Some(as_of);

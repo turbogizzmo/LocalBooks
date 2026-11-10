@@ -38,7 +38,7 @@ pub async fn email_voucher_with_mail_app(app: AppHandle, db: State<'_, Db>, doc:
     let (to, subject, body) = email.checked()?;
     let (file_name, bytes) = vouchers::pdf_file(&db.pool().await, &doc).await?;
     let outgoing = app.path().app_cache_dir().map_err(|e| format!("MAIL_STAGE: {e}"))?.join("outgoing");
-    let message = mail_app::Compose { to, subject, body, attachment: Default::default() };
+    let message = mail_app::Compose { to, subject, body, attachment: Default::default(), more: Vec::new() };
     tauri::async_runtime::spawn_blocking(move || {
         let attachment = mail_app::stage_attachment(&outgoing, &file_name, &bytes)?;
         mail_app::compose(&mail_app::Compose { attachment, ..message })

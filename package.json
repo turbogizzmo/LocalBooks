@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "node --test \"src/**/*.test.js\"",
     "tauri": "tauri",
-    "build:mac": "CI=true TAURI_SIGNING_PRIVATE_KEY=\"$HOME/.tauri/localbooks-updater.key\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"$(security find-generic-password -a localbooks-updater -s 'LocalBooks updater signing key password' -w)\" tauri build",
+    "build:mac": "env -u OPENSSL_DIR -u OPENSSL_LIB_DIR -u OPENSSL_INCLUDE_DIR CI=true TAURI_SIGNING_PRIVATE_KEY=\"$HOME/.tauri/localbooks-updater.key\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"$(security find-generic-password -a localbooks-updater -s 'LocalBooks updater signing key password' -w)\" tauri build",
     "lint": "eslint src"
   },
   "dependencies": {
@@ -19,6 +19,7 @@
     "@tauri-apps/plugin-process": "^2.4.0",
     "@tauri-apps/plugin-updater": "^2.14.1",
     "lucide-react": "1.49.0",
+    "pdfjs-dist": "6.4.299",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -27,6 +28,7 @@
     "@vitejs/plugin-react": "^5.2.0",
     "autoprefixer": "^10.6.2",
     "eslint": "9.39.5",
+    "eslint-plugin-jsx-a11y": "6.10.2",
     "eslint-plugin-react": "7.37.5",
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "17.14.0",

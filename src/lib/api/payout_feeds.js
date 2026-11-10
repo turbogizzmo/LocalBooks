@@ -1,10 +1,13 @@
-// Payout feeds from payment processors (Stripe).
+// Payout feeds from payment processors (Stripe, PayPal, Shopify Payments).
 import { invoke } from '@tauri-apps/api/core';
 
 export default {
   listPayoutFeeds: () => invoke('list_payout_feeds'),
   connectStripeFeed: (key, input) => invoke('connect_stripe_feed', { key, input }),
+  connectPaypalFeed: (credentials, input) => invoke('connect_paypal_feed', { credentials, input }),
+  connectShopifyFeed: (shop, token, input) => invoke('connect_shopify_feed', { shop, token, input }),
   updatePayoutFeed: (id, input) => invoke('update_payout_feed', { id, input }),
+  setPayoutAutoFetch: (id, hours) => invoke('set_payout_auto_fetch', { id, hours }),
   disconnectPayoutFeed: (id) => invoke('disconnect_payout_feed', { id }),
   fetchPayouts: (id) => invoke('fetch_payouts', { id }),
   listPayouts: (feedId) => invoke('list_payouts', { feedId }),
