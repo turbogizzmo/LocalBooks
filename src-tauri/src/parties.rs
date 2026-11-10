@@ -309,7 +309,7 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         crate::custom_fields::save_record_values(pool, list, id, &input.custom_fields).await?;
     }
     if t == "customers" && old_name != name {
-        let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+        let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
         let result = async {
             // The jobs move with their customer...
             sqlx::query("UPDATE customers SET name = ?1 || substr(name, length(?2) + 1) WHERE substr(name, 1, length(?2) + 1) = ?2 || ':'")

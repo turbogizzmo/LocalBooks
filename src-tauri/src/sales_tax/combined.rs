@@ -305,9 +305,9 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
             None => agencies.push(AgencyReturn { agency_vendor_id: agency_id, agency_name: agency_name.unwrap_or_else(|| "No agency".into()), lines: Vec::new(), tax_cents: 0, paid_cents: cents }),
         }
     }
-    agencies.sort_by(|a, b| (a.agency_vendor_id.is_none(), a.agency_name.to_lowercase()).cmp(&(b.agency_vendor_id.is_none(), b.agency_name.to_lowercase())));
+    agencies.sort_by_key(|a| (a.agency_vendor_id.is_none(), a.agency_name.to_lowercase()));
     for a in &mut agencies {
-        a.lines.sort_by(|x, y| x.name.to_lowercase().cmp(&y.name.to_lowercase()));
+        a.lines.sort_by_key(|x| x.name.to_lowercase());
     }
     let tax = agencies.iter().try_fold(0i64, |s, a| s.checked_add(a.tax_cents)).ok_or_else(overflow)?;
     let paid = agencies.iter().try_fold(0i64, |s, a| s.checked_add(a.paid_cents)).ok_or_else(overflow)?;

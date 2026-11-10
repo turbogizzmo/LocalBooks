@@ -840,7 +840,7 @@ pub async fn budget_amounts(pool: &SqlitePool, id: i64) -> Result<Vec<BudgetAmou
 /// month's activity; balance sheet accounts as the balance at each month end.
 pub async fn set_budget_amounts(pool: &SqlitePool, id: i64, amounts: &[BudgetAmount]) -> Result<(), String> {
     let chart = Chart::load(pool).await?;
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     for a in amounts {
         let known = chart.accounts.iter().any(|acct| acct.id == a.account_id);
         if !known || !(1..=12).contains(&a.period) {

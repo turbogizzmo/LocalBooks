@@ -370,6 +370,7 @@ impl PageDecoder {
     /// - the rotation itself drifts by 2, 4 or half a sector, so those variants are tried;
     /// - on pages whose rotation flipped, sector 7's base differs from the one the other sectors
     ///   imply, so the base is derived from the first known row-length byte instead of assumed.
+    ///
     /// Every candidate must reproduce all the sector's known row-length bytes. The one whose rows
     /// `score` rates highest wins (ties: the assumed base, then the most plausible bytes), and is
     /// returned when it beats the current decode.

@@ -53,7 +53,7 @@ fn is_investment(code: &str) -> bool {
 /// One record: its fields in order, as (code, value).
 type Record = Vec<(char, String)>;
 
-fn first<'a>(record: &'a Record, code: char) -> Option<&'a str> {
+fn first(record: &Record, code: char) -> Option<&str> {
     record.iter().find(|(c, _)| *c == code).map(|(_, v)| v.trim()).filter(|v| !v.is_empty())
 }
 

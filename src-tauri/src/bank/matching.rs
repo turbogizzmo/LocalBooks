@@ -145,7 +145,7 @@ async fn write_match(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, jour
 /// Matches a line the import just added when exactly one entered transaction agrees; returns
 /// whether it did.
 pub(crate) async fn auto_match(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, description: &str) -> Result<bool, String> {
-    match auto_candidate(&mut **tx, transaction_id, description).await? {
+    match auto_candidate(tx, transaction_id, description).await? {
         Some(c) => write_match(tx, transaction_id, c.journal_entry_id, "AUTO").await.map(|()| true),
         None => Ok(false),
     }
@@ -169,7 +169,7 @@ pub async fn candidates(pool: &SqlitePool, transaction_id: i64) -> Result<Vec<Ma
 }
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     match work(&mut tx).await {
         Ok(value) => crate::ledger::commit_write(tx).await.map(|()| value).map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),

@@ -328,16 +328,16 @@ pub async fn import(pool: &SqlitePool, bytes: &[u8], by: &str) -> Result<CopyRec
     let sha = hex(&Sha256::digest(bytes));
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result: Result<i64, String> = async {
-        let copy_id = matching_copy(&mut *tx, &file).await?;
+        let copy_id = matching_copy(&mut tx, &file).await?;
         // Returned first, so the client's lock no longer refuses the accountant's dates.
         sqlx::query("UPDATE accountants_copies SET status = 'RETURNED' WHERE id = ?1").bind(copy_id).execute(&mut *tx).await.map_err(db_err)?;
         let mut created = Vec::new();
         for a in &file.accounts {
-            if account_id(&mut *tx, a.number.as_deref(), &a.full_name).await?.is_some() {
+            if account_id(&mut tx, a.number.as_deref(), &a.full_name).await?.is_some() {
                 continue;
             }
             let parent = match &a.parent_full_name {
-                Some(p) => Some(account_id(&mut *tx, None, p).await?.ok_or_else(|| format!("ACCOUNTANT_CHANGES_ACCOUNT: the parent account '{p}' isn't in the books"))?),
+                Some(p) => Some(account_id(&mut tx, None, p).await?.ok_or_else(|| format!("ACCOUNTANT_CHANGES_ACCOUNT: the parent account '{p}' isn't in the books"))?),
                 None => None,
             };
             let id: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type, parent_id) VALUES (?1, ?2, ?3, ?4) RETURNING id")
@@ -357,7 +357,7 @@ pub async fn import(pool: &SqlitePool, bytes: &[u8], by: &str) -> Result<CopyRec
             }
             let mut lines = Vec::with_capacity(e.lines.len());
             for l in &e.lines {
-                let account = account_id(&mut *tx, l.account_number.as_deref(), &l.account_full_name)
+                let account = account_id(&mut tx, l.account_number.as_deref(), &l.account_full_name)
                     .await?
                     .ok_or_else(|| format!("ACCOUNTANT_CHANGES_ACCOUNT: the account '{}' isn't in the books", l.account_full_name))?;
                 lines.push(JournalLine { account_id: account, debit: Cents(l.debit_cents), credit: Cents(l.credit_cents), memo: l.memo.clone(), class_id: None });

@@ -88,7 +88,7 @@ fn writes_each_field_in_its_place() {
     let l: Vec<&str> = text.lines().collect();
     let blank = |n: usize| " ".repeat(n);
     // File header: priority 01, destination, origin, date and time, modifier, 094 10 1, names, reference.
-    assert_eq!(l[0], format!("101 1210428821234567890261026" ) + "0905A094101" + &format!("{:<23}{:<23}", "WELLS FARGO", "ACME WIDGETS LLC") + &blank(8));
+    assert_eq!(l[0], "101 1210428821234567890261026".to_string() + "0905A094101" + &format!("{:<23}{:<23}", "WELLS FARGO", "ACME WIDGETS LLC") + &blank(8));
     // Batch header: credits only (220), company name, discretionary data, company ID, SEC code,
     // description, descriptive date, effective date, settlement date (the bank's), status 1, ODFI, batch.
     let batch = |sec: &str, n: u32| format!("5220{:<16}{}1234567890{sec}VENDOR PAY{}261027{}1121042880{n:06}", "ACME WIDGETS", blank(20), blank(6), blank(3));

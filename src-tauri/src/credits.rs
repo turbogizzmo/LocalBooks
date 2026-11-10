@@ -47,7 +47,7 @@ async fn check_money_account(tx: &mut Transaction<'_, Sqlite>, account_id: i64, 
 }
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     match work(&mut tx).await {
         Ok(value) => crate::ledger::commit_write(tx).await.map(|()| value).map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),
@@ -571,7 +571,7 @@ pub(crate) async fn write_unapplied_payment(tx: &mut Transaction<'_, Sqlite>, in
     if input.payment_method_id.is_none() && !crate::invoices::PAYMENT_METHODS.contains(&input.payment_method.as_str()) {
         return Err(format!("INV_BAD_METHOD: unknown payment method '{}'", input.payment_method));
     }
-    let (method_id, method) = crate::profile_lists::resolve_payment_method(&mut **tx, input.payment_method_id, Some(&input.payment_method), "INV").await?;
+    let (method_id, method) = crate::profile_lists::resolve_payment_method(tx, input.payment_method_id, Some(&input.payment_method), "INV").await?;
     // A bank, or the Undeposited Funds system account (where Make Deposits finds it).
     let deposit: Option<(String, bool)> = sqlx::query_as("SELECT account_type, is_system FROM chart_of_accounts WHERE id = ?1")
         .bind(input.deposit_account_id)

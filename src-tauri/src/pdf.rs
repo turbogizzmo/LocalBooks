@@ -585,7 +585,7 @@ fn write(pages: &[Page], image: Option<&PdfImage>, title: &str, protection: Opti
 }
 
 mod protect;
-pub use protect::{Protection, MAX_PASSWORD_BYTES};
+pub use protect::Protection;
 
 #[cfg(test)]
 mod tests;
