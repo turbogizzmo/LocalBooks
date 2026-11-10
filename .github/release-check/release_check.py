@@ -363,7 +363,7 @@ def cmd_balances(args):
 
 def cmd_upgrade(args):
     work = Path(args.work)
-    summary("### Upgrade with `--check-file`\n\n| Company | Schema | Pre-upgrade copy | File Dentist | Balances | Result |\n|---|---|---|---|---|---|")
+    summary("### Upgrade with `--check-file`\n\n| Company | Schema | Pre-upgrade copy | File Check & Repair | Balances | Result |\n|---|---|---|---|---|---|")
     for source in companies(args.seed_dir):
         name = source.stem
         folder = work / name
