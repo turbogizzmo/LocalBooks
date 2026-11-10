@@ -55,11 +55,11 @@ each of these was last done:
 
 - **A copy off this computer**: a backup saved with **Back up to…** onto another drive, a network
   share or a synced folder, or made by the offsite backup. A copy saved to another folder on the
-  same disk doesn't count.
+  same disk doesn't count, and nor does one beside books that already live on a network share.
 - **A test restore**: **Test** beside a snapshot, **Test restore a backup…** for any backup file,
   or **Test restore** on an offsite copy. LocalBooks opens the backup and checks it as a restore
   would (that it's an undamaged LocalBooks file, and how many entries it has), without replacing
-  your books.
+  your books. Only a backup of these books (the same company name) counts here.
 
 **Reminders** lists **Copy a backup off this computer** or **Test-restore a backup** when either
 hasn't been done in 30 days. Change the days, or turn it off, under **Backup safety** in

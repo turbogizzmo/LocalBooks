@@ -92,18 +92,20 @@ fn same_volume(a: &Path, b: &Path) -> bool {
 #[cfg(not(unix))]
 fn same_volume(a: &Path, b: &Path) -> bool {
     use std::path::Component;
+    // `C:` and `\\?\C:` (a canonical path) are the same drive.
     let root = |p: &Path| match std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()).components().next() {
-        Some(Component::Prefix(prefix)) => Some(prefix.as_os_str().to_string_lossy().to_ascii_lowercase()),
+        Some(Component::Prefix(prefix)) => Some(prefix.as_os_str().to_string_lossy().to_ascii_lowercase().trim_start_matches(r"\\?\").trim_start_matches(r"unc\").to_string()),
         _ => None,
     };
     root(a) == root(b)
 }
 
 /// Whether a backup saved at `destination` is off the disk the company file at `company` is on:
-/// another drive, a network share or a synced folder.
+/// another drive, or a network share or synced folder when the books themselves are on this
+/// computer. A copy beside books that already live on a share is on that same share.
 pub fn is_off_disk(destination: &Path, company: &Path) -> bool {
     let (Some(dest_dir), Some(company_dir)) = (destination.parent(), company.parent()) else { return false };
-    crate::storage::classify(dest_dir).is_shared() || !same_volume(dest_dir, company_dir)
+    !same_volume(dest_dir, company_dir) || (crate::storage::classify(dest_dir).is_shared() && !crate::storage::classify(company_dir).is_shared())
 }
 
 /// Notes a backup saved to `destination`; counts it when it is off the company file's disk.
@@ -118,10 +120,15 @@ pub async fn saved_copy(pool: &SqlitePool, destination: &Path, company: &Path) -
 /// Test restore: opens the backup at `path` read-only and checks it as a restore would (a LocalBooks
 /// company file, its integrity and its version), without touching the open books. Records the time
 /// in the open company when it passes.
+/// Only a backup of these books (the same company name) counts as their test restore.
 pub async fn test_restore(pool: Option<&SqlitePool>, path: &Path) -> Result<CompanyFileInfo, String> {
     let info = backup::inspect(path).await?;
     if let Some(pool) = pool {
-        record(pool, TEST_RESTORE_KEY, &now()).await?;
+        let ours = crate::preferences::get(pool, "company_name").await.unwrap_or_default();
+        let same = info.company_name.as_deref().is_some_and(|n| n.trim().eq_ignore_ascii_case(ours.trim()));
+        if same {
+            record(pool, TEST_RESTORE_KEY, &now()).await?;
+        }
     }
     Ok(info)
 }
@@ -223,6 +230,9 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let live = dir.join("Books.localbooks");
         let books = crate::db::open(&live).await.unwrap();
+        // A backup of these books: the same company name.
+        let ours = crate::preferences::get(&pool, "company_name").await.unwrap();
+        record(&books, "company_name", &ours).await.unwrap();
         let copy = dir.join("copy.localbooks");
         backup::snapshot(&books, &live, &copy).await.unwrap();
         crate::db::close_pool(&books).await;
@@ -234,6 +244,16 @@ mod tests {
         std::fs::write(&junk, b"not a database").unwrap();
         assert!(test_restore(Some(&pool), &junk).await.unwrap_err().starts_with("RESTORE_NOT_SQLITE"));
         assert_eq!(status(&pool).await.unwrap().last_test_restore.unwrap(), tested);
+        // A backup of other books opens fine but doesn't count as these books' test restore.
+        record(&pool, TEST_RESTORE_KEY, "2026-09-01T08:00:00").await.unwrap();
+        let other = dir.join("Other.localbooks");
+        let others = crate::db::open(&other).await.unwrap();
+        record(&others, "company_name", "Someone Else Ltd").await.unwrap();
+        let other_copy = dir.join("other-copy.localbooks");
+        backup::snapshot(&others, &other, &other_copy).await.unwrap();
+        crate::db::close_pool(&others).await;
+        test_restore(Some(&pool), &other_copy).await.unwrap();
+        assert_eq!(status(&pool).await.unwrap().last_test_restore.as_deref(), Some("2026-09-01T08:00:00"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

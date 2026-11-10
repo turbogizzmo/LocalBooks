@@ -13,7 +13,7 @@ export function testRestoreText(info) {
   const name = info.companyName ? `${info.companyName}'s backup` : 'The backup';
   const last = info.lastEntryDate ? `, the latest dated ${info.lastEntryDate}` : '';
   const upgrade = info.needsUpgrade ? ' It is from an older version and would be upgraded when restored.' : '';
-  return `Test restore passed: ${name} opens and checks out, with ${info.journalEntries} journal entries${last}. Your books were not changed.${upgrade}`;
+  return `Test restore passed: ${name} opens and checks out, with ${info.journalEntries} journal entries${last}. Your books were not changed.${upgrade} (Only a backup of these books counts toward the Backup safety reminder.)`;
 }
 
 /** `onTest(path)` is shared with the snapshot list's Test restore buttons. */
