@@ -121,7 +121,7 @@ re-check one against the code before you start it.
 | A3 | done | S | No lint gate on pull requests | `.github/workflows/lint.yml` runs Clippy (correctness, suspicious, perf, float arithmetic) on every PR |
 | A4 | open | S | The Lint check is not yet a required check | Ruleset "Protect main" lists `Clippy` among required checks (repo admin setting) |
 | A5 | open | M | Code is not rustfmt-formatted (over 3,000 hunks), so there is no format gate | One formatting-only PR with a `rustfmt.toml`, landed when no feature PRs are open; then `cargo fmt --check` in `lint.yml` |
-| A6 | open | M | 142 Clippy style/complexity warnings (103 fixed by `clippy --fix`, 39 by hand; order in `docs/plans/code-cleanup.md`), so the gate can't use `-D warnings` | `cargo clippy --all-targets -- -D warnings` passes; `lint.yml` uses it |
+| A6 | open | M | 142 Clippy style/complexity warnings (102 fixed by `clippy --fix`, 40 by hand; order in `docs/plans/code-cleanup.md`), so the gate can't use `-D warnings` | `cargo clippy --all-targets -- -D warnings` passes; `lint.yml` uses it |
 | A7 | partial | L | `Cents` newtype covers journal lines, entry totals and FX conversion only; documents and commands still pass bare `i64` `*_cents` fields (373 struct fields in 65 modules; order in `docs/plans/code-cleanup.md`) | Invoice, bill, expense, payment and report structs use `Cents`; the JSON stays a bare integer |
 | A8 | done | S | Floats allowed anywhere | `#![deny(clippy::float_arithmetic)]` in `main.rs`; each allowed module or item gives a reason |
 | A9 | done | S | Imported quantities passed through `f64` | `qbw_records::Value::as_quantity_e4` scales decimal values exactly in integers |

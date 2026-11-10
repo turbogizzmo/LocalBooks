@@ -22,9 +22,9 @@ would also fail on.
 | `unnecessary_sort_by` | 3 | yes | qbw_company 2, sales_tax |
 | `doc_lazy_continuation` | 3 | yes | qbw_pages |
 | `redundant_guards` | 2 | yes | custom_reports, nacha |
-| 11 other lints, 1 each | 11 | 9 of them | `enum_variant_names` (custom_reports) and `too_many_arguments` (inventory) need a hand |
+| 12 other lints, 1 each | 12 | 10 of them | `enum_variant_names` (custom_reports) and `too_many_arguments` (inventory) need a hand |
 
-So **103** go with `cargo clippy --fix`, and **39** need a hand:
+So **102** go with `cargo clippy --fix`, and **40** need a hand:
 
 - 38 `type_complexity`: mostly tuple rows read with `sqlx::query_as` (`Vec<(i64, String, Option<i64>, …)>`).
   These become a named `type Row = (…);` next to the query, as several modules already do, or a
