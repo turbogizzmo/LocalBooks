@@ -73,6 +73,9 @@ people using LocalBooks.
   sheet pays invoices and bills already in your books: every row is checked against them first,
   and Post payments records them all at once. Invoice and sales receipt sheets take a sales tax
   and a discount for each document.
+- **Billable costs in other currencies.** Sales › Bill Costs lists costs on expenses in another
+  currency and bills them at their home amount, at the expense's own exchange rate. Editing an
+  invoice that billed costs can move a reimbursed line to another expense account.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept

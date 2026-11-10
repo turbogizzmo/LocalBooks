@@ -299,7 +299,14 @@ default.
 3. Click **Create invoice**. Each cost becomes a line, crediting its expense account back (or the
    income account, if reimbursed expenses count as income), with one **Markup** line on top.
 
-Voiding that invoice puts the costs back on the list; editing it keeps them billed.
+Voiding that invoice puts the costs back on the list; editing it keeps them billed. When you edit
+it, a reimbursed line can move to another expense account (to correct where the cost was booked),
+but not to a bank, asset or liability account.
+
+A cost on an expense or check in another currency is billed in your home currency, at the
+exchange rate the expense was entered with, so the reimbursement takes off exactly what the expense
+put on. **Bill Costs** shows the original amount under the home amount, and the invoice line says
+it (for example *EUR 200.00*).
 
 When reimbursed expenses count as income, each expense account can send its reimbursements to an
 income account of its own: open the expense account in the **Chart of Accounts** and choose it
