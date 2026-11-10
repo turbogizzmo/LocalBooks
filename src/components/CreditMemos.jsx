@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import { layoutMessage } from '../lib/itemTypes.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
-import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
+import LineItemGrid, { blankLine, linesFromDocument, summarizeLines } from './LineItemGrid.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import { attachPicked, PendingAttachments } from './Attachments.jsx';
@@ -24,18 +24,23 @@ import { useSalesDetails } from './SalesDetails.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
 
 const isMoneyAccount = (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
+const isIncomeAccount = (a) => a.isActive && (a.accountType === 'INCOME' || a.accountType === 'OTHER_INCOME');
+// An unapplied payment (an overpayment or prepayment kept as credit) is listed with credit memos.
+const kindOf = (m) => (m.isPayment ? 'Unapplied payment' : m.refundAccountId !== null ? 'Refund receipt' : 'Credit memo');
+const nameOf = (m) => (m.isPayment ? `unapplied payment${m.paymentReference ? ` (${m.paymentReference})` : ''}` : `credit memo #${m.creditNumber}`);
 
 /** Credit memo (credit kept for the customer) or refund receipt (money paid back now). */
-function CreditForm({ accounts, refund, onPosted, onCancel, savedStep }) {
+/** `copyOf` (from Duplicate) starts the credit memo or refund receipt as a copy of a saved one, dated today. */
+function CreditForm({ accounts, refund, onPosted, onCancel, savedStep, copyOf = null }) {
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
   const defaultBank = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
-  const [customer, setCustomer] = useState('');
+  const [customer, setCustomer] = useState(copyOf?.name ?? '');
   const [date, setDate] = useTransactionDate();
-  const [memo, setMemo] = useState('');
-  const [refundFrom, setRefundFrom] = useState(defaultBank);
-  const [lines, setLines] = useState(() => Array.from({ length: 3 }, () => blankLine(defaultIncome)));
+  const [memo, setMemo] = useState(copyOf?.memo ?? '');
+  const [refundFrom, setRefundFrom] = useState(copyOf?.accountId ?? defaultBank);
+  const [lines, setLines] = useState(() => (copyOf ? linesFromDocument(copyOf.lines, [], defaultIncome) : Array.from({ length: 3 }, () => blankLine(defaultIncome))));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // Files picked before posting; attached once it posts.
@@ -45,6 +50,12 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep }) {
   const tax = useFormTax(customer, customers.data);
   // Only its Bill To / Ship To / P.O. No. / FOB row is used here.
   const sales = useSalesDetails(customer, customers.data);
+  // A copy keeps the original's tax rate.
+  useEffect(() => {
+    if (copyOf) tax.set(copyOf.taxRateId ?? null);
+    // Once, for the copy the form was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (defaultIncome !== null) setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
@@ -209,7 +220,7 @@ function ApplyDialog({ memo, onClose, onDone }) {
       for (const [invoiceId, cents] of parsed) {
         await api.applyCustomerCredit({ creditId: memo.id, documentId: invoiceId, amountCents: cents, appliedDate: date });
       }
-      onDone(`Applied ${formatCents(total)} of credit memo #${memo.creditNumber}.`);
+      onDone(`Applied ${formatCents(total)} of ${nameOf(memo)}.`);
     } catch (err) {
       setError(errorText(err));
       setBusy(false);
@@ -227,7 +238,7 @@ function ApplyDialog({ memo, onClose, onDone }) {
   };
 
   return (
-    <Dialog title={`Apply credit memo #${memo.creditNumber} · ${memo.customerName}`} onClose={onClose}>
+    <Dialog title={`Apply ${nameOf(memo)} · ${memo.customerName}`} onClose={onClose}>
       <div className="flex flex-col gap-2 px-3 py-2 text-xs">
         <div className="flex items-end gap-3">
           <span className="text-sm">
@@ -292,9 +303,13 @@ function ApplyDialog({ memo, onClose, onDone }) {
   );
 }
 
-/** Pays credit left over back to the customer (or, for a vendor credit, records the vendor's refund). */
-export function RefundDialog({ title, remainingCents, accounts, direction, onRefund, onClose }) {
-  const [accountId, setAccountId] = useState(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null);
+/**
+ * Pays credit left over back to the customer (or, for a vendor credit, records the vendor's refund).
+ * With `writeOff` it writes the credit off to an income account instead.
+ */
+export function RefundDialog({ title, remainingCents, accounts, direction, onRefund, onClose, writeOff = false }) {
+  // The first account the box offers: a bank or card account for a refund, income for a write-off.
+  const [accountId, setAccountId] = useState(() => accounts.find((a) => a.isActive && (writeOff ? isIncomeAccount(a) : isMoneyAccount(a)))?.id ?? null);
   const [date, setDate] = useState(todayIso());
   const [amount, setAmount] = useState(centsToInput(remainingCents));
   const [reference, setReference] = useState('');
@@ -321,8 +336,8 @@ export function RefundDialog({ title, remainingCents, accounts, direction, onRef
         <p className="text-qb-ink-muted">Credit left: {formatCents(remainingCents)}.</p>
         <div className="grid grid-cols-2 gap-2">
           <label className="col-span-2 flex flex-col gap-0.5">
-            <span className="font-semibold text-qb-ink-muted">{direction === 'out' ? 'Pay from' : 'Deposit to'}</span>
-            <AccountSelect accounts={accounts} filter={isMoneyAccount} value={accountId} onChange={setAccountId} />
+            <span className="font-semibold text-qb-ink-muted">{writeOff ? 'Write off to (income)' : direction === 'out' ? 'Pay from' : 'Deposit to'}</span>
+            <AccountSelect accounts={accounts} filter={writeOff ? isIncomeAccount : isMoneyAccount} value={accountId} onChange={setAccountId} />
           </label>
           <label className="flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Date</span>
@@ -333,14 +348,14 @@ export function RefundDialog({ title, remainingCents, accounts, direction, onRef
             <input className="qb-input num" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" data-money />
           </label>
           <label className="col-span-2 flex flex-col gap-0.5">
-            <span className="font-semibold text-qb-ink-muted">Reference (check no.)</span>
+            <span className="font-semibold text-qb-ink-muted">{writeOff ? 'Reference' : 'Reference (check no.)'}</span>
             <input className="qb-input" value={reference} onChange={(e) => setReference(e.target.value)} />
           </label>
         </div>
         {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
         <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>Cancel</button>
-          <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={busy}>Record refund</button>
+          <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={busy}>{writeOff ? 'Write off' : 'Record refund'}</button>
         </div>
       </form>
     </Dialog>
@@ -353,14 +368,17 @@ export default function CreditMemos({ accounts, intent }) {
     number: (m) => m.creditNumber,
     date: (m) => m.creditDate,
     customer: (m) => m.customerName,
-    type: (m) => (m.refundAccountId !== null ? 'Refund receipt' : 'Credit memo'),
+    type: kindOf,
     total: (m) => m.totalCents,
     left: (m) => (m.refundAccountId !== null || m.isVoided ? null : m.remainingCents),
     status: (m) => (m.isVoided ? 'Voided' : m.refundAccountId !== null ? 'Refunded' : m.remainingCents === 0 ? 'Used' : m.remainingCents < m.totalCents ? 'Partly used' : 'Open'),
   }, { storageKey: 'credit-memos' });
   const [composing, setComposing] = useState(intent?.action === 'credit-memo' ? 'credit' : intent?.action === 'refund-receipt' ? 'refund' : null);
-  const [dialog, setDialog] = useState(null); // { mode: 'apply' | 'refund', memo }
+  const [dialog, setDialog] = useState(null); // { mode: 'apply' | 'refund' | 'writeOff', memo }
   const [notice, setNotice] = useState(null);
+  // Duplicate: the saved credit memo or refund receipt the new one starts from.
+  const [copyOf, setCopyOf] = useState(null);
+  const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
     if (intent?.action === 'credit-memo') setComposing('credit');
@@ -373,7 +391,7 @@ export default function CreditMemos({ accounts, intent }) {
   };
   // Saved credit memos (or refund receipts, on that form) open read-only in the form's place.
   const ordered = useMemo(
-    () => byDateThenNumber((data ?? []).filter((m) => (m.refundAccountId !== null) === (composing === 'refund')), (m) => m.creditDate, (m) => m.creditNumber),
+    () => byDateThenNumber((data ?? []).filter((m) => !m.isPayment && (m.refundAccountId !== null) === (composing === 'refund')), (m) => m.creditDate, (m) => m.creditNumber),
     [data, composing],
   );
   const saved = useSavedDoc(ordered);
@@ -383,6 +401,17 @@ export default function CreditMemos({ accounts, intent }) {
     setComposing(m.refundAccountId !== null ? 'refund' : 'credit');
     saved.open(m);
   };
+  const duplicate = (m) =>
+    api.getCopySource('CREDIT_MEMO', m.id).then(
+      (copy) => {
+        saved.close();
+        setComposing(m.refundAccountId !== null ? 'refund' : 'credit');
+        setCopyOf(copy);
+        setFormKey((k) => k + 1);
+        setNotice({ kind: 'info', text: `A copy of ${m.refundAccountId !== null ? 'refund receipt' : 'credit memo'} #${m.creditNumber}, dated today: it gets the next number when you save it.` });
+      },
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
   const viewingRefund = viewing?.refundAccountId !== null;
   const viewingLabel = viewingRefund ? 'Refund receipt' : 'Credit memo';
 
@@ -395,6 +424,7 @@ export default function CreditMemos({ accounts, intent }) {
           step={saved.step}
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
+          onDuplicate={() => duplicate(viewing)}
           entryId={viewing.journalEntryId}
           // Drawn, printed and emailed as its credit memo form (Settings › Custom Forms › Credit Memo).
           form={{ kind: 'CREDIT_MEMO', id: viewing.id }}
@@ -419,18 +449,33 @@ export default function CreditMemos({ accounts, intent }) {
                   [
                     { id: 'apply', label: 'Apply', icon: 'ReceivePayment', hint: 'Apply the credit to open invoices', disabled: viewing.isVoided || viewing.remainingCents === 0, onClick: () => setDialog({ mode: 'apply', memo: viewing }) },
                     { id: 'refund', label: 'Refund', icon: 'HomeRefund', hint: 'Pay the credit back to the customer', disabled: viewing.isVoided || viewing.remainingCents === 0, onClick: () => setDialog({ mode: 'refund', memo: viewing }) },
+                    { id: 'write-off', label: 'Write Off', icon: 'Void', hint: 'Keep the credit left as income', disabled: viewing.isVoided || viewing.remainingCents === 0, onClick: () => setDialog({ mode: 'writeOff', memo: viewing }) },
                   ],
                 ]
           }
         />
       )}
       {composing && !viewing && (
-        <CreditForm key={composing} accounts={accounts} refund={composing === 'refund'} savedStep={(blocked) => saved.fromNew(blocked)} onCancel={() => setComposing(null)} onPosted={(text) => setNotice({ kind: 'success', text })} />
+        <CreditForm
+          key={`${composing}-${formKey}`}
+          copyOf={copyOf}
+          accounts={accounts}
+          refund={composing === 'refund'}
+          savedStep={(blocked) => saved.fromNew(blocked)}
+          onCancel={() => {
+            setCopyOf(null);
+            setComposing(null);
+          }}
+          onPosted={(text) => {
+            setCopyOf(null);
+            setNotice({ kind: 'success', text });
+          }}
+        />
       )}
       {dialog?.mode === 'apply' && <ApplyDialog memo={dialog.memo} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.mode === 'refund' && (
         <RefundDialog
-          title={`Refund credit memo #${dialog.memo.creditNumber} · ${dialog.memo.customerName}`}
+          title={`Refund ${nameOf(dialog.memo)} · ${dialog.memo.customerName}`}
           remainingCents={dialog.memo.remainingCents}
           accounts={accounts}
           direction="out"
@@ -441,12 +486,26 @@ export default function CreditMemos({ accounts, intent }) {
           }}
         />
       )}
+      {dialog?.mode === 'writeOff' && (
+        <RefundDialog
+          writeOff
+          title={`Write off ${nameOf(dialog.memo)} · ${dialog.memo.customerName}`}
+          remainingCents={dialog.memo.remainingCents}
+          accounts={accounts}
+          direction="out"
+          onClose={() => setDialog(null)}
+          onRefund={async (writeOff) => {
+            await api.writeOffCustomerCredit({ creditId: dialog.memo.id, ...writeOff });
+            done(`Wrote off ${formatCents(writeOff.amountCents)} of ${dialog.memo.customerName}'s credit: Dr Accounts Receivable / Cr ${accountLabel(accounts, writeOff.accountId)}.`);
+          }}
+        />
+      )}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={error} />}
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Credit memos &amp; refunds</h2>
-          <span className="text-xs text-qb-ink-muted">A credit memo keeps credit for the customer to apply to invoices; a refund receipt pays the money back now.</span>
+          <span className="text-xs text-qb-ink-muted">A credit memo keeps credit for the customer to apply to invoices; a refund receipt pays the money back now. Money received but not applied to an invoice is listed as an unapplied payment.</span>
           <div className="ml-auto flex gap-2">
             <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setComposing('refund')}>
               New refund receipt
@@ -490,11 +549,11 @@ export default function CreditMemos({ accounts, intent }) {
                 const refund = m.refundAccountId !== null;
                 const status = m.isVoided ? 'Voided' : refund ? 'Refunded' : m.remainingCents === 0 ? 'Used' : m.remainingCents < m.totalCents ? 'Partly used' : 'Open';
                 return (
-                  <tr key={m.id} className={`qb-grid-row cursor-pointer ${m.isVoided ? 'text-qb-ink-faint' : ''}`} onDoubleClick={() => openMemo(m)}>
-                    <td className="qb-grid-cell">{m.creditNumber}</td>
+                  <tr key={m.id} className={`qb-grid-row ${m.isPayment ? '' : 'cursor-pointer'} ${m.isVoided ? 'text-qb-ink-faint' : ''}`} onDoubleClick={() => !m.isPayment && openMemo(m)}>
+                    <td className="qb-grid-cell">{m.isPayment ? m.paymentReference ?? '' : m.creditNumber}</td>
                     <td className="qb-grid-cell">{formatDate(m.creditDate)}</td>
                     <td className="qb-grid-cell font-semibold">{m.customerName}</td>
-                    <td className="qb-grid-cell">{refund ? 'Refund receipt' : 'Credit memo'}</td>
+                    <td className="qb-grid-cell">{kindOf(m)}</td>
                     <td className="qb-grid-cell num">{formatCents(m.totalCents)}</td>
                     <td className="qb-grid-cell num font-semibold">{refund || m.isVoided ? '' : formatCents(m.remainingCents)}</td>
                     <td className="qb-grid-cell text-sm">{status}</td>
@@ -502,13 +561,15 @@ export default function CreditMemos({ accounts, intent }) {
                       <RowMenu
                         label={`Actions for credit ${m.creditNumber}`}
                         items={[
-                          { label: 'Open', onSelect: () => openMemo(m) },
+                          { label: 'Open', disabled: m.isPayment, onSelect: () => openMemo(m) },
+                          { label: 'Duplicate', hint: 'A new one copied from this one, dated today', disabled: m.isPayment, onSelect: () => duplicate(m) },
                           { label: 'Apply to invoices…', disabled: refund || m.isVoided, onSelect: () => setDialog({ mode: 'apply', memo: m }) },
                           { label: 'Refund credit…', disabled: refund || m.isVoided || m.remainingCents === 0, onSelect: () => setDialog({ mode: 'refund', memo: m }) },
+                          { label: 'Write off credit…', disabled: refund || m.isVoided || m.remainingCents === 0, onSelect: () => setDialog({ mode: 'writeOff', memo: m }) },
                           voidItem({
                             journalEntryId: m.journalEntryId,
                             voided: m.isVoided,
-                            description: `${refund ? 'Refund receipt' : 'Credit memo'} #${m.creditNumber} for ${m.customerName} (${formatCents(m.totalCents)}).`,
+                            description: `${kindOf(m)}${m.isPayment ? '' : ` #${m.creditNumber}`} for ${m.customerName} (${formatCents(m.totalCents)}).`,
                             onVoid: async (id) => {
                               await api.voidTransaction(id);
                               setNotice({ kind: 'success', text: `Voided #${m.creditNumber}.` });

@@ -12,6 +12,8 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::ledger::{db_err, mul_div_round, post_entry_in_tx, rollback, EntrySource, JournalEntry, JournalLine, MAX_LINE_CENTS};
 
+pub mod combined;
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct TaxRateView {
@@ -24,6 +26,11 @@ pub struct TaxRateView {
     pub liability_account_id: i64,
     pub liability_account_name: String,
     pub is_active: bool,
+    /// A combined rate: its rate is its components' added up.
+    pub is_group: bool,
+    /// A combined rate's component rates, in order.
+    #[sqlx(skip)]
+    pub component_ids: Vec<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -39,20 +46,25 @@ pub struct TaxRateInput {
 }
 
 const RATE_SELECT: &str = "SELECT r.id, r.name, r.rate_ppm, r.agency_vendor_id, v.name AS agency_name, r.liability_account_id,
-        a.full_name AS liability_account_name, r.is_active
+        a.full_name AS liability_account_name, r.is_active, r.is_group
  FROM tax_rates r LEFT JOIN vendors v ON v.id = r.agency_vendor_id JOIN v_chart_of_accounts a ON a.id = r.liability_account_id";
 
 pub async fn list_tax_rates(pool: &SqlitePool) -> Result<Vec<TaxRateView>, String> {
-    sqlx::query_as::<_, TaxRateView>(&format!("{RATE_SELECT} ORDER BY r.name COLLATE NOCASE")).fetch_all(pool).await.map_err(db_err)
+    let mut rates = sqlx::query_as::<_, TaxRateView>(&format!("{RATE_SELECT} ORDER BY r.name COLLATE NOCASE")).fetch_all(pool).await.map_err(db_err)?;
+    combined::fill_components(pool, &mut rates).await?;
+    Ok(rates)
 }
 
 async fn get_rate(pool: &SqlitePool, id: i64) -> Result<TaxRateView, String> {
-    sqlx::query_as::<_, TaxRateView>(&format!("{RATE_SELECT} WHERE r.id = ?1"))
+    let rate = sqlx::query_as::<_, TaxRateView>(&format!("{RATE_SELECT} WHERE r.id = ?1"))
         .bind(id)
         .fetch_optional(pool)
         .await
         .map_err(db_err)?
-        .ok_or_else(|| format!("TAX_NOT_FOUND: tax rate {id} does not exist"))
+        .ok_or_else(|| format!("TAX_NOT_FOUND: tax rate {id} does not exist"))?;
+    let mut one = vec![rate];
+    combined::fill_components(pool, &mut one).await?;
+    Ok(one.remove(0))
 }
 
 /// The liability account for a rate: the one given (a current liability), or Sales Tax Payable
@@ -132,6 +144,10 @@ pub async fn update_tax_rate(pool: &SqlitePool, id: i64, input: TaxRateInput) ->
     let name = validate_rate(&input)?;
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
+        let group: bool = sqlx::query_scalar("SELECT is_group FROM tax_rates WHERE id = ?1").bind(id).fetch_optional(&mut *tx).await.map_err(db_err)?.unwrap_or(false);
+        if group {
+            return Err("TAX_IS_COMBINED: a combined rate is changed by choosing its component rates".into());
+        }
         let account = liability_account(&mut tx, input.liability_account_id).await?;
         let vendor = agency(&mut tx, &input.agency_name).await?;
         sqlx::query("UPDATE tax_rates SET name = ?1, rate_ppm = ?2, agency_vendor_id = ?3, liability_account_id = ?4 WHERE id = ?5")
@@ -142,7 +158,9 @@ pub async fn update_tax_rate(pool: &SqlitePool, id: i64, input: TaxRateInput) ->
             .bind(id)
             .execute(&mut *tx)
             .await
-            .map_err(|e| unique(e, name))
+            .map_err(|e| unique(e, name))?;
+        // The combined rates it is part of add up to a new rate too.
+        combined::refresh_groups_of(&mut tx, id).await
     }
     .await;
     match result {
@@ -159,21 +177,55 @@ pub async fn set_tax_rate_active(pool: &SqlitePool, id: i64, active: bool) -> Re
     get_rate(pool, id).await
 }
 
-/// The tax on a document.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct DocumentTax {
-    pub rate_id: Option<i64>,
+/// One rate's share of a document's tax, credited to that rate's liability account.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TaxPart {
+    pub rate_id: i64,
+    pub name: String,
     pub liability_account_id: i64,
     pub cents: i64,
 }
 
+/// The tax on a document: its rate, the total, and how it splits by rate (one part for an ordinary
+/// rate, one per component for a combined rate).
+#[derive(Debug, Clone)]
+pub(crate) struct DocumentTax {
+    pub rate_id: Option<i64>,
+    pub cents: i64,
+    pub parts: Vec<TaxPart>,
+    /// A combined rate: its split is recorded with the entry ([`DocumentTax::record_parts`]).
+    pub combined: bool,
+}
+
 impl DocumentTax {
-    /// The tax line: a credit on a sale, a debit when `reverse` (a credit memo).
-    pub fn line(&self, reverse: bool) -> Option<JournalLine> {
-        (self.cents > 0).then(|| {
-            let line = if reverse { JournalLine::debit(self.liability_account_id, self.cents) } else { JournalLine::credit(self.liability_account_id, self.cents) };
-            line.with_memo(Some("Sales tax"))
-        })
+    /// The tax lines: one per part, a credit on a sale, a debit when `reverse` (a credit memo).
+    pub fn lines(&self, reverse: bool) -> Vec<JournalLine> {
+        self.parts
+            .iter()
+            .filter(|p| p.cents > 0)
+            .map(|p| {
+                let line = if reverse { JournalLine::debit(p.liability_account_id, p.cents) } else { JournalLine::credit(p.liability_account_id, p.cents) };
+                let memo = if self.combined { format!("Sales tax: {}", p.name) } else { "Sales tax".to_string() };
+                line.with_memo(Some(&memo))
+            })
+            .collect()
+    }
+
+    /// Keeps a combined rate's split with the posted entry, for the sales tax return.
+    pub async fn record_parts(&self, tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64) -> Result<(), String> {
+        if !self.combined {
+            return Ok(());
+        }
+        for p in &self.parts {
+            sqlx::query("INSERT INTO document_tax_parts (journal_entry_id, tax_rate_id, cents) VALUES (?1, ?2, ?3)")
+                .bind(journal_entry_id)
+                .bind(p.rate_id)
+                .bind(p.cents)
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
+        }
+        Ok(())
     }
 }
 
@@ -186,17 +238,26 @@ pub fn tax_on(taxable_cents: i64, rate_ppm: i64) -> Option<i64> {
 /// `None` when no rate is chosen.
 pub(crate) async fn document_tax(tx: &mut Transaction<'_, Sqlite>, rate_id: Option<i64>, taxable_cents: i64, code: &str) -> Result<Option<DocumentTax>, String> {
     let Some(rate_id) = rate_id else { return Ok(None) };
-    let row: Option<(i64, i64, bool)> = sqlx::query_as("SELECT rate_ppm, liability_account_id, is_active FROM tax_rates WHERE id = ?1")
+    let row: Option<(String, i64, i64, bool, bool)> = sqlx::query_as("SELECT name, rate_ppm, liability_account_id, is_active, is_group FROM tax_rates WHERE id = ?1")
         .bind(rate_id)
         .fetch_optional(&mut **tx)
         .await
         .map_err(db_err)?;
-    let (ppm, account, active) = row.ok_or_else(|| format!("{code}_UNKNOWN_TAX: that tax rate does not exist"))?;
+    let (name, ppm, account, active, group) = row.ok_or_else(|| format!("{code}_UNKNOWN_TAX: that tax rate does not exist"))?;
     if !active {
         return Err(format!("{code}_INACTIVE_TAX: that tax rate is inactive"));
     }
-    let cents = tax_on(taxable_cents, ppm).filter(|c| *c <= MAX_LINE_CENTS).ok_or_else(|| format!("{code}_TAX_TOO_LARGE: the tax is out of range"))?;
-    Ok(Some(DocumentTax { rate_id: Some(rate_id), liability_account_id: account, cents }))
+    let too_large = || format!("{code}_TAX_TOO_LARGE: the tax is out of range");
+    let cents = tax_on(taxable_cents, ppm).filter(|c| *c <= MAX_LINE_CENTS).ok_or_else(too_large)?;
+    if !group {
+        return Ok(Some(DocumentTax { rate_id: Some(rate_id), cents, parts: vec![TaxPart { rate_id, name, liability_account_id: account, cents }], combined: false }));
+    }
+    let components = combined::components(&mut **tx, rate_id).await?;
+    if let Some(off) = components.iter().find(|c| !c.is_active) {
+        return Err(format!("{code}_INACTIVE_TAX: '{}' in this combined rate is inactive", off.name));
+    }
+    let parts = combined::split(cents, taxable_cents, &components).ok_or_else(too_large)?;
+    Ok(Some(DocumentTax { rate_id: Some(rate_id), cents, parts, combined: true }))
 }
 
 // ------------------------------------------------------------------------------------------------
