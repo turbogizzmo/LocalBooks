@@ -37,6 +37,11 @@ async fn the_sqlite_library_is_sqlcipher() {
     let pool = crate::db::test_pool().await;
     let version = cipher_version(&pool).await.expect("SQLCipher is linked");
     assert!(version.starts_with('4'), "SQLCipher 4: {version}");
+    // macOS must use CommonCrypto: an OpenSSL there comes from the build machine (OPENSSL_DIR set),
+    // and a release built that way would not start on other Macs.
+    let provider = cipher_provider().await.expect("a crypto provider");
+    let expected = if cfg!(target_os = "macos") { "commoncrypto" } else { "openssl" };
+    assert_eq!(provider, expected);
 }
 
 #[tokio::test]
@@ -79,12 +84,16 @@ async fn a_keyed_file_shows_nothing_readable_and_opens_only_with_its_key() {
 /// SQLCipher 4.5.7 is built on SQLite 3.45.3, which predates digit separators in SQL numbers
 /// (`12_500`, SQLite 3.46). Rust allows them, so a query string written like Rust code fails only
 /// when it runs. No string literal that reads as SQL may hold one, tested or not, and neither may a
-/// migration outside its comments.
+/// SQLCipher 4.5.7 is built on SQLite 3.45.3, which predates digit separators in SQL numbers
+/// (`12_500`, SQLite 3.46). Rust allows them, so a query string written like Rust code fails only
+/// when it runs. No string literal that reads as SQL (one line or many, plain or raw) may hold one,
+/// tested or not, and neither may migration code outside its comments.
 #[test]
 fn sql_never_uses_digit_separators() {
     let number = regex::Regex::new(r"(?:^|[^\w.])\d+(?:_\d+)+(?:$|[^\w])").unwrap();
     let sql = regex::Regex::new(r"(?i)\b(select|insert|update|delete|values|where|create|set)\b").unwrap();
-    let literal = regex::Regex::new(r#""((?:[^"\\]|\\.)*)""#).unwrap();
+    // Raw strings r"…" and r#"…"#, then ordinary strings; (?s) lets both span lines.
+    let literal = regex::Regex::new(r##"(?s)r#"(.*?)"#|r"([^"]*)"|"((?:[^"\\]|\\.)*)""##).unwrap();
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut found = Vec::new();
     let mut stack = vec![root.join("src")];
@@ -94,9 +103,12 @@ fn sql_never_uses_digit_separators() {
             if path.is_dir() {
                 stack.push(path);
             } else if path.extension().is_some_and(|e| e == "rs") && !path.ends_with("file_cipher/tests.rs") {
-                for (i, line) in std::fs::read_to_string(&path).unwrap().lines().enumerate() {
-                    if literal.captures_iter(line).any(|c| number.is_match(&c[1]) && sql.is_match(&c[1])) {
-                        found.push(format!("{}:{}", path.strip_prefix(root).unwrap().display(), i + 1));
+                let text = std::fs::read_to_string(&path).unwrap();
+                for c in literal.captures_iter(&text) {
+                    let body = c.get(1).or_else(|| c.get(2)).or_else(|| c.get(3)).unwrap();
+                    if number.is_match(body.as_str()) && sql.is_match(body.as_str()) {
+                        let line = text[..body.start()].lines().count();
+                        found.push(format!("{}:{line}", path.strip_prefix(root).unwrap().display()));
                     }
                 }
             }
@@ -105,11 +117,30 @@ fn sql_never_uses_digit_separators() {
     for entry in std::fs::read_dir(root.join("migrations")).unwrap() {
         let path = entry.unwrap().path();
         for (i, line) in std::fs::read_to_string(&path).unwrap().lines().enumerate() {
-            let code = line.split("--").next().unwrap_or_default();
-            if number.is_match(code) {
+            if number.is_match(sql_code(line)) {
                 found.push(format!("{}:{}", path.strip_prefix(root).unwrap().display(), i + 1));
             }
         }
     }
     assert!(found.is_empty(), "write these numbers without underscores (SQLite 3.45 rejects 12_500):\n{}", found.join("\n"));
+}
+
+/// A line of SQL without its `--` comment; a `--` inside a quoted string is not a comment.
+fn sql_code(line: &str) -> &str {
+    let mut quoted = false;
+    let bytes = line.as_bytes();
+    for (i, &b) in bytes.iter().enumerate() {
+        match b {
+            b'\'' => quoted = !quoted,
+            b'-' if !quoted && bytes.get(i + 1) == Some(&b'-') => return &line[..i],
+            _ => {}
+        }
+    }
+    line
+}
+
+#[test]
+fn sql_comments_end_only_outside_quotes() {
+    assert_eq!(sql_code("SELECT 1 -- 12_500"), "SELECT 1 ");
+    assert_eq!(sql_code("VALUES ('a--b', 1_000)"), "VALUES ('a--b', 1_000)");
 }

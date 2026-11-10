@@ -15,5 +15,17 @@ pub async fn cipher_version(pool: &SqlitePool) -> Option<String> {
     sqlx::query_scalar::<_, String>("PRAGMA cipher_version").fetch_optional(pool).await.ok().flatten()
 }
 
+/// The crypto library SQLCipher was built against: `commoncrypto` on macOS, `openssl` elsewhere.
+/// A macOS build that reports `openssl` linked an OpenSSL other Macs may not have. SQLCipher only
+/// answers on a keyed connection, so this asks a throwaway in-memory one.
+pub async fn cipher_provider() -> Option<String> {
+    use sqlx::{ConnectOptions, Connection};
+    let options = sqlx::sqlite::SqliteConnectOptions::new().filename(":memory:").pragma("key", "'cipher provider check'");
+    let mut conn = options.connect().await.ok()?;
+    let provider = sqlx::query_scalar::<_, String>("PRAGMA cipher_provider").fetch_optional(&mut conn).await.ok().flatten();
+    let _ = conn.close().await;
+    provider
+}
+
 #[cfg(test)]
 mod tests;
