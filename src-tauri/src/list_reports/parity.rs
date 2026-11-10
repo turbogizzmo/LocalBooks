@@ -18,7 +18,8 @@ use crate::ledger::db_err;
 // Terms Listing
 // ------------------------------------------------------------------------------------------------
 
-/// Parts per million as a percent with up to three decimals: 20000 → "2%", 12500 → "1.25%".
+/// Parts per million as a percent with up to four decimals (a ppm is 0.0001%): 20000 → "2%",
+/// 12500 → "1.25%", 1 → "0.0001%".
 fn percent(ppm: i64) -> String {
     let whole = ppm / 10_000;
     let frac = ppm % 10_000;
@@ -94,7 +95,8 @@ pub(super) async fn unbilled_costs_by_job(pool: &SqlitePool, today: NaiveDate) -
                 1,
                 vec![
                     Value::Null,
-                    json!(if c.source == "BILL" { "Bill" } else { "Check" }),
+                    // A bill line, or a line of a check, card charge or other expense.
+                    json!(if c.source == "BILL" { "Bill" } else { "Expense" }),
                     json!(c.date),
                     json!(c.vendor_name),
                     json!(c.account_name),
@@ -160,7 +162,8 @@ pub(super) async fn stock_status_by_vendor(pool: &SqlitePool, today: NaiveDate) 
         rows.push(section(0, w, &title));
         for r in items {
             // Order: at or below the reorder point, counting what is already on order.
-            let order = r.reorder.is_some_and(|point| r.item.qty_on_hand_e4.saturating_add(r.on_po) <= point);
+            let expected = r.item.qty_on_hand_e4.checked_add(r.on_po).ok_or("RPT_OVERFLOW: quantity on hand and on order")?;
+            let order = r.reorder.is_some_and(|point| expected <= point);
             to_order += usize::from(order);
             rows.push(row(
                 RowKind::Detail,
