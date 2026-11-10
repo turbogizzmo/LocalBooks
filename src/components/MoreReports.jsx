@@ -815,6 +815,8 @@ export function StockStatusReport() {
       formatQuantity(r.qtyOnHandE4),
       r.qtyOnOrderE4 ? formatQuantity(r.qtyOnOrderE4) : '',
       r.nextDelivery ? formatDate(r.nextDelivery) : '',
+      r.qtyOnSalesOrderE4 ? formatQuantity(r.qtyOnSalesOrderE4) : '',
+      formatQuantity(r.qtyAvailableE4),
       formatQuantity(r.qtySoldE4),
       formatQuantity(r.salesPerWeekE4),
     ],
@@ -830,15 +832,17 @@ export function StockStatusReport() {
         { label: 'On hand', align: 'right' },
         { label: 'On PO', align: 'right' },
         { label: 'Next deliv', align: 'right' },
+        { label: 'On SO', align: 'right' },
+        { label: 'Available', align: 'right' },
         { label: 'Sold', align: 'right' },
         { label: 'Sales/week', align: 'right' },
       ]}
       rows={rows}
       error={error}
       toolbar={p.controls}
-      footer="On hand at the end of the period · On PO: open purchase orders (Next deliv is the earliest expected date) · Sold and Sales/week: units sold in the period, less voided sales"
+      footer="On hand at the end of the period · On PO: open purchase orders (Next deliv is the earliest expected date) · On SO: left on open sales orders; Available is on hand less that · Sold and Sales/week: units sold in the period, less voided sales"
       onCsvRows={() =>
-        data.rows.map((r) => [r.name, r.sku ?? '', r.description ?? '', (r.qtyOnHandE4 / 10_000).toString(), (r.qtyOnOrderE4 / 10_000).toString(), r.nextDelivery ?? '', (r.qtySoldE4 / 10_000).toString(), (r.salesPerWeekE4 / 10_000).toString()])
+        data.rows.map((r) => [r.name, r.sku ?? '', r.description ?? '', (r.qtyOnHandE4 / 10_000).toString(), (r.qtyOnOrderE4 / 10_000).toString(), r.nextDelivery ?? '', (r.qtyOnSalesOrderE4 / 10_000).toString(), (r.qtyAvailableE4 / 10_000).toString(), (r.qtySoldE4 / 10_000).toString(), (r.salesPerWeekE4 / 10_000).toString()])
       }
     />
   );

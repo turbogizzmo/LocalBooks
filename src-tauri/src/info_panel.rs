@@ -84,6 +84,9 @@ pub struct ItemSummary {
     pub qty_on_hand_e4: i64,
     pub qty_on_order_e4: i64,
     pub next_delivery: Option<NaiveDate>,
+    /// Left to invoice on open sales orders, and on hand less that.
+    pub qty_on_sales_order_e4: i64,
+    pub qty_available_e4: i64,
     pub average_cost_cents: Option<i64>,
     pub asset_value_cents: i64,
     pub sales_price_cents: i64,
@@ -122,6 +125,8 @@ pub async fn item_summary(pool: &SqlitePool, product_id: i64, today: NaiveDate) 
         qty_on_hand_e4,
         qty_on_order_e4: stock.map_or(0, |r| r.qty_on_order_e4),
         next_delivery: stock.and_then(|r| r.next_delivery),
+        qty_on_sales_order_e4: stock.map_or(0, |r| r.qty_on_sales_order_e4),
+        qty_available_e4: stock.map_or(qty_on_hand_e4, |r| r.qty_available_e4),
         average_cost_cents: value.and_then(|r| r.average_cost_cents),
         asset_value_cents: value.map_or(0, |r| r.asset_value_cents),
         at_reorder_point: reorder_point_e4.is_some_and(|point| qty_on_hand_e4 <= point),

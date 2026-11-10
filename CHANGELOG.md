@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Sales orders.** Record what a customer has ordered before you ship it, in **Sales › Sales
+  Orders**. An order doesn't touch your books; invoice it all at once or in parts as you ship, and
+  it keeps track of what is left. Voiding one of its invoices puts the quantities back. Stock Status
+  and an item's information panel now show what is on sales orders and what is available, and the
+  Open by customer, Open by item and Pending sales reports list what is still to ship.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

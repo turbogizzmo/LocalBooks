@@ -15,6 +15,7 @@ export const NAV = [
       { id: 'sales/all', label: 'All Sales' },
       { id: 'sales/invoices', label: 'Invoices' },
       { id: 'sales/estimates', label: 'Estimates' },
+      { id: 'sales/orders', label: 'Sales Orders' },
       { id: 'sales/credits', label: 'Credit Memos & Refunds' },
       { id: 'sales/customers', label: 'Customers' },
       { id: 'sales/products', label: 'Products & Services' },

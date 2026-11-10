@@ -801,6 +801,8 @@ export default function Invoices({ accounts, intent }) {
   const [notice, setNotice] = useState(null);
   // Set while the form holds an estimate's lines: posting then marks that estimate converted.
   const [fromEstimate, setFromEstimate] = useState(null);
+  // Set while the form holds a sales order's lines: posting takes their quantities off the order.
+  const [fromOrder, setFromOrder] = useState(null);
   // Set while the form holds a posted invoice being edited: saving replaces it.
   const [editing, setEditing] = useState(null);
   // Everything the form would save, as loaded; see `snapshot` below.
@@ -846,6 +848,27 @@ export default function Invoices({ accounts, intent }) {
         },
         (err) => setNotice({ kind: 'error', text: errorText(err) }),
       );
+    } else if (intent?.action === 'from-sales-order' && intent.data?.orderId) {
+      setReceiving(false);
+      api.getSalesOrder(intent.data.orderId).then(
+        (order) => {
+          const chosen = intent.data.quantities ?? {};
+          // The lines still open, at the quantity chosen to ship (all that is left by default).
+          const open = order.lines
+            .map((l) => ({ ...l, quantityE4: chosen[l.id] ?? l.leftQtyE4 }))
+            .filter((l) => l.leftQtyE4 > 0 && l.quantityE4 > 0);
+          const loaded = linesFromDocument(open, [], defaultAccountId).map((line, i) => (i < open.length ? { ...line, orderLineId: open[i].id } : line));
+          setCustomer(order.customerName);
+          sales.set({ salesRepId: order.salesRepId, shipMethodId: order.shipMethodId, customerMessageId: order.customerMessageId, billTo: order.billTo, shipTo: order.shipTo, poNumber: order.poNumber, fob: order.fob });
+          setLines(loaded);
+          setFromEstimate(null);
+          setFromOrder({ id: order.id, number: order.orderNumber });
+          tax.set(order.taxRateId ?? null);
+          setNotice(null);
+          customerRef.current?.focus();
+        },
+        (err) => setNotice({ kind: 'error', text: errorText(err) }),
+      );
     }
     // Only a new intent loads anything; the default account is read when it does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -869,7 +892,12 @@ export default function Invoices({ accounts, intent }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerRecord?.id, customerRecord?.termsId, termsList, termsTouched, termsId]);
 
-  const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines);
+  const { evaluated, filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines);
+  // Which posted line takes from which sales order line (`payload` keeps the filled item lines in order).
+  const takes = lines
+    .filter((_, i) => !evaluated[i].blank && !evaluated[i].form)
+    .map((line, k) => (line.orderLineId ? { orderLineId: line.orderLineId, invoiceLine: k } : null))
+    .filter(Boolean);
   const discountCents = parseDiscount(discountText, linesTotal);
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
   useWindowContent(editing ? { name: `Invoice ${editing.number} · ${editing.customer}`, action: 'edit', data: { invoiceId: editing.id } } : null);
@@ -914,6 +942,7 @@ export default function Invoices({ accounts, intent }) {
           setReceiving(false);
           sales.set(details);
           setFromEstimate(null);
+          setFromOrder(null);
           setTermsTouched(true);
           setTermsId(details?.termsId ?? null);
           setCurrency(invoice.currencyCode ?? '');
@@ -929,6 +958,7 @@ export default function Invoices({ accounts, intent }) {
         setReceiving(false);
         sales.set(details);
         setFromEstimate(null);
+        setFromOrder(null);
         const loaded = linesFromDocument(items, storedForm, defaultAccountId);
         // Payments and credits applied stay applied to the edited version (see appliedText).
         const applied = invoice.amountPaidCents > 0 ? formatMoney(invoice.amountPaidCents, invoice.currencyCode) : null;
@@ -975,6 +1005,7 @@ export default function Invoices({ accounts, intent }) {
     setDueDate(addDays(newTransactionDate(), 30));
     setLines(Array.from({ length: INITIAL_ROWS }, () => blankLine(defaultAccountId)));
     setFromEstimate(null);
+    setFromOrder(null);
     setEditing(null);
     setBaseline(null);
     setDiscountText('');
@@ -1075,8 +1106,12 @@ export default function Invoices({ accounts, intent }) {
         reset();
         return true;
       }
-      const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input, printLater.on);
-      if (fromEstimate && printLater.on) await api.setToBePrinted('INVOICE', inv.id, true).catch(() => {});
+      const inv = fromOrder
+        ? await api.invoiceFromSalesOrder(fromOrder.id, input, takes)
+        : fromEstimate
+          ? await api.invoiceFromEstimate(fromEstimate.id, input)
+          : await api.createInvoice(input, printLater.on);
+      if ((fromEstimate || fromOrder) && printLater.on) await api.setToBePrinted('INVOICE', inv.id, true).catch(() => {});
       printLater.remember(printLater.on);
       const queued = emailLater && (await api.setEmailLater('INVOICE', inv.id, true).then(() => true, () => false));
       const attachError = files.length > 0 ? await attachPicked(inv.journalEntryId, files) : null;
@@ -1107,6 +1142,7 @@ export default function Invoices({ accounts, intent }) {
           ? `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: ${formatMoney(inv.totalCents, inv.currencyCode)} booked as Dr Accounts Receivable ${formatCents(inv.homeTotalCents)}.`
           : `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: Dr Accounts Receivable ${formatCents(inv.totalCents)} / Cr income.` +
             (fromEstimate ? ` Estimate #${fromEstimate.number} is marked converted.` : '') +
+            (fromOrder ? ` Sales order #${fromOrder.number} is updated with what this invoice shipped.` : '') +
             creditNote +
             (queued ? ' Marked Email later.' : '') +
             (printLater.on ? ' Waiting in File › Print Forms › Invoices.' : '') +
@@ -1224,6 +1260,13 @@ export default function Invoices({ accounts, intent }) {
         <Notice
           kind="info"
           text={`Editing invoice #${editing.number}. ${appliedText ? `${appliedText} ` : ''}Saving voids the original and posts this version under a new number; both stay in the audit trail.`}
+          onDismiss={reset}
+        />
+      )}
+      {fromOrder && (
+        <Notice
+          kind="info"
+          text={`Invoicing sales order #${fromOrder.number}: change quantities, rates or add lines below, then post. A line can't ship more than is left on the order; the order is updated only when this invoice posts.`}
           onDismiss={reset}
         />
       )}

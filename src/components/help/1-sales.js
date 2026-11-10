@@ -15,6 +15,10 @@ export const screens = {
     help: 'Quotes for customers that do not touch your books until they become invoices. Mark an estimate accepted, then convert it to an invoice in one step.',
     guide: 'sales-receipts-and-estimates',
   },
+  'sales/orders': {
+    help: 'Orders customers have placed and you have not shipped yet. They post nothing; invoice an order all at once or in parts as you ship, and see what is backordered.',
+    guide: 'sales-orders',
+  },
   'sales/tax': {
     help: 'Turn on sales tax, set up the rates you charge, see taxable sales and tax owed for any period, and record payments to the tax agency.',
   },
@@ -105,6 +109,14 @@ export const topics = [
     keywords: 'print forms batch sales receipts credit memos bill payment stubs purchase orders mailing labels address labels',
     go: { label: 'Go to Print Forms', view: 'sales/print-forms' },
     guide: 'invoices',
+  },
+  {
+    id: 'sales-order', area: 'sales', views: ['sales/orders', 'sales/invoices', 'sales/products'],
+    title: 'Take a sales order and invoice it in parts',
+    body: 'A sales order records what a customer ordered before you ship it, and posts nothing. From its menu, Create invoice for all that is left, or for part of it, opens the invoice form with those quantities; posting takes them off the order, and voiding that invoice puts them back. On sales orders and Available show stock already promised, and the Open by customer, Open by item and Pending sales tabs list what is still to ship.',
+    keywords: 'sales order so backorder back order partial invoice pending sales open orders fulfil fulfill ship',
+    go: { label: 'New sales order', view: 'sales/orders', action: 'sales-order' },
+    guide: 'sales-orders',
   },
   {
     id: 'invoice', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/customers'],
