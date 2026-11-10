@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Ready for encrypting the whole company file.** LocalBooks' database engine now includes
+  SQLCipher, the groundwork for an optional setting that encrypts the whole company file and its
+  backups. Nothing changes in your files yet, and Help › Save diagnostics lists the SQLCipher
+  version.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

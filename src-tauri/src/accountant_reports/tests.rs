@@ -185,7 +185,7 @@ async fn reconciliations_keep_a_snapshot_and_report_changes_made_afterwards() {
         sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
     }
     let cleared: Vec<(i64, i64)> = sqlx::query_as("SELECT id, journal_entry_id FROM journal_lines WHERE reconciliation_id = ?1 ORDER BY id").bind(january).fetch_all(&pool).await.unwrap();
-    sqlx::query("UPDATE journal_lines SET credit_cents = 13_000 WHERE id = ?1").bind(cleared[1].0).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE journal_lines SET credit_cents = 13000 WHERE id = ?1").bind(cleared[1].0).execute(&pool).await.unwrap();
     sqlx::query("DELETE FROM journal_lines WHERE id = ?1").bind(cleared[2].0).execute(&pool).await.unwrap();
     sqlx::query("UPDATE journal_entries SET entry_date = '2025-01-03' WHERE id = ?1").bind(cleared[0].1).execute(&pool).await.unwrap();
     let report = discrepancy(&pool, None, d(2025, 3, 1)).await.unwrap();
@@ -225,7 +225,7 @@ async fn older_reconciliations_are_checked_by_their_totals() {
     for t in triggers {
         sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
     }
-    sqlx::query("UPDATE journal_lines SET debit_cents = 12_000 WHERE reconciliation_id = ?1").bind(rec).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE journal_lines SET debit_cents = 12000 WHERE reconciliation_id = ?1").bind(rec).execute(&pool).await.unwrap();
     let report = discrepancy(&pool, None, d(2025, 3, 1)).await.unwrap();
     assert_eq!(report.report.line_count, 1);
     let row = report.report.rows.iter().find(|r| r.kind == RowKind::Detail).unwrap();

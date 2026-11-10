@@ -316,7 +316,7 @@ async fn list_changes_come_from_creation_dates_and_the_audit_trail() {
     sqlx::query("UPDATE customers SET name = 'Acme Corp' WHERE id = ?1").bind(customer).execute(&pool).await.unwrap();
     sqlx::query("UPDATE customers SET phone = '555-0100' WHERE id = ?1").bind(customer).execute(&pool).await.unwrap();
     sqlx::query("UPDATE vendors SET is_active = 0 WHERE id = ?1").bind(vendor).execute(&pool).await.unwrap();
-    sqlx::query("UPDATE products_services SET rate_cents = 12_500 WHERE id = ?1").bind(product).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE products_services SET rate_cents = 12500 WHERE id = ?1").bind(product).execute(&pool).await.unwrap();
     crate::accounts::set_account_active(&pool, account(&pool, "6600").await, false).await.unwrap();
     // A change to a field nobody reviews writes nothing.
     let rows = || async { sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'LIST_CHANGE'").fetch_one(&pool).await.unwrap() };
