@@ -167,3 +167,19 @@ export async function signedInAs() {
   await summary.waitForDisplayed();
   return summary.getText();
 }
+
+/**
+ * Sends a Window menu command ('tile-vertically', 'cascade', 'close-all', ...) the way the native
+ * menu bar does: `windows.rs` emits the `window-command` event to the LocalBooks window it acts on.
+ * WebDriver can't open the operating system's menus, so this emits the same event to the current
+ * window through Tauri's IPC (the event plugin's `emit_to`, which `@tauri-apps/api/event`'s
+ * `emitTo` calls; the page has no module import to reach that from a WebDriver script). Kept here
+ * so a change in Tauri's internals is fixed in one place.
+ */
+export async function windowMenu(command) {
+  await browser.execute(async (payload) => {
+    const tauri = window.__TAURI_INTERNALS__;
+    const label = tauri.metadata.currentWebview.label;
+    await tauri.invoke('plugin:event|emit_to', { target: { kind: 'WebviewWindow', label }, event: 'window-command', payload });
+  }, command);
+}

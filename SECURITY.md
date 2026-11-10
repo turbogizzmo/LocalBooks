@@ -24,8 +24,9 @@ claim loses its link.
   telemetry. It makes network requests only for: the update check (on by default, sends no data
   about the books: [`Updates.jsx`](src/components/Updates.jsx)), exchange rates (off unless turned
   on, sends two currency codes and a date: [`fx_rates.rs`](src-tauri/src/fx_rates.rs)), bank
-  downloads ([`simplefin.rs`](src-tauri/src/simplefin.rs)) and emailing over SMTP
-  ([`smtp.rs`](src-tauri/src/smtp.rs)), the last two only after the user sets them up. Offsite
+  downloads ([`simplefin.rs`](src-tauri/src/simplefin.rs)), Stripe payouts from api.stripe.com
+  ([`payout_feeds.rs`](src-tauri/src/payout_feeds.rs)) and emailing over SMTP
+  ([`smtp.rs`](src-tauri/src/smtp.rs)), the last three only after the user sets them up. Offsite
   backup writes to a folder the user picks and sends nothing itself
   ([`offsite.rs`](src-tauri/src/offsite.rs)).
 - **Updates are installed only if signed** with the project's update key (minisign); the public
@@ -46,19 +47,28 @@ claim loses its link.
   the operating system's credential store (Keychain, Credential Manager). On Linux, and in
   development builds, they go to a file in LocalBooks' settings folder that only the user's account
   can read ([`secrets.rs`](src-tauri/src/secrets.rs)). This covers the bank connection, the SMTP
-  password, remembered sign-ins, the offsite backup key and the audit-trail anchor.
+  password, the Stripe payout key, remembered sign-ins, the offsite backup key and the audit-trail
+  anchor.
 - **SimpleFIN bank access is read-only**, and its access URL is kept in the credential store above,
   never in the company file or in error messages
   (`connect_link_and_sync_without_duplicates` and
   `a_company_file_without_saved_access_asks_to_reconnect` in
   [`simplefin/tests.rs`](src-tauri/src/simplefin/tests.rs)).
+- **Payout feeds (Stripe)** accept only a restricted key (`rk_`), refusing a full secret key that
+  could move money, keep it in the credential store above and never in the company file, and call
+  Stripe's API only when the user clicks Get payouts
+  (`a_fetched_payout_is_recorded_as_a_gross_deposit_that_lands_at_the_net` in
+  [`payout_feeds/tests.rs`](src-tauri/src/payout_feeds/tests.rs)).
 - **Email** opens in the user's own mail app by default. Sending over SMTP is optional; a password
   over an unencrypted connection is refused, so a password is only ever sent over STARTTLS or TLS,
   and the password is kept in the credential store, never in the company file (`settings_are_checked`
   and `passwords_stay_out_of_the_company_file` in [`smtp/tests.rs`](src-tauri/src/smtp/tests.rs)).
 - **A company file from someone else cannot run code.** Every connection turns off
   `trusted_schema`, so views and triggers stored in a file cannot call functions with side effects
-  (`open_for` in [`db.rs`](src-tauri/src/db.rs)).
+  (`open_for` in [`db.rs`](src-tauri/src/db.rs)). A file whose `-wal` log was written for another
+  page size is refused before SQLite reads it, which blocks RUSTSEC-2026-0459 in the SQLite
+  LocalBooks bundles until it can be upgraded (`a_log_with_another_page_size_is_refused` in
+  [`wal_guard.rs`](src-tauri/src/wal_guard.rs)).
 
 ## Users and sensitive data
 

@@ -67,6 +67,7 @@ async fn deposit_sweeps_undeposited_funds_and_other_lines() {
         items: items.iter().map(|i| DepositItemRef { kind: i.kind.clone(), id: i.id }).collect(),
         other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: 125, memo: Some("Interest".into()), class_id: None, customer_id: None, vendor_id: None }],
         cash_back: None,
+        deductions: Vec::new(),
     };
     let deposit_id = post_bank_deposit(&pool, deposit_input(waiting.iter().collect())).await.expect("deposit posts");
     assert_eq!(balance(&pool, checking).await, 80_125);
@@ -125,6 +126,7 @@ async fn cash_back_comes_out_of_what_the_bank_gets() {
         items: vec![],
         other_lines: vec![DepositOtherLine { account_id: services, amount_cents: 50_000, memo: Some("Market stall".into()), class_id: None, customer_id: None, vendor_id: None }],
         cash_back: cash,
+        deductions: Vec::new(),
     };
     let back = |account_id, amount_cents| Some(CashBack { account_id, amount_cents, memo: Some("Float".into()) });
     // It must leave the bank something, and go somewhere other than the bank.
