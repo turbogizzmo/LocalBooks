@@ -10,6 +10,10 @@ people using LocalBooks.
   added with overflow checks, a cost row read twice counts once, and a sales receipt that also
   moves inventory finds the account its money went into. Batches staged by an earlier version
   label their fixed asset items correctly when you bring in their lists.
+- **More on items.** An item's record takes Subitem of, a description for purchase forms and a cost
+  (also brought in from IIF files). The item list has a search row, tick boxes to make several
+  items inactive or active at once, and Add/Edit Multiple for rows pasted from a spreadsheet. The
+  item box on sales forms has Find & Select Items to add several lines at once.
 - **Discounts and charges on credit memos.** Credit memos and refund receipts take subtotals,
   discount lines, percentage charges and groups, as invoices do. They print in their places, and a
   discount lowers the credit and the sales tax given back.

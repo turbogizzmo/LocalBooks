@@ -162,8 +162,9 @@ pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i6
     for item in &ledger.items {
         sqlx::query(
             "INSERT INTO ledger_import_items
-                (batch_id, source_id, name, description, rate_cents, income_source_account_id, item_kind, is_taxable, is_active, custom_fields, percent_ppm)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                (batch_id, source_id, name, description, rate_cents, income_source_account_id, item_kind, is_taxable, is_active, custom_fields,
+                 purchase_description, purchase_cost_cents, percent_ppm)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         )
         .bind(batch_id)
         .bind(item.id)
@@ -175,6 +176,8 @@ pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i6
         .bind(item.taxable as i64)
         .bind(item.active as i64)
         .bind(custom_json(&item.custom_fields))
+        .bind(&item.purchase_description)
+        .bind(item.purchase_cost_cents)
         .bind(item.percent_ppm)
         .execute(&mut *tx)
         .await
@@ -1053,6 +1056,8 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
         is_taxable: i64,
         is_active: i64,
         custom_fields: Option<String>,
+        purchase_description: Option<String>,
+        purchase_cost_cents: Option<i64>,
         item_kind: String,
         percent_ppm: Option<i64>,
     }
@@ -1063,7 +1068,7 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
         "SELECT i.source_id, i.name, i.description, i.rate_cents,
                 CASE WHEN t.classification = 'INCOME' THEN a.account_id END AS mapped_account,
                 CASE WHEN a.account_id IS NULL OR t.classification <> 'INCOME' THEN a.full_name END AS other_account,
-                i.is_taxable, i.is_active, i.custom_fields, i.item_kind, i.percent_ppm
+                i.is_taxable, i.is_active, i.custom_fields, i.purchase_description, i.purchase_cost_cents, i.item_kind, i.percent_ppm
          FROM ledger_import_items i
          LEFT JOIN ledger_import_accounts a ON a.batch_id = i.batch_id AND a.source_id = i.income_source_account_id
          LEFT JOIN chart_of_accounts c ON c.id = a.account_id
@@ -1113,8 +1118,9 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
                 };
                 let percent = item.percent_ppm.filter(|_| item_type != "ITEM");
                 let inserted = sqlx::query_scalar(
-                    "INSERT INTO products_services (name, description, rate_cents, income_account_id, is_taxable, is_active, item_type, percent_ppm)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id",
+                    "INSERT INTO products_services (name, description, rate_cents, income_account_id, is_taxable, is_active, purchase_description, purchase_cost_cents,
+                                                    item_type, percent_ppm)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) RETURNING id",
                 )
                 .bind(&item.name)
                 .bind(&description)
@@ -1122,6 +1128,8 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
                 .bind(account)
                 .bind(item.is_taxable)
                 .bind(item.is_active)
+                .bind(item.purchase_description.as_deref().map(|d| d.chars().take(4000).collect::<String>()))
+                .bind(item.purchase_cost_cents.map(|c| c.clamp(0, crate::ledger::MAX_LINE_CENTS)))
                 .bind(item_type)
                 .bind(percent)
                 .fetch_one(&mut *tx)

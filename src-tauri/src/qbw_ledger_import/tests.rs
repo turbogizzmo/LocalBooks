@@ -149,6 +149,8 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
             taxable: true,
             active: true,
             custom_fields: Vec::new(),
+            purchase_description: None,
+            purchase_cost_cents: None,
             percent_ppm: None,
         }],
         quality: LedgerQuality::default(),
@@ -544,6 +546,8 @@ async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
             taxable: true,
             active: true,
             custom_fields: Vec::new(),
+            purchase_description: None,
+            purchase_cost_cents: None,
             percent_ppm: None,
         }],
         quality: LedgerQuality::default(),
@@ -825,6 +829,8 @@ async fn lists_are_matched_by_name_or_created_with_their_details() {
         taxable: false,
         active: true,
         custom_fields: Vec::new(),
+        purchase_description: None,
+        purchase_cost_cents: None,
         percent_ppm: None,
     };
     books.accounts.push(account(6, "Consulting Income", "INCOME", None));
@@ -1025,6 +1031,8 @@ async fn discount_and_subtotal_items_become_form_lines() {
         taxable: false,
         active: true,
         custom_fields: Vec::new(),
+        purchase_description: None,
+        purchase_cost_cents: None,
         percent_ppm,
     };
     let mut l = ledger();
