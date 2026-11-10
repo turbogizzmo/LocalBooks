@@ -441,7 +441,8 @@ Add the carriers and services you ship with, such as `UPS Ground` or `Local deli
 date** and a **Ship via** box.
 
 To fill in the same carrier on every new form, choose it as **Usual shipping method** in
-**Preferences › Sales & Customers**. You can still change it on each form.
+**Preferences › Sales & Customers**, and the same **F.O.B.** (such as *Origin*) as **Usual
+F.O.B.**. You can still change either on each form.
 
 ### Custom fields
 

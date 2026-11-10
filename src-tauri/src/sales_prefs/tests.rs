@@ -186,7 +186,6 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
 }
 
 #[tokio::test]
-#[ignore = "waits for #151: estimate_lines is rebuilt to allow zero-amount lines on top of its migration 0067"]
 async fn zero_amount_estimate_lines_stay_off_the_invoice() {
     let pool = test_pool().await;
     let income = account(&pool, "4100").await;

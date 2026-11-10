@@ -27,6 +27,10 @@ people using LocalBooks.
 - **Customize Columns on Reconcile and form lines.** Reconcile and the line grids on sales, purchase
   and banking forms now have **Columns ▾** to hide columns you don't use and put the rest in your own
   order.
+- **Included extras on estimates, and a usual F.O.B.** An estimate line can be priced at 0.00, and
+  such lines are left off the invoice the estimate becomes (Preferences › Sales & Customers can
+  bring them over instead). A usual F.O.B. set there fills in on new invoices, sales receipts and
+  estimates.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.
