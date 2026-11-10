@@ -268,6 +268,13 @@ paid that agency in it. Choose **Accrual** (tax owed when you invoice) or **Cash
 paid; an invoice counts in proportion to what was paid on it in the period); it starts on the basis
 set in Preferences › Sales Tax. A payment counts for the agency of the rate it was recorded against.
 
+**Pay sales tax** for a combined rate splits the payment among its rates in proportion to their
+percentages (any rounding cent going to the largest) and pays down each rate's liability account,
+all in one entry from the account you pay from; the return lists each share under its rate's
+agency. To pay agencies different amounts, or on different dates, pay each agency's own rate
+instead. (A combined-rate payment recorded in version 0.14.0 went entirely to its first rate's
+account and is listed under that rate's agency; void it and record it again to spread it.)
+
 ## Sales tax, time, 1099 and inventory preferences
 
 These company preferences (Admins only) change how LocalBooks works out tax, time and stock.

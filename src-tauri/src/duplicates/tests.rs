@@ -104,3 +104,68 @@ async fn a_deposit_copies_only_its_other_lines_and_a_transfer_its_accounts() {
         assert!(copy.account_id.is_some());
     }
 }
+
+#[tokio::test]
+async fn a_credit_memo_copy_keeps_its_discounts_and_charges_so_it_totals_the_same() {
+    use crate::item_types::{charge_input, FormLineInput};
+    let pool = crate::harness::fixture::harbor_lane().await;
+    let income: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4000'").fetch_one(&pool).await.unwrap();
+    let item = |description: &str, rate_cents: i64| crate::sales::SalesLineInput { product_service_id: None, description: description.into(), quantity_e4: 10_000, rate_cents, income_account_id: income, class_id: None, is_taxable: false, service_date: None };
+    // $100.00 with a 5% restocking charge after it, $20.00, then a subtotal and 10% off it.
+    let original = crate::credits::create_credit_memo(
+        &pool,
+        crate::credits::CreditMemoInput {
+            customer_name: "Walk-in".into(),
+            credit_date: chrono::NaiveDate::from_ymd_opt(2025, 6, 2).unwrap(),
+            memo: None,
+            refund_account_id: None,
+            tax_rate_id: None,
+            lines: vec![item("Chairs", 10_000), item("Delivery", 2_000)],
+            header: Default::default(),
+            form_lines: vec![FormLineInput::charge(1, income, 50_000, false), FormLineInput::subtotal(2), FormLineInput::discount(2, income, Some(100_000), None, false)],
+        },
+    )
+    .await
+    .unwrap();
+    assert!(original.total_cents < 12_000, "the discount took something off: {}", original.total_cents);
+
+    let copy = copy_source(&pool, "CREDIT_MEMO", original.id).await.unwrap();
+    let kinds: Vec<&str> = copy.form_lines.iter().map(|f| f.kind.as_str()).collect();
+    assert_eq!(kinds, ["SUBTOTAL", "DISCOUNT"], "the subtotal and discount come with the copy");
+    assert_eq!(copy.form_lines[1].percent_ppm, Some(100_000));
+    let charge = copy.lines.iter().find(|l| l.percent_ppm.is_some()).expect("the percent charge comes back as a percent");
+    assert_eq!(charge.percent_ppm, Some(50_000));
+
+    // Saved as the form loads it, the copy credits exactly what the original did.
+    let item_numbers: Vec<i64> = copy.lines.iter().filter(|l| l.percent_ppm.is_none()).map(|l| l.line_number).collect();
+    let after = |n: i64| item_numbers.iter().filter(|i| **i < n).count();
+    let mut form_lines: Vec<FormLineInput> = copy
+        .form_lines
+        .iter()
+        .map(|f| match f.kind.as_str() {
+            "SUBTOTAL" => FormLineInput::subtotal(after(f.line_number)),
+            _ => FormLineInput::discount(after(f.line_number), f.account_id.unwrap(), f.percent_ppm, f.percent_ppm.is_none().then_some(f.amount_cents), f.is_taxable),
+        })
+        .collect();
+    for l in copy.lines.iter().filter(|l| l.percent_ppm.is_some()) {
+        form_lines.push(charge_input(l.line_number, &l.description, l.percent_ppm.unwrap(), l.account_id, l.product_service_id, l.class_id, l.is_taxable, &item_numbers));
+    }
+    form_lines.sort_by_key(|f| f.after_lines);
+    let lines = copy.lines.iter().filter(|l| l.percent_ppm.is_none()).map(|l| item(&l.description, l.rate_cents.unwrap())).collect();
+    let again = crate::credits::create_credit_memo(
+        &pool,
+        crate::credits::CreditMemoInput {
+            customer_name: copy.name.clone().unwrap(),
+            credit_date: chrono::NaiveDate::from_ymd_opt(2025, 6, 3).unwrap(),
+            memo: None,
+            refund_account_id: None,
+            tax_rate_id: copy.tax_rate_id,
+            lines,
+            header: Default::default(),
+            form_lines,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(again.total_cents, original.total_cents);
+}
