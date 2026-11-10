@@ -443,6 +443,7 @@ the others, and a click on a line opens its transaction or account where it has 
 | **Average Days to Pay Summary** | Who owes you | For each customer, the invoices paid off in the period and the average days from the invoice date to the payment or credit that paid each one off |
 | **Unpaid Bills by Job** | What you owe | Bills with a balance as of a date, under the customer or job on their lines. A bill for several jobs is split by its lines' amounts; lines with no job are under **No customer or job** |
 | **Open Purchase Orders Detail** | Expenses and vendors | Every line of the purchase orders still open, by vendor (the **Open Purchase Orders** report has one row per order) |
+| **Open Purchase Orders by Job** | Jobs | The same open lines under the customer or job on each line, lines for no one last; its total matches Open Purchase Orders Detail |
 | **Time by Job Summary** and **Detail** · **Time by Name** · **Time by Item** | Jobs | Hours from the timesheet in the period, by customer or job, by employee or by service item, with the billable hours |
 | **Physical Inventory Worksheet** | Inventory | Every tracked item with today's quantity on hand and a blank **Physical Count** column to print and fill in |
 | **Inventory Turnover by Item** | Inventory | For each tracked item over the period: inventory value at the start and end, their average, the cost of goods sold, how many times the average stock **turned over** (cost of goods sold ÷ average value) and the **days on hand** that implies. The ending values match Inventory Valuation |

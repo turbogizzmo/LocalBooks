@@ -31,7 +31,7 @@ async fn company() -> SqlitePool {
         .execute(p)
         .await
         .unwrap();
-    let patio: i64 = sqlx::query_scalar("INSERT INTO customers (name, parent_id, phone) VALUES ('Patio Menu', ?1, '555-0143') RETURNING id").bind(cafe).fetch_one(p).await.unwrap();
+    let patio: i64 = sqlx::query_scalar("INSERT INTO customers (name, parent_id, phone) VALUES ('Brightwater Cafe:Patio Menu', ?1, '555-0143') RETURNING id").bind(cafe).fetch_one(p).await.unwrap();
     sqlx::query("UPDATE vendors SET phone = '555-0190', email = 'orders@riverside.example', terms_days = 30, is_1099 = 1 WHERE name = 'Riverside Print Shop'").execute(p).await.unwrap();
 
     // Time in November: billable design for the cafe, unbilled work on its patio menu job, and an
@@ -71,6 +71,7 @@ async fn company() -> SqlitePool {
         rate_cents: rate,
         amount_cents: amount,
         class_id: None,
+        customer_id: None,
     };
     crate::workflows::create_purchase_order(
         p,
@@ -514,4 +515,65 @@ async fn t49_reports_tie_out_to_the_ledger() {
     // Mugs: nothing at the start, $72.00 at the end, $36.00 on average, $36.00 sold: turned over once.
     let mug_row = details(&turnover).find(|r| text(&r.cells[0]) == "Gift Mugs").unwrap();
     assert_eq!((text(&mug_row.cells[5]), text(&mug_row.cells[6])), ("1.00".to_string(), "365".to_string()));
+}
+
+/// A job on purchase order lines (gap T9): Open Purchase Orders by Job groups the same open lines
+/// Open Purchase Orders Detail lists, the job goes onto the bill, and a customer merge moves it.
+#[tokio::test]
+async fn open_purchase_orders_by_job_tie_out_and_the_job_reaches_the_bill() {
+    let pool = company().await;
+    let p = &pool;
+    let office = account(p, "6250").await;
+    let job = |name: &'static str| {
+        let p = p.clone();
+        async move { sqlx::query_scalar::<_, i64>("SELECT id FROM customers WHERE name = ?1").bind(name).fetch_one(&p).await.unwrap() }
+    };
+    let (cafe, patio) = (job("Brightwater Cafe").await, job("Brightwater Cafe:Patio Menu").await);
+    let line = |amount_cents, description: &str, customer_id| crate::workflows::PurchaseOrderLineInput {
+        account_id: office,
+        product_service_id: None,
+        description: Some(description.into()),
+        quantity_e4: None,
+        rate_cents: None,
+        amount_cents,
+        class_id: None,
+        customer_id,
+    };
+    let po = crate::workflows::create_purchase_order(
+        p,
+        crate::workflows::PurchaseOrderInput {
+            vendor_name: "Riverside Print Shop".into(),
+            po_date: d(2025, 12, 9),
+            expected_date: None,
+            memo: None,
+            lines: vec![line(4_000, "Menu boards", Some(cafe)), line(1_500, "Patio banner", Some(patio)), line(700, "Shop supplies", None)],
+        },
+    )
+    .await
+    .unwrap();
+
+    let by_job = run(p, "open-po-job").await;
+    let detail = run(p, "open-po-detail").await;
+    assert_eq!(last(total(&by_job)), last(total(&detail)), "the same open lines, grouped by job");
+    let jobs: Vec<String> = by_job.report.rows.iter().filter(|r| r.kind == RowKind::Section).map(|r| text(&r.cells[0])).collect();
+    assert_eq!(jobs, ["Brightwater Cafe", "Brightwater Cafe:Patio Menu", "No customer or job"]);
+    let subtotals: Vec<i64> = by_job.report.rows.iter().filter(|r| r.kind == RowKind::Subtotal).map(last).collect();
+    assert_eq!(subtotals[..2], [4_000, 1_500]);
+
+    // The bill made from the order keeps each line's job.
+    let bill = crate::workflows::bill_purchase_order(p, po, d(2025, 12, 12), d(2025, 12, 26), None).await.unwrap();
+    let on_bill: Vec<Option<i64>> = sqlx::query_scalar("SELECT customer_id FROM bill_lines WHERE bill_id = ?1 ORDER BY line_number").bind(bill).fetch_all(p).await.unwrap();
+    assert_eq!(on_bill, [Some(cafe), Some(patio), None]);
+
+    // A customer entered twice: merging it into the cafe moves its purchase order lines too.
+    let twice: i64 = sqlx::query_scalar("INSERT INTO customers (name) VALUES ('Brightwater Cafe Co') RETURNING id").fetch_one(p).await.unwrap();
+    crate::workflows::create_purchase_order(
+        p,
+        crate::workflows::PurchaseOrderInput { vendor_name: "Riverside Print Shop".into(), po_date: d(2025, 12, 10), expected_date: None, memo: None, lines: vec![line(900, "Table cards", Some(twice))] },
+    )
+    .await
+    .unwrap();
+    crate::merges::merge(p, crate::merges::MergeKind::Customer, twice, cafe, d(2025, 12, 31)).await.unwrap_or_else(|e| panic!("merge: {e}"));
+    let moved: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM purchase_order_lines WHERE customer_id = ?1 AND description = 'Table cards'").bind(cafe).fetch_one(p).await.unwrap();
+    assert_eq!(moved, 1);
 }

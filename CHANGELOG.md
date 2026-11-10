@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
+  job carries over to the bill, and Open Purchase Orders by Job lists what is still on order for
+  each job.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

@@ -79,11 +79,12 @@ export function summarizeSplits(rows) {
  * Category / description / amount split rows with an "Add split row" link. Every cell is an input
  * (data-entry grid), sized to the row so editing causes no layout shift. `withClasses` adds a Class
  * column (once the company has classes) for documents whose lines carry one. `withJobs` adds a
- * Customer:Job column (once the company has customers): the job a cost is for, for job costing.
+ * Customer:Job column (once the company has customers): the job a cost is for, for job costing,
+ * with a Bill? box unless `withBillable` is off (a purchase order line isn't a cost yet).
  * `withReceivedFrom` adds a Received From column (deposits): the customer or vendor the money
  * came from, kept as the row's `customerId` or `vendorId`.
  */
-export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, withClasses: classesAllowed = false, withJobs: jobsAllowed = false, withReceivedFrom = false, currency = null, stockItems = [] }) {
+export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, withClasses: classesAllowed = false, withJobs: jobsAllowed = false, withBillable = true, withReceivedFrom = false, currency = null, stockItems = [] }) {
   const tracking = useClassTracking();
   const { classes } = tracking;
   const withClasses = classesAllowed && showsClassColumn(tracking, rows);
@@ -128,7 +129,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
         <col className="w-[260px]" />
         <col />
         {withJobs && <col className="w-[170px]" />}
-        {withJobs && <col className="w-[34px]" />}
+        {withJobs && withBillable && <col className="w-[34px]" />}
         {withClasses && <col className="w-[150px]" />}
         {withPricing && <col className="w-[70px]" />}
         {withPricing && <col className="w-[96px]" />}
@@ -143,7 +144,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
           <th className="qb-grid-head">{categoryLabel}</th>
           <th className="qb-grid-head">Description</th>
           {withJobs && <th className="qb-grid-head" title="The customer or job this cost is for (job costing)">Customer:Job</th>}
-          {withJobs && (
+          {withJobs && withBillable && (
             <th className="qb-grid-head text-center" title="Billable: invoice this cost to the customer from Sales › Bill Costs">
               Bill?
             </th>
@@ -214,7 +215,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
                   </select>
                 </td>
               )}
-              {withJobs && (
+              {withJobs && withBillable && (
                 <td className="qb-grid-cell text-center">
                   {row.customerId ? (
                     <input

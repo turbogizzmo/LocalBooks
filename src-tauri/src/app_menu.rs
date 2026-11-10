@@ -309,6 +309,7 @@ const REPORTS: &[Entry] = &[
             report("Estimates by Job", "est-by-job"),
             report("Progress Invoices vs. Estimates", "progress"),
             Entry::Sep,
+            report("Open Purchase Orders by Job", "list:open-po-job"),
             report("Time by Job Summary", "list:time-job-summary"),
             report("Time by Job Detail", "list:time-job-detail"),
             report("Time by Name", "list:time-name"),

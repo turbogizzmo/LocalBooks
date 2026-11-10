@@ -27,7 +27,7 @@ export const screens = {
     guide: 'expenses-and-checks',
   },
   'expenses/purchase-orders': {
-    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines in one step.',
+    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines (and each line’s Customer:Job) in one step.',
   },
 };
 
