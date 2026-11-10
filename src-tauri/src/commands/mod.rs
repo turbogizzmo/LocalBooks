@@ -115,6 +115,7 @@ features![
     report_export,
     report_mail,
     revaluation,
+    rollback,
     sales,
     sales_header,
     sales_lists,

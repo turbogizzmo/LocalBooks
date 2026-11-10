@@ -3,7 +3,8 @@ import { getVersion } from '@tauri-apps/api/app';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import Notice from './Notice.jsx';
-import { errorText } from '../lib/api.js';
+import { api, errorText } from '../lib/api.js';
+import { askConfirm } from '../lib/dialogs.jsx';
 
 const RELEASES_URL = 'https://github.com/turbogizzmo/LocalBooks/releases';
 const AUTO_KEY = 'localbooks.autoUpdateCheck';
@@ -176,6 +177,7 @@ export function UpdatesPanel() {
           </div>
         )}
         {state.kind === 'error' && <Notice kind="error" text={`Could not check for updates: ${state.text}`} onDismiss={() => setState({ kind: 'idle' })} />}
+        <PreviousVersion />
         <p className="text-xs text-qb-ink-muted">
           Updates come from LocalBooks’ GitHub releases and are installed only if their signature matches the key built into
           LocalBooks. Before a new version changes your company file, it saves a copy under Settings › File &amp; Data Controls
@@ -183,5 +185,69 @@ export function UpdatesPanel() {
         </p>
       </div>
     </section>
+  );
+}
+
+/**
+ * Go back to the release before this one (Help › Reinstall Previous Version…). The books are backed
+ * up first, and LocalBooks refuses when the older version couldn't open them.
+ */
+function PreviousVersion() {
+  const [state, setState] = useState({ kind: 'idle' });
+  const look = async () => {
+    setState({ kind: 'looking' });
+    try {
+      setState({ kind: 'plan', plan: await api.getPreviousRelease() });
+    } catch (err) {
+      setState({ kind: 'error', text: errorText(err) });
+    }
+  };
+  const reinstall = async (previous) => {
+    const ok = await askConfirm(
+      `Reinstall LocalBooks ${previous.version}? Your company file is backed up first. LocalBooks ${previous.version} is downloaded from its GitHub release, checked against LocalBooks’ signing key, and installed; restart to use it. To come back to this version later, check for updates.`,
+      { confirmLabel: 'Back up and reinstall' },
+    );
+    if (!ok) return;
+    setState({ kind: 'installing', previous });
+    try {
+      setState({ kind: 'done', text: await api.reinstallPreviousRelease() });
+    } catch (err) {
+      setState({ kind: 'error', text: errorText(err) });
+    }
+  };
+  const plan = state.kind === 'plan' ? state.plan : null;
+  return (
+    <div className="rounded-xs border border-qb-border p-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <strong>Go back to the previous version</strong>
+        <span className="text-qb-ink-muted">If this version has a problem, reinstall the one before it.</span>
+        <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row" onClick={look} disabled={state.kind === 'looking' || state.kind === 'installing'}>
+          {state.kind === 'looking' ? 'Looking…' : 'Find the previous version'}
+        </button>
+      </div>
+      {plan && !plan.previous && <p className="mt-1 text-qb-ink-muted">There is no earlier release than {plan.currentVersion}.</p>}
+      {plan?.previous && plan.blocked && <Notice kind="error" text={plan.blocked} />}
+      {plan?.previous && !plan.blocked && (
+        <div className="mt-1 flex items-center gap-2">
+          <span>
+            The previous version is <strong>LocalBooks {plan.previous.version}</strong>
+            {plan.previous.publishedAt ? `, released ${plan.previous.publishedAt.slice(0, 10)}` : ''}. It can open this company file.
+          </span>
+          <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" onClick={() => reinstall(plan.previous)}>
+            Back up and reinstall…
+          </button>
+        </div>
+      )}
+      {state.kind === 'installing' && <p className="mt-1 text-qb-ink-muted">Backing up and installing LocalBooks {state.previous.version}…</p>}
+      {state.kind === 'done' && (
+        <div className="mt-1 flex items-center gap-2">
+          <Notice kind="success" text={state.text} />
+          <button type="button" className="qb-btn qb-btn-primary h-row" onClick={() => relaunch()}>
+            Restart now
+          </button>
+        </div>
+      )}
+      {state.kind === 'error' && <Notice kind="error" text={state.text} onDismiss={() => setState({ kind: 'idle' })} />}
+    </div>
   );
 }

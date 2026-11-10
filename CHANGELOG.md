@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Go back to the previous version.** Help › Reinstall Previous Version… backs up your books and
+  reinstalls the release before this one through the signed updater. If that version couldn't open
+  your company file, it says so and leaves the version as it is.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one
