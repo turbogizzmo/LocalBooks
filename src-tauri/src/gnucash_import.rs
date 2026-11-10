@@ -713,7 +713,7 @@ impl Parties {
 
 /// A form line for a posted split, one unit at its amount.
 fn split_line(l: &SourceLine) -> DocumentLine {
-    DocumentLine { item_id: None, description: l.memo.clone(), quantity_e4: 10_000, rate_cents: l.cents.abs(), cents: l.cents, account_id: l.account_id, class: None }
+    DocumentLine { item_id: None, description: l.memo.clone(), quantity_e4: 10_000, rate_cents: l.cents.abs(), cents: l.cents, account_id: l.account_id, class: None, subtotal: false }
 }
 
 /// The form lines of an invoice or bill: its entries when they add up, per account, to what the
@@ -758,7 +758,7 @@ fn form_lines(cx: &Context, st: &SourceTransaction, invoice: &Invoice) -> Vec<Do
             _ => (10_000, amount.abs()),
         };
         let description = e.description.as_deref().map(str::trim).filter(|d| !d.is_empty()).map(str::to_string);
-        lines.push(DocumentLine { item_id: None, description, quantity_e4, rate_cents, cents, account_id, class: None });
+        lines.push(DocumentLine { item_id: None, description, quantity_e4, rate_cents, cents, account_id, class: None, subtotal: false });
     }
     if lines.is_empty() || covered.iter().any(|(a, c)| by_account.get(a) != Some(c)) {
         return from_splits();

@@ -86,8 +86,8 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
         number: Some("501".into()),
         due_date: "2024-02-09".parse().ok(),
         lines: vec![
-            DocumentLine { item_id: Some(200), description: None, quantity_e4: 20_000, rate_cents: 5_000, cents: 10_000, account_id: 6, class: None },
-            DocumentLine { item_id: None, description: Some("Sales tax".into()), quantity_e4: 10_000, rate_cents: 1_000, cents: 1_000, account_id: 8, class: None },
+            DocumentLine { item_id: Some(200), description: None, quantity_e4: 20_000, rate_cents: 5_000, cents: 10_000, account_id: 6, class: None, subtotal: false },
+            DocumentLine { item_id: None, description: Some("Sales tax".into()), quantity_e4: 10_000, rate_cents: 1_000, cents: 1_000, account_id: 8, class: None, subtotal: false },
         ],
         sales: Default::default(),
     };
@@ -149,6 +149,7 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
             taxable: true,
             active: true,
             custom_fields: Vec::new(),
+            percent_ppm: None,
         }],
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
@@ -224,7 +225,7 @@ async fn a_deposit_split_between_banks_still_banks_its_payments() {
                 customer_id: 100,
                 number: Some("7".into()),
                 due_date: None,
-                lines: vec![DocumentLine { item_id: None, description: Some("Work".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None }],
+                lines: vec![DocumentLine { item_id: None, description: Some("Work".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None, subtotal: false }],
                 sales: Default::default(),
             },
         ),
@@ -300,7 +301,7 @@ async fn a_deposit_into_a_non_bank_account_clears_its_payments_as_a_transfer() {
                 customer_id: 100,
                 number: Some("7".into()),
                 due_date: None,
-                lines: vec![DocumentLine { item_id: None, description: Some("Work".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None }],
+                lines: vec![DocumentLine { item_id: None, description: Some("Work".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None, subtotal: false }],
                 sales: Default::default(),
             },
         ),
@@ -399,7 +400,7 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
                     vendor_id: 300,
                     number: Some("B-7".into()),
                     due_date: "2024-03-10".parse().ok(),
-                    lines: vec![DocumentLine { item_id: None, description: Some("Paper".into()), quantity_e4: 10_000, rate_cents: 5_000, cents: -5_000, account_id: 10, class: None }],
+                    lines: vec![DocumentLine { item_id: None, description: Some("Paper".into()), quantity_e4: 10_000, rate_cents: 5_000, cents: -5_000, account_id: 10, class: None, subtotal: false }],
                 },
             ),
             doc(32, "Check", "2024-02-12", &[(1, 2_500), (12, -2_500)], expense(Some("1001"))),
@@ -473,14 +474,14 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
 async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
     use crate::qbw_documents::{DocumentLine, SourceDocument};
     let pool = test_pool().await;
-    let line = |item_id, cents, account_id| DocumentLine { item_id, description: None, quantity_e4: 30_000, rate_cents: 1_000, cents, account_id, class: None };
+    let line = |item_id, cents, account_id| DocumentLine { item_id, description: None, quantity_e4: 30_000, rate_cents: 1_000, cents, account_id, class: None, subtotal: false };
     let estimate = |customer_id| SourceDocument::Estimate {
         customer_id,
         date: "2024-04-01".parse().unwrap(),
         number: Some("77".into()),
         expires: "2024-05-01".parse().ok(),
         memo: Some("Spring work".into()),
-        lines: vec![line(Some(200), 3_000, 6), DocumentLine { item_id: None, description: Some("Tax".into()), quantity_e4: 10_000, rate_cents: 240, cents: 240, account_id: 8, class: None }],
+        lines: vec![line(Some(200), 3_000, 6), DocumentLine { item_id: None, description: Some("Tax".into()), quantity_e4: 10_000, rate_cents: 240, cents: 240, account_id: 8, class: None, subtotal: false }],
         sales: Default::default(),
     };
     let lineless = |id, kind, document: SourceDocument| SourceTransaction { kind, document: Some(document), ..txn(id, "2024-04-01", &[]) };
@@ -543,6 +544,7 @@ async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
             taxable: true,
             active: true,
             custom_fields: Vec::new(),
+            percent_ppm: None,
         }],
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
@@ -823,6 +825,7 @@ async fn lists_are_matched_by_name_or_created_with_their_details() {
         taxable: false,
         active: true,
         custom_fields: Vec::new(),
+        percent_ppm: None,
     };
     books.accounts.push(account(6, "Consulting Income", "INCOME", None));
     books.transactions.push(txn(14, "2023-03-05", &[(4, -9_000), (6, 9_000)]));
@@ -995,6 +998,116 @@ async fn a_lists_only_file_adds_its_lists_once_and_reverses() {
     discard_batch(&pool, batch).await.unwrap();
 }
 
+/// A file's discount item comes in as a LocalBooks discount item (with its percent), and an
+/// invoice that used it after a subtotal comes in with that subtotal and a discount line, not a
+/// document discount. Subtotal items are form lines, not items.
+#[tokio::test]
+async fn discount_and_subtotal_items_become_form_lines() {
+    use crate::qbw_documents::{DocumentLine, SourceDocument};
+    let pool = test_pool().await;
+    let line = |item_id: i64, cents: i64, account_id: i64| DocumentLine {
+        item_id: Some(item_id),
+        description: None,
+        quantity_e4: 10_000,
+        rate_cents: cents.abs(),
+        cents,
+        account_id,
+        class: None,
+        subtotal: false,
+    };
+    let item = |id: i64, name: &str, kind: &'static str, account: i64, percent_ppm: Option<i64>| SourceItem {
+        id,
+        name: name.into(),
+        description: None,
+        rate_cents: if percent_ppm.is_some() { 0 } else { 10_000 },
+        income_account_id: Some(account),
+        kind,
+        taxable: false,
+        active: true,
+        custom_fields: Vec::new(),
+        percent_ppm,
+    };
+    let mut l = ledger();
+    l.accounts.extend([account(6, "Design Income", "INCOME", None), account(11, "Discounts Given", "INCOME", None)]);
+    l.unbalanced.clear();
+    l.unreadable.clear();
+    l.items = vec![item(200, "Design", "Service", 6, None), item(301, "Loyal Customer", "Discount", 11, Some(100_000))];
+    l.customers = vec![SourceParty {
+        id: 100,
+        name: "Hillside Builders".into(),
+        parent_id: None,
+        company_name: None,
+        email: None,
+        phone: None,
+        address: None,
+        terms_days: None,
+        tax_id: None,
+        is_1099: false,
+        active: true,
+        balance_cents: None,
+        notes: None,
+        sales_rep: None,
+        custom_fields: Vec::new(),
+    }];
+    // Design 100.00, a subtotal, then 10% off it: receivable 90.00.
+    let subtotal = DocumentLine { subtotal: true, quantity_e4: 0, rate_cents: 0, account_id: 0, ..line(300, 0, 0) };
+    l.transactions = vec![SourceTransaction {
+        kind: "Invoice",
+        document: Some(SourceDocument::Invoice {
+            customer_id: 100,
+            number: Some("12".into()),
+            due_date: None,
+            lines: vec![line(200, 10_000, 6), subtotal.clone(), line(301, -1_000, 11)],
+            sales: Default::default(),
+        }),
+        ..txn(50, "2024-04-01", &[(4, -9_000), (6, 10_000), (11, -1_000)])
+    }, SourceTransaction {
+        kind: "Sales receipt",
+        document: Some(SourceDocument::SalesReceipt {
+            customer_id: Some(100),
+            number: Some("13".into()),
+            method: "CASH".into(),
+            lines: vec![line(200, 10_000, 6), subtotal, line(301, -1_000, 11)],
+            sales: Default::default(),
+        }),
+        ..txn(51, "2024-04-02", &[(1, -9_000), (6, 10_000), (11, -1_000)])
+    }];
+    let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &l).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    let full = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().full.unwrap();
+    assert_eq!((full.invoices, full.sales_receipts, full.fell_back), (1, 1, 0), "{full:?}");
+
+    let (item_type, percent): (String, Option<i64>) =
+        sqlx::query_as("SELECT item_type, percent_ppm FROM products_services WHERE name = 'Loyal Customer'").fetch_one(&pool).await.unwrap();
+    assert_eq!((item_type.as_str(), percent), ("DISCOUNT", Some(100_000)));
+    let (total, discount): (i64, i64) = sqlx::query_as("SELECT total_cents, discount_cents FROM invoices").fetch_one(&pool).await.unwrap();
+    assert_eq!((total, discount), (9_000, 0), "the discount is a line, not the document discount");
+    let lines: Vec<(i64, String, i64)> =
+        sqlx::query_as("SELECT line_number, kind, amount_cents FROM invoice_form_lines ORDER BY line_number").fetch_all(&pool).await.unwrap();
+    assert_eq!(lines, [(2, "SUBTOTAL".to_string(), 10_000), (3, "DISCOUNT".to_string(), -1_000)]);
+    let item_line: i64 = sqlx::query_scalar("SELECT line_number FROM invoice_items").fetch_one(&pool).await.unwrap();
+    assert_eq!(item_line, 1);
+    let receipt: Vec<(i64, String, i64)> =
+        sqlx::query_as("SELECT line_number, kind, amount_cents FROM sales_receipt_form_lines ORDER BY line_number").fetch_all(&pool).await.unwrap();
+    assert_eq!(receipt, lines);
+    let (total, discount): (i64, i64) = sqlx::query_as("SELECT total_cents, discount_cents FROM sales_receipts").fetch_one(&pool).await.unwrap();
+    assert_eq!((total, discount), (9_000, 0));
+}
+
+/// Amounts the file stores with a fraction of a cent are left out, and the summary lists each one.
+#[tokio::test]
+async fn the_summary_lists_amounts_that_are_not_whole_cents() {
+    let pool = crate::db::test_pool().await;
+    let mut odd = ledger();
+    odd.quality.fractional_amounts = vec!["Invoice line, transaction 812: 10.005".into(), "Stored balance of account 3: 0.125".into()];
+    let batch = stage(&pool, std::path::Path::new("/books/Odd.qbw"), 1, &odd).await.unwrap();
+    let summary = batch_summary(&pool, batch).await.unwrap();
+    assert_eq!(summary.fractional_amounts, odd.quality.fractional_amounts);
+
+    let clean = stage(&pool, std::path::Path::new("/books/Clean.qbw"), 1, &ledger()).await.unwrap();
+    assert!(batch_summary(&pool, clean).await.unwrap().fractional_amounts.is_empty());
+}
+
 /// Forms that sold inventory carry its cost (cost of goods sold debit, inventory credit) in the
 /// same transaction. A full import still makes them an invoice and a sales receipt, and their
 /// entries move the cost.
@@ -1003,7 +1116,7 @@ async fn sold_inventory_cost_stays_with_its_invoice_and_sales_receipt() {
     use crate::qbw_documents::{DocumentLine, SourceDocument};
     let pool = test_pool().await;
     let doc = |id: i64, kind: &'static str, lines: &[(i64, i64)], document: SourceDocument| SourceTransaction { kind, document: Some(document), ..txn(id, "2024-03-01", lines) };
-    let sold = vec![DocumentLine { item_id: None, description: Some("Tile".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None }];
+    let sold = vec![DocumentLine { item_id: None, description: Some("Tile".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None, subtotal: false }];
     let mut l = ledger();
     l.accounts.extend([
         account(6, "Materials Income", "INCOME", None),
@@ -1054,20 +1167,6 @@ async fn sold_inventory_cost_stays_with_its_invoice_and_sales_receipt() {
     assert_eq!(balance(&pool, mapped("Cost of Goods Sold")).await, 11_000);
     assert_eq!(balance(&pool, mapped("Inventory Asset")).await, -11_000);
     assert_eq!(balance(&pool, mapped("Riverside Bank")).await, 9_000, "the receipt's money went to the bank");
-}
-
-/// Amounts the file stores with a fraction of a cent are left out, and the summary lists each one.
-#[tokio::test]
-async fn the_summary_lists_amounts_that_are_not_whole_cents() {
-    let pool = crate::db::test_pool().await;
-    let mut odd = ledger();
-    odd.quality.fractional_amounts = vec!["Invoice line, transaction 812: 10.005".into(), "Stored balance of account 3: 0.125".into()];
-    let batch = stage(&pool, std::path::Path::new("/books/Odd.qbw"), 1, &odd).await.unwrap();
-    let summary = batch_summary(&pool, batch).await.unwrap();
-    assert_eq!(summary.fractional_amounts, odd.quality.fractional_amounts);
-
-    let clean = stage(&pool, std::path::Path::new("/books/Clean.qbw"), 1, &ledger()).await.unwrap();
-    assert!(batch_summary(&pool, clean).await.unwrap().fractional_amounts.is_empty());
 }
 
 /// An account the file says holds more than its transactions add up to (here a transaction that

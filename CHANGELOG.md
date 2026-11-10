@@ -19,6 +19,11 @@ people using LocalBooks.
   Charge item or straight to an account. A purchase order's discounts and charges print on it and
   carry over to its bill. Other Charge and Discount items can have their own expense account for
   these forms.
+- **Discounts come in as discount lines from QuickBooks Desktop files.** A company file's
+  discount items become LocalBooks discount items (a percent one keeps its percent), and a full
+  import keeps an invoice's or sales receipt's subtotal and discount lines where they were, instead
+  of folding the discount into one amount off the whole form. Subtotal, group, payment and sales
+  tax items are no longer added to your item list as things to sell.
 - **Payroll and cost of goods sold come in from QuickBooks Desktop files.** Importing a company
   file now brings its paychecks and payroll liability payments, so payroll expense and liability
   accounts match QuickBooks. Invoices and sales receipts that sold inventory also bring the cost

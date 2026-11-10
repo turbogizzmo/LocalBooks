@@ -84,7 +84,10 @@ LocalBooks reads the file like this:
 - **Customers and jobs, vendors and items.** Jobs become sub-customers (`Customer:Job`).
   Customers and vendors keep their company name, address, phone, email, notes and payment terms;
   vendors keep their tax ID and 1099 flag. Service, inventory, non-inventory and other charge
-  items come in with their price and income account. Employees and other names appear on their
+  items come in with their price and income account, and discount items as discount items (a
+  percent discount keeps its percent). Subtotal, group, payment and sales tax items aren't added
+  to the item list; in a full import an invoice's or sales receipt's subtotal and discount lines
+  stay where they were on the form. Employees and other names appear on their
   transactions but aren't added to a list, and classes aren't imported.
 - **Transactions** come in by type: invoices, sales receipts, credit memos, payments, deposits,
   bills, vendor credits, bill payments, checks, card charges, transfers, journal entries,

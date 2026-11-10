@@ -131,6 +131,15 @@ impl Value {
         }
     }
 
+    /// A percentage (10 for 10%) in parts per million, ignoring its sign, when it is exact and
+    /// between 0.0001% and 100%.
+    pub fn as_percent_ppm(&self) -> Option<i64> {
+        match self {
+            Value::Numeric(n) => n.scaled(2).filter(|&(_, exact)| exact).map(|(ppm, _)| ppm.abs()).filter(|ppm| (1..=1_000_000).contains(ppm)),
+            _ => None,
+        }
+    }
+
     /// A double that is not a whole number of cents, as the file stores it (`as_cents` refuses
     /// these; the import lists them rather than drop them silently).
     #[allow(clippy::float_arithmetic, reason = "only tells whether a stored double is whole cents; no amount is computed from it")]
