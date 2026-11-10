@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Discounts come in as discount lines from QuickBooks Desktop files.** A company file's
+  discount items become LocalBooks discount items (a percent one keeps its percent), and a full
+  import keeps an invoice's or sales receipt's subtotal and discount lines where they were, instead
+  of folding the discount into one amount off the whole form. Subtotal, group, payment and sales
+  tax items are no longer added to your item list as things to sell.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

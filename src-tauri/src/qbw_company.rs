@@ -194,6 +194,8 @@ pub struct SourceItem {
     pub active: bool,
     /// Custom fields with a value, as (label, value).
     pub custom_fields: Vec<(String, String)>,
+    /// A percent discount or charge, in parts per million of the line it applies to.
+    pub percent_ppm: Option<i64>,
 }
 
 /// The file's sales rep and shipping method lists, by name, with whether each is active. They are
@@ -657,6 +659,27 @@ fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<S
     out
 }
 
+/// An item's kind by the file's item type code, or `None` for the kinds that are not things
+/// LocalBooks sells: subtotals (a form line, not an item), groups, payments, and sales tax items
+/// and groups (sales tax rates come in with the tax settings).
+pub(crate) fn item_kind(code: Option<i64>) -> Option<&'static str> {
+    match code {
+        Some(0) => Some("Service"),
+        Some(1 | 2) => Some("Inventory part"),
+        Some(3) => Some("Non-inventory part"),
+        Some(4) => Some("Fixed asset"),
+        Some(5) => Some("Other charge"),
+        Some(8) => Some("Discount"),
+        Some(6 | 7 | 9 | 10 | 11) => None,
+        _ => Some("Item"),
+    }
+}
+
+/// Ids of the file's subtotal items: a form line that sums the lines above it.
+pub(crate) fn subtotal_items(pages: &[LogicalPage], catalog: &Catalog) -> HashSet<i64> {
+    rows_of(pages, catalog, "abmc_item_user").iter().filter(|r| r.get("item_type").as_int() == Some(6)).filter_map(|r| r.get("item_id").as_int()).collect()
+}
+
 fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
     let taxable_codes: HashSet<i64> = rows_of(pages, catalog, "abmc_sales_tax_code")
         .iter()
@@ -672,19 +695,15 @@ fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
         .iter()
         .filter_map(|r| {
             let id = r.get("item_id").as_int()?;
+            let kind = item_kind(r.get("item_type").as_int())?;
             Some(SourceItem {
                 id,
                 name: full.get(&id)?.clone(),
                 description: text(r, "description"),
                 rate_cents: r.get("sales_price_amt").as_cents().map(i64::abs).unwrap_or(0),
                 income_account_id: r.get("post_account_id").as_int(),
-                kind: match r.get("item_type").as_int() {
-                    Some(0) => "Service",
-                    Some(1) => "Inventory part",
-                    Some(3) => "Non-inventory part",
-                    Some(4) => "Other charge",
-                    _ => "Item",
-                },
+                percent_ppm: if matches!(kind, "Discount" | "Other charge") { r.get("sales_price_pct").as_percent_ppm() } else { None },
+                kind,
                 taxable: r.get("sales_tax_code_id").as_int().is_some_and(|c| taxable_codes.contains(&c)),
                 active: r.get("is_hidden_bool").as_int() != Some(1) && r.get("is_deleted_bool").as_int() != Some(1),
                 custom_fields: r.get("item_abm_id").as_text().and_then(|a| custom.get(&a).cloned()).unwrap_or_default(),

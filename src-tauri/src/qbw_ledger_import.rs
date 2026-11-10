@@ -161,8 +161,8 @@ pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i6
     for item in &ledger.items {
         sqlx::query(
             "INSERT INTO ledger_import_items
-                (batch_id, source_id, name, description, rate_cents, income_source_account_id, item_kind, is_taxable, is_active, custom_fields)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                (batch_id, source_id, name, description, rate_cents, income_source_account_id, item_kind, is_taxable, is_active, custom_fields, percent_ppm)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )
         .bind(batch_id)
         .bind(item.id)
@@ -174,6 +174,7 @@ pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i6
         .bind(item.taxable as i64)
         .bind(item.active as i64)
         .bind(custom_json(&item.custom_fields))
+        .bind(item.percent_ppm)
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;
@@ -1005,6 +1006,8 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
         is_taxable: i64,
         is_active: i64,
         custom_fields: Option<String>,
+        item_kind: String,
+        percent_ppm: Option<i64>,
     }
     // LocalBooks items post to income accounts only; the desktop program also allows expense and
     // cost accounts (for example a "Parts" item). Those items use the fallback income account,
@@ -1013,7 +1016,7 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
         "SELECT i.source_id, i.name, i.description, i.rate_cents,
                 CASE WHEN t.classification = 'INCOME' THEN a.account_id END AS mapped_account,
                 CASE WHEN a.account_id IS NULL OR t.classification <> 'INCOME' THEN a.full_name END AS other_account,
-                i.is_taxable, i.is_active, i.custom_fields
+                i.is_taxable, i.is_active, i.custom_fields, i.item_kind, i.percent_ppm
          FROM ledger_import_items i
          LEFT JOIN ledger_import_accounts a ON a.batch_id = i.batch_id AND a.source_id = i.income_source_account_id
          LEFT JOIN chart_of_accounts c ON c.id = a.account_id
@@ -1055,16 +1058,25 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
                 if item.mapped_account.is_none() {
                     result.items_on_fallback_account += 1;
                 }
+                // Discounts and other charges keep their type, and a percent one its percent.
+                let item_type = match item.item_kind.as_str() {
+                    "Discount" => "DISCOUNT",
+                    "Other charge" => "OTHER_CHARGE",
+                    _ => "ITEM",
+                };
+                let percent = item.percent_ppm.filter(|_| item_type != "ITEM");
                 let inserted = sqlx::query_scalar(
-                    "INSERT INTO products_services (name, description, rate_cents, income_account_id, is_taxable, is_active)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
+                    "INSERT INTO products_services (name, description, rate_cents, income_account_id, is_taxable, is_active, item_type, percent_ppm)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id",
                 )
                 .bind(&item.name)
                 .bind(&description)
-                .bind(item.rate_cents.clamp(0, crate::ledger::MAX_LINE_CENTS))
+                .bind(if percent.is_some() { 0 } else { item.rate_cents.clamp(0, crate::ledger::MAX_LINE_CENTS) })
                 .bind(account)
                 .bind(item.is_taxable)
                 .bind(item.is_active)
+                .bind(item_type)
+                .bind(percent)
                 .fetch_one(&mut *tx)
                 .await;
                 let inserted = match inserted {
@@ -1134,7 +1146,11 @@ async fn import_price_levels(tx: &mut sqlx::SqliteConnection, batch_id: i64, res
             None => {
                 let mut level_items = Vec::new();
                 for item in serde_json::from_str::<Vec<LevelItem>>(&items).unwrap_or_default() {
-                    let product: Option<i64> = sqlx::query_scalar("SELECT product_id FROM ledger_import_items WHERE batch_id = ?1 AND source_id = ?2")
+                    let product: Option<i64> = sqlx::query_scalar(
+                        // Price levels do not apply to discounts.
+                        "SELECT i.product_id FROM ledger_import_items i JOIN products_services p ON p.id = i.product_id
+                         WHERE i.batch_id = ?1 AND i.source_id = ?2 AND p.item_type <> 'DISCOUNT'",
+                    )
                         .bind(batch_id)
                         .bind(item.product_id)
                         .fetch_optional(&mut *tx)

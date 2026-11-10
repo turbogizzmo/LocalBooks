@@ -131,6 +131,15 @@ impl Value {
         }
     }
 
+    /// A percentage (10 for 10%) in parts per million, ignoring its sign, when it is exact and
+    /// between 0.0001% and 100%.
+    pub fn as_percent_ppm(&self) -> Option<i64> {
+        match self {
+            Value::Numeric(n) => n.scaled(2).filter(|&(_, exact)| exact).map(|(ppm, _)| ppm.abs()).filter(|ppm| (1..=1_000_000).contains(ppm)),
+            _ => None,
+        }
+    }
+
     #[allow(clippy::float_arithmetic, reason = "some tables store amounts as doubles; only whole cents are accepted")]
     pub fn as_cents(&self) -> Option<i64> {
         match self {
