@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { creditLeftFor, overrideProblem, withOverrides } from './payBillsAdjust.js';
+import { creditLeftFor, offeredDiscount, overrideProblem, withOverrides } from './payBillsAdjust.js';
 
 const plan = {
   discounts: [{ billId: 1, amountCents: 200 }, { billId: 2, amountCents: 100 }],
@@ -33,4 +33,12 @@ test('amounts are checked against the offer, the credit left and the balance', (
   assert.match(overrideProblem({ discountCents: null }, facts), /0.00 or more/);
   assert.match(overrideProblem({ credits: [{ creditId: 9, amountCents: 600 }] }, facts), /more of a credit/);
   assert.match(overrideProblem({ discountCents: 200, credits: [{ creditId: 9, amountCents: 500 }, { creditId: 8, amountCents: 400 }] }, facts), /more than the bill/);
+});
+
+test('a discount is offered through its last day, on a bill nothing is paid on yet', () => {
+  const bill = { discountUntil: '2026-04-10', earlyDiscountCents: 200, amountPaidCents: 0 };
+  assert.equal(offeredDiscount(bill, '2026-04-10'), 200);
+  assert.equal(offeredDiscount(bill, '2026-04-11'), 0);
+  assert.equal(offeredDiscount({ ...bill, amountPaidCents: 100 }, '2026-04-01'), 0);
+  assert.equal(offeredDiscount({ ...bill, discountUntil: null }, '2026-04-01'), 0);
 });

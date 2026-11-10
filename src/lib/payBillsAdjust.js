@@ -47,3 +47,11 @@ export function overrideProblem({ discountCents, credits }, { balanceCents, offe
   if (total > balanceCents) return 'The discount and credits come to more than the bill’s balance.';
   return null;
 }
+
+/**
+ * The early-payment discount `bill` offers when paid on `date` (an ISO date): its discount through
+ * the last day, on a bill nothing has been paid on yet, else 0 (the backend's `offered_discount`).
+ */
+export function offeredDiscount(bill, date) {
+  return bill.discountUntil && date <= bill.discountUntil && (bill.amountPaidCents ?? 0) === 0 ? (bill.earlyDiscountCents ?? 0) : 0;
+}

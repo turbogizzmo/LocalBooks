@@ -1,5 +1,5 @@
 import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
-import { creditLeftFor, overrideProblem, withOverrides } from '../lib/payBillsAdjust.js';
+import { creditLeftFor, offeredDiscount, overrideProblem, withOverrides } from '../lib/payBillsAdjust.js';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
@@ -386,7 +386,7 @@ function AdjustBill({ bill, what, date, current, allCredits, onCancel, onSet }) 
   // Only Set Credits lists the vendor's credits; Set Discount doesn't ask for them.
   const vendorCredits = useLedgerQuery(() => (what === 'credits' ? api.listVendorCredits() : Promise.resolve([]))).data ?? [];
   const open = vendorCredits.filter((c) => c.vendorId === bill.vendorId && !c.isVoided && (c.remainingCents > 0 || current.credits.some((u) => u.creditId === c.id)));
-  const offered = bill.discountUntil && date <= bill.discountUntil && (bill.amountPaidCents ?? 0) === 0 ? bill.earlyDiscountCents ?? 0 : 0;
+  const offered = offeredDiscount(bill, date);
   const [discount, setDiscount] = useState(centsToInput(current.discountCents));
   const [amounts, setAmounts] = useState(() => Object.fromEntries(current.credits.map((c) => [c.creditId, centsToInput(c.amountCents)])));
   const parsedCredits = open.map((c) => ({ creditId: c.id, amountCents: (amounts[c.id] ?? '').trim() === '' ? 0 : parseMoneyToCents(amounts[c.id]) }));
@@ -624,6 +624,9 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
   const pay = async () => {
     if (picked.length === 0) return setError('Select at least one bill.');
     if (bad.length > 0) return setError('Each payment must be above zero (unless credits cover the bill) and, with its credits, no more than the open balance.');
+    // A discount set by hand, checked again against the payment date as it is now.
+    const stale = picked.find((b) => (overrides[b.id]?.discountCents ?? 0) > offeredDiscount(b, date));
+    if (stale) return setError(`The discount set on ${stale.vendorName}${stale.billNumber ? ` bill #${stale.billNumber}` : '’s bill'} is more than its terms offer when paid on this date. Set its discount again.`);
     if (ach) return payByAch();
     if (checks && !printLater.on && firstCheck && !numbered && payees.length > 1) return setError('To number a check for each vendor, the check number must be digits only.');
     setBusy(true);
