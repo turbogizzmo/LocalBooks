@@ -16,14 +16,14 @@ Each platform's job summary has one section per step.
 | **Artifacts** | Every installer and update bundle for the platform verifies against the updater public key in the release's `tauri.conf.json`, and that key is the same as the previous release's (installed copies check updates against their own key). `latest.json` has the release's version and an entry for each platform. Each of its URLs downloads, the way the updater fetches it, a file identical to a release asset with a valid signature. |
 | **Code signature** (macOS) | Report only, never fails the job. It shows `codesign --verify` of the app from the `.dmg` and its signature details. Builds are signed ad hoc for now (`Signature=adhoc`, no Team ID), which verifies but still makes Gatekeeper warn. A Developer ID signature would show a Team ID here. |
 | **Seed** | The **previous** release, built from its tag, runs its test-company seeder (`seed_test_companies` in `src-tauri/src/test_companies.rs`). This gives `Edge Cases`, `No Users` and `Five Years` as that version wrote them. Their balances are recorded. |
-| **Upgrade with `--check-file`** | The new release's app opens a copy of each company headlessly (see below). The schema reaches the release's newest step. A pre-upgrade copy is saved and opens at the old schema with the same entries. File Dentist reports no failure, and every account's balance and the entry and line counts are unchanged. |
+| **Upgrade with `--check-file`** | The new release's app opens a copy of each company headlessly (see below). The schema reaches the release's newest step. A pre-upgrade copy is saved and opens at the old schema with the same entries. File Check & Repair reports no failure, and every account's balance and the entry and line counts are unchanged. |
 | **Launch smoke** | The installed app starts on a copy of each seeded company and is still running after 30 s. It leaves no crash report, panic or `startup-error.log`, and it quits. The file it opened is upgraded, has a pre-upgrade copy in the app's backups folder, passes `integrity_check` and `foreign_key_check`, and has unchanged balances. |
 
 The seeded and upgraded company files, the balances and each `--check-file` result are kept as a
 workflow artifact (`release-check-<platform>`) for 7 days.
 
 Releases from before `--check-file` existed (v0.6.0 and earlier) skip the Upgrade step, with a
-notice. Their upgrade is still checked by the launch, without File Dentist.
+notice. Their upgrade is still checked by the launch, without File Check & Repair.
 
 ## `--check-file` (internal)
 
@@ -34,11 +34,11 @@ LocalBooks --check-file <company file> [--backups-dir <folder>] [--output <resul
 ```
 
 It opens the file the way a launch with that file does: the restore checks, then the schema upgrade
-with its verified pre-upgrade copy. Then it runs File Dentist's check-up and prints the JSON result
+with its verified pre-upgrade copy. Then it runs the file check-up and prints the JSON result
 (`ok`, `schemaBefore`, `schemaAfter`, `preUpgradeBackup`, `checkup`, `problems`). No window opens,
 and it doesn't hand off to a running copy, take an automatic backup, start the MCP server or write
 audit-trail anchors to the keychain. The exit code is 0 when everything passes, 1 on any problem
-and 2 on bad arguments. A File Dentist `WARN` (only ever unused space) is not a problem.
+and 2 on bad arguments. A File Check & Repair `WARN` (only ever unused space) is not a problem.
 
 The pre-upgrade copy goes to `--backups-dir`. By default that's a `localbooks-check-backups` folder
 next to the company file, never the installed app's backups. On Windows the release build has no

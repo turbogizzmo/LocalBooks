@@ -739,6 +739,11 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
     if let Some(reason) = blocked {
         return Err(reason);
     }
+    // An item receipt (a JOURNAL entry) can't be voided while its bill stands; voiding one reopens
+    // its purchase order.
+    if source_type == "JOURNAL" {
+        crate::item_receipts::before_void(tx, journal_entry_id).await?;
+    }
     // Lines moved to another class: voiding this entry would reverse them into their original class
     // while the reclassifying entry still moves them, so that entry is voided first.
     let reclassified_by: Option<i64> = sqlx::query_scalar(

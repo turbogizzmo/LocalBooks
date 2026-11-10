@@ -598,6 +598,7 @@ const WRITE_LOCK_WAIT: Duration = Duration::from_secs(30);
 /// a connection that has the file to itself, so this also proves nothing else has it open. The
 /// next [`open_for`] switches a local file back to WAL.
 async fn leave_wal(path: &Path) -> Result<(), String> {
+    crate::wal_guard::check(path)?;
     let options = SqliteConnectOptions::new().filename(path).create_if_missing(false).busy_timeout(Duration::from_secs(5));
     let mut conn = sqlx::SqliteConnection::connect_with(&options).await.map_err(|e| format!("cannot open {}: {e}", path.display()))?;
     let mode: Result<String, _> = sqlx::query_scalar("PRAGMA journal_mode = DELETE").fetch_one(&mut conn).await;
@@ -785,6 +786,8 @@ pub async fn open(path: &Path) -> Result<SqlitePool, String> {
 /// time) and `backups` is given, a verified copy is saved there first, so an upgrade can always be
 /// undone by restoring it.
 async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) -> Result<SqlitePool, String> {
+    // Before SQLite reads it: a log that doesn't belong to the file is refused (RUSTSEC-2026-0459).
+    crate::wal_guard::check(path)?;
     // The diagnostics log names the file, never its contents.
     crate::diagnostics::log(&format!("opening company file {}", path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
     if let Some(dir) = path.parent() {
@@ -852,7 +855,7 @@ async fn prepare(pool: &SqlitePool, path: &Path, backups: Option<&Path>) -> Resu
 /// left behind (seen on Linux and Windows); one connection opened and closed on its own does it.
 /// Best effort: the data is safe either way, the next open replays the log.
 async fn checkpoint_closed(path: &Path) {
-    if !PathBuf::from(format!("{}-wal", path.display())).exists() {
+    if !crate::wal_guard::wal_path(path).exists() || crate::wal_guard::check(path).is_err() {
         return;
     }
     let options = SqliteConnectOptions::new().filename(path).busy_timeout(Duration::from_secs(5));

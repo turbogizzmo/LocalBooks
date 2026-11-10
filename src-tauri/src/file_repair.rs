@@ -1,4 +1,4 @@
-//! File Dentist: a check-up of the live company file, and a rebuild that repairs what can be
+//! File Check & Repair: a check-up of the live company file, and a rebuild that repairs what can be
 //! repaired safely.
 //!
 //! The check-up only reads. It runs SQLite's full `integrity_check` and `foreign_key_check`,
@@ -84,7 +84,7 @@ fn plural(n: usize, one: &str, many: &str) -> String {
 }
 
 fn err(e: sqlx::Error) -> String {
-    format!("DENTIST_QUERY: {e}")
+    format!("REPAIR_QUERY: {e}")
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -140,7 +140,7 @@ async fn reference_schema() -> Result<Vec<SchemaObject>, String> {
     let pool = SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|e| e.to_string())?;
     let built = match db::migrate(&pool).await {
         Ok(()) => schema_objects(&pool).await,
-        Err(e) => Err(format!("DENTIST_REFERENCE: {e}")),
+        Err(e) => Err(format!("REPAIR_REFERENCE: {e}")),
     };
     pool.close().await;
     built

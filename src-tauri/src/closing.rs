@@ -94,7 +94,9 @@ pub async fn check_open(tx: &mut Transaction<'_, Sqlite>, date: NaiveDate) -> Re
     if closed && !exception {
         return Err(CLOSED_MESSAGE.to_string());
     }
-    Ok(())
+    // An Accountant's Copy's dividing date (the client's side of it, or the copy's) holds for an
+    // External Accountant too: their pass is only past the closing date.
+    crate::accountants_copy::check_posting(tx, date).await
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]

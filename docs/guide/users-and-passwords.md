@@ -60,13 +60,15 @@ yourself off: another Admin has to.
 ## Sign in and sign out
 
 - The sign-in screen appears whenever a company file with users is opened.
-- Tick **Remember me on this Mac** to have this Mac open the company as you next time without asking.
-  Anyone who can use your Mac account could then open the books, so leave it off on a shared
-  computer. **Forget on This Mac** in **Settings › Users & Passwords** turns it off again.
+- Tick **Remember me on this computer** to have this computer open the company as you next time
+  without asking. Anyone who can use your account on this computer could then open the books, so
+  leave it off on a shared computer. **Forget on This Computer** in **Settings › Users & Passwords**
+  turns it off again. The password is kept in the Mac's Keychain or Windows Credential Manager (on
+  Linux, in a file only your account can read), never in the company file.
 - **Sign Out** is at the top of **Settings › Users & Passwords**. Your name at the top right of
   every screen leads there.
 - LocalBooks signs everyone out after **15 minutes** without typing or clicking in any of its
-  windows, including time the Mac was asleep. An Admin can change this under **Sign out when idle**
+  windows, including time the computer was asleep. An Admin can change this under **Sign out when idle**
   (or choose **Never**). Anything not yet saved is lost when it signs out.
 
 ## Forgot your password?
@@ -105,8 +107,12 @@ working.
 - Roles are enforced by LocalBooks. The rest of the company file is a regular database that another
   program could read or change; changes made outside LocalBooks show up in
   [Verify and correct the ledger](ledger-integrity.md).
-- For the whole file, turn on FileVault (System Settings › Privacy & Security) so the disk is
-  encrypted too.
+- Vendor tax IDs and bank details are the only values encrypted inside the company file. The rest of
+  the file, its local backups and its attachments are readable by anyone who has them, so turn on
+  full-disk encryption on every computer that holds them: FileVault on a Mac (System Settings ›
+  Privacy & Security), BitLocker or Device Encryption on Windows. Offsite backups are encrypted as a
+  whole.
+- [SECURITY.md](https://github.com/turbogizzmo/LocalBooks/blob/main/SECURITY.md) lists every security claim with the code and test behind it.
 
 ### Copies outside the company file
 

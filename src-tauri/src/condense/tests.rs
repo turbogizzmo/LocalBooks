@@ -166,7 +166,7 @@ async fn condensing_harbor_lane_keeps_every_balance_and_open_item() {
     let summaries = count(&pool, "SELECT COUNT(*) FROM journal_entries WHERE memo LIKE 'Condensed: %' AND entry_date <= '2025-03-31'").await;
     assert_eq!(summaries, preview.summary_entries);
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'CONDENSE'").await, 1);
-    let report = file_dentist::checkup(&pool, 0).await.unwrap();
+    let report = file_repair::checkup(&pool, 0).await.unwrap();
     assert!(report.checks.iter().all(|c| c.status != CheckStatus::Fail), "{:?}", report.checks);
     // New entries keep working after the condense, in the open period.
     let (checking, services) = (account(&pool, "1010").await, account(&pool, "4100").await);

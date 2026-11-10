@@ -18,7 +18,7 @@ fn clean(text: Option<&str>) -> Option<&str> {
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct UndepositedItem {
-    /// `PAYMENT` (invoice payment) or `SALES_RECEIPT`
+    /// `PAYMENT` (invoice payment), `SALES_RECEIPT` or `CREDIT` (an unapplied payment)
     pub kind: String,
     pub id: i64,
     pub date: String,
@@ -34,7 +34,7 @@ pub struct UndepositedItem {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DepositItemRef {
-    /// `PAYMENT` or `SALES_RECEIPT`
+    /// `PAYMENT`, `SALES_RECEIPT` or `CREDIT` (an unapplied payment)
     pub kind: String,
     pub id: i64,
 }
@@ -66,6 +66,21 @@ pub struct DepositInput {
     /// Part of the deposit kept as cash rather than banked.
     #[serde(default)]
     pub cash_back: Option<CashBack>,
+    /// Amounts taken out before the money reaches the bank (a processor's fees, refunds and
+    /// chargebacks on a payout): each a debit to its account, out of what the bank gets.
+    #[serde(default)]
+    pub deductions: Vec<DepositDeduction>,
+}
+
+/// A deduction from a deposit: `amount_cents` debited to `account_id`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DepositDeduction {
+    pub account_id: i64,
+    pub amount_cents: i64,
+    pub memo: Option<String>,
+    /// `FEE`, `REFUND`, `CHARGEBACK` or `OTHER`.
+    pub kind: String,
 }
 
 /// Cash back on a deposit: posted to `account_id` (petty cash, say), out of what the bank gets.
@@ -104,6 +119,15 @@ pub struct BankingActivity {
     pub is_voided: bool,
 }
 
+/// What a deposited payment line comes from.
+#[derive(Debug, Clone, Copy)]
+enum DepositSource {
+    Payment(i64),
+    Receipt(i64),
+    /// An unapplied payment (a customer credit with a payment account).
+    Credit(i64),
+}
+
 pub async fn list_undeposited(pool: &SqlitePool) -> Result<Vec<UndepositedItem>, String> {
     sqlx::query_as::<_, UndepositedItem>(
         "SELECT 'PAYMENT' AS kind, p.id AS id, p.payment_date AS date, i.customer_name, p.payment_method,
@@ -129,6 +153,16 @@ pub async fn list_undeposited(pool: &SqlitePool) -> Result<Vec<UndepositedItem>,
            AND NOT EXISTS (SELECT 1 FROM deposit_lines d WHERE d.sales_receipt_id = r.id AND d.is_voided = 0)
            AND NOT EXISTS (SELECT 1 FROM undeposited_fund_matches m WHERE m.sales_receipt_id = r.id AND m.is_voided = 0)
            AND NOT EXISTS (SELECT 1 FROM undeposited_transfers t WHERE t.sales_receipt_id = r.id AND t.is_voided = 0)
+         UNION ALL
+         SELECT 'CREDIT', m.id, m.credit_date, c.name, m.payment_method,
+                (SELECT name FROM payment_methods WHERE id = m.payment_method_id), m.payment_reference,
+                m.total_cents, m.payment_account_id
+         FROM credit_memos m
+         JOIN customers c ON c.id = m.customer_id
+         JOIN chart_of_accounts a ON a.id = m.payment_account_id
+         WHERE a.is_system = 1 AND a.account_type = 'OTHER_CURRENT_ASSET'
+           AND m.is_voided = 0 AND m.journal_entry_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM deposit_lines d WHERE d.credit_memo_id = m.id AND d.is_voided = 0)
          ORDER BY date, kind, id",
     )
     .fetch_all(pool)
@@ -154,8 +188,8 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
         return Err("DEP_EMPTY: select payments to deposit or add other funds".into());
     }
 
-    // Resolve the selected payments: (payment id, receipt id, undeposited account, amount, label).
-    let mut resolved: Vec<(Option<i64>, Option<i64>, i64, i64, String)> = Vec::with_capacity(input.items.len());
+    // Resolve the selected payments: (which document, undeposited account, amount, label).
+    let mut resolved: Vec<(DepositSource, i64, i64, String)> = Vec::with_capacity(input.items.len());
     for item in &input.items {
         let row: Option<(i64, i64, Option<String>)> = match item.kind.as_str() {
             "PAYMENT" => sqlx::query_as(
@@ -168,6 +202,12 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
                  FROM sales_receipts r LEFT JOIN customers c ON c.id = r.customer_id
                  WHERE r.id = ?1 AND r.is_voided = 0 AND r.journal_entry_id IS NOT NULL",
             ),
+            // An unapplied payment kept as the customer's credit (T24).
+            "CREDIT" => sqlx::query_as(
+                "SELECT m.payment_account_id, m.total_cents, c.name
+                 FROM credit_memos m JOIN customers c ON c.id = m.customer_id
+                 WHERE m.id = ?1 AND m.is_voided = 0 AND m.journal_entry_id IS NOT NULL AND m.payment_account_id IS NOT NULL",
+            ),
             other => return Err(format!("DEP_BAD_ITEM: unknown deposit item kind '{other}'")),
         }
         .bind(item.id)
@@ -176,12 +216,16 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
         .map_err(db_err)?;
         let (account, amount, customer) =
             row.ok_or_else(|| format!("DEP_ITEM_UNAVAILABLE: {} {} is not available to deposit", item.kind.to_lowercase(), item.id))?;
-        let (payment, receipt) = if item.kind == "PAYMENT" { (Some(item.id), None) } else { (None, Some(item.id)) };
-        resolved.push((payment, receipt, account, amount, customer.unwrap_or_else(|| "Customer payment".into())));
+        let source = match item.kind.as_str() {
+            "PAYMENT" => DepositSource::Payment(item.id),
+            "SALES_RECEIPT" => DepositSource::Receipt(item.id),
+            _ => DepositSource::Credit(item.id),
+        };
+        resolved.push((source, account, amount, customer.unwrap_or_else(|| "Customer payment".into())));
     }
 
     let mut total: i64 = 0;
-    let amounts = resolved.iter().map(|r| r.3).chain(input.other_lines.iter().map(|l| l.amount_cents));
+    let amounts = resolved.iter().map(|r| r.2).chain(input.other_lines.iter().map(|l| l.amount_cents));
     for (idx, amount) in amounts.enumerate() {
         if !(1..=MAX_LINE_CENTS).contains(&amount) {
             return Err(format!("DEP_BAD_AMOUNT: deposit line {} amount must be greater than zero", idx + 1));
@@ -206,6 +250,24 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
         _ => None,
     };
     let cash_back_cents = cash_back.map_or(0, |c| c.amount_cents);
+    // Deductions also come out of what the bank gets, which must stay above zero.
+    let mut deducted: i64 = 0;
+    for (idx, d) in input.deductions.iter().enumerate() {
+        if !(1..=MAX_LINE_CENTS).contains(&d.amount_cents) {
+            return Err(format!("DEP_BAD_DEDUCTION: deduction {} must be more than zero", idx + 1));
+        }
+        if d.account_id == input.bank_account_id {
+            return Err("DEP_DEDUCTION_ACCOUNT: a deduction goes to an account other than the bank".into());
+        }
+        if !matches!(d.kind.as_str(), "FEE" | "REFUND" | "CHARGEBACK" | "OTHER") {
+            return Err(format!("DEP_BAD_DEDUCTION: unknown deduction kind '{}'", d.kind));
+        }
+        deducted = deducted.checked_add(d.amount_cents).ok_or_else(|| "DEP_AMOUNT_TOO_LARGE: the deductions are out of range".to_string())?;
+    }
+    let banked = total - cash_back_cents - deducted;
+    if banked <= 0 {
+        return Err(format!("DEP_NOTHING_BANKED: cash back and deductions must leave the bank more than zero of the {} deposited", format_cents(total)));
+    }
 
     let deposit_id: i64 = sqlx::query_scalar(
         "INSERT INTO deposits (bank_account_id, deposit_date, memo, total_cents, cash_back_account_id, cash_back_cents, cash_back_memo)
@@ -224,16 +286,22 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
 
     let mut credits: Vec<JournalLine> = Vec::new();
     let mut line_number = 0i64;
-    for (payment, receipt, account, amount, label) in &resolved {
+    for (source, account, amount, label) in &resolved {
         line_number += 1;
+        let (payment, receipt, credit) = match *source {
+            DepositSource::Payment(id) => (Some(id), None, None),
+            DepositSource::Receipt(id) => (None, Some(id), None),
+            DepositSource::Credit(id) => (None, None, Some(id)),
+        };
         sqlx::query(
-            "INSERT INTO deposit_lines (deposit_id, line_number, invoice_payment_id, sales_receipt_id, account_id, amount_cents, memo)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO deposit_lines (deposit_id, line_number, invoice_payment_id, sales_receipt_id, credit_memo_id, account_id, amount_cents, memo)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(deposit_id)
         .bind(line_number)
         .bind(payment)
         .bind(receipt)
+        .bind(credit)
         .bind(account)
         .bind(amount)
         .bind(label)
@@ -268,9 +336,22 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
         credits.push(JournalLine::credit(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id));
     }
 
-    let mut lines = vec![JournalLine::debit(input.bank_account_id, total - cash_back_cents)];
+    let mut lines = vec![JournalLine::debit(input.bank_account_id, banked)];
     if let Some(c) = cash_back {
         lines.push(JournalLine::debit(c.account_id, c.amount_cents).with_memo(Some(clean(c.memo.as_deref()).unwrap_or("Cash back"))));
+    }
+    for (idx, d) in input.deductions.iter().enumerate() {
+        sqlx::query("INSERT INTO deposit_deductions (deposit_id, line_number, account_id, amount_cents, memo, kind) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+            .bind(deposit_id)
+            .bind(idx as i64 + 1)
+            .bind(d.account_id)
+            .bind(d.amount_cents)
+            .bind(clean(d.memo.as_deref()))
+            .bind(&d.kind)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
+        lines.push(JournalLine::debit(d.account_id, d.amount_cents).with_memo(clean(d.memo.as_deref())));
     }
     lines.extend(credits);
     let description = clean(input.memo.as_deref()).map_or_else(|| "Deposit".to_string(), |m| format!("Deposit: {m}"));

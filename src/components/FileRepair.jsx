@@ -71,8 +71,8 @@ function RebuildConfirm({ busy, onConfirm, onCancel }) {
   );
 }
 
-/** File Dentist: a read-only check-up of the company file, and a backed-up rebuild. */
-export default function FileDentist({ onRebuilt }) {
+/** File Check & Repair: a read-only check-up of the company file, and a backed-up rebuild. */
+export default function FileRepair({ onRebuilt }) {
   const [report, setReport] = useState(null);
   const [rebuild, setRebuild] = useState(null);
   const [confirming, setConfirming] = useState(false);
@@ -84,7 +84,7 @@ export default function FileDentist({ onRebuilt }) {
     setNotice(null);
     setRebuild(null);
     try {
-      setReport(await api.fileDentistCheckup());
+      setReport(await api.fileRepairCheckup());
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
     } finally {
@@ -96,7 +96,7 @@ export default function FileDentist({ onRebuilt }) {
     setBusy('rebuild');
     setNotice(null);
     try {
-      const result = await api.fileDentistRebuild();
+      const result = await api.fileRepairRebuild();
       setRebuild(result);
       setReport(result.report);
       setConfirming(false);
@@ -111,7 +111,7 @@ export default function FileDentist({ onRebuilt }) {
   return (
     <section className="qb-panel">
       <h2 className="border-b border-qb-border bg-qb-row-header px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">
-        File Dentist · Verify &amp; Rebuild
+        File Check &amp; Repair · Verify &amp; Rebuild
       </h2>
       <div className="flex flex-wrap items-center gap-2 px-2 py-1.5">
         <button type="button" className="qb-btn qb-btn-primary h-row-lg px-3" onClick={runCheckup} disabled={busy !== null}>

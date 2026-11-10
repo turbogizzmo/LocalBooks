@@ -718,6 +718,9 @@ pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDat
         if status != "OPEN" {
             return Err("PO_NOT_OPEN: only an open purchase order can be billed".into());
         }
+        if crate::item_receipts::order_has_receipts(tx, id).await? {
+            return Err(format!("PO_HAS_RECEIPTS: items on purchase order #{number} have been received; enter the bill from Enter Bill for Received Items"));
+        }
         let bill = BillInput {
             terms_id: None,
             vendor_name: vendor,

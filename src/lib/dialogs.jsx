@@ -23,6 +23,11 @@ export async function askConfirm(message, { confirmLabel = 'OK', danger = false,
   return answer;
 }
 
+/** Tells the person something, with only an OK button (window.alert's replacement). */
+export function tellUser(message) {
+  return show((done) => <Dialog message={message} confirmLabel="OK" onlyOk onDone={done} />, undefined);
+}
+
 /** Asks for a line of text; resolves the text as typed, or null when cancelled. */
 export function askText(message, defaultValue = '') {
   return show((done) => <Dialog message={message} input defaultValue={defaultValue} confirmLabel="OK" onDone={done} />, null);
@@ -42,7 +47,7 @@ function show(render, cancelled) {
   });
 }
 
-function Dialog({ message, input = false, defaultValue = '', confirmLabel, danger = false, offerHide = false, onDone }) {
+function Dialog({ message, input = false, defaultValue = '', confirmLabel, danger = false, offerHide = false, onlyOk = false, onDone }) {
   const [text, setText] = useState(defaultValue);
   const [hide, setHide] = useState(false);
   const focusRef = useRef(null);
@@ -76,10 +81,12 @@ function Dialog({ message, input = false, defaultValue = '', confirmLabel, dange
           )}
         </div>
         <div className="flex justify-end gap-2 border-t border-qb-border px-3 py-1.5">
-          <button ref={input ? undefined : focusRef} type="button" className="qb-btn qb-btn-secondary" onClick={() => onDone(undefined)}>
-            Cancel
-          </button>
-          <button type="submit" className={`qb-btn ${danger ? 'bg-qb-negative text-white hover:opacity-90' : 'qb-btn-primary'}`}>
+          {!onlyOk && (
+            <button ref={input ? undefined : focusRef} type="button" className="qb-btn qb-btn-secondary" onClick={() => onDone(undefined)}>
+              Cancel
+            </button>
+          )}
+          <button ref={onlyOk ? focusRef : undefined} type="submit" className={`qb-btn ${danger ? 'bg-qb-negative text-white hover:opacity-90' : 'qb-btn-primary'}`}>
             {confirmLabel}
           </button>
         </div>

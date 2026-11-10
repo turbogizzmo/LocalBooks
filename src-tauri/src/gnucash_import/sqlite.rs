@@ -80,6 +80,7 @@ fn owner(row: &SqliteRow, prefix: &str) -> Option<(OwnerKind, String)> {
 }
 
 pub async fn read_sqlite(path: &Path) -> Result<Book, String> {
+    crate::wal_guard::check(path)?;
     let options = SqliteConnectOptions::new().filename(path).read_only(true).immutable(true).disable_statement_logging();
     let mut conn = SqliteConnection::connect_with(&options).await.map_err(|e| format!("GNUCASH_UNREADABLE: {}: {e}", path.display()))?;
     let book = read_connection(&mut conn).await;
