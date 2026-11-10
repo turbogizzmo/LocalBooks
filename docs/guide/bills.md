@@ -39,8 +39,8 @@ credit both post the other way round. Only one discount or charge can follow eac
 discount can't be more than its line.
 
 A purchase order's discounts and charges print on the order and carry over to the bill made from it
-with **Create Bill**. A bill entered from received items (**Enter Bill for Received Items**) doesn't
-take them yet; add them on that bill.
+with **Create Bill**, or to the bills entered from received items (see [Receive items before the
+bill](#receive-items-before-the-bill)).
 To give an Other Charge or Discount item its own account on purchase forms (for example a freight
 expense account, while its income account is used on invoices), open the item in **Products and
 Services** and choose **Expense account on bills and checks**.
@@ -120,6 +120,12 @@ the receipt), enter the vendor's reference number, bill date and due date, and c
 in Items Received Not Billed and puts the bill's total in Accounts Payable. When the vendor billed a
 different price, the difference goes to the line's expense account, or for stock to Inventory Asset
 for the units still on hand and to Cost of Goods Sold for any already sold.
+
+The purchase order's discounts and charges come over to the bill too, listed under the lines: a
+percent is taken of each bill's line for that order line, so every part shipment gets its share, and
+a fixed amount goes on the first bill that has that order line. A fixed discount more than a part
+shipment's line waits for a later bill whose line can take it; the bill says so. If no more is
+coming, enter the discount as a vendor credit.
 
 To undo a receipt, click **Void** beside it: its stock leaves inventory. A billed receipt can't be
 voided; void its bill first, which makes the receipt wait for a bill again. A bill entered for a
