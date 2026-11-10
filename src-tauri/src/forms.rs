@@ -939,7 +939,7 @@ pub async fn credit_memo_doc(pool: &SqlitePool, credit_id: i64, symbol: &str) ->
     .map_err(db_err)?;
     let (number, customer_id, name, date, memo, total, tax, tax_name, voided, refund_account) = header.ok_or("FORM_NOT_FOUND: that credit memo no longer exists")?;
     let rows: Vec<ItemRow> = sqlx::query_as(
-        "SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, NULL AS percent_ppm, NULL AS service_date
+        "SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, percent_ppm, NULL AS service_date
          FROM credit_memo_lines WHERE credit_memo_id = ?1 ORDER BY line_number",
     )
     .bind(credit_id)
@@ -965,7 +965,10 @@ pub async fn credit_memo_doc(pool: &SqlitePool, credit_id: i64, symbol: &str) ->
         customer_name: name,
         customer_email: cust.email,
         meta: vec![(format!("{title} date"), format_date(&date), false), (format!("Total {}", title.to_lowercase()), money(total), true)],
-        lines: mark_taxable(lines_of(pool, rows, &money).await?, &taxable, mark).into_iter().map(|(_, l)| l).collect(),
+        lines: {
+            let form = crate::item_types::form_lines_of(pool, crate::item_types::CREDIT_MEMO_LINES, credit_id).await?;
+            with_form_lines(mark_taxable(lines_of(pool, rows, &money).await?, &taxable, mark), &form, &money, mark)
+        },
         totals,
         memo: if voided { Some("This credit memo has been voided.".into()) } else { memo.filter(|m| !m.trim().is_empty()) },
         date: format_date(&date),

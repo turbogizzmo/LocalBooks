@@ -74,6 +74,9 @@ pub struct CreditMemoInput {
     /// Bill To, Ship To, P.O. number and FOB (see `sales_header`).
     #[serde(flatten)]
     pub header: crate::sales_header::SalesHeader,
+    /// Subtotals, discounts, percent charges and groups placed among the lines (`item_types`).
+    #[serde(default)]
+    pub form_lines: Vec<crate::item_types::FormLineInput>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -129,18 +132,24 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
     if input.lines.is_empty() {
         return Err("CM_NO_ITEMS: add at least one line".into());
     }
-    let mut total: i64 = 0;
+    let mut amounts = Vec::with_capacity(input.lines.len());
     for (idx, line) in input.lines.iter().enumerate() {
         let amount = validate_line(line.quantity_e4, line.rate_cents, idx + 1, "CM")?;
-        total = total.checked_add(amount).filter(|t| *t <= MAX_LINE_CENTS).ok_or_else(|| format!("CM_TOO_LARGE: total exceeds {}", format_cents(MAX_LINE_CENTS)))?;
+        amounts.push(crate::item_types::ItemAmount { amount_cents: amount, is_taxable: line.is_taxable });
     }
-    let mut taxable = 0;
-    for line in input.lines.iter().filter(|l| l.is_taxable) {
-        taxable += line_amount(line.quantity_e4, line.rate_cents)?;
-    }
-    let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "CM").await?;
+    // Subtotals, discounts, percent charges and groups among the lines, as on an invoice.
+    let form = &input.form_lines;
+    let layout = crate::item_types::lay_out(&amounts, form, "CM")?;
+    crate::item_types::check_form_lines(tx, form, &layout, "CM").await?;
+    let charges = crate::item_types::charge_rows(form, &layout);
+    let numbers = layout.item_numbers();
+    let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, layout.taxable_cents, "CM").await?;
     let tax_cents = tax.as_ref().map_or(0, |t| t.cents);
-    let total = total.checked_add(tax_cents).filter(|t| *t <= MAX_LINE_CENTS).ok_or("CM_TOO_LARGE: the credit is too large")?;
+    let total = layout
+        .lines_cents
+        .checked_add(tax_cents)
+        .filter(|t| *t > 0 && *t <= MAX_LINE_CENTS)
+        .ok_or_else(|| format!("CM_TOO_LARGE: the credit must be above zero and at most {}", format_cents(MAX_LINE_CENTS)))?;
     if let Some(account) = input.refund_account_id {
         check_money_account(tx, account, "CM").await?;
     }
@@ -200,7 +209,7 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(memo_id)
-        .bind(n as i64)
+        .bind(numbers[idx])
         .bind(line.product_service_id)
         .bind(line.description.trim())
         .bind(line.quantity_e4)
@@ -219,11 +228,24 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
         }
     }
 
+    // A percent charge is given back like an item line, on its charge account.
+    for c in &charges {
+        let key = (c.account_id, c.class_id);
+        match debits.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, sum)) => *sum += c.amount_cents,
+            None => debits.push((key, c.amount_cents)),
+        }
+    }
+    crate::item_types::write_charges(tx, crate::item_types::CREDIT_MEMO_LINES, memo_id, &charges, tax.is_some()).await?;
+    crate::item_types::write_form_lines(tx, crate::item_types::CREDIT_MEMO_LINES, memo_id, form, &layout, tax.is_some()).await?;
+
     let credit_account = match input.refund_account_id {
         Some(account) => account,
         None => system_account(tx, "ACCOUNTS_RECEIVABLE").await?,
     };
     let mut lines: Vec<JournalLine> = debits.into_iter().map(|((a, class), c)| JournalLine::debit(a, c).with_class(class)).collect();
+    // A discount on a credit memo gives back less: the reverse of an invoice's, a credit to its account.
+    lines.extend(crate::item_types::discount_debits(form, &layout).into_iter().map(|l| JournalLine { debit: l.credit, credit: l.debit, ..l }));
     lines.extend(tax.as_ref().map(|t| t.lines(true)).unwrap_or_default());
     lines.push(JournalLine::credit(credit_account, total));
     let kind = if input.refund_account_id.is_some() { "Refund receipt" } else { "Credit memo" };

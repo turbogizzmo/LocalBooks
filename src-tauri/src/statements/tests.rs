@@ -106,7 +106,7 @@ async fn cash_basis_counts_invoices_as_paid_and_periods_line_up() {
     let second = invoice("2026-03-01", 50_000).await;
     let memo = crate::credits::create_credit_memo(
         &pool,
-        crate::credits::CreditMemoInput {
+        crate::credits::CreditMemoInput { form_lines: Vec::new(),
             customer_name: "Acme".into(),
             credit_date: ymd(2026, 3, 10),
             memo: None,

@@ -37,6 +37,7 @@ pub struct ClassInput {
 const CLASS_USERS: &[&str] = &[
     "journal_lines", "invoice_items", "sales_receipt_lines", "estimate_lines", "bill_lines", "expense_lines",
     "deposit_lines", "bank_transactions", "time_activities", "invoice_form_lines", "sales_receipt_form_lines", "estimate_form_lines",
+    "credit_memo_lines", "credit_memo_form_lines",
 ];
 
 fn is_used_sql() -> String {

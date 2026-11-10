@@ -69,7 +69,7 @@ pub(super) async fn company() -> SqlitePool {
     .id;
     let memo = crate::credits::create_credit_memo(
         p,
-        CreditMemoInput {
+        CreditMemoInput { form_lines: Vec::new(),
             customer_name: "Brightwater Cafe".into(),
             credit_date: d(2025, 11, 20),
             memo: Some("Misprinted posters".into()),

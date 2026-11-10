@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Discounts and charges on credit memos.** Credit memos and refund receipts take subtotals,
+  discount lines, percentage charges and groups, as invoices do. They print in their places, and a
+  discount lowers the credit and the sales tax given back.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
