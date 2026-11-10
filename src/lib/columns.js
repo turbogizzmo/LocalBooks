@@ -32,10 +32,14 @@ export function toggleColumn(arranged, id) {
   return arranged.map((c) => (c.id === id && !c.required ? { ...c, visible: !c.visible } : c));
 }
 
-/** Moves a column one place earlier (`step` -1) or later (1). */
-export function moveColumn(arranged, id, step) {
+/**
+ * Moves a column one place earlier (`step` -1) or later (1), past any columns `offered` says this
+ * table doesn't have (a form without Class, say), so the move is one the table shows.
+ */
+export function moveColumn(arranged, id, step, offered = () => true) {
   const at = arranged.findIndex((c) => c.id === id);
-  const to = at + step;
+  let to = at + step;
+  while (to >= 0 && to < arranged.length && !offered(arranged[to].id)) to += step;
   if (at < 0 || to < 0 || to >= arranged.length) return arranged;
   const out = [...arranged];
   [out[at], out[to]] = [out[to], out[at]];

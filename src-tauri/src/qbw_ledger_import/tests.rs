@@ -1093,3 +1093,17 @@ async fn discount_and_subtotal_items_become_form_lines() {
     let (total, discount): (i64, i64) = sqlx::query_as("SELECT total_cents, discount_cents FROM sales_receipts").fetch_one(&pool).await.unwrap();
     assert_eq!((total, discount), (9_000, 0));
 }
+
+/// Amounts the file stores with a fraction of a cent are left out, and the summary lists each one.
+#[tokio::test]
+async fn the_summary_lists_amounts_that_are_not_whole_cents() {
+    let pool = crate::db::test_pool().await;
+    let mut odd = ledger();
+    odd.quality.fractional_amounts = vec!["Invoice line, transaction 812: 10.005".into(), "Stored balance of account 3: 0.125".into()];
+    let batch = stage(&pool, std::path::Path::new("/books/Odd.qbw"), 1, &odd).await.unwrap();
+    let summary = batch_summary(&pool, batch).await.unwrap();
+    assert_eq!(summary.fractional_amounts, odd.quality.fractional_amounts);
+
+    let clean = stage(&pool, std::path::Path::new("/books/Clean.qbw"), 1, &ledger()).await.unwrap();
+    assert!(batch_summary(&pool, clean).await.unwrap().fractional_amounts.is_empty());
+}

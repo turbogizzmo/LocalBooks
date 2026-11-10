@@ -291,7 +291,7 @@ pub async fn pre_import_snapshot(db: &Db, batch_id: i64) -> Result<PathBuf, Stri
     Ok(path)
 }
 
-/// Saves a verified copy of the live books before File Dentist rebuilds them:
+/// Saves a verified copy of the live books before File Check & Repair rebuilds them:
 /// `pre-rebuild-<timestamp>.db`.
 pub async fn pre_rebuild_snapshot(db: &Db) -> Result<BackupFile, String> {
     let path = db.backups_dir().join(format!("pre-rebuild-{}.db", stamp()));

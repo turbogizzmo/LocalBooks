@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { layoutMessage } from '../lib/itemTypes.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
-import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
+import LineItemGrid, { blankLine, linesFromDocument, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
@@ -13,7 +13,7 @@ import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu from './RowMenu.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
-import { formatCents } from '../lib/money.js';
+import { centsToInput, formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
@@ -32,15 +32,16 @@ const STATUS = {
   CONVERTED: { label: '● Converted · invoice', className: 'text-qb-info' },
 };
 
-function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep }) {
+/** `copyOf` (from Duplicate) starts the estimate as a copy of a saved one, dated today. */
+function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep, copyOf = null }) {
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
-  const [customer, setCustomer] = useState('');
+  const [customer, setCustomer] = useState(copyOf?.name ?? '');
   const [date, setDate] = useTransactionDate();
   const [expires, setExpires] = useState(() => addDays(date, 30));
-  const [memo, setMemo] = useState('');
-  const [lines, setLines] = useState(() => Array.from({ length: 3 }, () => blankLine(null)));
+  const [memo, setMemo] = useState(copyOf?.memo ?? '');
+  const [lines, setLines] = useState(() => (copyOf ? linesFromDocument(copyOf.lines, copyOf.formLines, null) : Array.from({ length: 3 }, () => blankLine(null))));
   const [busy, setBusy] = useState(false);
   const [emailLater, setEmailLater] = useState(false);
   const [error, setError] = useState(null);
@@ -50,6 +51,14 @@ function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep }) {
   const tax = useFormTax(customer, customers.data);
   const sales = useSalesDetails(customer, customers.data);
   useCustomerDelivery(customer, customers.data, { setEmailLater });
+  // A copy keeps the original's tax rate, rep and shipping.
+  useEffect(() => {
+    if (!copyOf) return;
+    tax.set(copyOf.taxRateId ?? null);
+    if (copyOf.details) sales.set(copyOf.details);
+    // Once, for the copy the form was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => customerRef.current?.focus(), []);
   useEffect(() => {
@@ -59,7 +68,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep }) {
 
   // A 0.00 line (an included extra) is allowed once estimate lines accept it.
   const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines, { allowZeroRate: ZERO_LINES });
-  const [discountText, setDiscountText] = useState('');
+  const [discountText, setDiscountText] = useState(copyOf?.discountCents ? centsToInput(copyOf.discountCents) : '');
   // Opening a saved estimate (Previous) asks for the entries to be saved or cleared first.
   const dirty = useDirtySince('estimate', { customer, memo, discountText, lines: lines.map((l) => [l.productId, l.description, l.qty, l.rate]) });
   const discountCents = parseDiscount(discountText, linesTotal);
@@ -199,6 +208,9 @@ function EstimateList({ accounts, intent, navigate }) {
   const { data, error } = useLedgerQuery(api.listEstimates);
   const [composing, setComposing] = useState(intent?.action === 'estimate');
   const [notice, setNotice] = useState(null);
+  // Duplicate: the saved estimate the new one on the form starts from (and a key to start afresh).
+  const [copyOf, setCopyOf] = useState(null);
+  const [formKey, setFormKey] = useState(0);
   const today = todayIso();
 
   useEffect(() => {
@@ -242,6 +254,17 @@ function EstimateList({ accounts, intent, navigate }) {
     saved.open(e);
     setComposing(true);
   };
+  const duplicate = (e) =>
+    api.getCopySource('ESTIMATE', e.id).then(
+      (copy) => {
+        saved.close();
+        setCopyOf(copy);
+        setFormKey((k) => k + 1);
+        setComposing(true);
+        setNotice({ kind: 'info', text: `A copy of estimate #${e.estimateNumber}, dated today: it gets the next number when you save it.` });
+      },
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -253,6 +276,7 @@ function EstimateList({ accounts, intent, navigate }) {
           step={saved.step}
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
+          onDuplicate={() => duplicate(viewing)}
           form={{ kind: 'ESTIMATE', id: viewing.id }}
           record={{ kind: 'ESTIMATE', id: viewing.id }}
           onNotice={setNotice}
@@ -271,7 +295,21 @@ function EstimateList({ accounts, intent, navigate }) {
         />
       )}
       {composing && !viewing && (
-        <EstimateForm accounts={accounts} forms={forms} savedStep={(blocked) => saved.fromNew(blocked)} onCancel={() => setComposing(false)} onSaved={(text) => setNotice({ kind: 'success', text })} />
+        <EstimateForm
+          key={formKey}
+          copyOf={copyOf}
+          accounts={accounts}
+          forms={forms}
+          savedStep={(blocked) => saved.fromNew(blocked)}
+          onCancel={() => {
+            setCopyOf(null);
+            setComposing(false);
+          }}
+          onSaved={(text) => {
+            setCopyOf(null);
+            setNotice({ kind: 'success', text });
+          }}
+        />
       )}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={`Could not load estimates: ${error}`} />}
@@ -344,6 +382,7 @@ function EstimateList({ accounts, intent, navigate }) {
                       <RowMenu
                         items={[
                           { label: 'Open', onSelect: () => openEstimate(e) },
+                          { label: 'Duplicate', hint: 'A new estimate copied from this one, dated today', onSelect: () => duplicate(e) },
                           ...formMenuItems('ESTIMATE', e.id, forms, emailed.get(e.id)),
                           {
                             label: 'Edit as invoice…',

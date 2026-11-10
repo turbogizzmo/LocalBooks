@@ -140,6 +140,16 @@ impl Value {
         }
     }
 
+    /// A double that is not a whole number of cents, as the file stores it (`as_cents` refuses
+    /// these; the import lists them rather than drop them silently).
+    #[allow(clippy::float_arithmetic, reason = "only tells whether a stored double is whole cents; no amount is computed from it")]
+    pub fn fractional_amount(&self) -> Option<String> {
+        match self {
+            Value::Float(f) if f.is_finite() && ((f * 100.0) - (f * 100.0).round()).abs() >= 1e-6 => Some(f.to_string()),
+            _ => None,
+        }
+    }
+
     #[allow(clippy::float_arithmetic, reason = "some tables store amounts as doubles; only whole cents are accepted")]
     pub fn as_cents(&self) -> Option<i64> {
         match self {
