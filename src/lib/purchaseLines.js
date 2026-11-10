@@ -103,12 +103,29 @@ export function fromItem(row, item) {
 
 /**
  * A receipt's bill: the purchase order's discounts and charges (`get_receipt_bill_form_lines`) laid
- * out against the billed amounts, as the ledger does it. A fixed discount more than its line is held
- * for a later bill (`purchase_lines::fit_carried`). Returns `layOutPurchase`'s result plus `lines`,
- * the form lines kept.
+ * out against the billed amounts, as the ledger does it (`purchase_lines::fit_carried`). A percent
+ * goes after every line it is placed after; a fixed amount (placed after each receipt line from its
+ * order line, all with the same `source`) goes once, after the first line that can take it. A fixed
+ * discount no line can take waits for a later bill. Returns `layOutPurchase`'s result plus `lines`,
+ * the form lines kept, and `held`: each waiting discount with the lines it was more than.
  */
 export function layOutCarried(splitAmounts, formLines) {
-  const kept = (formLines ?? []).filter((f) => !(f.kind === 'DISCOUNT' && f.amountCents !== null && f.amountCents !== undefined && f.amountCents > (splitAmounts[f.afterLine - 1] ?? 0)));
+  const placed = new Set();
+  const isFixed = (f) => !f.percentPpm && f.amountCents !== null && f.amountCents !== undefined;
+  const kept = (formLines ?? []).filter((f) => {
+    if (!isFixed(f)) return true;
+    const fits = f.kind === 'CHARGE' || f.amountCents <= (splitAmounts[f.afterLine - 1] ?? 0);
+    if (!fits || placed.has(f.source)) return false;
+    placed.add(f.source);
+    return true;
+  });
+  const held = [];
+  for (const f of formLines ?? []) {
+    if (!isFixed(f) || placed.has(f.source)) continue;
+    const seen = held.find((h) => h.line.source === f.source);
+    if (seen) seen.afterLines.push(f.afterLine);
+    else held.push({ line: f, afterLines: [f.afterLine] });
+  }
   const rows = kept.map((f) => ({
     afterLine: f.afterLine,
     kind: f.kind,
@@ -118,5 +135,5 @@ export function layOutCarried(splitAmounts, formLines) {
     description: f.description ?? '',
     value: f.percentPpm ? percentText(f.percentPpm) : centsToInput(f.amountCents),
   }));
-  return { ...layOutPurchase(splitAmounts, rows), lines: kept };
+  return { ...layOutPurchase(splitAmounts, rows), lines: kept, held };
 }

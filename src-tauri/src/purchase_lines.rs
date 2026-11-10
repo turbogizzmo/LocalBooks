@@ -13,7 +13,7 @@
 //! it to apply to (`<code>_FORM_LINE_NEEDS_BASE`).
 
 use serde::{Deserialize, Serialize};
-use sqlx::{Sqlite, SqlitePool, Transaction};
+use sqlx::{Sqlite, Transaction};
 
 use crate::ledger::{db_err, mul_div_round, JournalLine, MAX_LINE_CENTS};
 
@@ -253,26 +253,46 @@ pub fn journal_lines(form: &[PurchaseFormLineInput], amounts: &[i64], split_debi
         .collect()
 }
 
-/// A document's stored discount and charge lines, in place order.
-pub async fn lines_of(pool: &SqlitePool, doc: PurchaseDoc, id: i64) -> Result<Vec<PurchaseFormLineView>, String> {
+/// A document's stored discount and charge lines, in place order (from the pool, or inside a
+/// transaction with `&mut **tx`).
+pub async fn lines_of<'e, E: sqlx::Executor<'e, Database = Sqlite>>(executor: E, doc: PurchaseDoc, id: i64) -> Result<Vec<PurchaseFormLineView>, String> {
     sqlx::query_as::<_, PurchaseFormLineView>(&format!(
         "SELECT after_line, kind, description, product_service_id, percent_ppm, amount_cents, account_id, class_id
          FROM purchase_form_lines WHERE {} = ?1 ORDER BY after_line",
         doc.column()
     ))
     .bind(id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await
     .map_err(db_err)
 }
 
-/// Drops the fixed discounts that are more than the split line they follow: a purchase order's
-/// fixed discount, carried to the bill for a part shipment, waits for a bill whose line can take it.
-pub fn fit_carried(form: Vec<PurchaseFormLineInput>, splits: &[i64]) -> Vec<PurchaseFormLineInput> {
+/// A purchase order's discount or charge placed on a receipt's bill, with `source`: which of the
+/// order's lines it is. A fixed one is placed after every receipt line from its order line, and
+/// [`fit_carried`] keeps one of them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CarriedLine {
+    #[serde(flatten)]
+    pub line: PurchaseFormLineInput,
+    pub source: usize,
+}
+
+/// The carried lines a receipt's bill takes. A percent goes after every line it is placed after. A
+/// fixed amount goes once, after the first line that can take it: a fixed discount more than its
+/// split line (a part shipment) is not placed there, and waits for a bill whose line can take it.
+pub fn fit_carried(form: Vec<CarriedLine>, splits: &[i64]) -> Vec<PurchaseFormLineInput> {
+    let mut placed: Vec<usize> = Vec::new();
     form.into_iter()
-        .filter(|l| {
-            let base = l.after_line.checked_sub(1).and_then(|i| splits.get(i));
-            !(l.kind == PurchaseLineKind::Discount && l.amount_cents.zip(base).is_some_and(|(amount, base)| amount > *base))
+        .filter_map(|c| {
+            let Some(amount) = c.line.amount_cents.filter(|_| c.line.percent_ppm.is_none()) else { return Some(c.line) };
+            let base = c.line.after_line.checked_sub(1).and_then(|i| splits.get(i));
+            let fits = c.line.kind == PurchaseLineKind::Charge || base.is_some_and(|b| amount <= *b);
+            if !fits || placed.contains(&c.source) {
+                return None;
+            }
+            placed.push(c.source);
+            Some(c.line)
         })
         .collect()
 }

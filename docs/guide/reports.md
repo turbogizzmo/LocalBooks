@@ -88,8 +88,8 @@ page of widgets you choose, each a summary of one report:
 | Income breakdown | The five largest income accounts, then Others; the total is all income | Profit and Loss |
 | Expense breakdown | The five largest cost of sales and expense accounts, then Others | Profit and Loss |
 | Year over year | Income, expenses and net income, beside the same dates a year earlier and the change | Profit and Loss for each period |
-| To-dos | Open to-dos due by the period's end, and those with no date, soonest first; the total is how many | To Do Notes |
-| Note | Text you type and keep on the page (it saves when you click away) | — |
+| To-dos | Your open to-dos (yours and unassigned ones, as your reminders show them) due by the period's end, and those with no date, soonest first; the total is how many | To Do Notes |
+| Note | Text you type and keep on the page (it saves when you click away). Everyone who opens the company sees the same page and notes | — |
 
 - **Add a widget…** puts it at the end of the page; **✕** removes it; **↑** and **↓** move it.
 - Each widget has its own period: today (the balance widgets show balances as of the period's

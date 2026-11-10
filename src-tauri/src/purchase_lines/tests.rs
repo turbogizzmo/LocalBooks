@@ -2,6 +2,7 @@ use super::*;
 use crate::db::test_pool;
 use chrono::NaiveDate;
 use serde_json::json;
+use sqlx::SqlitePool;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -112,6 +113,42 @@ async fn checks_card_credits_and_vendor_credits_post_each_line_on_its_side() {
     assert_eq!(balance(&pool, rent).await, -11_000);
 }
 
+/// Preferences › Checking › "Change check date when a check is printed": the re-dated check is
+/// posted again with its discount and charge lines, at the same total.
+#[tokio::test]
+async fn a_queued_check_redated_when_printed_keeps_its_discount_and_charge_lines() {
+    let pool = test_pool().await;
+    let (checking, rent, utilities, services) = (account(&pool, "1010").await, account(&pool, "6400").await, account(&pool, "6500").await, account(&pool, "4100").await);
+    crate::preferences::set(&pool, crate::preferences::tax_time::DATE_CHECKS_PRINTED, "true").await.unwrap();
+    let input: crate::expenses::ExpenseInput = serde_json::from_value(json!({
+        "kind": "CHECK", "payeeName": "Supplier", "paymentAccountId": checking, "expenseDate": "2026-03-02", "checkNumber": null, "paymentMethod": null, "memo": null,
+        "lines": [{ "accountId": rent, "amountCents": 20_000, "memo": null }, { "accountId": utilities, "amountCents": 5_000, "memo": null }],
+        "formLines": [
+            { "afterLine": 1, "kind": "DISCOUNT", "percentPpm": 100_000, "accountId": services, "description": "Early pay" },
+            { "afterLine": 2, "kind": "CHARGE", "amountCents": 750, "accountId": utilities, "description": "Delivery" }
+        ]
+    }))
+    .unwrap();
+    let queued = crate::print_queue::post_expense(&pool, input, true).await.unwrap();
+    // 200.00 - 20.00 + 50.00 + 7.50.
+    assert_eq!(queued.total_cents, 23_750);
+    let before = lines_of(&pool, PurchaseDoc::Expense, queued.id).await.unwrap();
+    let printed = vec![crate::print_queue::PrintedCheck { expense_id: queued.id, check_number: "601".into(), bill_check_id: None }];
+    crate::print_queue::mark_checks_printed_on(&pool, printed, NaiveDate::from_ymd_opt(2026, 3, 9).unwrap()).await.unwrap();
+
+    let (id, date, total): (i64, String, i64) = sqlx::query_as("SELECT id, expense_date, total_cents FROM expenses WHERE check_number = '601' AND is_voided = 0").fetch_one(&pool).await.unwrap();
+    assert_ne!(id, queued.id, "the queued check is replaced");
+    assert_eq!((date.as_str(), total), ("2026-03-09", 23_750));
+    let after = lines_of(&pool, PurchaseDoc::Expense, id).await.unwrap();
+    let shape = |v: &[PurchaseFormLineView]| v.iter().map(|l| (l.after_line, l.kind.clone(), l.description.clone(), l.percent_ppm, l.amount_cents, l.account_id)).collect::<Vec<_>>();
+    assert_eq!(shape(&after), shape(&before));
+    let splits: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM expense_lines WHERE expense_id = ?1").bind(id).fetch_one(&pool).await.unwrap();
+    assert_eq!(splits, 2, "the form lines are not added to the split lines");
+    // Only the replacement counts: checking paid 237.50 once, the discount and charge posted once.
+    assert_eq!((balance(&pool, checking).await, balance(&pool, rent).await, balance(&pool, utilities).await, balance(&pool, services).await), (-23_750, 20_000, 5_750, -2_000));
+    assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
+}
+
 #[tokio::test]
 async fn a_purchase_orders_lines_carry_to_its_bill() {
     let pool = test_pool().await;
@@ -165,7 +202,16 @@ async fn items_name_their_purchase_account_and_lines_their_item() {
 #[test]
 fn a_fixed_discount_too_big_for_a_part_shipment_waits() {
     use PurchaseLineKind::{Charge, Discount};
-    let form = vec![line(1, Discount, None, Some(5_000), 9), line(2, Discount, Some(100_000), None, 9), line(3, Charge, None, Some(9_000), 9)];
+    let from = |source: usize, line: PurchaseFormLineInput| CarriedLine { line, source };
+    let form = vec![from(0, line(1, Discount, None, Some(5_000), 9)), from(1, line(2, Discount, Some(100_000), None, 9)), from(2, line(3, Charge, None, Some(9_000), 9))];
     let kept = fit_carried(form, &[3_000, 3_000, 2_000]);
     assert_eq!(kept.iter().map(|l| l.after_line).collect::<Vec<_>>(), [2, 3], "only the fixed discount over its line is held back");
+
+    // Two receipt lines from one order line: the fixed discount goes after the first that can take
+    // it, once; a percent goes after both.
+    let twice = |a: usize, b: usize| vec![from(0, line(a, Discount, None, Some(5_000), 9)), from(1, line(a, Discount, Some(100_000), None, 9)), from(0, line(b, Discount, None, Some(5_000), 9)), from(1, line(b, Discount, Some(100_000), None, 9))];
+    let placed = |kept: Vec<PurchaseFormLineInput>| kept.iter().map(|l| (l.after_line, l.amount_cents.is_some())).collect::<Vec<_>>();
+    assert_eq!(placed(fit_carried(twice(1, 2), &[3_000, 8_000])), [(1, false), (2, true), (2, false)], "too big for line 1, so it goes after line 2");
+    assert_eq!(placed(fit_carried(twice(1, 2), &[6_000, 8_000])), [(1, true), (1, false), (2, false)], "once, after the first");
+    assert_eq!(placed(fit_carried(twice(1, 2), &[3_000, 4_000])), [(1, false), (2, false)], "neither can take it: it waits");
 }
