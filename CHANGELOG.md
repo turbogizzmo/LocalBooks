@@ -17,6 +17,9 @@ people using LocalBooks.
   maximized one can't take focus.
 - **Edit dialogs are shown whole.** The vendor and customer Edit dialog and the other record dialogs
   no longer open with their title row hidden under the toolbar.
+- **Keyboard and screen-reader fixes.** A list row's ▾ menu now works with the arrow keys, Home
+  and End, and Esc returns you to its button. The bank feed's list and every pop-up menu can take
+  focus and are named for screen readers.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

@@ -573,6 +573,15 @@ is greyed out, and hovering over it (or moving to it with the keyboard) says why
 Press **Tab** to move through the buttons, or the **Left** and **Right** arrow keys to move along the
 row. On **Print ▾** and **Email ▾**, press **Enter** or **Down** to open the menu.
 
+## Work without a mouse
+
+Every list, form and dialog can be used from the keyboard. **Tab** moves through a form's fields
+and buttons in reading order, and through a line grid's columns in the order you chose (see
+"Choose a list's columns"). In a list, each row's **▾** button opens its menu (**Open**,
+**Edit…**, **Void**, **QuickReport** and the rest): Tab to it and press **Enter** or **Space**,
+then use **↑** and **↓** (or **Home** and **End**) to choose and **Enter** to do it. **Esc** closes
+a menu and puts you back on its button. The toolbar's menus (Print, Email, More) work the same way.
+
 ## Save a form and type faster with the keyboard
 
 Every transaction form (invoice, sales receipt, estimate, credit memo and refund, bill, check,
