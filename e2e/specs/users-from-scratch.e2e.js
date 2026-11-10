@@ -35,12 +35,24 @@ describe('From no users to a View only user', () => {
     await waitForApp();
     await goTo('Invoices');
     await type(field('Customer'), 'E2E Customer');
+    // The customer is new, so LocalBooks asks before adding it: when the box is left, or (with no
+    // customers on the list yet) when the invoice is saved. Quick add puts it on the list.
+    const quickAdd = async () => {
+      const add = button('Quick add');
+      if (await add.waitForDisplayed({ timeout: 5000 }).catch(() => false)) {
+        await add.click();
+        await add.waitForExist({ reverse: true });
+      }
+    };
     // A line becomes editable when its row is clicked.
+    await click($('[data-row="0"] [data-cell="description"]'));
+    await quickAdd();
     await click($('[data-row="0"] [data-cell="description"]'));
     await type($('[data-row="0"] [data-col="description"]'), 'End-to-end consulting');
     await type($('[data-row="0"] [data-col="qty"]'), '2');
     await type($('[data-row="0"] [data-col="rate"]'), '150');
     await click(button('Save & New'));
+    await quickAdd();
     await notice('success', 'for E2E Customer posted').waitForDisplayed();
     // Listed with its total: 2 × 150.00.
     const [, customer, , , total] = await tableRow('E2E Customer');
