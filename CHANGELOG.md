@@ -6,6 +6,8 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+## [0.14.1]
+
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a
   state rate plus a city rate, say) now splits the payment among its rates, in proportion to their
   percentages, and pays down each rate's own liability account in one entry. The sales tax return
