@@ -44,6 +44,10 @@ people using LocalBooks.
   form and go with it when the email opens in your mail app, not only when LocalBooks sends it.
 - **A group's quantity on the form.** The heading of an item group on an invoice, sales receipt or
   estimate has a Qty: change it and every item in the group changes in proportion.
+- **Inventory to reorder.** Reminders lists tracked items at or below their reorder point, with
+  what is already on order, and Vendors › Inventory Activities gathers the inventory screens:
+  the item list, Adjust Quantity/Value on Hand, Change Item Prices, purchase orders and the stock
+  reports.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.
