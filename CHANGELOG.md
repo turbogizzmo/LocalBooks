@@ -25,6 +25,10 @@ people using LocalBooks.
   Refunds lists it as an unapplied payment, the Customer Center shows the unapplied amount and
   remaining credit, and Make Deposits picks it up from Undeposited Funds. Any credit left can now
   also be written off.
+- **List menus and Edit-menu list commands.** The customer, vendor and item lists have New
+  Transactions, Print and Excel menus. The Edit menu's New, Edit, Delete, Make Inactive / Active and
+  Show All act on the list on screen, and a customer, vendor or item that was never used can now be
+  deleted.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

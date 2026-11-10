@@ -959,6 +959,8 @@ export default function Invoices({ accounts, intent }) {
   useEffect(() => {
     if (intent?.action === 'invoice') {
       setReceiving(false);
+      // New Transactions › Invoice on the customer list starts with that customer.
+      if (intent.data?.customerName) setCustomer(intent.data.customerName);
       customerRef.current?.focus();
     } else if (intent?.action === 'receive-payment') {
       setReceiving(true);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { runListCommand } from './lib/listCommands.js';
 import Sidebar, { canOpen, findNav, openableInstead, resolveView } from './components/Sidebar.jsx';
 import QuickCreateModal from './components/QuickCreateModal.jsx';
 import { UpdateBanner } from './components/Updates.jsx';
@@ -186,6 +187,8 @@ export default function App() {
       if (payload === 'help') setHelpOpen(true);
       // Edit › Delete or Void Transaction, Memorize, Insert Line, Delete Line: the open form's (formFlow.jsx).
       if (typeof payload === 'string' && payload.startsWith('form:')) runFormCommand(payload.slice(5));
+      // Edit › New, Edit, Delete, Make Inactive and Show All: the open list's (listCommands.js).
+      if (typeof payload === 'string' && payload.startsWith('list:')) runListCommand(payload.slice(5));
       // File › Print…: the open form's Print, else the screen's own printout (a register prints its
       // rows), else the window.
       if (payload === 'print' && !runFormCommand('print')) runPrintCommand();

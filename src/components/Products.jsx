@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ChangePrices from './ChangePrices.jsx';
 import PriceLevels from './PriceLevels.jsx';
@@ -10,7 +10,10 @@ import { ItemInfoPanel, useInfoPanel } from './InfoPanel.jsx';
 import { readReorderPoint } from '../lib/infoPanel.js';
 import { CustomFieldInputs } from './SalesLists.jsx';
 import { useCompany } from './PrintDocuments.jsx';
-import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
+import { longDate, tableExports } from './ReportParts.jsx';
+import ListMenus from './ListMenus.jsx';
+import { useListCommands } from '../lib/listCommands.js';
+import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
@@ -300,6 +303,29 @@ export default function Products({ accounts, intent }) {
     }
   };
 
+  // Edit › New, Edit, Delete, Make Inactive and Show All act on this list and its selected item.
+  const listRef = useRef(null);
+  const newNameRef = useRef(null);
+  const chosen = () => (data ?? []).find((p) => p.id === selected) ?? null;
+  const needChoice = () => setNotice({ kind: 'info', text: 'Click an item in the list first.' });
+  const removeItem = async (p) => {
+    if (!(await askConfirm(`Delete ${p.name}? Only an item on no transactions, groups or stock records can be deleted; this can't be undone.`, { confirmLabel: 'Delete', danger: true }))) return;
+    try {
+      await api.deleteListRecord('item', p.id);
+      setSelected(null);
+      setNotice({ kind: 'success', text: `Deleted ${p.name}.` });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
+  useListCommands(listRef, {
+    new: () => newNameRef.current?.focus(),
+    edit: () => (chosen() ? setDialog({ mode: 'edit', product: chosen() }) : needChoice()),
+    delete: () => (chosen() ? removeItem(chosen()) : needChoice()),
+    'toggle-active': () => (chosen() ? setActive(chosen(), !chosen().isActive) : needChoice()),
+    'show-all': () => setShowInactive((on) => !on),
+  });
+
   const company = useCompany();
   const exports = tableExports({
     company: company.name,
@@ -369,7 +395,7 @@ export default function Products({ accounts, intent }) {
   };
 
   return (
-    <div className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
+    <div ref={listRef} className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
       {dialog?.mode === 'track' && (
         <TrackDialog
           product={dialog.product}
@@ -429,7 +455,7 @@ export default function Products({ accounts, intent }) {
           </label>
           {customOrder && <ListViewControls ctl={listOrder} label="items" />}
           <div className="ml-2 flex-none">
-            <ExportMenu printable={false} onNotice={setNotice} {...exports} />
+            <ListMenus kind="item" exports={exports} />
           </div>
           <ColumnsMenu cols={cols} />
         </div>
@@ -462,7 +488,7 @@ export default function Products({ accounts, intent }) {
                     if (c.id === 'name')
                       return (
                         <td key={c.id} className="qb-grid-cell-edit">
-                          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New product or service" aria-label="Name" />
+                          <input ref={newNameRef} value={name} onChange={(e) => setName(e.target.value)} placeholder="New product or service" aria-label="Name" />
                         </td>
                       );
                     if (c.id === 'description')
@@ -539,6 +565,7 @@ export default function Products({ accounts, intent }) {
                           { label: 'Edit…', onSelect: () => setDialog({ mode: 'edit', product: p }) },
                           { label: 'QuickReport (Ctrl+Q)', onSelect: () => runQuickReport(p) },
                           p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },
+                          { label: 'Delete…', hint: 'Only one on no transactions, groups or stock records', onSelect: () => removeItem(p) },
                         ]}
                       />
                     </td>

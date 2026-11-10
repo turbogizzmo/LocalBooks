@@ -178,6 +178,14 @@ export const topics = [
     guide: 'sales-receipts-and-estimates',
   },
   {
+    id: 'list-menus', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'sales/products'],
+    title: 'New Transactions, Print, Excel and the Edit menu on lists',
+    body: 'Over the customer, vendor and item lists, New Transactions opens their forms (an invoice from the customer list starts with the customer you clicked), Print prints the list or opens the phone, contact and item list reports, and Excel saves the list as a workbook or CSV. The Edit menu acts on the list on screen: New in List, Edit in List, Delete from List, Make Inactive / Active and Show All. Only a name or item that was never used can be deleted; make anything else inactive.',
+    keywords: 'edit menu new edit delete make inactive show all list new transactions print excel export delete customer delete vendor delete item remove',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
+    guide: 'customers-and-products',
+  },
+  {
     id: 'duplicate-name', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'accounting/chart-of-accounts'],
     title: 'Copy a customer, vendor or account (Duplicate)',
     body: 'Choose Duplicate… in a row’s ▾ menu on the Customers, Vendors or Chart of Accounts list. A customer or vendor copy takes everything but the name, account and resale numbers, tax ID and history, and opens for editing; an account copy opens New account filled in from the original.',
