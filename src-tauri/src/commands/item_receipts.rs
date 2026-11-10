@@ -9,7 +9,14 @@ handlers![
     list_item_receipt_lines,
     list_order_receiving,
     bill_received_items,
+    get_receipt_bill_form_lines,
 ];
+
+/// The purchase order's discounts and charges the receipt's bill will take (T21).
+#[tauri::command]
+pub async fn get_receipt_bill_form_lines(db: State<'_, Db>, item_receipt_id: i64) -> Result<Vec<crate::purchase_lines::PurchaseFormLineInput>, String> {
+    receipts::receipt_bill_form_lines(&db.pool().await, item_receipt_id).await
+}
 
 /// Records goods received from a vendor before the bill; posts to Items Received Not Billed.
 #[tauri::command]

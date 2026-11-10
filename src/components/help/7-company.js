@@ -28,6 +28,14 @@ export const screens = {
  */
 export const topics = [
   {
+    id: 'previous-version', area: 'company', views: ['settings/updates'],
+    title: 'Go back to the previous version',
+    body: 'Help › Reinstall Previous Version… finds the release before this one and checks it can open your company file (a newer version may have changed the file in a way an older one can’t read; then it says so). Back up and reinstall… backs up the books, downloads that version, installs it only if its signature matches LocalBooks’ key, and asks you to restart. Admins only.',
+    keywords: 'rollback roll back downgrade previous older version reinstall undo update problem',
+    go: { label: 'Go to Updates', view: 'settings/updates' },
+    guide: 'troubleshooting',
+  },
+  {
     id: 'save-diagnostics', area: 'company', views: ['settings/diagnostics', 'settings/updates'],
     title: 'Save diagnostics for whoever is helping you',
     body: 'Help › Save Diagnostics… (or Settings › Diagnostics) saves a zip file where you choose: LocalBooks’ version, your operating system, the company file’s size, schema version and integrity check, how many rows each table has, and LocalBooks’ log of when it started, stopped, which file it opened and any crash. It holds no customers, vendors or amounts, and LocalBooks never sends it anywhere. Show what’s in it lets you read it first.',
@@ -139,7 +147,7 @@ export const topics = [
   {
     id: 'closing-date', area: 'company', views: ['settings/preferences', 'accounting/journal'],
     title: 'Close a fiscal or tax period',
-    body: 'Set a closing date to lock the books through that date, so nothing dated on or before it can be posted or voided from any screen. Add a passcode to require it for moving or removing the date; every change is kept in the closing history.',
+    body: 'Set a closing date to lock the books through that date, so nothing dated on or before it can be posted or voided from any screen, except by an External Accountant user. Add a passcode to require it for moving or removing the date; every change is kept in the closing history. Reports › Closing Date Exceptions lists everything posted in a closed period, and who entered it.',
     keywords: 'lock close year end period tax password passcode books',
     go: { label: 'Go to the closing date', view: 'settings/preferences', action: 'closing' },
     guide: 'closing-the-books',
@@ -147,7 +155,7 @@ export const topics = [
   {
     id: 'users', area: 'company', views: ['settings/users', 'expenses/vendors'],
     title: 'Users, passwords and sensitive data',
-    body: 'Turn on users so everyone signs in with their own password and a role: Admin (everything, including users, settings, imports and restores), Standard (day-to-day bookkeeping) or View only (looks and runs reports, changes nothing). LocalBooks checks the role before every action. Vendor tax IDs and bank details are then encrypted and shown in full only to users allowed to see sensitive data. Everyone is signed out after 15 minutes without typing or clicking (an Admin can change this under Sign out when idle). Remember me on this computer skips the sign-in once per opening. Save the recovery key you are given: it is the only way back in if every Admin forgets their password. Only those sensitive values are encrypted: use FileVault or BitLocker for the rest of the file and its backups.',
+    body: 'Turn on users so everyone signs in with their own password and a role: Admin (everything, including users, settings, imports and restores), Standard (day-to-day bookkeeping), View only (looks and runs reports, changes nothing) or External Accountant (your outside accountant: like Standard, may post in closed periods, never sees sensitive data). LocalBooks checks the role before every action. Vendor tax IDs and bank details are then encrypted and shown in full only to users allowed to see sensitive data. Everyone is signed out after 15 minutes without typing or clicking (an Admin can change this under Sign out when idle). Remember me on this computer skips the sign-in once per opening. Save the recovery key you are given: it is the only way back in if every Admin forgets their password. Only those sensitive values are encrypted: use FileVault or BitLocker for the rest of the file and its backups.',
     keywords: 'user users password sign in login log in role admin permission security encrypt encryption ssn ein tax id sensitive recovery key forgot lock idle remember',
     go: { label: 'Go to Users & Passwords', view: 'settings/users' },
     guide: 'users-and-passwords',
@@ -181,6 +189,13 @@ export const topics = [
     title: 'Export lists to an IIF file, or addresses to a text file',
     body: 'File › Utilities › Export › Lists to IIF Files saves the chart of accounts, customers and jobs, vendors, items and classes as an IIF file, which Import / Convert (and the desktop products) read, to start another company with the same lists. Addresses to Text File saves each active customer’s and vendor’s name, address, phone and email as tab-separated text for mail merges and labels.',
     keywords: 'export lists iif file utilities chart of accounts customers vendors items addresses text file mail merge labels tab delimited',
+  },
+  {
+    id: 'backup-safety', area: 'company', views: ['settings/data', 'dashboard'],
+    title: 'Keep a backup off this computer, and test that it restores',
+    body: 'Backup safety in File & Data Controls shows when a backup was last copied off this computer (Back up to… on another drive, a network or synced folder, or the offsite backup) and last test-restored. Test beside a snapshot, or Test restore a backup…, opens a backup and checks it as a restore would without replacing your books. Reminders lists either one after 30 days; change the days in Preferences › Reminders.',
+    keywords: 'backup safety offsite another drive usb test restore verify check reminder disk failure',
+    go: { label: 'Go to File & Data Controls', view: 'settings/data' },
     guide: 'backups-and-company-files',
   },
   {
@@ -210,8 +225,8 @@ export const topics = [
   {
     id: 'qbw-import', area: 'company', views: ['settings/import'],
     title: 'Import a desktop company file (.qbw)',
-    body: 'Choose a .qbw file: LocalBooks reads it without changing it and brings in invoice line amounts only, because customers, payments and account names cannot be read from .qbw files yet. Map each line type to an income account, compare the total with the original program, then post.',
-    keywords: 'qbw qbb qbm migrate migration wizard desktop company file convert move import extractor',
+    body: 'Choose a .qbw company file or .qbb backup: LocalBooks reads it without changing it and brings in its accounts, lists and transactions. Step 2 compares each account’s total with the balance the file stores, and lists any account that does not match with the file’s balance, the imported balance and the difference; the list stays after you post. Choose a LocalBooks account for each, then post.',
+    keywords: 'qbw qbb qbm migrate migration wizard desktop company file convert move import extractor balance differs difference match',
     go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
     guide: 'desktop-migration',
   },
@@ -234,8 +249,8 @@ export const topics = [
   {
     id: 'sheet-import', area: 'company', views: ['settings/import'],
     title: 'Import from a spreadsheet: lists, transactions or journal entries',
-    body: 'Under step 1 of the Desktop Migration Wizard, open "From a spreadsheet you laid out", choose what the sheet holds (customers, vendors, invoices, sales receipts, credit memos, deposits, bills, bill credits, checks, credit card charges or credits, or journal entries), and choose the .csv or Excel file (or download the template first). Match each field to a column, then click Check the rows: every row that would fail is listed with its row number, and nothing is staged until there are none. Continue to the review, which works like any other import. Rows with the same number become one transaction, a line per row; a journal entry\'s debits must equal its credits.',
-    keywords: 'spreadsheet excel csv xlsx import customers vendors invoices sales receipts credit memos deposits bills checks credit card journal entries columns map mapping template rows',
+    body: 'Under step 1 of the Desktop Migration Wizard, open "From a spreadsheet you laid out", choose what the sheet holds (customers, vendors, invoices, sales receipts, credit memos, deposits, bills, bill credits, checks, credit card charges or credits, customer or bill payments, or journal entries), and choose the .csv or Excel file (or download the template first). Match each field to a column, then click Check the rows: every row that would fail is listed with its row number, and nothing is staged until there are none. Continue to the review, which works like any other import. Rows with the same number become one transaction, a line per row; a journal entry\'s debits must equal its credits. Invoices and sales receipts take a Sales tax and a Discount for the whole document. A payments sheet names the invoice or bill each row pays; its rows are checked against your books, and Post payments records them all at once, or nothing.',
+    keywords: 'spreadsheet excel csv xlsx import customers vendors invoices sales receipts credit memos deposits bills checks credit card journal entries columns map mapping template rows payments customer payments bill payments sales tax discount',
     go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
     guide: 'desktop-migration',
   },
@@ -345,7 +360,7 @@ export const topics = [
   {
     id: 'sales-defaults', area: 'company', views: ['settings/preferences', 'sales/invoices', 'expenses/bills', 'sales/estimates', 'sales/customers'],
     title: 'Defaults for selling, getting paid and paying bills',
-    body: 'An Admin sets these in Edit › Preferences, Company Preferences. Sales & Customers: the usual Ship Via on new sales forms, the default markup Change Item Prices starts with from cost, price levels on or off, and a warning before selling to a customer with overdue invoices. Jobs & Estimates: estimates on or off (off hides them from the menus, side bar and New) and the names of the five job statuses. Payments: apply a payment to an exact match or the oldest invoices automatically, or tick them yourself; work out the amount from the invoices ticked; deposit to Undeposited Funds; take customers’ early-payment discounts automatically, and the account they go to (such as Sales Discounts). Bills: days until a bill is due when the vendor has no terms (10), and using vendor credits and taking early-payment discounts in Pay Bills (discounts go to the discount account you choose). Send Forms: whether new customers’ forms are marked Email later, Print later or neither. Each customer’s Preferred delivery and each job’s status are on the customer’s Edit….',
+    body: 'An Admin sets these in Edit › Preferences, Company Preferences. Sales & Customers: the usual Ship Via and F.O.B. on new sales forms, whether 0.00 estimate lines are left off the invoice it becomes, the default markup Change Item Prices starts with from cost, price levels on or off, and a warning before selling to a customer with overdue invoices. Jobs & Estimates: estimates on or off (off hides them from the menus, side bar and New) and the names of the five job statuses. Payments: apply a payment to an exact match or the oldest invoices automatically, or tick them yourself; work out the amount from the invoices ticked; deposit to Undeposited Funds; take customers’ early-payment discounts automatically, and the account they go to (such as Sales Discounts). Bills: days until a bill is due when the vendor has no terms (10), and using vendor credits and taking early-payment discounts in Pay Bills (discounts go to the discount account you choose). Send Forms: whether new customers’ forms are marked Email later, Print later or neither. Each customer’s Preferred delivery and each job’s status are on the customer’s Edit….',
     keywords: 'shipping method ship via fob markup price levels off overdue warning zero amount lines estimate invoice estimates off job status pending awarded closed auto apply payment exact match oldest calculate undeposited funds sales discounts early payment bill due days terms vendor credits pay bills discount preferred delivery send method email later print later',
     go: { label: 'Go to Preferences', view: 'settings/preferences' },
     guide: 'getting-started',

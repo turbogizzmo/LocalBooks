@@ -186,7 +186,7 @@ async fn expenses_entered_directly_are_history_too() {
     let pool = test_pool().await;
     let checking = account(&pool, "1010").await;
     let software = account(&pool, "6350").await;
-    let expense = crate::expenses::ExpenseInput {
+    let expense = crate::expenses::ExpenseInput { form_lines: Vec::new(),
         payment_method_id: None,
         kind: "EXPENSE".into(),
         payee_name: Some("Canva".into()),

@@ -84,15 +84,9 @@ export default function QuickCreateModal({ onClose, onCreate }) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-qb-nav/30 pt-[12vh] backdrop-blur-sm" onMouseDown={onClose}>
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Create new"
-        className="w-[760px] rounded-xs border border-qb-border-strong bg-white shadow-popover"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+    // A press on the dimmed backdrop itself (not inside the dialog) closes it.
+    <div role="presentation" className="fixed inset-0 z-50 flex items-start justify-center bg-qb-nav/30 pt-[12vh] backdrop-blur-sm" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Create new" className="w-[760px] rounded-xs border border-qb-border-strong bg-white shadow-popover">
         <div className="flex items-center border-b border-qb-border px-3 py-1">
           <h2 className="text-md font-semibold">New</h2>
           <span className="ml-2 text-xs text-qb-ink-muted">↑↓ to move · Enter to open · Esc to close</span>

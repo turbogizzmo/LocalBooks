@@ -582,6 +582,9 @@ pub struct PurchaseOrderInput {
     pub expected_date: Option<NaiveDate>,
     pub memo: Option<String>,
     pub lines: Vec<PurchaseOrderLineInput>,
+    /// Discount and charge lines among the split lines (`purchase_lines`).
+    #[serde(default)]
+    pub form_lines: Vec<crate::purchase_lines::PurchaseFormLineInput>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -651,12 +654,17 @@ pub fn validate_purchase_order(input: &PurchaseOrderInput) -> Result<i64, String
         }
         total = total.checked_add(line.amount_cents).filter(|t| *t <= MAX_LINE_CENTS).ok_or_else(|| format!("PO_TOO_LARGE: the order exceeds {}", format_cents(MAX_LINE_CENTS)))?;
     }
+    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+    let (_, total) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "PO")?;
     Ok(total)
 }
 
 /// Writes a validated purchase order (`total` from [`validate_purchase_order`]) in `tx`.
 pub(crate) async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, input: &PurchaseOrderInput, total: i64) -> Result<i64, String> {
     {
+        let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+        let (form_amounts, _) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "PO")?;
+        crate::purchase_lines::check(tx, &input.form_lines, "PO").await?;
         let vendor = crate::sales::find_or_create_named(tx, crate::sales::Party::Vendor, &input.vendor_name).await?;
         let id: i64 = sqlx::query_scalar(
             "INSERT INTO purchase_orders (po_number, vendor_id, po_date, expected_date, memo, total_cents)
@@ -689,6 +697,7 @@ pub(crate) async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, input
             .await
             .map_err(db_err)?;
         }
+        crate::purchase_lines::write(tx, crate::purchase_lines::PurchaseDoc::PurchaseOrder, id, &input.form_lines, &form_amounts).await?;
         Ok(id)
     }
 }
@@ -711,6 +720,8 @@ pub async fn set_purchase_order_closed(pool: &SqlitePool, id: i64, closed: bool)
 /// Turns an open purchase order into a posted bill with the same lines; returns the bill id.
 pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDate, due_date: NaiveDate, bill_number: Option<String>) -> Result<i64, String> {
     let lines = purchase_order_lines(pool, id).await?;
+    // Its discounts and charges come over too, so the bill totals what the order did.
+    let form_lines = crate::purchase_lines::inputs_of(&crate::purchase_lines::lines_of(pool, crate::purchase_lines::PurchaseDoc::PurchaseOrder, id).await?);
     run(pool, async |tx| {
         let head: Option<(String, i64, String, Option<String>, i64)> = sqlx::query_as(
             "SELECT v.name, o.total_cents, o.status, o.memo, o.po_number FROM purchase_orders o JOIN vendors v ON v.id = o.vendor_id WHERE o.id = ?1",
@@ -748,6 +759,7 @@ pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDat
                     billable: None,
                 })
                 .collect(),
+            form_lines: form_lines.clone(),
         };
         let bill_id = crate::expenses::write_bill(tx, &bill).await?;
         sqlx::query("UPDATE purchase_orders SET status = 'BILLED', bill_id = ?1 WHERE id = ?2").bind(bill_id).bind(id).execute(&mut **tx).await.map_err(db_err)?;

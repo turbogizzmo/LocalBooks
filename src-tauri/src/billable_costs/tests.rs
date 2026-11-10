@@ -245,3 +245,72 @@ async fn billable_time_is_invoiced_once_at_its_hours_and_rate() {
     crate::ledger::void_transaction(&pool, entry_id).await.unwrap();
     assert_eq!(list_unbilled_time(&pool, Some(acme)).await.unwrap().len(), 2);
 }
+
+/// A cost on an expense in another currency is billed at its home amount, converted at the
+/// expense's rate, and the reimbursement takes off exactly what the expense put on.
+#[tokio::test]
+async fn a_foreign_currency_cost_is_billed_at_its_home_amount() {
+    let pool = test_pool().await;
+    let (checking, supplies, rent) = (account(&pool, "1010").await, account(&pool, "6250").await, account(&pool, "6300").await);
+    let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
+    let mut euro = check(checking, supplies, rent, acme, Some(true));
+    euro.currency = Some(crate::ledger::ForeignCurrency { code: "EUR".into(), exchange_rate_e6: 1_105_000 });
+    crate::expenses::post_expense(&pool, euro).await.unwrap();
+    let unbilled = list_unbilled(&pool, Some(acme)).await.unwrap();
+    assert_eq!(unbilled.len(), 1);
+    let cost = &unbilled[0];
+    // €200.00 at 1.105 is $221.00.
+    assert_eq!((cost.amount_cents, cost.foreign_amount_cents, cost.currency_code.as_deref()), (22_100, Some(20_000), Some("EUR")));
+    let expense_before = balance(&pool, supplies).await;
+    let invoice = bill_costs(
+        &pool,
+        BillCostsInput {
+            customer_id: acme,
+            costs: vec![CostRef { source: "EXPENSE".into(), line_id: cost.line_id }],
+            time: Vec::new(),
+            issue_date: d(10),
+            due_date: d(31),
+            markup_percent: Some("0".into()),
+            tax_rate_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(invoice.total_cents, 22_100);
+    assert_eq!(balance(&pool, supplies).await, expense_before - 22_100, "the expense is back to where it was");
+    let line = &crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap().items[0];
+    assert!(line.description.ends_with(", EUR 200.00)"), "{}", line.description);
+}
+
+/// Editing an invoice that billed costs can move a reimbursed line to another expense account,
+/// but not to an asset or liability.
+#[tokio::test]
+async fn an_edited_reimbursement_line_can_move_to_another_expense_account() {
+    let pool = test_pool().await;
+    let (checking, supplies, rent) = (account(&pool, "1010").await, account(&pool, "6250").await, account(&pool, "6300").await);
+    let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
+    crate::expenses::post_expense(&pool, check(checking, supplies, rent, acme, Some(true))).await.unwrap();
+    let cost = list_unbilled(&pool, Some(acme)).await.unwrap()[0].line_id;
+    let invoice = bill_costs(
+        &pool,
+        BillCostsInput { customer_id: acme, costs: vec![CostRef { source: "EXPENSE".into(), line_id: cost }], time: Vec::new(), issue_date: d(10), due_date: d(31), markup_percent: Some("0".into()), tax_rate_id: None },
+    )
+    .await
+    .unwrap();
+    let edited = |account_id: i64| crate::invoices::InvoiceInput {
+        customer_name: "Acme".into(),
+        issue_date: d(11),
+        due_date: d(31),
+        lines: vec![crate::invoices::InvoiceLineInput { description: "Lumber".into(), quantity_e4: 10_000, rate_cents: 20_000, income_account_id: account_id, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        currency: None,
+        tax_rate_id: None,
+        discount_cents: 0,
+        details: Default::default(),
+    };
+    let err = crate::edits::replace_invoice(&pool, invoice.id, edited(checking)).await.unwrap_err();
+    assert!(err.starts_with("INV_NOT_INCOME_ACCOUNT"), "{err}");
+    let (supplies_before, rent_before) = (balance(&pool, supplies).await, balance(&pool, rent).await);
+    crate::edits::replace_invoice(&pool, invoice.id, edited(rent)).await.unwrap();
+    assert_eq!((balance(&pool, supplies).await - supplies_before, balance(&pool, rent).await - rent_before), (20_000, -20_000), "the reimbursement moved to Rent");
+    assert!(list_unbilled(&pool, Some(acme)).await.unwrap().is_empty(), "the cost stays billed");
+}

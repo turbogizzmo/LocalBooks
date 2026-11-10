@@ -50,7 +50,7 @@ async fn open_purchase_orders_match_the_report() {
     let account = crate::harness::account(&pool, "6300").await;
     let line = |cents| PurchaseOrderLineInput { account_id: account, product_service_id: None, description: Some("Paper".into()), quantity_e4: None, rate_cents: None, amount_cents: cents, class_id: None, customer_id: None };
     for cents in [12_500, 7_500] {
-        let po = PurchaseOrderInput { vendor_name: vendor.name.clone(), po_date: d(2026, 1, 5), expected_date: None, memo: None, lines: vec![line(cents)] };
+        let po = PurchaseOrderInput { form_lines: Vec::new(), vendor_name: vendor.name.clone(), po_date: d(2026, 1, 5), expected_date: None, memo: None, lines: vec![line(cents)] };
         crate::workflows::create_purchase_order(&pool, po).await.unwrap();
     }
     let summary = party_summary(&pool, "vendor", vendor.id).await.unwrap();

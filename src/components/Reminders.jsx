@@ -17,7 +17,9 @@ const GO = {
   GROUP_STATEMENTS: ['sales/statements', null, 'Customer Statements'],
   PAYMENT_REMINDERS: ['sales/customers', null, 'Customers'],
   TAX_DATES: ['settings', 'preferences', 'Tax calendar'],
+  INVENTORY_REORDER: ['sales/products', null, 'Item list'],
   BACKUP: ['settings', 'data', 'Back up'],
+  BACKUP_SAFETY: ['settings', 'data', 'Backup safety'],
 };
 
 /** The categories in the order they show, with what their days mean. */
@@ -28,7 +30,9 @@ const CATEGORIES = [
   { key: 'recurring', label: 'Recurring transactions to enter', days: 'Days ahead to look for scheduled dates' },
   { key: 'emailQueue', label: 'Forms to email (Email later)' },
   { key: 'taxDates', label: 'Tax dates', days: 'Days ahead to look for federal due dates' },
+  { key: 'inventoryReorder', label: 'Inventory to reorder (tracked items at or below their reorder point)' },
   { key: 'backup', label: 'Backup', days: 'Days since the last backup before it is due' },
+  { key: 'backupSafety', label: 'Backup safety (a copy off this computer, a test restore)', days: 'Days since the last of each before it is due' },
 ];
 
 function ReminderGroup({ group, open, onToggle, navigate }) {
@@ -180,7 +184,7 @@ export function ReminderSettingsDialog({ onClose }) {
                       {c.days && (
                         <input
                           type="number"
-                          min={c.key === 'backup' ? 1 : 0}
+                          min={c.key === 'backup' || c.key === 'backupSafety' ? 1 : 0}
                           max={365}
                           value={settings[c.key].days}
                           onChange={(e) => setCategory(c.key, { days: e.target.value === '' ? 0 : Number(e.target.value) })}

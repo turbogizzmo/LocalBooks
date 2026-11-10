@@ -80,6 +80,10 @@ pub async fn bundle(pool: Option<&SqlitePool>, company_file: Option<&Path>, log_
     if let Some(pool) = pool {
         let sqlite: String = sqlx::query_scalar("SELECT sqlite_version()").fetch_one(pool).await.map_err(db_err)?;
         versions.push_str(&format!("SQLite: {sqlite}\n"));
+        if let Some(cipher) = crate::file_cipher::cipher_version(pool).await {
+            let provider = crate::file_cipher::cipher_provider().await.unwrap_or_default();
+            versions.push_str(&format!("SQLCipher: {cipher} ({provider})\n"));
+        }
     }
     files.push(("versions.txt".to_string(), versions));
 

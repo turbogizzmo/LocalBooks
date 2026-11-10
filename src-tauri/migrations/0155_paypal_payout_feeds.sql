@@ -1,0 +1,27 @@
+-- T68: PayPal payout feeds (`payout_feeds/paypal.rs`, docs/plans/payout-feeds.md).
+--
+-- A feed's processor may now be PayPal, and a feed gains `account_ref`: which PayPal environment
+-- the app's credentials belong to ('LIVE' or 'SANDBOX'; a later processor keeps its own reference
+-- here, never a secret). The table is rebuilt with its rows; payouts keep their feed ids.
+
+CREATE TABLE payout_feeds_new (
+    id                    INTEGER PRIMARY KEY,
+    processor             TEXT    NOT NULL CHECK (processor IN ('STRIPE', 'PAYPAL')),
+    name                  TEXT    NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 100),
+    secret_key            TEXT    NOT NULL UNIQUE,
+    account_ref           TEXT    CHECK (account_ref IS NULL OR length(account_ref) BETWEEN 1 AND 255),
+    bank_account_id       INTEGER NOT NULL REFERENCES chart_of_accounts (id) ON DELETE RESTRICT,
+    sales_account_id      INTEGER NOT NULL REFERENCES chart_of_accounts (id) ON DELETE RESTRICT,
+    fee_account_id        INTEGER NOT NULL REFERENCES chart_of_accounts (id) ON DELETE RESTRICT,
+    refund_account_id     INTEGER NOT NULL REFERENCES chart_of_accounts (id) ON DELETE RESTRICT,
+    chargeback_account_id INTEGER NOT NULL REFERENCES chart_of_accounts (id) ON DELETE RESTRICT,
+    last_fetched_at       TEXT,
+    created_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    CHECK (processor <> 'PAYPAL' OR account_ref IN ('LIVE', 'SANDBOX'))
+) STRICT;
+
+INSERT INTO payout_feeds_new (id, processor, name, secret_key, bank_account_id, sales_account_id, fee_account_id, refund_account_id, chargeback_account_id, last_fetched_at, created_at)
+SELECT id, processor, name, secret_key, bank_account_id, sales_account_id, fee_account_id, refund_account_id, chargeback_account_id, last_fetched_at, created_at FROM payout_feeds ORDER BY id;
+
+DROP TABLE payout_feeds;
+ALTER TABLE payout_feeds_new RENAME TO payout_feeds;

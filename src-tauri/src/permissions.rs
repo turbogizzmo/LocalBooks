@@ -4,7 +4,8 @@
 //! - [`Need::Open`] commands (signing in, opening or closing a company file, windows) always run;
 //! - everything else needs someone signed in, who has replaced any temporary password;
 //! - [`Need::Read`] commands run for every role;
-//! - [`Need::Write`] commands (anything that changes the books) need Admin or Standard;
+//! - [`Need::Write`] commands (anything that changes the books) need Admin, Standard or External
+//!   Accountant;
 //! - [`Need::Admin`] commands (users, company-wide settings, imports and restores, bank connections,
 //!   the AI access server) need an Admin.
 //!
@@ -59,6 +60,8 @@ const OPEN: &[&str] = &[
 ];
 
 const ADMIN: &[&str] = &[
+    // Going back to the previous release changes the app for everyone using these books.
+    "reinstall_previous_release",
     // Removing an attachment for good (deleting one is reversible and open to Standard users).
     "purge_attachment",
     // Users and the recovery key.
@@ -107,6 +110,9 @@ const ADMIN: &[&str] = &[
     "delete_approval_rule",
     // Payout feeds: connecting a processor account and its key.
     "connect_stripe_feed",
+    "connect_paypal_feed",
+    "connect_shopify_feed",
+    "set_payout_auto_fetch",
     "update_payout_feed",
     "disconnect_payout_feed",
     "file_repair_rebuild",
@@ -123,6 +129,7 @@ const ADMIN: &[&str] = &[
     "ingest_raw_qbw",
     "ingest_report_exports",
     "stage_import_sheet",
+    "post_payment_sheet",
     "export_from_installed_quickbooks",
     "set_qbw_mapping",
     "auto_create_qbw_accounts",
@@ -172,6 +179,8 @@ const READ: &[&str] = &[
     "report_sheet",
     "list_statement_charges",
     "get_list_order",
+    "list_other_names",
+    "get_other_name",
     "get_customer_credit",
     "list_party_contacts",
     "list_item_categories",
@@ -242,9 +251,39 @@ pub fn check(gate: &Gate, need: Need) -> Result<(), String> {
     }
     match (need, user.role) {
         (Need::Write, Role::ViewOnly) => Err("ROLE_VIEW_ONLY: view only: your user can look at the books but not change them".into()),
-        (Need::Admin, Role::Standard | Role::ViewOnly) => Err("ROLE_ADMIN_ONLY: only an Admin can do this".into()),
+        (Need::Admin, Role::Standard | Role::ViewOnly | Role::ExternalAccountant) => Err("ROLE_ADMIN_ONLY: only an Admin can do this".into()),
         _ => Ok(()),
     }
+}
+
+/// The role signed in to the open company file, set with the gate by
+/// [`crate::db::Db::refresh_gate`]. One company file is open per process, so one value serves
+/// every write; tests open files in parallel, each on its own thread.
+#[cfg(not(test))]
+static SIGNED_IN_ROLE: std::sync::RwLock<Option<Role>> = std::sync::RwLock::new(None);
+
+#[cfg(test)]
+thread_local! {
+    static SIGNED_IN_ROLE: std::cell::Cell<Option<Role>> = const { std::cell::Cell::new(None) };
+}
+
+pub fn set_signed_in_role(role: Option<Role>) {
+    #[cfg(not(test))]
+    {
+        *SIGNED_IN_ROLE.write().expect("signed-in role lock") = role;
+    }
+    #[cfg(test)]
+    SIGNED_IN_ROLE.with(|r| r.set(role));
+}
+
+/// An External Accountant is signed in: postings on or before the closing date are allowed
+/// (`closing::check_open`), and the Closing Date Exceptions list shows them afterwards.
+pub fn may_post_in_closed_period() -> bool {
+    #[cfg(not(test))]
+    let role = *SIGNED_IN_ROLE.read().expect("signed-in role lock");
+    #[cfg(test)]
+    let role = SIGNED_IN_ROLE.with(|r| r.get());
+    role == Some(Role::ExternalAccountant)
 }
 
 #[cfg(test)]

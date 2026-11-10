@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
-import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useEditIntent, useOpenFromList } from '../lib/windows.js';
 import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
 import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu from './RowMenu.jsx';
 import SplitGrid, { blankSplit, splitRowsFromCopy, summarizeSplits } from './SplitGrid.jsx';
+import PurchaseFormLines, { usePurchaseFormLines } from './PurchaseFormLines.jsx';
+import { purchaseLineMessage } from '../lib/purchaseLines.js';
+import { percentText } from '../lib/itemTypes.js';
 import { useFormClass } from './ClassSelect.jsx';
 import { isCategory } from './Bills.jsx';
 import { DocHeader, PrintPortal, useCompany } from './PrintDocuments.jsx';
@@ -23,7 +27,13 @@ import { FormInfoPanel } from './InfoPanel.jsx';
 
 const STATUS = { OPEN: 'Open', CLOSED: 'Closed', BILLED: 'Billed' };
 
-export function PurchaseOrderDocument({ company, order, lines, accounts }) {
+/** Loads what a printed purchase order shows: its lines, and its discounts and charges. */
+export async function purchaseOrderPrintLines(id) {
+  const [lines, formLines] = await Promise.all([api.getPurchaseOrderLines(id), api.getPurchaseFormLines('PURCHASE_ORDER', id)]);
+  return { lines, formLines };
+}
+
+export function PurchaseOrderDocument({ company, order, lines, formLines = [], accounts }) {
   return (
     <article className="doc">
       <DocHeader company={company} title="Purchase Order" subtitle={`PO #${order.poNumber} · ${formatDate(order.poDate)}`} />
@@ -43,15 +53,28 @@ export function PurchaseOrderDocument({ company, order, lines, accounts }) {
           </tr>
         </thead>
         <tbody>
-          {lines.map((l, i) => (
-            <tr key={i}>
-              <td>{accountLabel(accounts, l.accountId)}</td>
-              <td>{l.description ?? ''}</td>
-              <td className="doc-num">{l.quantityE4 ? formatQuantity(l.quantityE4) : ''}</td>
-              <td className="doc-num">{l.rateCents ? formatCents(l.rateCents) : ''}</td>
-              <td className="doc-num">{formatCents(l.amountCents)}</td>
-            </tr>
-          ))}
+          {lines.flatMap((l, i) => {
+            // A discount or charge prints under the line it applies to.
+            const extra = formLines.find((f) => f.afterLine === i + 1);
+            return [
+              <tr key={i}>
+                <td>{accountLabel(accounts, l.accountId)}</td>
+                <td>{l.description ?? ''}</td>
+                <td className="doc-num">{l.quantityE4 ? formatQuantity(l.quantityE4) : ''}</td>
+                <td className="doc-num">{l.rateCents ? formatCents(l.rateCents) : ''}</td>
+                <td className="doc-num">{formatCents(l.amountCents)}</td>
+              </tr>,
+              extra && (
+                <tr key={`f${i}`}>
+                  <td>{accountLabel(accounts, extra.accountId)}</td>
+                  <td>{extra.description}</td>
+                  <td className="doc-num" />
+                  <td className="doc-num">{extra.percentPpm ? percentText(extra.percentPpm) : ''}</td>
+                  <td className="doc-num">{formatCents(extra.kind === 'DISCOUNT' ? -extra.amountCents : extra.amountCents)}</td>
+                </tr>
+              ),
+            ];
+          })}
         </tbody>
       </table>
       <table className="doc-totals">
@@ -79,7 +102,9 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
   const [busy, setBusy] = useState(false);
   const formClass = useFormClass(accounts);
   const openFromList = useOpenFromList();
-  const { lines, invalid, total } = summarizeSplits(rows);
+  const { lines, invalid, total: splitTotal } = summarizeSplits(rows);
+  const [formRows, setFormRows, laid, formTouched] = usePurchaseFormLines(lines, copyOf?.sourceId ? { doc: 'PURCHASE_ORDER', id: copyOf.sourceId } : null);
+  const total = laid.error ? splitTotal : laid.total;
 
   const clear = () => {
     setVendor('');
@@ -87,6 +112,7 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
     setExpected('');
     setMemo('');
     setRows([blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+    setFormRows([]);
     formClass.reset();
     setError(null);
   };
@@ -95,10 +121,11 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
     if (!vendor.trim()) return setError('Enter a vendor.');
     if (invalid > 0) return setError(`${invalid} row(s) need an account and an amount above zero.`);
     if (lines.length === 0) return setError('Add at least one line.');
+    if (laid.error && formRows.length > 0) return setError(purchaseLineMessage(laid.error));
     const posted = formClass.apply(lines).map(({ memo: description, ...l }) => ({ ...l, description }));
     setBusy(true);
     try {
-      const input = { vendorName: vendor.trim(), poDate, expectedDate: expected || null, memo: memo.trim() || null, lines: posted };
+      const input = { vendorName: vendor.trim(), poDate, expectedDate: expected || null, memo: memo.trim() || null, lines: posted, formLines: laid.formLines ?? [] };
       let id;
       try {
         id = await api.createPurchaseOrder(input);
@@ -122,7 +149,7 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
 
   const flow = useFormFlow({ save: () => save('save'), clear, onClose: onCancel, busy });
   // Opening a saved order (Previous) asks for the entries to be saved or cleared first.
-  const dirty = useDirtySince('purchase-order', { vendor, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
+  const dirty = useDirtySince('purchase-order', { vendor, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]), formTouched });
 
   return (
     <div className="flex flex-none gap-2">
@@ -156,6 +183,7 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
         </div>
       </div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withPricing withClasses withJobs withBillable={false} stockItems={stockItems.data ?? []} />
+      <PurchaseFormLines rows={formRows} setRows={setFormRows} laid={laid} lines={lines} accounts={accounts} />
       <div className="flex items-center gap-2 px-2 py-1">
         <input className="qb-input w-[320px]" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Message to vendor" />
         {error && <span className="text-sm text-qb-negative">{error}</span>}
@@ -179,7 +207,7 @@ function PurchaseOrderPreview({ company, order, accounts }) {
     let live = true;
     setLines(null);
     setError(null);
-    api.getPurchaseOrderLines(order.id).then(
+    purchaseOrderPrintLines(order.id).then(
       (l) => live && setLines(l),
       (err) => live && setError(errorText(err)),
     );
@@ -191,7 +219,7 @@ function PurchaseOrderPreview({ company, order, accounts }) {
   if (!lines) return <div className="px-2 py-1 text-sm text-qb-ink-muted">Loading…</div>;
   return (
     <div className="mx-auto max-w-[820px] bg-white p-6 shadow-md">
-      <PurchaseOrderDocument company={company} order={order} lines={lines} accounts={accounts} />
+      <PurchaseOrderDocument company={company} order={order} lines={lines.lines} formLines={lines.formLines} accounts={accounts} />
     </div>
   );
 }
@@ -263,8 +291,7 @@ export default function PurchaseOrders({ accounts, intent }) {
 
   const print = async (order) => {
     try {
-      const lines = await api.getPurchaseOrderLines(order.id);
-      setPrinting({ order, lines });
+      setPrinting({ order, ...(await purchaseOrderPrintLines(order.id)) });
       setTimeout(() => printDocument(), 120);
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
@@ -298,6 +325,8 @@ export default function PurchaseOrders({ accounts, intent }) {
     saved.open(o);
     setComposing(true);
   };
+  // A purchase order opened from elsewhere (the bills money bar's Purchase orders list).
+  useEditIntent(intent, 'purchaseOrderId', data, openOrder, () => setNotice({ kind: 'error', text: 'That purchase order is no longer in the books.' }));
   // Duplicate: the saved order the new one on the form starts from.
   const [copyOf, setCopyOf] = useState(null);
   const [formKey, setFormKey] = useState(0);
@@ -305,7 +334,8 @@ export default function PurchaseOrders({ accounts, intent }) {
     api.getCopySource('PURCHASE_ORDER', o.id).then(
       (copy) => {
         saved.close();
-        setCopyOf(copy);
+        // The copy's discounts and charges come from the original (`sourceId`).
+        setCopyOf({ ...copy, sourceId: o.id });
         setFormKey((k) => k + 1);
         setComposing(true);
         setNotice({ kind: 'info', text: `A copy of PO #${o.poNumber}, dated today: it gets the next number when you save it.` });
@@ -317,7 +347,7 @@ export default function PurchaseOrders({ accounts, intent }) {
       {!inventoryOn && <Notice kind="info" text="Inventory and purchase orders are turned off in Preferences › Items & Inventory. Existing purchase orders stay here; new ones can't be made." />}
       {printing && (
         <PrintPortal>
-          <PurchaseOrderDocument company={company} order={printing.order} lines={printing.lines} accounts={accounts} />
+          <PurchaseOrderDocument company={company} order={printing.order} lines={printing.lines} formLines={printing.formLines} accounts={accounts} />
         </PrintPortal>
       )}
       {composing && viewing ? (
@@ -411,7 +441,7 @@ export default function PurchaseOrders({ accounts, intent }) {
                 </tr>
               )}
               {list.map((o) => (
-                <tr key={o.id} className="qb-grid-row cursor-pointer" onDoubleClick={() => openOrder(o)}>
+                <tr key={o.id} className="qb-grid-row cursor-pointer" {...rowKeys({ first: o === list[0], open: () => openOrder(o) })}>
                   <td className="qb-grid-cell font-semibold">{o.poNumber}</td>
                   <td className="qb-grid-cell">{formatDate(o.poDate)}</td>
                   <td className="qb-grid-cell">{o.vendorName}</td>

@@ -17,6 +17,20 @@ purchase order or vendor credit, type the name. If nobody matches, the list offe
 **＋ Add "…" as a new customer** (or vendor), added straight away, and **Add with details…**, which
 adds the name and opens its record for the address, terms and (for vendors) 1099 status.
 
+### Other names
+
+**Expenses › Other Names** (or **Lists › Other Names List**) keeps people and businesses who are
+neither customers nor vendors: an owner taking a draw, a partner, a one-off payee. Click **New other
+name** and give the name, and if you like a company, email, phone, address and notes. A name can
+belong to one record only, among customers, vendors and other names.
+
+To pay one, write a check or expense and type (or pick) their name as the payee: the check is paid
+to them, and no vendor is added. Registers, reports by name and **Find** show the other name on it.
+Click a name in the list for its information panel: what has been paid to them, their contact
+details, notes with **Date Stamp**, and their recent transactions. **Make inactive** on a name's
+**Actions** menu hides it from the payee list and keeps its history. **Reports › List › Other Names
+Phone List** prints their phone numbers.
+
 ### Work with the list from the menus
 
 The customer, vendor and item lists (**Sales › Products & Services**) have three menus over the
@@ -441,7 +455,8 @@ Add the carriers and services you ship with, such as `UPS Ground` or `Local deli
 date** and a **Ship via** box.
 
 To fill in the same carrier on every new form, choose it as **Usual shipping method** in
-**Preferences › Sales & Customers**. You can still change it on each form.
+**Preferences › Sales & Customers**, and the same **F.O.B.** (such as *Origin*) as **Usual
+F.O.B.**. You can still change either on each form.
 
 ### Custom fields
 

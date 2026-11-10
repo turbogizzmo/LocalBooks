@@ -7,5 +7,6 @@ export default {
   listItemReceipts: (openOnly = false) => invoke('list_item_receipts', { openOnly }),
   listItemReceiptLines: (itemReceiptId) => invoke('list_item_receipt_lines', { itemReceiptId }),
   listOrderReceiving: (purchaseOrderId) => invoke('list_order_receiving', { purchaseOrderId }),
+  getReceiptBillFormLines: (itemReceiptId) => invoke('get_receipt_bill_form_lines', { itemReceiptId }),
   billReceivedItems: (input) => recordTransaction('bill_received_items', { input }),
 };

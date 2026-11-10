@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
@@ -804,7 +805,7 @@ export default function PartyList({ kind, navigate, intent = null }) {
                     className={`qb-grid-row cursor-pointer ${p.id === selected ? 'is-active' : ''} ${p.isActive ? '' : 'text-qb-ink-faint'}`}
                     aria-selected={p.id === selected}
                     onClick={() => showTransactions(p.id)}
-                    onDoubleClick={() => openRecord(p.id)}
+                    {...rowKeys({ first: p === shownParties[0]?.row, open: () => openRecord(p.id), select: () => setSelected(p.id) })}
                     title="Click to see transactions, double-click to edit"
                   >
                     {cols.columns.map((c) => cell(c, p, item))}

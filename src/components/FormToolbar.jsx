@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useRef, useState } from 'react';
+import { menuKeyDown } from '../lib/menuKeys.js';
 import { Icon } from '../lib/icons.js';
 import { pickAttachments } from './Attachments.jsx';
 import { ConfirmDialog } from './RowMenu.jsx';
@@ -118,20 +119,7 @@ function MenuButton({ item }) {
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
 
-  const onMenuKey = (e) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      setOpen(false);
-      buttonRef.current?.focus();
-    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      const items = [...menuRef.current.querySelectorAll('button:not(:disabled)')];
-      const at = items.indexOf(document.activeElement);
-      items[(at + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
-    } else if (e.key === 'Tab') {
-      setOpen(false);
-    }
-  };
+  const onMenuKey = (e) => menuKeyDown(e, { menu: menuRef.current, opener: buttonRef.current, close: () => setOpen(false) });
 
   const choose = (entry) => {
     setOpen(false);
@@ -158,6 +146,7 @@ function MenuButton({ item }) {
         <div
           ref={menuRef}
           role="menu"
+          tabIndex={-1}
           aria-label={item.label}
           onKeyDown={onMenuKey}
           className="absolute left-0 top-full z-40 mt-0.5 min-w-[180px] rounded-xs border border-qb-border-strong bg-white py-0.5 shadow-popover"

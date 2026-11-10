@@ -413,7 +413,7 @@ async fn discount_items_cannot_be_stocked_or_price_levelled() {
     let bad = crate::sales::create_item(
         &pool,
         crate::sales::ProductInput { name: "Odd".into(), description: None, rate_cents: 0, income_account_id: discounts, is_taxable: false },
-        crate::sales::ItemKind { item_type: "ITEM".into(), percent_ppm: Some(5) },
+        crate::sales::ItemKind { item_type: "ITEM".into(), percent_ppm: Some(5), expense_account_id: None },
     )
     .await
     .unwrap_err();
@@ -439,14 +439,14 @@ async fn fixed_and_percent_charges_post_balanced_and_carry_from_an_estimate() {
     let shipping = crate::sales::create_item(
         &pool,
         crate::sales::ProductInput { name: "Shipping".into(), description: None, rate_cents: 1_500, income_account_id: services, is_taxable: false },
-        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: None },
+        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: None, expense_account_id: None },
     )
     .await
     .unwrap();
     let handling = crate::sales::create_item(
         &pool,
         crate::sales::ProductInput { name: "Handling 3%".into(), description: None, rate_cents: 0, income_account_id: services, is_taxable: false },
-        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: Some(30_000) },
+        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: Some(30_000), expense_account_id: None },
     )
     .await
     .unwrap();
@@ -705,4 +705,71 @@ async fn a_group_s_tracked_items_go_through_the_stock_guard_each() {
         .await
         .unwrap_err();
     assert!(err.starts_with("INV_NOT_ENOUGH_STOCK"), "{err}");
+}
+
+#[tokio::test]
+async fn a_credit_memo_with_a_discount_a_charge_and_a_subtotal_posts_balanced_and_prints_them() {
+    let pool = test_pool().await;
+    let (ar, services) = (account_id(&pool, "1200").await, account_id(&pool, "4100").await);
+    let discounts = discounts_given(&pool).await;
+    let rate = crate::sales_tax::create_tax_rate(
+        &pool,
+        crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 80_000, agency_name: None, liability_account_id: None },
+    )
+    .await
+    .unwrap();
+    let handling = crate::sales::create_item(
+        &pool,
+        crate::sales::ProductInput { name: "Handling 5%".into(), description: None, rate_cents: 0, income_account_id: services, is_taxable: true },
+        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: Some(50_000), expense_account_id: None },
+    )
+    .await
+    .unwrap();
+    let returned = SalesLineInput { product_service_id: None, description: "Returned work".into(), quantity_e4: 10_000, rate_cents: 10_000, income_account_id: services, class_id: None, is_taxable: true, service_date: None };
+    // 100.00 taxable, 5% handling on it (5.00, taxable), a subtotal, then 10% off (taxable).
+    let form_lines = vec![
+        FormLineInput { product_service_id: Some(handling.id), description: "Handling".into(), ..FormLineInput::charge(1, services, 50_000, true) },
+        FormLineInput::subtotal(1),
+        FormLineInput::discount(1, discounts, Some(100_000), None, true),
+    ];
+    let memo = crate::credits::create_credit_memo(
+        &pool,
+        crate::credits::CreditMemoInput {
+            customer_name: "Acme".into(),
+            credit_date: d(3),
+            memo: None,
+            refund_account_id: None,
+            lines: vec![returned],
+            tax_rate_id: Some(rate.id),
+            header: Default::default(),
+            form_lines,
+        },
+    )
+    .await
+    .unwrap();
+    // 100.00 + 5.00 = 105.00, less 10% = 94.50; tax 8% of 94.50 = 7.56; total 102.06.
+    assert_eq!(memo.total_cents, 10_206);
+    // A credit memo credits A/R by its total.
+    assert_posts(&pool, memo.journal_entry_id.unwrap(), ar, -10_206).await;
+    let to_discounts: i64 = sqlx::query_scalar("SELECT SUM(credit_cents) - SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = ?1 AND account_id = ?2")
+        .bind(memo.journal_entry_id)
+        .bind(discounts)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(to_discounts, 1_050, "a credit memo's discount reverses the invoice's: the discount account is credited");
+    let stored: Vec<(i64, Option<i64>)> = sqlx::query_as("SELECT line_number, percent_ppm FROM credit_memo_lines WHERE credit_memo_id = ?1 ORDER BY line_number")
+        .bind(memo.id)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(stored, vec![(1, None), (2, Some(50_000))]);
+
+    let printed = crate::forms::credit_memo_doc(&pool, memo.id, "$").await.unwrap();
+    let rows: Vec<(&str, &str)> = printed.lines.iter().map(|l| (l.description.as_str(), l.amount.as_str())).collect();
+    assert_eq!(rows, vec![("Returned work", "$100.00 T"), ("Handling", "$5.00 T"), ("Subtotal", "$105.00"), ("Discount", "-$10.50 T")]);
+
+    // Posted form lines are as locked as the credit memo's own lines.
+    let err = sqlx::query("UPDATE credit_memo_form_lines SET amount_cents = 0 WHERE credit_memo_id = ?1").bind(memo.id).execute(&pool).await.unwrap_err();
+    assert!(err.to_string().contains("CM_IMMUTABLE"), "{err}");
 }

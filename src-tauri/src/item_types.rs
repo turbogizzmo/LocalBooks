@@ -117,7 +117,6 @@ impl FormLineInput {
         FormLineInput { group_line_count: count, group_quantity_e4: Some(10_000), print_items: Some(print_items), ..Self::blank(after_lines, FormLineKind::Group) }
     }
 
-    #[cfg(test)]
     pub fn subtotal(after_lines: usize) -> Self {
         Self::blank(after_lines, FormLineKind::Subtotal)
     }
@@ -128,7 +127,6 @@ impl FormLineInput {
     }
 
     /// A discount of a percentage (`percent_ppm`) or an amount off the line above.
-    #[cfg(test)]
     pub fn discount(after_lines: usize, account_id: i64, percent_ppm: Option<i64>, amount_cents: Option<i64>, is_taxable: bool) -> Self {
         FormLineInput { account_id: Some(account_id), percent_ppm, amount_cents, is_taxable, ..Self::blank(after_lines, FormLineKind::Discount) }
     }
@@ -323,12 +321,31 @@ pub fn percent_text(ppm: i64) -> String {
     }
 }
 
-fn table(doc: SalesDoc) -> (&'static str, &'static str) {
-    match doc {
-        SalesDoc::Invoice => ("invoice_form_lines", "invoice_id"),
-        SalesDoc::SalesReceipt => ("sales_receipt_form_lines", "sales_receipt_id"),
-        SalesDoc::Estimate => ("estimate_form_lines", "estimate_id"),
+/// Where a document's lines are kept: its item table, its form-line table and the column naming
+/// the document in both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct LineTables {
+    pub items: &'static str,
+    pub form: &'static str,
+    pub key: &'static str,
+}
+
+/// Credit memos and refund receipts (`credits.rs`).
+pub(crate) const CREDIT_MEMO_LINES: LineTables = LineTables { items: "credit_memo_lines", form: "credit_memo_form_lines", key: "credit_memo_id" };
+
+impl From<SalesDoc> for LineTables {
+    fn from(doc: SalesDoc) -> Self {
+        match doc {
+            SalesDoc::Invoice => LineTables { items: "invoice_items", form: "invoice_form_lines", key: "invoice_id" },
+            SalesDoc::SalesReceipt => LineTables { items: "sales_receipt_lines", form: "sales_receipt_form_lines", key: "sales_receipt_id" },
+            SalesDoc::Estimate => LineTables { items: "estimate_lines", form: "estimate_form_lines", key: "estimate_id" },
+        }
     }
+}
+
+fn table(doc: impl Into<LineTables>) -> (&'static str, &'static str) {
+    let t = doc.into();
+    (t.form, t.key)
 }
 
 /// Checks what the form lines refer to: a discount's account is an active income account, its
@@ -422,12 +439,8 @@ pub fn charge_rows(form: &[FormLineInput], layout: &Layout) -> Vec<ChargeRow> {
 }
 
 /// Writes a document's percent charges to its item table (`<table>` keyed by `<key>`).
-pub(crate) async fn write_charges(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, charges: &[ChargeRow], taxed: bool) -> Result<(), String> {
-    let (table, key) = match doc {
-        SalesDoc::Invoice => ("invoice_items", "invoice_id"),
-        SalesDoc::SalesReceipt => ("sales_receipt_lines", "sales_receipt_id"),
-        SalesDoc::Estimate => ("estimate_lines", "estimate_id"),
-    };
+pub(crate) async fn write_charges(tx: &mut Transaction<'_, Sqlite>, doc: impl Into<LineTables>, id: i64, charges: &[ChargeRow], taxed: bool) -> Result<(), String> {
+    let LineTables { items: table, key, .. } = doc.into();
     for c in charges {
         sqlx::query(&format!(
             "INSERT INTO {table} ({key}, line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id, is_taxable, percent_ppm)
@@ -451,7 +464,7 @@ pub(crate) async fn write_charges(tx: &mut Transaction<'_, Sqlite>, doc: SalesDo
 
 /// Writes a document's form lines, after its row is inserted and before it posts. `taxed`: the
 /// document has a tax rate (as for item lines, a line is stored taxable only then).
-pub(crate) async fn write_form_lines(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, form: &[FormLineInput], layout: &Layout, taxed: bool) -> Result<(), String> {
+pub(crate) async fn write_form_lines(tx: &mut Transaction<'_, Sqlite>, doc: impl Into<LineTables>, id: i64, form: &[FormLineInput], layout: &Layout, taxed: bool) -> Result<(), String> {
     let (table, key) = table(doc);
     for (number, index, amount_cents) in layout.form_rows() {
         let f = &form[index];
@@ -506,7 +519,7 @@ pub struct FormLineView {
 }
 
 /// A document's form lines in line order.
-pub async fn form_lines_of<'e, E: sqlx::Executor<'e, Database = Sqlite>>(executor: E, doc: SalesDoc, id: i64) -> Result<Vec<FormLineView>, String> {
+pub async fn form_lines_of<'e, E: sqlx::Executor<'e, Database = Sqlite>>(executor: E, doc: impl Into<LineTables>, id: i64) -> Result<Vec<FormLineView>, String> {
     let (table, key) = table(doc);
     sqlx::query_as::<_, FormLineView>(&format!("SELECT line_number, kind, description, amount_cents, product_service_id, percent_ppm, account_id, class_id, is_taxable,
                 item_group_id, group_quantity_e4, group_line_count, print_items FROM {table} WHERE {key} = ?1 ORDER BY line_number"))

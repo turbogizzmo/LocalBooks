@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
 import { accountLabel } from './AccountSelect.jsx';
 import SplitGrid, { blankSplit, splitRowsFromCopy, summarizeSplits } from './SplitGrid.jsx';
+import PurchaseFormLines, { usePurchaseFormLines } from './PurchaseFormLines.jsx';
+import { purchaseLineMessage } from '../lib/purchaseLines.js';
 import Notice from './Notice.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import { attachPicked, PendingAttachments } from './Attachments.jsx';
@@ -45,13 +48,16 @@ function VendorCreditForm({ accounts, onPosted, onCancel, savedStep, copyOf = nu
     if (defaultCategory !== null) setRows((rs) => rs.map((r) => (r.accountId === null ? { ...r, accountId: defaultCategory } : r)));
   }, [defaultCategory]);
 
-  const { lines, invalid, total } = summarizeSplits(rows);
+  const { lines, invalid, total: splitTotal } = summarizeSplits(rows);
+  const [formRows, setFormRows, laid, formTouched] = usePurchaseFormLines(lines, copyOf?.sourceId ? { doc: 'VENDOR_CREDIT', id: copyOf.sourceId } : null);
+  const total = laid.error ? splitTotal : laid.total;
 
   const clear = () => {
     setVendor('');
     setReference('');
     setMemo('');
     setRows([blankSplit(defaultCategory)]);
+    setFormRows([]);
     setFiles([]);
     formClass.reset();
     setError(null);
@@ -61,12 +67,13 @@ function VendorCreditForm({ accounts, onPosted, onCancel, savedStep, copyOf = nu
     if (!vendor.trim()) return setError('Enter a vendor.');
     if (invalid > 0) return setError(`${invalid} line(s) need a category and an amount above zero.`);
     if (lines.length === 0) return setError('Add at least one line.');
+    if (laid.error && formRows.length > 0) return setError(purchaseLineMessage(laid.error));
     const postedLines = formClass.apply(lines.map((l) => ({ accountId: l.accountId, amountCents: l.amountCents, memo: l.memo, classId: l.classId ?? null, customerId: l.customerId ?? null })));
     const warning = formClass.missing(postedLines);
     if (warning) return setError(warning);
     setBusy(true);
     try {
-      const credit = await api.createVendorCredit({ vendorName: vendor.trim(), reference: reference.trim() || null, creditDate: date, memo: memo.trim() || null, lines: postedLines });
+      const credit = await api.createVendorCredit({ vendorName: vendor.trim(), reference: reference.trim() || null, creditDate: date, memo: memo.trim() || null, lines: postedLines, formLines: laid.formLines ?? [] });
       const attachError = files.length > 0 ? await attachPicked(credit.journalEntryId, files) : null;
       onPosted(
         `Vendor credit from ${credit.vendorName} posted: Dr Accounts Payable ${formatCents(credit.totalCents)} / Cr ${lines.length} line${lines.length === 1 ? '' : 's'}.` +
@@ -83,7 +90,7 @@ function VendorCreditForm({ accounts, onPosted, onCancel, savedStep, copyOf = nu
 
   const flow = useFormFlow({ save, clear, onClose: onCancel, busy });
   // Opening a saved credit (Previous) asks for the entries to be saved or cleared first.
-  const dirty = useDirtySince('vendor-credit', { vendor, reference, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
+  const dirty = useDirtySince('vendor-credit', { vendor, reference, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]), formTouched });
 
   return (
     <div className="flex flex-none gap-2">
@@ -121,6 +128,7 @@ function VendorCreditForm({ accounts, onPosted, onCancel, savedStep, copyOf = nu
         </div>
       </div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withClasses withJobs />
+      <PurchaseFormLines rows={formRows} setRows={setFormRows} laid={laid} lines={lines} accounts={accounts} />
       <div className="flex items-center gap-2 px-2 py-1">
         {files.length > 0 && <PendingAttachments paths={files} onChange={setFiles} label="Attach another…" />}
         {error && <span className="text-sm text-qb-negative">{error}</span>}
@@ -289,7 +297,8 @@ export default function VendorCredits({ accounts, intent }) {
     api.getCopySource('VENDOR_CREDIT', c.id).then(
       (copy) => {
         saved.close();
-        setCopyOf(copy);
+        // The copy's discounts and charges come from the original (`sourceId`).
+        setCopyOf({ ...copy, sourceId: c.id });
         setFormKey((k) => k + 1);
         setComposing(true);
         setNotice({ kind: 'info', text: `A copy of the vendor credit from ${c.vendorName}, dated today. Enter the vendor's reference for the new one.` });
@@ -413,7 +422,7 @@ export default function VendorCredits({ accounts, intent }) {
                 </tr>
               )}
               {sorter.sorted.map((c) => (
-                <tr key={c.id} className={`qb-grid-row cursor-pointer ${c.isVoided ? 'text-qb-ink-faint' : ''}`} onDoubleClick={() => openCredit(c)}>
+                <tr key={c.id} className={`qb-grid-row cursor-pointer ${c.isVoided ? 'text-qb-ink-faint' : ''}`} {...rowKeys({ first: c === sorter.sorted[0], open: () => openCredit(c) })}>
                   <td className="qb-grid-cell">{formatDate(c.creditDate)}</td>
                   <td className="qb-grid-cell font-semibold">{c.vendorName}</td>
                   <td className="qb-grid-cell">{c.reference ?? ''}</td>

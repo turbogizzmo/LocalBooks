@@ -1,6 +1,6 @@
 import { useLineCommands } from '../lib/formFlow.jsx';
 import { pasteLineAt } from '../lib/formKeys.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './ClassSelect.jsx';
 import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
@@ -9,7 +9,7 @@ import NewItemDialog from './NewItemDialog.jsx';
 import { useCategoryFilter } from './ItemCategories.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
-import { documentOrder, layOut, parsePercentPpm, percentText } from '../lib/itemTypes.js';
+import { documentOrder, layOut, parsePercentPpm, percentText, scaleGroupQuantity } from '../lib/itemTypes.js';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { myPreferences } from '../lib/myPreferences.js';
 import { formatDate } from '../lib/dates.js';
@@ -83,6 +83,7 @@ function toLine(item, form, defaultAccountId) {
             rate: form.kind !== 'DISCOUNT' ? '' : form.percentPpm ? percentText(form.percentPpm) : centsToInput(-form.amountCents),
             groupId: form.itemGroupId ?? null,
             printItems: form.printItems ?? true,
+            groupQty: form.kind === 'GROUP' && form.groupQuantityE4 ? formatQuantity(form.groupQuantityE4).replace(/,/g, '') : '1',
           }
         : {
             ...blankLine(item.incomeAccountId),
@@ -190,7 +191,8 @@ export function summarizeLines(lines, options) {
                   itemGroupId: line.groupId ?? null,
                   // Its items: the filled item lines right after it that came from it.
                   groupLineCount: groupItems(lines, evaluated, i),
-                  groupQuantityE4: 10_000,
+                  // How many of the group; its items' quantities already reflect it.
+                  groupQuantityE4: parseQuantityE4(line.groupQty ?? '1') > 0 ? parseQuantityE4(line.groupQty ?? '1') : (line.groupAppliedE4 ?? 10_000),
                   printItems: line.printItems !== false,
                 }
               : { afterLines: itemsBefore, kind: line.kind, description: line.description.trim() },
@@ -241,7 +243,7 @@ const incomeOnly = (a) => a.classification === 'INCOME';
 /**
  * The columns between Description and Amount, in the desktop sales forms' order (Customize Columns
  * hides and reorders them; Qty and Rate always show). Service Date, Price level and Class appear
- * only where the form has them.
+ * only where the form has them; Income account is off by default (T37).
  */
 const LINE_COLUMNS = [
   { id: 'serviceDate', label: 'Service Date', width: 'w-[120px]', title: 'When the work on the line was done; printed in its own column' },
@@ -249,7 +251,9 @@ const LINE_COLUMNS = [
   { id: 'level', label: 'Price level', width: 'w-[120px]', title: 'Fills in the rate; a typed rate always wins' },
   { id: 'rate', label: 'Rate', width: 'w-[100px]', num: true, required: true },
   { id: 'class', label: 'Class', width: 'w-[150px]' },
-  { id: 'account', label: 'Income account', width: 'w-[200px]', title: 'Filled in from the item; choose one for a line without an item' },
+  // Off until turned on (the item fills it in, as on the desktop forms); it shows by itself while a
+  // line still needs an account.
+  { id: 'account', label: 'Income account', width: 'w-[200px]', title: 'Filled in from the item; choose one for a line without an item', hidden: true },
 ];
 
 export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null, itemTypes = false, allowZeroRate = false, serviceDates: datesAllowed = false }) {
@@ -417,7 +421,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   const expandGroup = (index, groupId) => {
     const group = groups.find((g) => g.id === groupId);
     if (!group) return;
-    const heading = { ...blankLine(lines[index].accountId), kind: 'GROUP', groupId, description: group.description ?? group.name, printItems: group.printItems };
+    const heading = { ...blankLine(lines[index].accountId), kind: 'GROUP', groupId, description: group.description ?? group.name, printItems: group.printItems, groupQty: '1' };
     const members = group.members.map((m) => {
       const product = products.find((p) => p.id === m.productId);
       return {
@@ -435,6 +439,27 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
     });
     setLines((ls) => [...ls.slice(0, index), heading, ...members, ...ls.slice(index + 1)]);
     setActive(null);
+  };
+  // The group's quantity: its items' quantities change in proportion (2 of a group of 3 widgets
+  // and 1 hour is 6 widgets and 2 hours). A quantity that isn't above zero is kept as typed and
+  // changes nothing until it is.
+  const setGroupQty = (index, text) => {
+    const heading = lines[index];
+    // Scaled from the last quantity that was above zero, so clearing the box and typing a new one
+    // still changes the items from where they are.
+    const from = heading.groupAppliedE4 ?? parseQuantityE4(heading.groupQty ?? '1') ?? 10_000;
+    const to = parseQuantityE4(text);
+    const applies = to != null && to > 0 && from > 0;
+    setLines((ls) =>
+      ls.map((l, i) => {
+        if (i === index) return { ...l, groupQty: text, groupAppliedE4: applies ? to : from };
+        if (!applies) return l;
+        if (l.inGroup !== heading.key || isFormLine(l)) return l;
+        const qty = parseQuantityE4(l.qty);
+        const scaled = qty == null ? null : scaleGroupQuantity(qty, from, to);
+        return scaled == null ? l : { ...l, qty: formatQuantity(scaled).replace(/,/g, '') };
+      }),
+    );
   };
   const pickLevel = (index, levelId) => {
     const line = lines[index];
@@ -460,7 +485,15 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   // The middle columns as the person arranged them (Customize Columns), of those this form has.
   const offered = { serviceDate: serviceDates, level: withLevels, class: withClasses };
   const cols = useColumns('sales-lines', LINE_COLUMNS, (id) => offered[id] ?? true);
-  const middle = cols.columns;
+  const needsAccount = useMemo(
+    () =>
+      lines.some((l) => {
+        const state = evaluateLine(l, { allowZeroRate });
+        return !state.blank && Boolean(state.errors.account);
+      }),
+    [lines, allowZeroRate],
+  );
+  const middle = cols.all.filter((c) => c.visible || (c.id === 'account' && needsAccount));
   // A subtotal's or group heading's one cell spans them.
   const spareColumns = middle.length;
   const blankCell = (id) => <td key={id} className="qb-grid-cell" />;
@@ -697,7 +730,19 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                   {line.kind === 'SUBTOTAL' || line.kind === 'GROUP' ? (
                     <td colSpan={spareColumns} className="qb-grid-cell">
                       {line.kind === 'GROUP' && (
-                        <label className="flex items-center gap-1 font-normal" title="On the printed form, show the group as one line with its total">
+                        <label className="mr-3 inline-flex items-center gap-1 font-normal" title="How many of the group: its items' quantities change in proportion">
+                          Qty
+                          <input
+                            className="qb-input num h-[20px] w-[64px]"
+                            inputMode="decimal"
+                            value={line.groupQty ?? '1'}
+                            onChange={(e) => setGroupQty(i, e.target.value)}
+                            aria-label={`Group quantity ${i + 1}`}
+                          />
+                        </label>
+                      )}
+                      {line.kind === 'GROUP' && (
+                        <label className="inline-flex items-center gap-1 font-normal" title="On the printed form, show the group as one line with its total">
                           <input type="checkbox" className="accent-qb-green" checked={line.printItems === false} onChange={(e) => update(i, { printItems: !e.target.checked })} />
                           Print as one line
                         </label>
@@ -720,7 +765,19 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                   {line.kind === 'SUBTOTAL' || line.kind === 'GROUP' ? (
                     <td colSpan={spareColumns} className="qb-grid-cell">
                       {line.kind === 'GROUP' && (
-                        <label className="flex items-center gap-1 font-normal" title="On the printed form, show the group as one line with its total">
+                        <label className="mr-3 inline-flex items-center gap-1 font-normal" title="How many of the group: its items' quantities change in proportion">
+                          Qty
+                          <input
+                            className="qb-input num h-[20px] w-[64px]"
+                            inputMode="decimal"
+                            value={line.groupQty ?? '1'}
+                            onChange={(e) => setGroupQty(i, e.target.value)}
+                            aria-label={`Group quantity ${i + 1}`}
+                          />
+                        </label>
+                      )}
+                      {line.kind === 'GROUP' && (
+                        <label className="inline-flex items-center gap-1 font-normal" title="On the printed form, show the group as one line with its total">
                           <input type="checkbox" className="accent-qb-green" checked={line.printItems === false} onChange={(e) => update(i, { printItems: !e.target.checked })} />
                           Print as one line
                         </label>

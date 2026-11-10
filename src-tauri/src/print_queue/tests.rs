@@ -16,7 +16,7 @@ async fn check(pool: &SqlitePool, payee: &str, number: Option<&str>, cents: i64,
     let (checking, rent) = (account_id(pool, "1010").await, account_id(pool, "6300").await);
     post_expense(
         pool,
-        ExpenseInput {
+        ExpenseInput { form_lines: Vec::new(),
             payment_method_id: None,
             kind: "CHECK".into(),
             payee_name: Some(payee.into()),
@@ -107,7 +107,7 @@ async fn only_unnumbered_live_checks_join_the_queue() {
     assert!(refused.contains("PRINT_HAS_NUMBER"), "{refused}");
 
     let (card, supplies) = (account_id(&pool, "2100").await, account_id(&pool, "6250").await);
-    let expense = ExpenseInput {
+    let expense = ExpenseInput { form_lines: Vec::new(),
         payment_method_id: None,
         kind: "EXPENSE".into(),
         payee_name: None,
@@ -141,7 +141,7 @@ async fn an_edited_queued_check_stays_queued() {
     let pool = test_pool().await;
     let queued = check(&pool, "Landlord", None, 10_000, true).await.unwrap();
     let (checking, rent) = (account_id(&pool, "1010").await, account_id(&pool, "6300").await);
-    let edited = ExpenseInput {
+    let edited = ExpenseInput { form_lines: Vec::new(),
         payment_method_id: None,
         kind: "CHECK".into(),
         payee_name: Some("Landlord".into()),
@@ -196,7 +196,7 @@ async fn pay_bills_checks_wait_in_the_queue_one_per_vendor_and_take_their_number
     use crate::expenses::{BillInput, BillLineInput, BillPaymentInput};
     let pool = test_pool().await;
     let (checking, rent, card) = (account_id(&pool, "1010").await, account_id(&pool, "6300").await, account_id(&pool, "2100").await);
-    let bill = |vendor: &str, number: &str, cents: i64| BillInput {
+    let bill = |vendor: &str, number: &str, cents: i64| BillInput { form_lines: Vec::new(),
         terms_id: None,
         vendor_name: vendor.into(),
         bill_number: Some(number.into()),

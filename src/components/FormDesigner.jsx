@@ -13,6 +13,7 @@ const KINDS = [
   { id: 'STATEMENT', label: 'Statement' },
   { id: 'CREDIT_MEMO', label: 'Credit memo' },
   { id: 'BILL_PAYMENT', label: 'Bill payment stub' },
+  { id: 'SALES_ORDER', label: 'Sales order' },
 ];
 const LAYOUTS = [
   ['CLASSIC', 'Classic', 'Company and title side by side over an accent rule'],
@@ -70,6 +71,7 @@ function useDocumentChoices(kind) {
   const sales = useLedgerQuery(api.listAllSales);
   const customers = useLedgerQuery(api.listCustomers);
   const credits = useLedgerQuery(api.listCreditMemos);
+  const orders = useLedgerQuery(api.listSalesOrders);
   const rows = {
     INVOICE: () => (invoices.data ?? []).map((i) => ({ id: i.id, label: `Invoice ${i.invoiceNumber} · ${i.customerName} · ${formatDate(i.issueDate)}` })),
     ESTIMATE: () => (estimates.data ?? []).map((e) => ({ id: e.id, label: `Estimate ${e.estimateNumber} · ${e.customerName} · ${formatDate(e.estimateDate)}` })),
@@ -78,7 +80,8 @@ function useDocumentChoices(kind) {
     // A statement previews last month's statement for the customer.
     STATEMENT: () => (customers.data ?? []).map((c) => ({ id: c.id, label: `${c.name} · last month` })),
     CREDIT_MEMO: () => (credits.data ?? []).map((m) => ({ id: m.id, label: `Credit ${m.creditNumber} · ${m.customerName} · ${formatDate(m.creditDate)}` })),
-  }[kind]();
+    SALES_ORDER: () => (orders.data ?? []).map((o) => ({ id: o.id, label: `Sales order ${o.orderNumber} · ${o.customerName} · ${formatDate(o.orderDate)}` })),
+  }[kind]?.() ?? [];
   return rows.slice(0, 50);
 }
 

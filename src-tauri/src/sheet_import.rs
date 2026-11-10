@@ -33,6 +33,10 @@ pub enum SheetKind {
     CardCharges,
     CardCredits,
     JournalEntries,
+    /// Payments against invoices already in the books (`payments.rs`).
+    CustomerPayments,
+    /// Payments against bills already in the books.
+    BillPayments,
 }
 
 impl SheetKind {
@@ -51,6 +55,8 @@ impl SheetKind {
             SheetKind::CardCharges => "Card charges",
             SheetKind::CardCredits => "Card credits",
             SheetKind::JournalEntries => "Journal entries",
+            SheetKind::CustomerPayments => "Customer payments",
+            SheetKind::BillPayments => "Bill payments",
         }
     }
 }
@@ -127,7 +133,13 @@ struct Doc {
     sign: i64,
     due: bool,
     method: bool,
+    /// Takes a Sales tax and a Discount for the whole document (invoices and sales receipts).
+    extras: bool,
 }
+
+/// Where a sheet's sales tax and discounts post until the review maps them to the books' accounts.
+const TAX_ACCOUNT: (&str, &str) = ("Sales Tax Payable", "OTHER_CURRENT_LIABILITY");
+const DISCOUNT_ACCOUNT: (&str, &str) = ("Discounts Given", "INCOME");
 
 const BANK_ALIASES: &[&str] = &["bank", "bankaccount", "account", "depositto", "paidfrom", "fromaccount", "checking"];
 
@@ -144,6 +156,7 @@ fn doc(kind: SheetKind) -> Option<Doc> {
         sign,
         due: false,
         method: false,
+        extras: false,
     };
     let purchase = |trnstype, noun, number_label, party, header, sign| Doc {
         trnstype,
@@ -157,16 +170,18 @@ fn doc(kind: SheetKind) -> Option<Doc> {
         sign,
         due: false,
         method: false,
+        extras: false,
     };
     let ar = Header::Fixed("Accounts Receivable", "ACCOUNTS_RECEIVABLE");
     let ap = Header::Fixed("Accounts Payable", "ACCOUNTS_PAYABLE");
     let bank = |label| Header::Column { label, account_type: "BANK", default: None, aliases: BANK_ALIASES };
     let card = Header::Column { label: "Card account", account_type: "CREDIT_CARD", default: None, aliases: &["card", "creditcard", "account", "cardname", "paidwith"] };
     Some(match kind {
-        SheetKind::Customers | SheetKind::Vendors | SheetKind::JournalEntries => return None,
-        SheetKind::Invoices => Doc { due: true, ..sales("INVOICE", "invoice", "Invoice no.", true, Some((Party::Customer, true)), ar, 1) },
+        SheetKind::Customers | SheetKind::Vendors | SheetKind::JournalEntries | SheetKind::CustomerPayments | SheetKind::BillPayments => return None,
+        SheetKind::Invoices => Doc { due: true, extras: true, ..sales("INVOICE", "invoice", "Invoice no.", true, Some((Party::Customer, true)), ar, 1) },
         SheetKind::SalesReceipts => Doc {
             method: true,
+            extras: true,
             ..sales(
                 "CASH SALE",
                 "sales receipt",
@@ -212,6 +227,23 @@ pub fn fields(kind: SheetKind) -> Vec<Field> {
             field("memo", "Memo", false, &["description", "desc", "lineitem"]),
             field("name", "Name", false, &["customer", "vendor", "payee", "customervendor"]),
         ],
+        SheetKind::CustomerPayments => vec![
+            DATE,
+            field("party", "Customer", true, &["customer", "customername", "receivedfrom", "name", "client"]),
+            field("document", "Invoice no.", true, &["invoice", "invoicenumber", "invoiceno", "invoicenum", "inv", "number", "num"]),
+            field("amount", "Amount", true, &["payment", "paymentamount", "amountpaid", "amountreceived", "total"]),
+            field("account", "Deposit to", false, &["depositto", "deposit", "bank", "bankaccount", "account"]),
+            field("method", "Payment method", false, &["paymentmethod", "paidby", "method", "paymenttype"]),
+            field("reference", "Reference no.", false, &["reference", "ref", "refno", "checkno", "checknumber", "check"]),
+        ],
+        SheetKind::BillPayments => vec![
+            DATE,
+            field("party", "Vendor", true, &["vendor", "vendorname", "payee", "name", "supplier"]),
+            field("document", "Bill no.", true, &["bill", "billnumber", "billno", "billnum", "refno", "invoice", "invoicenumber", "number", "num"]),
+            field("amount", "Amount", true, &["payment", "paymentamount", "amountpaid", "total"]),
+            field("account", "Pay from", true, &["payfrom", "paidfrom", "bank", "bankaccount", "account", "card"]),
+            field("reference", "Check no.", false, &["checkno", "checknumber", "check", "reference", "ref"]),
+        ],
         _ => {
             let d = doc(kind).expect("a transaction kind");
             let mut out = vec![field("number", d.number_label, d.number_required, NUMBER_ALIASES), DATE];
@@ -226,6 +258,10 @@ pub fn fields(kind: SheetKind) -> Vec<Field> {
             }
             if d.method {
                 out.push(field("method", "Payment method", false, &["paymentmethod", "paidby", "method", "paymenttype"]));
+            }
+            if d.extras {
+                out.push(field("tax", "Sales tax", false, &["salestax", "tax", "taxamount", "salestaxamount"]));
+                out.push(field("discount", "Discount", false, &["discount", "discountamount"]));
             }
             out.extend([
                 field("item", "Item", false, &["product", "productservice", "service", "itemname"]),
@@ -391,6 +427,9 @@ struct Line {
     amount_cents: i64,
     account: String,
     memo: Option<String>,
+    /// The document's sales tax and discount, when the row gives them (the same on every row that does).
+    tax_cents: Option<i64>,
+    discount_cents: Option<i64>,
 }
 
 /// Every problem in the sheet, and what it would import.
@@ -438,6 +477,16 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
     let mut records = 0;
     let mut total: i64 = 0;
     match kind {
+        SheetKind::CustomerPayments | SheetKind::BillPayments => {
+            let rows = payments::read(kind, sheet, mapping, order, &mut problems);
+            records = rows.len();
+            for p in &rows {
+                match total.checked_add(p.amount_cents) {
+                    Some(t) => total = t,
+                    None => problems.push(Problem { row: p.row, message: "The payments add up to more than LocalBooks can hold".into() }),
+                }
+            }
+        }
         SheetKind::Customers | SheetKind::Vendors => {
             let mut seen: HashMap<String, usize> = HashMap::new();
             for (row, cells) in &sheet.rows {
@@ -511,6 +560,8 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                         amount_cents,
                         account: account.to_string(),
                         memo: r.get(cells, "memo").map(String::from),
+                        tax_cents: None,
+                        discount_cents: None,
                     });
                 }
             }
@@ -578,6 +629,16 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                 }
                 let rate = amount_of(&r, cells, "rate", &mut problems, row, "rate");
                 let amount = amount_of(&r, cells, "amount", &mut problems, row, "amount");
+                // A document's sales tax and discount: amounts of zero or more.
+                let mut extra = |f: &str, label: &str| {
+                    let v = if d.extras { amount_of(&r, cells, f, &mut problems, row, label) } else { None };
+                    if v.is_some_and(|v| v < 0) {
+                        problems.push(Problem { row, message: format!("Write the {label} as zero or more") });
+                        return None;
+                    }
+                    v
+                };
+                let (tax_cents, discount_cents) = (extra("tax", "sales tax"), extra("discount", "discount"));
                 let q = quantity.and_then(|q| q.1);
                 let from_rate = q.zip(rate).and_then(|(q, p)| crate::ledger::mul_div_round(q, p, crate::ledger::QUANTITY_SCALE));
                 let amount_cents = match (amount, from_rate) {
@@ -616,6 +677,8 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                         amount_cents,
                         account: account.to_string(),
                         memo: r.get(cells, "memo").map(String::from),
+                        tax_cents,
+                        discount_cents,
                     });
                 }
             }
@@ -640,9 +703,33 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                     }),
                     Some(_) => {}
                 }
+                // The sales tax and the discount are the document's: any row may give them, and
+                // the rows that do must agree.
+                for (label, value) in [("sales tax", l.tax_cents), ("discount", l.discount_cents)] {
+                    let Some(value) = value else { continue };
+                    let earlier = lines.iter().take_while(|x| !std::ptr::eq(*x, l)).find(|x| x.key == l.key && (if label == "sales tax" { x.tax_cents } else { x.discount_cents }).is_some());
+                    if let Some(x) = earlier {
+                        let theirs = if label == "sales tax" { x.tax_cents } else { x.discount_cents }.unwrap_or_default();
+                        if theirs != value {
+                            problems.push(Problem { row: l.row, message: format!("{noun} {number}'s {label} is {} on row {}, not {}", format_cents(theirs), x.row, format_cents(value)) });
+                        }
+                    }
+                }
                 match total.checked_add(l.amount_cents) {
                     Some(t) => total = t,
                     None => problems.push(Problem { row: l.row, message: format!("The {}s add up to more than LocalBooks can hold", d.noun) }),
+                }
+            }
+            // A discount comes off the lines; the sales tax goes on top.
+            for ls in grouped(&lines) {
+                let (tax, discount) = extras_of(&ls);
+                let subtotal: i64 = ls.iter().map(|l| l.amount_cents).sum();
+                if discount > subtotal {
+                    problems.push(Problem { row: ls[0].row, message: format!("{noun} {}'s discount of {} is more than its lines, {}", ls[0].number.as_deref().unwrap_or_default(), format_cents(discount), format_cents(subtotal)) });
+                }
+                match total.checked_add(tax).and_then(|t| t.checked_sub(discount)) {
+                    Some(t) => total = t,
+                    None => problems.push(Problem { row: ls[0].row, message: format!("The {}s add up to more than LocalBooks can hold", d.noun) }),
                 }
             }
         }
@@ -665,6 +752,11 @@ fn read_date(raw: Option<&str>, order: DateOrder, label: &str, row: usize, probl
 }
 
 /// The lines in sheet order, grouped by transaction in the order each first appears.
+/// A document's sales tax and discount: the first row that gives each.
+fn extras_of(ls: &[&Line]) -> (i64, i64) {
+    (ls.iter().find_map(|l| l.tax_cents).unwrap_or(0), ls.iter().find_map(|l| l.discount_cents).unwrap_or(0))
+}
+
 fn grouped(lines: &[Line]) -> Vec<Vec<&Line>> {
     let mut order: Vec<&str> = Vec::new();
     let mut by_key: HashMap<&str, Vec<&Line>> = HashMap::new();
@@ -688,7 +780,12 @@ fn signed_quantity(q: i64, negative: bool) -> String {
 
 /// The sheet as a [`Ledger`] to stage, or the problems that stop it.
 pub fn to_ledger(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<DateOrder>) -> Result<Ledger, Check> {
-    let (check, lines) = read_rows(kind, sheet, mapping, order);
+    let (mut check, lines) = read_rows(kind, sheet, mapping, order);
+    // A payments sheet pays what is already in the books: it is posted, not staged (`payments.rs`).
+    if payments::is_payments(kind) {
+        check.problems.push(Problem { row: 0, message: "A payments sheet is posted against the books, not staged; use Post payments".into() });
+        return Err(check);
+    }
     if !check.problems.is_empty() {
         return Err(check);
     }
@@ -743,6 +840,12 @@ pub fn to_ledger(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Optio
                     accounts.ensure(header, if Some(header) == default { "OTHER_CURRENT_ASSET" } else { account_type });
                 }
                 accounts.ensure(&l.account, d.line_type);
+                if l.tax_cents.is_some_and(|t| t > 0) {
+                    accounts.ensure(TAX_ACCOUNT.0, TAX_ACCOUNT.1);
+                }
+                if l.discount_cents.is_some_and(|t| t > 0) {
+                    accounts.ensure(DISCOUNT_ACCOUNT.0, DISCOUNT_ACCOUNT.1);
+                }
                 match (d.party, l.party.as_deref()) {
                     (Some((Party::Customer, _)), Some(p)) => {
                         names.ensure_customer(p);
@@ -756,7 +859,8 @@ pub fn to_ledger(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Optio
             for ls in grouped(&lines) {
                 let head = ls[0];
                 // Checked when the rows were read: the transactions' sum fits, so each one's does.
-                let total = ls.iter().try_fold(0_i64, |sum, l| sum.checked_add(l.amount_cents)).unwrap_or(0);
+                let (tax, discount) = extras_of(&ls);
+                let total = ls.iter().try_fold(0_i64, |sum, l| sum.checked_add(l.amount_cents)).unwrap_or(0) - discount + tax;
                 let trns = RawLine {
                     trnstype: d.trnstype.into(),
                     date: Some(iso(head.date)),
@@ -784,7 +888,24 @@ pub fn to_ledger(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Optio
                         item: l.item.clone(),
                         ..Default::default()
                     })
-                    .collect();
+                    .collect::<Vec<_>>();
+                // The discount is a line the other way, the sales tax a line to a liability: what
+                // the full import reads as a document's discount and tax.
+                let mut splits = splits;
+                for (cents, (account, sign)) in [(discount, (DISCOUNT_ACCOUNT.0, d.sign)), (tax, (TAX_ACCOUNT.0, -d.sign))] {
+                    if cents > 0 {
+                        splits.push(RawLine {
+                            trnstype: d.trnstype.into(),
+                            date: Some(iso(head.date)),
+                            account: Some(account.into()),
+                            name: head.party.clone(),
+                            amount: Some(crate::export_engine::plain_amount(sign * cents)),
+                            doc_num: head.number.clone(),
+                            memo: Some(if account == TAX_ACCOUNT.0 { "Sales tax".into() } else { "Discount".into() }),
+                            ..Default::default()
+                        });
+                    }
+                }
                 blocks.push(Block { trns, splits, file_line: head.row });
             }
         }
@@ -851,6 +972,16 @@ fn example(kind: SheetKind) -> Vec<Vec<(&'static str, &'static str)>> {
             vec![("number", "JE-1"), ("date", "03/31/2026"), ("account", "Depreciation Expense"), ("debit", "125.00"), ("memo", "March depreciation")],
             vec![("number", "JE-1"), ("date", "03/31/2026"), ("account", "Accumulated Depreciation"), ("credit", "125.00"), ("memo", "March depreciation")],
         ],
+        SheetKind::CustomerPayments => vec![vec![
+            ("date", "03/20/2026"),
+            ("party", "Rivera Landscaping"),
+            ("document", "1001"),
+            ("amount", "240.00"),
+            ("account", "Undeposited Funds"),
+            ("method", "Check"),
+            ("reference", "5521"),
+        ]],
+        SheetKind::BillPayments => vec![vec![("date", "03/25/2026"), ("party", "Paper Supply Co"), ("document", "101"), ("amount", "50.00"), ("account", "Checking"), ("reference", "1042")]],
         _ => vec![line],
     }
 }
@@ -865,6 +996,8 @@ pub fn template(kind: SheetKind) -> String {
     }
     String::from_utf8(out.into_inner().unwrap_or_default()).unwrap_or_default()
 }
+
+pub mod payments;
 
 #[cfg(test)]
 mod tests;

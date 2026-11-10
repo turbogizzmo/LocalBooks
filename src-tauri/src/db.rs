@@ -327,14 +327,15 @@ impl Db {
                     let user = session.as_ref().map(|s| &s.user);
                     (
                         Gate::Users(user.map(|u| SignedIn { role: u.role, must_change_password: u.must_change_password })),
-                        user.map(|u| u.username.clone()),
+                        user.map(|u| (u.username.clone(), u.role)),
                     )
                 } else {
                     (Gate::NoUsers, None)
                 }
             }
         };
-        crate::audit_chain::set_signed_in(actor);
+        crate::permissions::set_signed_in_role(actor.as_ref().map(|(_, role)| *role));
+        crate::audit_chain::set_signed_in(actor.map(|(name, _)| name));
         self.archive.store(archive, std::sync::atomic::Ordering::SeqCst);
         *self.idle.lock().expect("idle lock") = Idle { last: std::time::SystemTime::now(), limit };
         *self.gate.write().expect("gate lock") = gate;

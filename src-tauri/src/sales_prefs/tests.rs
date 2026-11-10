@@ -40,7 +40,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, cents: i64, date: NaiveDate) -> i
 
 async fn bill_on_terms(pool: &SqlitePool, vendor: &str, cents: i64, date: NaiveDate, terms_id: Option<i64>) -> i64 {
     let expense = account(pool, "6300").await;
-    let input = BillInput {
+    let input = BillInput { form_lines: Vec::new(),
         vendor_name: vendor.into(),
         bill_number: None,
         bill_date: date,
@@ -154,7 +154,7 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
     let other = bill(&pool, "Paper Co", 1_000, d(10, 5)).await;
     let credit = create_vendor_credit(
         &pool,
-        VendorCreditInput {
+        VendorCreditInput { form_lines: Vec::new(),
             vendor_name: "Harbor Hardware".into(),
             reference: Some("RMA-7".into()),
             credit_date: d(10, 2),
@@ -186,7 +186,6 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
 }
 
 #[tokio::test]
-#[ignore = "waits for #151: estimate_lines is rebuilt to allow zero-amount lines on top of its migration 0067"]
 async fn zero_amount_estimate_lines_stay_off_the_invoice() {
     let pool = test_pool().await;
     let income = account(&pool, "4100").await;

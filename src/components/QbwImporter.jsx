@@ -80,7 +80,7 @@ function ProgressTrack({ progress, seen }) {
 /** A numbered step card. */
 function Step({ number, title, state = 'active', aside, children }) {
   const badge =
-    state === 'done' ? 'bg-qb-green text-white' : state === 'active' ? 'bg-qb-nav text-white' : 'bg-qb-canvas text-qb-ink-faint';
+    state === 'done' ? 'bg-qb-green-active text-white' : state === 'active' ? 'bg-qb-nav text-white' : 'bg-qb-canvas text-qb-ink-faint';
   return (
     <section className={`qb-panel ${state === 'locked' ? 'opacity-60' : ''}`}>
       <div className="flex min-h-[36px] items-center gap-2 border-b border-qb-border px-3 py-1">
@@ -533,6 +533,56 @@ const DOCUMENT_WORDS = {
 
 const countOf = (n, [one, many]) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
+/** Accounts whose imported balance differs from the balance the file stores for them. */
+function BalanceDifferenceList({ items }) {
+  return (
+    <table className="qb-grid">
+      <colgroup>
+        <col />
+        <col className="w-[140px]" />
+        <col className="w-[140px]" />
+        <col className="w-[140px]" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th className="qb-grid-head">Account</th>
+          <th className="qb-grid-head text-right">File’s balance</th>
+          <th className="qb-grid-head text-right">Imported</th>
+          <th className="qb-grid-head text-right">Difference</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((d) => (
+          <tr key={d.sourceId}>
+            <td className="qb-grid-cell">{d.fullName}</td>
+            <td className="qb-grid-cell num">{formatCents(d.expectedCents)}</td>
+            <td className="qb-grid-cell num">{formatCents(d.importedCents)}</td>
+            <td className="qb-grid-cell num font-semibold text-qb-negative">{formatCents(d.differenceCents)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** The differences, or nothing when every stored balance matches. */
+function BalanceDifferences({ items, posted }) {
+  if (!items?.length) return null;
+  return (
+    <div className="border-b border-qb-border">
+      <p className="px-3 py-1.5 text-xs">
+        <strong>
+          {countOf(items.length, ['account does', 'accounts do'])} not match the balance the file stores
+        </strong>
+        {posted
+          ? '. Your books carry the imported balance: compare these accounts with the original program’s balance sheet and enter what is missing by hand.'
+          : '. A line that could not be read, or a kind of transaction LocalBooks does not read yet (such as inventory cost or payroll), leaves an account short. Check these accounts against the original program’s balance sheet after posting.'}
+      </p>
+      <BalanceDifferenceList items={items} />
+    </div>
+  );
+}
+
 function FallbackList({ items }) {
   return (
     <table className="qb-grid">
@@ -608,8 +658,9 @@ function LedgerReview({ summary, accounts, busy, run }) {
   const fallbacks = summary.fallbacks ?? [];
   const used = usedAccounts(summary);
   const unmapped = used.filter((a) => !a.accountId).length;
-  const matched = summary.accountsMatchingStored;
   const withStored = summary.accountsWithStoredBalance;
+  // Counted from the list below, so the two always agree.
+  const matched = withStored - (summary.balanceDifferences?.length ?? 0);
   const step2 = unmapped === 0 ? 'done' : 'active';
   const step3 = summary.listsOnly
     ? summary.listsAdded
@@ -772,6 +823,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
             <UnbalancedList items={summary.unbalanced} />
           </div>
         )}
+        <BalanceDifferences items={summary.balanceDifferences} posted={summary.liveEntryCount > 0} />
         <div className="flex items-center gap-2 px-3 py-1.5">
           <span className="text-xs text-qb-ink-muted">
             {unmapped === 0 ? '✓ Every account has a LocalBooks account.' : `Choose an account for ${unmapped} account${unmapped === 1 ? '' : 's'}, or:`}
@@ -830,6 +882,12 @@ function LedgerReview({ summary, accounts, busy, run }) {
           )}
           {summary.liveEntryCount > 0 && summary.mode !== 'FULL' && (
             <Notice kind="success" text={`${summary.liveEntryCount.toLocaleString()} entries from this import are in your books. Use “Reverse posted entries” above to undo them.`} />
+          )}
+          {summary.liveEntryCount > 0 && summary.balanceDifferences?.length > 0 && (
+            <Notice
+              kind="error"
+              text={`${countOf(summary.balanceDifferences.length, ['account does', 'accounts do'])} not match the balance the file stores. They are listed in step 2 with the file’s balance, the imported balance and the difference.`}
+            />
           )}
           {fallbacks.length > 0 && (
             <details className="rounded border border-qb-border">

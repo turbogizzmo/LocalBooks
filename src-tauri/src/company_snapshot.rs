@@ -14,6 +14,11 @@
 //! | Top customers | Sales by Customer Summary |
 //! | Top items | Sales by Product/Service Summary |
 //! | Top vendors | Expenses by Vendor Summary |
+//! | Income breakdown (income accounts, top five and the rest) | Profit and Loss, total income |
+//! | Expense breakdown (cost of sales and expense accounts) | Profit and Loss, total expenses |
+//! | Year over year (income, expenses and net, against the same dates a year earlier) | Profit and Loss for each period |
+//! | To-dos (open, due by the period's end or undated) | To Do Notes |
+//! | Note (text the user keeps on the page) | — |
 //!
 //! The layout (which widgets, in what order, with what period) is kept in the company file
 //! (`snapshot_widgets`), so everyone opening it sees the same page.
@@ -37,11 +42,28 @@ pub enum WidgetKind {
     TopCustomers,
     TopItems,
     TopVendors,
+    Notes,
+    Todos,
+    IncomeBreakdown,
+    ExpenseBreakdown,
+    YearOverYear,
 }
 
 impl WidgetKind {
-    pub const ALL: [WidgetKind; 7] =
-        [WidgetKind::AccountBalances, WidgetKind::WhoOwes, WidgetKind::VendorsToPay, WidgetKind::IncomeExpenseTrend, WidgetKind::TopCustomers, WidgetKind::TopItems, WidgetKind::TopVendors];
+    pub const ALL: [WidgetKind; 12] = [
+        WidgetKind::AccountBalances,
+        WidgetKind::WhoOwes,
+        WidgetKind::VendorsToPay,
+        WidgetKind::IncomeExpenseTrend,
+        WidgetKind::TopCustomers,
+        WidgetKind::TopItems,
+        WidgetKind::TopVendors,
+        WidgetKind::Notes,
+        WidgetKind::Todos,
+        WidgetKind::IncomeBreakdown,
+        WidgetKind::ExpenseBreakdown,
+        WidgetKind::YearOverYear,
+    ];
 
     pub fn code(self) -> &'static str {
         match self {
@@ -52,6 +74,11 @@ impl WidgetKind {
             WidgetKind::TopCustomers => "TOP_CUSTOMERS",
             WidgetKind::TopItems => "TOP_ITEMS",
             WidgetKind::TopVendors => "TOP_VENDORS",
+            WidgetKind::Notes => "NOTES",
+            WidgetKind::Todos => "TODOS",
+            WidgetKind::IncomeBreakdown => "INCOME_BREAKDOWN",
+            WidgetKind::ExpenseBreakdown => "EXPENSE_BREAKDOWN",
+            WidgetKind::YearOverYear => "YEAR_OVER_YEAR",
         }
     }
 
@@ -62,7 +89,7 @@ impl WidgetKind {
     /// The period a new widget starts with.
     fn default_period(self) -> Period {
         match self {
-            WidgetKind::AccountBalances | WidgetKind::WhoOwes | WidgetKind::VendorsToPay => Period::Today,
+            WidgetKind::AccountBalances | WidgetKind::WhoOwes | WidgetKind::VendorsToPay | WidgetKind::Notes | WidgetKind::Todos => Period::Today,
             WidgetKind::IncomeExpenseTrend => Period::Last12Months,
             _ => Period::ThisFiscalYear,
         }
@@ -139,6 +166,10 @@ pub struct WidgetLine {
     pub amount_cents: i64,
     pub overdue_cents: Option<i64>,
     pub account_id: Option<i64>,
+    /// Year over year: the same figure for the same dates a year earlier.
+    pub previous_cents: Option<i64>,
+    /// To-dos: the due date, if it has one.
+    pub date: Option<String>,
 }
 
 /// A month of the income and expense trend.
@@ -164,10 +195,12 @@ pub struct Widget {
     /// Names beyond the top ones, folded into one figure.
     pub others_cents: i64,
     pub trend: Vec<TrendPoint>,
-    /// The widget's total, equal to the report's.
+    /// The widget's total, equal to the report's (to-dos: how many are open).
     pub total_cents: i64,
+    /// The note widget's text.
+    pub note: Option<String>,
     /// The report id the screen opens for the full figures (`bs`, `ar`, `ap`, `pl`,
-    /// `sales-customer`, `sales-product`, `expenses-vendor`).
+    /// `sales-customer`, `sales-product`, `expenses-vendor`, `list:todo-notes`; empty for a note).
     pub report: &'static str,
 }
 
@@ -177,7 +210,7 @@ pub const TOP: usize = 5;
 fn top(summary: &SummaryReport) -> (Vec<WidgetLine>, i64, i64) {
     let mut rows: Vec<&crate::report_center::SummaryRow> = summary.rows.iter().collect();
     rows.sort_by(|a, b| b.amount_cents.cmp(&a.amount_cents).then_with(|| a.label.cmp(&b.label)));
-    let lines: Vec<WidgetLine> = rows.iter().take(TOP).map(|r| WidgetLine { label: r.label.clone(), amount_cents: r.amount_cents, overdue_cents: None, account_id: None }).collect();
+    let lines: Vec<WidgetLine> = rows.iter().take(TOP).map(|r| WidgetLine { label: r.label.clone(), amount_cents: r.amount_cents, overdue_cents: None, account_id: None, previous_cents: None, date: None }).collect();
     let shown: i64 = lines.iter().map(|l| l.amount_cents).sum();
     (lines, summary.total_cents - shown, summary.total_cents)
 }
@@ -191,7 +224,7 @@ async fn figures(pool: &SqlitePool, kind: WidgetKind, start: NaiveDate, end: Nai
                 .lines
                 .iter()
                 .filter(|l| l.kind == LineKind::Account && l.account_id.is_some_and(|id| kinds.iter().any(|(k, _)| *k == id)))
-                .map(|l| WidgetLine { label: l.label.clone(), amount_cents: l.amount_cents.unwrap_or(0), overdue_cents: None, account_id: l.account_id })
+                .map(|l| WidgetLine { label: l.label.clone(), amount_cents: l.amount_cents.unwrap_or(0), overdue_cents: None, account_id: l.account_id, previous_cents: None, date: None })
                 .collect();
             // The total is the bank balances (the cards are listed, owed, beside them).
             let total = lines.iter().filter(|l| kinds.iter().any(|(id, t)| Some(*id) == l.account_id && t == "BANK")).map(|l| l.amount_cents).sum();
@@ -205,14 +238,13 @@ async fn figures(pool: &SqlitePool, kind: WidgetKind, start: NaiveDate, end: Nai
             let lines: Vec<WidgetLine> = rows
                 .iter()
                 .take(TOP)
-                .map(|r| WidgetLine { label: r.party_name.clone(), amount_cents: r.total_cents, overdue_cents: Some(r.buckets_cents[1..].iter().sum()), account_id: None })
+                .map(|r| WidgetLine { label: r.party_name.clone(), amount_cents: r.total_cents, overdue_cents: Some(r.buckets_cents[1..].iter().sum()), account_id: None, previous_cents: None, date: None })
                 .collect();
             let shown: i64 = lines.iter().map(|l| l.amount_cents).sum();
             (lines, aging.total_cents - shown, Vec::new(), aging.total_cents, if payable { "ap" } else { "ar" })
         }
         WidgetKind::IncomeExpenseTrend => {
-            let basis = if crate::preferences::get(pool, crate::preferences::REPORT_BASIS).await? == "cash" { Basis::Cash } else { Basis::Accrual };
-            let graph = crate::graphs::income_expense(pool, start, end, basis).await?;
+            let graph = crate::graphs::income_expense(pool, start, end, report_basis(pool).await?).await?;
             let trend: Vec<TrendPoint> =
                 graph.months.iter().map(|p| TrendPoint { month: p.month.month.clone(), income_cents: p.income_cents, expense_cents: p.expense_cents, net_cents: p.net_income_cents }).collect();
             (Vec::new(), 0, trend, graph.net_income_cents, "pl")
@@ -229,7 +261,61 @@ async fn figures(pool: &SqlitePool, kind: WidgetKind, start: NaiveDate, end: Nai
             let (lines, others, total) = top(&crate::report_center::sales_by_product(pool, start, end).await?);
             (lines, others, Vec::new(), total, "sales-product")
         }
+        WidgetKind::Notes => (Vec::new(), 0, Vec::new(), 0, ""),
+        WidgetKind::Todos => {
+            let open: Vec<(String, Option<String>)> = sqlx::query_as(
+                "SELECT title, due_date FROM todos WHERE is_done = 0 AND (due_date IS NULL OR due_date <= ?1)
+                 ORDER BY due_date IS NULL, due_date, id",
+            )
+            .bind(end)
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
+            let count = i64::try_from(open.len()).unwrap_or(i64::MAX);
+            let lines = open.into_iter().take(TOP).map(|(title, due)| WidgetLine { label: title, amount_cents: 0, overdue_cents: None, account_id: None, previous_cents: None, date: due }).collect();
+            (lines, 0, Vec::new(), count, "list:todo-notes")
+        }
+        WidgetKind::IncomeBreakdown | WidgetKind::ExpenseBreakdown => {
+            let income = kind == WidgetKind::IncomeBreakdown;
+            let pl = crate::statements::profit_and_loss_basis(pool, start, end, None, report_basis(pool).await?).await?;
+            let ids: Vec<i64> = sqlx::query_scalar(if income {
+                "SELECT id FROM chart_of_accounts WHERE account_type IN ('INCOME', 'OTHER_INCOME')"
+            } else {
+                "SELECT id FROM chart_of_accounts WHERE account_type IN ('COST_OF_GOODS_SOLD', 'EXPENSE', 'OTHER_EXPENSE')"
+            })
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
+            let rows: Vec<crate::report_center::SummaryRow> = pl
+                .lines
+                .iter()
+                .filter(|l| l.kind == LineKind::Account && l.account_id.is_some_and(|id| ids.contains(&id)))
+                .map(|l| crate::report_center::SummaryRow { label: l.label.clone(), quantity_e4: None, amount_cents: l.amount_cents.unwrap_or(0) })
+                .collect();
+            let total = if income { pl.total_revenue_cents } else { pl.total_expenses_cents };
+            let summary = SummaryReport { start_date: start, end_date: end, rows, total_cents: total };
+            let (lines, others, total) = top(&summary);
+            (lines, others, Vec::new(), total, "pl")
+        }
+        WidgetKind::YearOverYear => {
+            let basis = report_basis(pool).await?;
+            let now = crate::statements::profit_and_loss_basis(pool, start, end, None, basis).await?;
+            let (ps, pe) = (start - Months::new(12), end - Months::new(12));
+            let then = crate::statements::profit_and_loss_basis(pool, ps, pe, None, basis).await?;
+            let line = |label: &str, a: i64, b: i64| WidgetLine { label: label.into(), amount_cents: a, overdue_cents: None, account_id: None, previous_cents: Some(b), date: None };
+            let lines = vec![
+                line("Income", now.total_revenue_cents, then.total_revenue_cents),
+                line("Expenses", now.total_expenses_cents, then.total_expenses_cents),
+                line("Net income", now.net_income_cents, then.net_income_cents),
+            ];
+            (lines, 0, Vec::new(), now.net_income_cents, "pl")
+        }
     })
+}
+
+/// Accrual or cash, as Preferences › Reports & Graphs says (the Profit and Loss report's basis).
+async fn report_basis(pool: &SqlitePool) -> Result<Basis, String> {
+    Ok(if crate::preferences::get(pool, crate::preferences::REPORT_BASIS).await? == "cash" { Basis::Cash } else { Basis::Accrual })
 }
 
 #[derive(sqlx::FromRow)]
@@ -237,18 +323,19 @@ struct Row {
     id: i64,
     kind: String,
     period: String,
+    note: Option<String>,
 }
 
 /// The snapshot page for `today`: every widget in order, with its figures.
 pub async fn snapshot(pool: &SqlitePool, today: NaiveDate) -> Result<Vec<Widget>, String> {
-    let rows: Vec<Row> = sqlx::query_as("SELECT id, kind, period FROM snapshot_widgets ORDER BY position, id").fetch_all(pool).await.map_err(db_err)?;
+    let rows: Vec<Row> = sqlx::query_as("SELECT id, kind, period, note FROM snapshot_widgets ORDER BY position, id").fetch_all(pool).await.map_err(db_err)?;
     let fiscal_month = crate::preferences::fiscal_start_month(pool).await?;
     let mut out = Vec::with_capacity(rows.len());
     for r in rows {
         let (Some(kind), Some(period)) = (WidgetKind::from_code(&r.kind), Period::from_code(&r.period)) else { continue };
         let (start, end) = period.dates(today, fiscal_month);
         let (lines, others_cents, trend, total_cents, report) = figures(pool, kind, start, end).await?;
-        out.push(Widget { id: r.id, kind, period, start_date: start, end_date: end, lines, others_cents, trend, total_cents, report });
+        out.push(Widget { id: r.id, kind, period, start_date: start, end_date: end, lines, others_cents, trend, total_cents, note: r.note, report });
     }
     Ok(out)
 }
@@ -265,6 +352,27 @@ pub async fn add(pool: &SqlitePool, kind: WidgetKind) -> Result<i64, String> {
 
 pub async fn remove(pool: &SqlitePool, id: i64) -> Result<(), String> {
     sqlx::query("DELETE FROM snapshot_widgets WHERE id = ?1").bind(id).execute(pool).await.map_err(db_err)?;
+    Ok(())
+}
+
+/// The longest note a note widget keeps (the column allows a little more).
+const NOTE_MAX: usize = 2_000;
+
+/// Sets a note widget's text (blank clears it).
+pub async fn set_note(pool: &SqlitePool, id: i64, note: &str) -> Result<(), String> {
+    let note = note.trim();
+    if note.chars().count() > NOTE_MAX {
+        return Err(format!("SNAPSHOT_NOTE_LONG: keep a note to {NOTE_MAX} characters"));
+    }
+    let done = sqlx::query("UPDATE snapshot_widgets SET note = ?1 WHERE id = ?2 AND kind = 'NOTES'")
+        .bind((!note.is_empty()).then_some(note))
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+    if done.rows_affected() == 0 {
+        return Err("SNAPSHOT_NO_WIDGET: that note was removed".into());
+    }
     Ok(())
 }
 

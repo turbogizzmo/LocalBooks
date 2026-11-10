@@ -13,6 +13,7 @@ import CreditMemos from './CreditMemos.jsx';
 import Dashboard from './Dashboard.jsx';
 import DepositsTransfers from './DepositsTransfers.jsx';
 import Estimates from './Estimates.jsx';
+import SalesOrders from './SalesOrders.jsx';
 import ExpensesChecks from './ExpensesChecks.jsx';
 import FinanceCharges from './FinanceCharges.jsx';
 import BillCosts from './BillCosts.jsx';
@@ -21,6 +22,7 @@ import FxRevaluation from './FxRevaluation.jsx';
 import Invoices from './Invoices.jsx';
 import JournalEntries from './JournalEntries.jsx';
 import PartyList from './PartyList.jsx';
+import OtherNames from './OtherNames.jsx';
 import Products from './Products.jsx';
 import { PrintChecks, PrintInvoices } from './PrintForms.jsx';
 import { MailingLabels, PrintBatch } from './PrintBatches.jsx';
@@ -58,6 +60,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'sales/all' && <AllSales {...props} />}
       {view === 'sales/invoices' && <Invoices {...props} />}
       {view === 'sales/estimates' && <Estimates {...props} />}
+      {view === 'sales/orders' && <SalesOrders {...props} />}
       {view === 'sales/credits' && <CreditMemos {...props} />}
       {view === 'sales/customers' && <PartyList kind="customer" navigate={navigate} intent={intent} />}
       {view === 'sales/products' && <Products accounts={list} intent={intent} />}
@@ -66,7 +69,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'sales/tax' && <SalesTax accounts={list} intent={intent} />}
       {view === 'sales/statements' && <Statements intent={intent} />}
       {view === 'sales/finance-charges' && <FinanceCharges accounts={list} navigate={navigate} />}
-      {view === 'sales/bill-costs' && <BillCosts navigate={navigate} />}
+      {view === 'sales/bill-costs' && <BillCosts navigate={navigate} intent={intent} />}
       {view === 'sales/send-forms' && <SendForms />}
       {view === 'sales/print-invoices' && <PrintInvoices />}
       {view === 'sales/print-forms' && <PrintBatch key={intent?.action ?? 'credit-memos'} action={intent?.action} accounts={list} />}
@@ -80,6 +83,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'expenses/approvals' && <Approvals isAdmin={isAdmin !== false} />}
       {view === 'expenses/item-receipts' && <ItemReceipts intent={intent} />}
       {view === 'expenses/vendors' && <PartyList kind="vendor" navigate={navigate} />}
+      {view === 'expenses/other-names' && <OtherNames />}
       {view === 'employees/time' && <TimeTracking {...props} />}
       {view === 'employees/mileage' && <MileageTracking {...props} />}
       {view === 'banking/feeds' && <BankFeed accounts={list} />}

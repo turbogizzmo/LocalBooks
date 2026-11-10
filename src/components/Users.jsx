@@ -12,6 +12,7 @@ const ROLES = [
   ['ADMIN', 'Admin', 'Everything, including users and passwords'],
   ['STANDARD', 'Standard', 'Everything except users and company-wide settings'],
   ['VIEW_ONLY', 'View only', 'Reads the books; changes nothing'],
+  ['EXTERNAL_ACCOUNTANT', 'External Accountant', 'Like Standard, may post in closed periods, never sees sensitive data'],
 ];
 const roleLabel = (role) => ROLES.find(([id]) => id === role)?.[1] ?? role;
 
@@ -440,8 +441,11 @@ function UserDialog({ user, me, onClose, onSaved }) {
   }, [busy, onClose]);
 
   const isAdmin = role === 'ADMIN';
+  // An External Accountant never sees sensitive data; the role can't hold the data key.
+  const isExternal = role === 'EXTERNAL_ACCOUNTANT';
+  const mayGrant = !isExternal && sensitive;
   // Granting sensitive data (or turning a user with it back on) needs a password to store the key for.
-  const needsPassword = !editing || ((isAdmin || sensitive) && active && (!user.canSeeSensitive || !user.isActive));
+  const needsPassword = !editing || ((isAdmin || mayGrant) && active && (!user.canSeeSensitive || !user.isActive));
   const showPassword = resetting || needsPassword;
   const ready = (editing || username.trim()) && (!showPassword || passwordReady(next));
 
@@ -452,8 +456,8 @@ function UserDialog({ user, me, onClose, onSaved }) {
     try {
       const password = showPassword ? next.password : null;
       const saved = editing
-        ? await api.updateUser(user.id, { displayName, role, canSeeSensitive: isAdmin || sensitive, isActive: active, newPassword: password })
-        : await api.addUser({ username, displayName: displayName || null, role, canSeeSensitive: isAdmin || sensitive, password });
+        ? await api.updateUser(user.id, { displayName, role, canSeeSensitive: isAdmin || mayGrant, isActive: active, newPassword: password })
+        : await api.addUser({ username, displayName: displayName || null, role, canSeeSensitive: isAdmin || mayGrant, password });
       onSaved(saved);
     } catch (err) {
       setError(errorText(err));
@@ -485,8 +489,9 @@ function UserDialog({ user, me, onClose, onSaved }) {
           ))}
         </fieldset>
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={isAdmin || sensitive} disabled={busy || isAdmin} onChange={(e) => setSensitive(e.target.checked)} />
+          <input type="checkbox" checked={isAdmin || mayGrant} disabled={busy || isAdmin || isExternal} onChange={(e) => setSensitive(e.target.checked)} />
           Can see sensitive data (vendor tax IDs and bank details){isAdmin && <span className="text-xs text-qb-ink-muted">: Admins always can</span>}
+          {isExternal && <span className="text-xs text-qb-ink-muted">: External Accountants never can</span>}
         </label>
         {editing && !self && (
           <label className="flex items-center gap-2 text-sm">

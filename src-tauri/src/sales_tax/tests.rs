@@ -48,7 +48,7 @@ async fn sales_tax_is_charged_reported_and_paid() {
 
     let memo = crate::credits::create_credit_memo(
         &pool,
-        crate::credits::CreditMemoInput {
+        crate::credits::CreditMemoInput { form_lines: Vec::new(),
             customer_name: "Acme".into(),
             credit_date: d(3),
             memo: None,
@@ -186,7 +186,7 @@ async fn cash_basis_counts_a_credit_applied_to_an_invoice_as_settling_it() {
     // A full credit for the invoice, dated July 5 and applied August 3.
     let memo = crate::credits::create_credit_memo(
         &pool,
-        crate::credits::CreditMemoInput {
+        crate::credits::CreditMemoInput { form_lines: Vec::new(),
             customer_name: "Acme".into(),
             credit_date: d(5),
             memo: None,

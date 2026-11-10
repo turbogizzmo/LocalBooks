@@ -15,6 +15,10 @@ export const screens = {
     help: 'Quotes for customers that do not touch your books until they become invoices. Mark an estimate accepted, then convert it to an invoice in one step.',
     guide: 'sales-receipts-and-estimates',
   },
+  'sales/orders': {
+    help: 'Orders customers have placed and you have not shipped yet. They post nothing; invoice an order all at once or in parts as you ship, and see what is backordered.',
+    guide: 'sales-orders',
+  },
   'sales/tax': {
     help: 'Turn on sales tax, set up the rates you charge, see taxable sales and tax owed for any period, and record payments to the tax agency.',
   },
@@ -112,6 +116,14 @@ export const topics = [
     keywords: 'print forms batch sales receipts credit memos bill payment stubs purchase orders mailing labels address labels',
     go: { label: 'Go to Print Forms', view: 'sales/print-forms' },
     guide: 'invoices',
+  },
+  {
+    id: 'sales-order', area: 'sales', views: ['sales/orders', 'sales/invoices', 'sales/products'],
+    title: 'Take a sales order and invoice it in parts',
+    body: 'A sales order records what a customer ordered before you ship it, and posts nothing. From its menu, Create invoice for all that is left, or for part of it, opens the invoice form with those quantities; posting takes them off the order, and voiding that invoice puts them back. Print, save or email an order from the same menu, or make one from an accepted estimate (Create sales order in the estimate’s menu). On sales orders and Available show stock already promised, and Open Sales Orders by Customer and by Item and Pending Sales (Reports › Sales) list what is still to ship. Preferences › Sales & Customers turns sales orders off.',
+    keywords: 'sales order so backorder back order partial invoice pending sales open orders fulfil fulfill ship',
+    go: { label: 'New sales order', view: 'sales/orders', action: 'sales-order' },
+    guide: 'sales-orders',
   },
   {
     id: 'invoice', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/customers'],
@@ -284,7 +296,7 @@ export const topics = [
   {
     id: 'item-types', area: 'sales', views: ['sales/products', 'sales/invoices', 'sales/all', 'sales/estimates'],
     title: 'Subtotals, discounts, other charges and groups',
-    body: 'In the Product/Service list on an invoice, sales receipt or estimate, choose Subtotal to add up the lines above it. A Discount item takes an amount or a percentage (type 10%) off the line above: an item, a group or a subtotal. An Other charge can be an amount or a percentage of the line above. Choosing Group: … fills in a line for each of its items; tick Print as one line to print it with just its total. Set the Type on Products & Services, and make groups with Groups….',
+    body: 'In the Product/Service list on an invoice, sales receipt, estimate, credit memo or refund receipt, choose Subtotal to add up the lines above it. A Discount item takes an amount or a percentage (type 10%) off the line above: an item, a group or a subtotal. An Other charge can be an amount or a percentage of the line above. Choosing Group: … fills in a line for each of its items; tick Print as one line to print it with just its total. On a credit memo a discount lowers the credit. Set the Type on Products & Services, and make groups with Groups….',
     keywords: 'subtotal discount item other charge shipping handling fee percent group bundle kit item type print as one line',
     go: { label: 'Go to Products & Services', view: 'sales/products' },
     guide: 'invoices',
@@ -301,7 +313,7 @@ export const topics = [
   {
     id: 'bill-costs', area: 'sales', views: ['sales/bill-costs', 'expenses/expenses', 'expenses/bills'],
     title: 'Bill expenses to a customer',
-    body: 'On a check, expense or bill line, choose the Customer:Job and tick Bill?. Sales › Bill Costs lists those costs by customer: tick them, check the markup and click Create invoice. Each cost credits its expense account back (or an income account, if Preferences › Time & Expenses counts reimbursed expenses as income), plus one Markup line. Mark all expenses as billable there to tick Bill? for you. Billable time from the timesheet is listed there too, one line per entry for its service item at its hours and rate; an expense account can send its reimbursements to an income account of its own (Chart of Accounts).',
+    body: 'On a check, expense or bill line, choose the Customer:Job and tick Bill?. Sales › Bill Costs lists those costs by customer: tick them, check the markup and click Create invoice. Each cost credits its expense account back (or an income account, if Preferences › Time & Expenses counts reimbursed expenses as income), plus one Markup line. Mark all expenses as billable there to tick Bill? for you. Billable time from the timesheet is listed there too, one line per entry for its service item at its hours and rate; an expense account can send its reimbursements to an income account of its own (Chart of Accounts). A cost in another currency is billed at its home amount, at the rate its expense was entered with; editing the invoice can move a reimbursed line to another expense account.',
     keywords: 'billable expenses reimbursable costs markup bill customer job reimbursement time and expenses billable time invoice from time hours timesheet',
     go: { label: 'Go to Bill Costs', view: 'sales/bill-costs' },
     guide: 'getting-started',
@@ -400,8 +412,8 @@ export const topics = [
     id: 'attachments', area: 'accounting', views: ['accounting/attachments', 'accounting/journal', 'accounting/register', 'expenses/bills', 'expenses/expenses', 'sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Attach receipts and documents',
     body: 'Keep a copy of a vendor’s invoice, a receipt or a contract in the company file (up to 25 MB each). On a new bill, expense or check, click Attach the vendor’s invoice… or Attach a receipt… before you post. For anything already posted, choose Attach file… in the row’s Actions menu; a 📎 marks rows with files. Click a file name to save a copy, or Save all… for every file on the transaction; Settings › File & Data › Save All Attachments… saves every attachment in the company file to one zip file, a folder per transaction. Files stay with a transaction when you edit it. Customers, vendors, items, accounts, estimates and purchase orders take files too. Accounting › Attachments Library lists every file: search, preview, keywords, Send with the form when it is emailed, and Delete, which can be restored (Show deleted).',
-    guide: 'attachments',
-    keywords: 'attachment attach receipt document file scan photo pdf paperclip save all zip export every attachment',
+    guide: 'attachments The Attachments Library previews pictures, PDFs and text; files marked Send with the form go with it when it is emailed or printed. To bring in paper, scan to a PDF or photo with your scanner’s own app and drop it on the Document Inbox.',
+    keywords: 'attachment attach receipt document file scan scanner photo pdf preview paperclip save all zip export every attachment print send with form',
     go: { label: 'Go to Journal Entries', view: 'accounting/journal' },
   },
   {
