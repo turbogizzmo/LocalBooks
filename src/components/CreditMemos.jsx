@@ -41,7 +41,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep, copyOf = 
   const [date, setDate] = useTransactionDate();
   const [memo, setMemo] = useState(copyOf?.memo ?? '');
   const [refundFrom, setRefundFrom] = useState(copyOf?.accountId ?? defaultBank);
-  const [lines, setLines] = useState(() => (copyOf ? linesFromDocument(copyOf.lines, [], defaultIncome) : Array.from({ length: 3 }, () => blankLine(defaultIncome))));
+  const [lines, setLines] = useState(() => (copyOf ? linesFromDocument(copyOf.lines, copyOf.formLines ?? [], defaultIncome) : Array.from({ length: 3 }, () => blankLine(defaultIncome))));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // Files picked before posting; attached once it posts.

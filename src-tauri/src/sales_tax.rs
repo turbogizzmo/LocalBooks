@@ -354,7 +354,8 @@ pub struct SalesTaxPaymentView {
     pub is_voided: bool,
 }
 
-/// Pays sales tax to the agency: Dr the liability account / Cr the bank or card account.
+/// Pays sales tax to the agency: Dr the liability account / Cr the bank or card account. A combined
+/// rate's payment splits among its rates by their percentages: Dr each rate's account for its share.
 pub async fn pay_sales_tax(pool: &SqlitePool, input: SalesTaxPaymentInput) -> Result<i64, String> {
     let amount = input.amount_cents.get();
     if !(1..=MAX_LINE_CENTS).contains(&amount) {
@@ -362,33 +363,46 @@ pub async fn pay_sales_tax(pool: &SqlitePool, input: SalesTaxPaymentInput) -> Re
     }
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
-        let rate: Option<(String, i64, Option<String>)> = match input.tax_rate_id {
-            Some(id) => sqlx::query_as("SELECT r.name, r.liability_account_id, v.name FROM tax_rates r LEFT JOIN vendors v ON v.id = r.agency_vendor_id WHERE r.id = ?1")
+        let rate: Option<(String, i64, Option<String>, bool)> = match input.tax_rate_id {
+            Some(id) => sqlx::query_as("SELECT r.name, r.liability_account_id, v.name, r.is_group FROM tax_rates r LEFT JOIN vendors v ON v.id = r.agency_vendor_id WHERE r.id = ?1")
                 .bind(id)
                 .fetch_optional(&mut *tx)
                 .await
                 .map_err(db_err)?,
             None => None,
         };
-        let liability = match (input.liability_account_id, &rate) {
-            (Some(id), _) => liability_account(&mut tx, Some(id)).await?,
-            (None, Some((_, id, _))) => *id,
-            (None, None) => liability_account(&mut tx, None).await?,
+        // A combined rate pays each of its rates' accounts, its share by their percentages.
+        let parts = match (input.tax_rate_id, &rate) {
+            (Some(id), Some((.., true))) => {
+                if input.liability_account_id.is_some() {
+                    return Err("TAX_COMBINED_ACCOUNT: a combined rate is paid to each of its rates' own accounts".to_string());
+                }
+                let components = combined::components(&mut tx, id).await?;
+                let parts = combined::split_payment(amount, &components).ok_or_else(|| "TAX_BAD_AMOUNT: the amount is out of range".to_string())?;
+                parts.into_iter().filter(|p| p.cents > 0).collect::<Vec<_>>()
+            }
+            _ => Vec::new(),
+        };
+        let liability = match (input.liability_account_id, &rate, parts.first()) {
+            (_, _, Some(first)) => first.liability_account_id,
+            (Some(id), _, None) => liability_account(&mut tx, Some(id)).await?,
+            (None, Some((_, id, ..)), None) => *id,
+            (None, None, None) => liability_account(&mut tx, None).await?,
         };
         let kind: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1").bind(input.account_id).fetch_optional(&mut *tx).await.map_err(db_err)?;
         if !matches!(kind.as_deref(), Some("BANK" | "CREDIT_CARD")) {
             return Err("TAX_BAD_PAYMENT_ACCOUNT: pay sales tax from a Bank or Credit Card account".to_string());
         }
         let to = rate.as_ref().and_then(|r| r.2.clone()).or_else(|| rate.as_ref().map(|r| r.0.clone())).unwrap_or_else(|| "tax agency".into());
-        let entry = JournalEntry {
-            id: None,
-            date: input.payment_date,
-            description: format!("Sales tax payment - {to}"),
-            lines: vec![JournalLine::debit(liability, amount), JournalLine::credit(input.account_id, amount)],
-            currency: None,
+        let mut lines: Vec<JournalLine> = if parts.is_empty() {
+            vec![JournalLine::debit(liability, amount)]
+        } else {
+            parts.iter().map(|p| JournalLine::debit(p.liability_account_id, p.cents).with_memo(Some(&format!("Sales tax: {}", p.name)))).collect()
         };
+        lines.push(JournalLine::credit(input.account_id, amount));
+        let entry = JournalEntry { id: None, date: input.payment_date, description: format!("Sales tax payment - {to}"), lines, currency: None };
         let entry_id = post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await?;
-        sqlx::query_scalar::<_, i64>(
+        let payment_id = sqlx::query_scalar::<_, i64>(
             "INSERT INTO sales_tax_payments (tax_rate_id, liability_account_id, account_id, payment_date, amount_cents, reference, journal_entry_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id",
         )
@@ -401,7 +415,18 @@ pub async fn pay_sales_tax(pool: &SqlitePool, input: SalesTaxPaymentInput) -> Re
         .bind(entry_id)
         .fetch_one(&mut *tx)
         .await
-        .map_err(db_err)
+        .map_err(db_err)?;
+        for p in &parts {
+            sqlx::query("INSERT INTO sales_tax_payment_parts (payment_id, tax_rate_id, liability_account_id, cents) VALUES (?1, ?2, ?3, ?4)")
+                .bind(payment_id)
+                .bind(p.rate_id)
+                .bind(p.liability_account_id)
+                .bind(p.cents)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_err)?;
+        }
+        Ok(payment_id)
     }
     .await;
     match result {

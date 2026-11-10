@@ -8,6 +8,9 @@
 //!   (`document_tax_parts`), so changing a combined rate later never changes tax already posted.
 //! - **Sales tax return.** For a period, on the accrual or cash basis: for each agency, each of its
 //!   rates with the taxable sales and the tax collected, and what was paid to it in the period.
+//! - **Paying a combined rate.** The payment splits among the components in proportion to their
+//!   rates ([`split_payment`]) and pays down each one's liability account in one entry; the split is
+//!   kept (`sales_tax_payment_parts`) so the return files each share under its own agency.
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -46,6 +49,28 @@ pub(crate) fn split(total: i64, taxable: i64, components: &[Component]) -> Optio
         .collect::<Option<_>>()?;
     let sum = parts.iter().try_fold(0i64, |s, p| s.checked_add(p.cents))?;
     let left = total.checked_sub(sum)?;
+    if left != 0 {
+        let largest = parts.iter().enumerate().max_by_key(|(i, p)| (p.cents, std::cmp::Reverse(*i))).map(|(i, _)| i)?;
+        parts[largest].cents = parts[largest].cents.checked_add(left)?;
+    }
+    Some(parts)
+}
+
+/// Splits a payment against a combined rate among its components, in proportion to their rates;
+/// the cent or two that rounding leaves over goes to the largest. `None` on overflow.
+pub(crate) fn split_payment(amount: i64, components: &[Component]) -> Option<Vec<TaxPart>> {
+    let total = components.iter().try_fold(0i64, |s, c| s.checked_add(c.rate_ppm))?;
+    let mut parts: Vec<TaxPart> = components
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            // Rates that are all 0%: the whole payment goes to the first.
+            let cents = if total == 0 { if i == 0 { Some(amount) } else { Some(0) } } else { mul_div_round(amount, c.rate_ppm, total) };
+            cents.map(|cents| TaxPart { rate_id: c.id, name: c.name.clone(), liability_account_id: c.liability_account_id, cents })
+        })
+        .collect::<Option<_>>()?;
+    let sum = parts.iter().try_fold(0i64, |s, p| s.checked_add(p.cents))?;
+    let left = amount.checked_sub(sum)?;
     if left != 0 {
         let largest = parts.iter().enumerate().max_by_key(|(i, p)| (p.cents, std::cmp::Reverse(*i))).map(|(i, _)| i)?;
         parts[largest].cents = parts[largest].cents.checked_add(left)?;
@@ -288,21 +313,47 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
         a.lines.push(ReturnLine { tax_rate_id: rate_id, name, rate_ppm: ppm, taxable_sales_cents: taxable, tax_cents: tax });
     }
 
-    // Payments in the period, by the agency of the rate they were paid for.
-    let paid: Vec<(Option<i64>, Option<String>, i64)> = sqlx::query_as(
-        "SELECT r.agency_vendor_id, v.name, SUM(p.amount_cents) FROM sales_tax_payments p JOIN journal_entries e ON e.id = p.journal_entry_id
-         LEFT JOIN tax_rates r ON r.id = p.tax_rate_id LEFT JOIN vendors v ON v.id = r.agency_vendor_id
-         WHERE e.is_voided = 0 AND p.payment_date BETWEEN ?1 AND ?2 GROUP BY r.agency_vendor_id",
+    // Payments in the period, by agency: a combined rate's payment by each part's rate. One made
+    // before the split was kept (0.14.0) paid its first rate's account, so it counts for that rate.
+    let payments: Vec<(i64, Option<i64>, i64, i64)> = sqlx::query_as(
+        "SELECT p.id, p.tax_rate_id, p.liability_account_id, p.amount_cents FROM sales_tax_payments p JOIN journal_entries e ON e.id = p.journal_entry_id
+         WHERE e.is_voided = 0 AND p.payment_date BETWEEN ?1 AND ?2 ORDER BY p.id",
     )
     .bind(start)
     .bind(end)
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    for (agency_id, agency_name, cents) in paid {
-        match agencies.iter_mut().find(|a| a.agency_vendor_id == agency_id) {
-            Some(a) => a.paid_cents = cents,
-            None => agencies.push(AgencyReturn { agency_vendor_id: agency_id, agency_name: agency_name.unwrap_or_else(|| "No agency".into()), lines: Vec::new(), tax_cents: 0, paid_cents: cents }),
+    let mut payment_parts: std::collections::HashMap<i64, Vec<(i64, i64)>> = std::collections::HashMap::new();
+    let split_rows: Vec<(i64, i64, i64)> = sqlx::query_as(
+        "SELECT t.payment_id, t.tax_rate_id, t.cents FROM sales_tax_payment_parts t JOIN sales_tax_payments p ON p.id = t.payment_id
+         WHERE p.payment_date BETWEEN ?1 AND ?2 ORDER BY t.payment_id, t.tax_rate_id",
+    )
+    .bind(start)
+    .bind(end)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    for (payment, rate_id, cents) in split_rows {
+        payment_parts.entry(payment).or_default().push((rate_id, cents));
+    }
+    let members: Vec<(i64, i64, i64)> = sqlx::query_as(
+        "SELECT c.group_id, c.component_id, r.liability_account_id FROM tax_rate_components c JOIN tax_rates r ON r.id = c.component_id ORDER BY c.group_id, c.position",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    for (payment, rate_id, account, amount) in payments {
+        let shares: Vec<(Option<i64>, i64)> = match payment_parts.get(&payment) {
+            Some(split) => split.iter().map(|(r, c)| (Some(*r), *c)).collect(),
+            None => vec![(rate_id.map(|id| members.iter().find(|(g, _, a)| *g == id && *a == account).map_or(id, |m| m.1)), amount)],
+        };
+        for (paid_rate, cents) in shares {
+            let (agency_id, agency_name) = paid_rate.and_then(rate).map_or((None, None), |r| (r.3, r.4.clone()));
+            match agencies.iter_mut().find(|a| a.agency_vendor_id == agency_id) {
+                Some(a) => a.paid_cents = a.paid_cents.checked_add(cents).ok_or_else(overflow)?,
+                None => agencies.push(AgencyReturn { agency_vendor_id: agency_id, agency_name: agency_name.unwrap_or_else(|| "No agency".into()), lines: Vec::new(), tax_cents: 0, paid_cents: cents }),
+            }
         }
     }
     agencies.sort_by_key(|a| (a.agency_vendor_id.is_none(), a.agency_name.to_lowercase()));
