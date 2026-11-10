@@ -11,6 +11,35 @@ import { opensOwnForm, transactionTarget } from '../lib/openTransaction.js';
 import { quickReport, reportShortcut, transactionJournal, useReportOpener } from '../lib/quickReport.js';
 import DateBox from './DateBox.jsx';
 
+/**
+ * A customer's credit not yet used: unapplied payments (an overpayment or prepayment kept as credit)
+ * and credit memos with credit left. Shown only when there is some.
+ */
+function CustomerCredits({ customerId }) {
+  const { data: credit, reload } = useLedgerQuery(() => api.getCustomerCredit(customerId));
+  useEffect(() => {
+    reload();
+  }, [customerId, reload]);
+  const unapplied = credit?.unappliedCents ?? 0;
+  const remaining = credit?.remainingCents ?? 0;
+  if (unapplied === 0 && remaining === 0) return null;
+  return (
+    <span className="text-xs" title="Apply, refund or write these off in Sales › Credit Memos & Refunds; a new invoice offers them too">
+      {unapplied > 0 && (
+        <>
+          Unapplied amount <span className="num font-semibold">{formatCents(unapplied)}</span>
+        </>
+      )}
+      {unapplied > 0 && remaining > 0 && ' · '}
+      {remaining > 0 && (
+        <>
+          Remaining credit <span className="num font-semibold">{formatCents(remaining)}</span>
+        </>
+      )}
+    </span>
+  );
+}
+
 /** How many transactions the panel lists; the count and total still cover them all. */
 const LIMIT = 500;
 
@@ -98,6 +127,7 @@ export default function PartyTransactions({ kind, party, onClose }) {
             {data.matchCount > data.rows.length && ` · newest ${data.rows.length} shown`} · double-click to open
           </span>
         )}
+        {kind === 'customer' && <CustomerCredits customerId={party.id} />}
         <select className="qb-input ml-auto h-row w-[150px] text-sm" value={type} onChange={(e) => setType(e.target.value)} aria-label="Transaction type">
           <option value="">All types</option>
           {TYPES[kind].map((t) => (

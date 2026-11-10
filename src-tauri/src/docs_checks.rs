@@ -132,3 +132,58 @@ fn heading_anchors_match_github() {
     assert_eq!(heading_anchor("\"LocalBooks couldn't open your company file\""), "localbooks-couldnt-open-your-company-file");
     assert_eq!(heading_anchor("See the transactions behind a number (QuickZoom)"), "see-the-transactions-behind-a-number-quickzoom");
 }
+
+/// The relative link targets (`](path)`) in a Markdown text, without anchors.
+fn relative_links(text: &str) -> Vec<String> {
+    text.split("](")
+        .skip(1)
+        .filter_map(|rest| rest.split(')').next())
+        .filter(|target| !target.starts_with("http") && !target.starts_with('#'))
+        .map(|target| target.split('#').next().unwrap_or_default().to_string())
+        .collect()
+}
+
+/// R6: every claim in `SECURITY.md`'s "how it is built" and "users" sections links to the code or
+/// test that backs it, every link resolves, and every function, test or constant it names in
+/// backticks appears in one of the files it links.
+#[test]
+fn security_claims_point_at_code_that_exists() {
+    let text = read(&repo().join("SECURITY.md"));
+    let mut problems = Vec::new();
+    for link in relative_links(&text) {
+        if !repo().join(&link).exists() {
+            problems.push(format!("link to {link}, which does not exist"));
+        }
+    }
+    let code: String = relative_links(&text).iter().filter(|l| l.ends_with(".rs") || l.ends_with(".jsx") || l.ends_with(".json")).filter_map(|l| std::fs::read_to_string(repo().join(l)).ok()).collect();
+
+    let start = text.find("## How LocalBooks is built to be safe").expect("the built-to-be-safe section");
+    let end = text.find("What this does not cover:").expect("the limits list");
+    let claims = &text[start..end];
+    let mut bullets: Vec<String> = Vec::new();
+    for line in claims.lines() {
+        if line.starts_with("- ") {
+            bullets.push(line.to_string());
+        } else if line.starts_with("  ") {
+            if let Some(last) = bullets.last_mut() {
+                last.push(' ');
+                last.push_str(line.trim());
+            }
+        }
+    }
+    assert!(bullets.len() >= 15, "found the claims ({})", bullets.len());
+    for bullet in &bullets {
+        if !bullet.contains("](src") {
+            problems.push(format!("claim without a link to code: {}", &bullet[..bullet.len().min(80)]));
+        }
+        // Names in backticks that look like code (snake_case or Type::name) must exist.
+        for (i, name) in bullet.split('`').enumerate() {
+            let looks_like_code = i % 2 == 1 && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':') && (name.contains('_') || name.contains("::"));
+            let last = name.rsplit("::").next().unwrap_or(name);
+            if looks_like_code && !code.contains(last) {
+                problems.push(format!("`{name}` is not in any file SECURITY.md links"));
+            }
+        }
+    }
+    assert!(problems.is_empty(), "SECURITY.md:\n{}", problems.join("\n"));
+}
