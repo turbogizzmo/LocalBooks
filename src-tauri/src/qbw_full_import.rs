@@ -427,7 +427,12 @@ async fn write_credit_memo(
 
 /// The one debit of a receipt, payment or deposit: the account the money went into.
 fn single_debit(t: &Staged) -> Result<(i64, i64), String> {
-    let debits: Vec<&Line> = t.lines.iter().filter(|l| l.1 < 0).collect();
+    debit_into(t, |_| true)
+}
+
+/// The one debit of `t` among the lines `keep` accepts.
+fn debit_into(t: &Staged, keep: impl Fn(&Line) -> bool) -> Result<(i64, i64), String> {
+    let debits: Vec<&Line> = t.lines.iter().filter(|l| l.1 < 0 && keep(l)).collect();
     match debits.as_slice() {
         [(account, cents, _, _)] => Ok((*account, -cents)),
         _ => Err("the money went into more than one account".into()),
@@ -442,7 +447,8 @@ async fn write_sales_receipt(
     books: &Books,
 ) -> Result<(i64, i64, i64, i64), String> {
     let SourceDocument::SalesReceipt { customer_id, number: doc_num, method, lines, sales } = doc else { unreachable!() };
-    let (into, total) = single_debit(t)?;
+    // The cost of inventory sold is a debit too (to cost of goods sold); it is not the money.
+    let (into, total) = debit_into(t, |l| books.kind(l.0) != "COST_OF_GOODS_SOLD")?;
     if !matches!(books.kind(into), "BANK" | "OTHER_CURRENT_ASSET") {
         return Err("the money did not go into a bank or Undeposited Funds account".into());
     }

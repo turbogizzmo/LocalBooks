@@ -252,3 +252,52 @@ fn price_levels_read_as_the_file_stores_them() {
     // An unknown type that lists items is per item.
     assert_eq!(price_level_of("X".into(), false, Some(0), None, &[(7, Some(100))]).kind, LevelKind::PerItem);
 }
+
+/// A cost row as the file keeps it: the form line it belongs to, an account and an amount
+/// (negative = debit). Made-up values.
+fn cost_row(target: i64, account: i64, cents: i64) -> Row {
+    let amount = crate::qbw_records::Numeric { coefficient: cents.unsigned_abs() as u128, exponent: -1, negative: cents < 0 };
+    Row {
+        values: [
+            ("target_id".to_string(), Value::Int(target)),
+            ("account_id".to_string(), Value::Int(account)),
+            ("amount_amt".to_string(), Value::Numeric(amount)),
+        ]
+        .into_iter()
+        .collect(),
+    }
+}
+
+#[test]
+fn inventory_cost_joins_the_form_it_was_sold_on() {
+    // Invoice 1: receivable 120.00 debit, income 120.00 credit. Accounts: 4 receivable, 26
+    // income, 30 cost of goods sold, 6 inventory asset.
+    let mut txns: BTreeMap<i64, SourceTransaction> = [(1, txn(1, vec![line(4, -12_000), line(26, 12_000)]))].into_iter().collect();
+    let form_lines: HashMap<i64, (i64, Option<String>)> = [(501, (1, Some("Remodel".to_string()))), (502, (1, None)), (503, (9, None))].into_iter().collect();
+    let known: HashSet<i64> = [4, 26, 30, 6].into_iter().collect();
+    let rows = [
+        // Line 501 sold stock that cost 73.50: debit cost of goods sold, credit inventory.
+        cost_row(501, 30, -7_350),
+        cost_row(501, 6, 7_350),
+        // Line 502's pair does not net to zero (one row lost): neither row is used.
+        cost_row(502, 30, -1_000),
+        cost_row(502, 6, 900),
+        // Line 503 belongs to a transaction that was not read.
+        cost_row(503, 30, -500),
+        cost_row(503, 6, 500),
+        // A zero-cost line adds nothing.
+        cost_row(504, 30, 0),
+    ];
+    let mut quality = LedgerQuality::default();
+    add_inventory_cost(&mut txns, &form_lines, &rows, &known, &mut quality);
+
+    let invoice = &txns[&1];
+    assert_eq!(invoice.imbalance_cents(), 0);
+    assert_eq!(&invoice.lines[2..], [
+        SourceLine { account_id: 30, cents: -7_350, memo: None, class: Some("Remodel".into()) },
+        SourceLine { account_id: 6, cents: 7_350, memo: None, class: Some("Remodel".into()) },
+    ]);
+    assert_eq!(quality.rejected_lines, 4);
+    assert_eq!(quality.rejected_by_reason["inventory cost does not net to zero"], 2);
+    assert_eq!(quality.rejected_by_reason["inventory cost of a form line that was not read"], 2);
+}

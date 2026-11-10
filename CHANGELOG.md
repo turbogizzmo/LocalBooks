@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Payroll and cost of goods sold come in from QuickBooks Desktop files.** Importing a company
+  file now brings its paychecks and payroll liability payments, so payroll expense and liability
+  accounts match QuickBooks. Invoices and sales receipts that sold inventory also bring the cost
+  of what they sold, moving it from Inventory Asset to Cost of Goods Sold as QuickBooks did.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.
