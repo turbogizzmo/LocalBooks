@@ -13,6 +13,14 @@ const ROLES = [
   ['chargebackAccountId', 'Chargebacks', (a) => a.accountType !== 'BANK'],
 ];
 const STATUS = { NEW: 'New', RECORDED: 'Recorded', IGNORED: 'Ignored' };
+/** How often a feed is fetched while LocalBooks is open; '' is only by hand. */
+const AUTO = [
+  ['', 'Only when I click Get payouts'],
+  ['1', 'Every hour'],
+  ['6', 'Every 6 hours'],
+  ['12', 'Every 12 hours'],
+  ['24', 'Once a day'],
+];
 const PROCESSOR = { STRIPE: 'Stripe', PAYPAL: 'PayPal', SHOPIFY: 'Shopify Payments' };
 
 /**
@@ -199,6 +207,23 @@ function FeedPanel({ feed, accounts, isAdmin, onChanged }) {
             <button type="button" className="qb-btn qb-btn-secondary h-row" disabled={busy} onClick={() => act(() => api.disconnectPayoutFeed(feed.id))}>Disconnect</button>
           </>
         )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 border-b border-qb-border px-2 py-1 text-xs">
+        <label className="flex items-center gap-1">
+          <span className="text-qb-ink-muted">Fetch</span>
+          <select
+            className="qb-input h-row"
+            value={feed.autoFetchHours ? String(feed.autoFetchHours) : ''}
+            disabled={!isAdmin || busy}
+            title={isAdmin ? 'While LocalBooks is open and someone who can change the books is signed in. Payouts still wait for you to record them.' : 'An Admin chooses this'}
+            onChange={(e) => act(() => api.setPayoutAutoFetch(feed.id, e.target.value ? Number(e.target.value) : null))}
+          >
+            {AUTO.map(([v, label]) => (
+              <option key={v} value={v}>{label}</option>
+            ))}
+          </select>
+        </label>
+        {feed.autoFetchHours && feed.lastAutoResult && <span className="text-qb-ink-muted">Last automatic fetch: {feed.lastAutoResult}</span>}
       </div>
       {editing && <FeedForm accounts={accounts} feed={feed} onDone={() => (setEditing(false), onChanged?.())} onCancel={() => setEditing(false)} />}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}

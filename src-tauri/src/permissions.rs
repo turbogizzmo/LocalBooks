@@ -105,6 +105,7 @@ const ADMIN: &[&str] = &[
     "connect_stripe_feed",
     "connect_paypal_feed",
     "connect_shopify_feed",
+    "set_payout_auto_fetch",
     "update_payout_feed",
     "disconnect_payout_feed",
     "file_dentist_rebuild",

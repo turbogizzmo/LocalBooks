@@ -264,6 +264,17 @@ fn main() {
                 }
             });
 
+            // Payout feeds an Admin set to fetch automatically: checked every 15 minutes while the
+            // app is open, each fetched when its interval has passed (`payout_feeds::fetch_due`).
+            let payouts = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                loop {
+                    commands::run_due_payout_fetches(&payouts).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
+                }
+            });
+
             // Daily automatic backup, off the startup path.
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

@@ -218,6 +218,13 @@ pub struct PayoutFeed {
     pub refund_account_id: i64,
     pub chargeback_account_id: i64,
     pub last_fetched_at: Option<String>,
+    /// Fetched automatically every this many hours while LocalBooks is open; `None`: only by hand.
+    pub auto_fetch_hours: Option<i64>,
+    /// What the last automatic fetch found, or why it failed.
+    pub last_auto_result: Option<String>,
+    /// When the last automatic try was.
+    #[serde(skip)]
+    pub last_auto_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -232,7 +239,7 @@ pub struct FeedInput {
 }
 
 const FEED_SELECT: &str =
-    "SELECT id, processor, name, secret_key, account_ref, bank_account_id, sales_account_id, fee_account_id, refund_account_id, chargeback_account_id, last_fetched_at FROM payout_feeds";
+    "SELECT id, processor, name, secret_key, account_ref, bank_account_id, sales_account_id, fee_account_id, refund_account_id, chargeback_account_id, last_fetched_at, auto_fetch_hours, last_auto_result, last_auto_at FROM payout_feeds";
 
 pub async fn feeds(pool: &SqlitePool) -> Result<Vec<PayoutFeed>, String> {
     sqlx::query_as(&format!("{FEED_SELECT} ORDER BY name")).fetch_all(pool).await.map_err(db_err)
@@ -310,6 +317,65 @@ pub async fn update_feed(pool: &SqlitePool, id: i64, input: &FeedInput) -> Resul
         .await
         .map_err(db_err)?;
     feed(pool, id).await
+}
+
+/// The intervals an Admin can choose for fetching automatically.
+pub const AUTO_FETCH_HOURS: [i64; 4] = [1, 6, 12, 24];
+
+/// Turns automatic fetching on (every `hours`) or off (`None`) for a feed.
+pub async fn set_auto_fetch(pool: &SqlitePool, id: i64, hours: Option<i64>) -> Result<PayoutFeed, String> {
+    if hours.is_some_and(|h| !AUTO_FETCH_HOURS.contains(&h)) {
+        return Err("PAYOUT_AUTO: fetch every 1, 6, 12 or 24 hours, or turn it off".into());
+    }
+    let done = sqlx::query("UPDATE payout_feeds SET auto_fetch_hours = ?1 WHERE id = ?2").bind(hours).bind(id).execute(pool).await.map_err(db_err)?;
+    if done.rows_affected() != 1 {
+        return Err("PAYOUT_NO_FEED: that payout feed was removed".into());
+    }
+    feed(pool, id).await
+}
+
+/// What one automatic fetch did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AutoFetch {
+    pub feed_id: i64,
+    pub new_payouts: usize,
+    /// Why it failed (the network, the key), kept for the screen.
+    pub error: Option<String>,
+}
+
+/// Fetches every feed whose automatic interval has passed since its last fetch (by hand or not),
+/// and keeps a line saying what each found. Never posts anything: recording stays a choice.
+pub async fn fetch_due(pool: &SqlitePool, store: &SecretStore, apis: &Apis, now: DateTime<Utc>) -> Result<Vec<AutoFetch>, String> {
+    let at = |t: &Option<String>| t.as_deref().and_then(|t| DateTime::parse_from_rfc3339(t).ok()).map(|t| t.with_timezone(&Utc));
+    let mut done = Vec::new();
+    for f in feeds(pool).await? {
+        let Some(hours) = f.auto_fetch_hours else { continue };
+        // The later of the last fetch (by hand or automatic) and the last automatic try: a failed
+        // try waits for the next interval too, rather than calling the processor again soon.
+        let last = at(&f.last_fetched_at).max(at(&f.last_auto_at));
+        if last.is_some_and(|t| now - t < chrono::Duration::hours(hours)) {
+            continue;
+        }
+        let stamp = now.format("%Y-%m-%d %H:%M UTC");
+        let (line, result) = match fetch(pool, store, apis, f.id, now).await {
+            Ok(r) => {
+                let refused = if r.refused.is_empty() { String::new() } else { format!(" Not kept: {}.", r.refused.join("; ")) };
+                let line = format!("{stamp}: {} new payout{}.{refused}", r.new_payouts, if r.new_payouts == 1 { "" } else { "s" });
+                (line, AutoFetch { feed_id: f.id, new_payouts: r.new_payouts, error: None })
+            }
+            Err(e) => (format!("{stamp}: not fetched: {}", reason(&e)), AutoFetch { feed_id: f.id, new_payouts: 0, error: Some(e) }),
+        };
+        let line: String = line.chars().take(2000).collect();
+        sqlx::query("UPDATE payout_feeds SET last_auto_result = ?1, last_auto_at = ?2 WHERE id = ?3")
+            .bind(&line)
+            .bind(now.to_rfc3339())
+            .bind(f.id)
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
+        done.push(result);
+    }
+    Ok(done)
 }
 
 /// Disconnects a feed: forgets its key and its payouts not yet recorded. Recorded deposits stay.

@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Payouts fetched on a schedule.** An Admin can set each payout feed in Banking › Payout Feeds
+  to fetch every hour, 6 hours, 12 hours or once a day while LocalBooks is open. New payouts wait
+  for you to record them, and the feed shows what its last automatic fetch found.
 - **Shopify Payments payouts with their fees.** Banking › Payout Feeds connects a Shopify store
   too, with a custom app that can only read payouts. Each payout to your bank comes in as a deposit
   of its sales, less Shopify's fees, refunds and chargebacks.

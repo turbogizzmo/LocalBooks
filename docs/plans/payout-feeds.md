@@ -9,7 +9,8 @@ deduction, and how it stays private.
 ## Privacy
 
 - The feed is **off until the user sets it up** with a key; nothing is fetched before that, and
-  only when the user clicks **Get payouts** (no background polling in this change).
+  only when the user clicks **Get payouts**, or on the schedule an Admin picks for that feed
+  (below).
 - The key is a **restricted, read-only key** the user creates at the processor (Stripe: read access
   to Balance and Payouts). It is kept in the operating system's credential store
   (`secrets.rs`, service "LocalBooks payout feeds"), never in the company file, backups or logs.
@@ -97,8 +98,19 @@ GraphQL Admin API (version 2026-10; the REST API is legacy):
 
 Each transaction's `amount − fee` is what it added; they must add up to the payout's `net`.
 
+## Fetching on a schedule
+
+Each feed is fetched only by hand until an Admin picks an interval: every 1, 6, 12 or 24 hours
+(`payout_feeds.auto_fetch_hours`, migration 0157). While LocalBooks is open, a task checks every 15
+minutes (`commands::run_due_payout_fetches`) and fetches each feed whose interval has passed since
+its last fetch or its last automatic try, so a failing feed waits for the next interval too. It runs
+only when the company file is open and someone who may change the books is signed in (or the file
+has no users), never in an archive: the same rule as clicking Get payouts. It only fetches: each
+payout still waits on the screen to be recorded. What the last automatic fetch found, or why it
+failed, is kept on the feed (`last_auto_result`) and shown on the screen; it never holds a key.
+
 ## Limits of this change
 
-Stripe first; PayPal and Shopify Payments came next (above). No automatic schedule; no matching of a charge
+Stripe first; PayPal and Shopify Payments came next (above). No matching of a charge
 to an open invoice (charges post to the sales account; the user applies them to invoices as
 needed). Payout reversals (failed payouts) are not fetched.

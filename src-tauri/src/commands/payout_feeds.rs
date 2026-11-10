@@ -3,7 +3,7 @@
 use super::prelude::*;
 use crate::payout_feeds::{self, Apis, FeedInput, FetchResult, PayPalCredentials, Payout, PayoutFeed, STRIPE_API};
 
-handlers![list_payout_feeds, connect_stripe_feed, connect_paypal_feed, connect_shopify_feed, update_payout_feed, disconnect_payout_feed, fetch_payouts, list_payouts, record_payout, set_payout_ignored];
+handlers![list_payout_feeds, connect_stripe_feed, connect_paypal_feed, connect_shopify_feed, set_payout_auto_fetch, update_payout_feed, disconnect_payout_feed, fetch_payouts, list_payouts, record_payout, set_payout_ignored];
 
 fn feed_secrets(app: &AppHandle) -> Result<SecretStore, String> {
     Ok(payout_feeds::secret_store(&crate::data_dirs(app).map_err(|e| format!("PAYOUT_CONFIG: {e}"))?.1))
@@ -41,6 +41,31 @@ pub async fn connect_shopify_feed(app: AppHandle, db: State<'_, Db>, shop: Strin
     let feed = payout_feeds::connect_shopify(&db.pool().await, &feed_secrets(&app)?, None, &shop, &token, &input).await?;
     notify(&app);
     Ok(feed)
+}
+
+/// Fetches a feed every `hours` (1, 6, 12 or 24) while LocalBooks is open, or only by hand (`None`).
+#[tauri::command]
+pub async fn set_payout_auto_fetch(app: AppHandle, db: State<'_, Db>, id: i64, hours: Option<i64>) -> Result<PayoutFeed, String> {
+    let feed = payout_feeds::set_auto_fetch(&db.pool().await, id, hours).await?;
+    notify(&app);
+    Ok(feed)
+}
+
+/// The feeds due an automatic fetch, fetched (`main.rs` calls this every few minutes). Only while
+/// someone who may change the books is signed in (or the file has no users), and never in an
+/// archive: the same rule as Get payouts by hand.
+pub async fn run_due_payout_fetches(app: &AppHandle) {
+    let Some(db) = app.try_state::<Db>() else { return };
+    if !db.is_open().await || db.check(crate::permissions::Need::Write, false).is_err() {
+        return;
+    }
+    let Ok(store) = feed_secrets(app) else { return };
+    match payout_feeds::fetch_due(&db.pool().await, &store, &Apis::live(), chrono::Utc::now()).await {
+        Ok(done) if !done.is_empty() => notify(app),
+        Ok(_) => {}
+        // An older company file without payout feeds, or one being switched.
+        Err(_) => {}
+    }
 }
 
 #[tauri::command]
