@@ -124,7 +124,7 @@ async fn resolve(pool: &SqlitePool, kind: SheetKind, rows: &[PaymentRow], proble
             };
             sqlx::query_as(
                 "SELECT i.id, COALESCE(c.name, i.customer_name), i.total_cents - i.amount_paid_cents, i.status, i.is_voided, i.currency_code
-                 FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.invoice_number = ?1",
+                 FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.invoice_number = ?1 AND i.is_replaced = 0",
             )
             .bind(number)
             .fetch_all(pool)

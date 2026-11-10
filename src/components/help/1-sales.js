@@ -136,7 +136,7 @@ export const topics = [
   {
     id: 'invoice-numbers', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'sales/orders'],
     title: 'Invoice numbers',
-    body: 'Invoice # on a new invoice shows the number it will get: one more than the highest so far. Leave it, or type another to use it instead; numbering carries on from the highest number used. Each number is used once: if the one you typed is taken, saving says which invoice has it and offers the next free number (Use #…), or Cancel to type another. Duplicate gives the copy the next number. Estimate #, Sale #, Credit # and Order # work the same way.',
+    body: 'Invoice # on a new invoice shows the number it will get: one more than the highest so far. Leave it, or type another to use it instead; numbering carries on from the highest number used. Each number is used once: if the one you typed is taken, saving says which invoice has it and offers the next free number (Use #…), or Cancel to type another. Duplicate gives the copy the next number; an edited invoice keeps its own. Estimate #, Sale #, Credit # and Order # work the same way.',
     keywords: 'invoice number numbering next number change number starting number sequence duplicate number estimate number sales receipt number credit memo number order number',
     guide: 'invoices',
   },

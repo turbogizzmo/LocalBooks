@@ -209,8 +209,9 @@ details and custom fields over.
 
 Double-click the invoice in the list (or choose **Edit…** in its **Actions** menu) to open it, make
 your changes and save. LocalBooks voids the original and posts the corrected invoice in its place;
-both stay in the journal and the audit trail. The voided original keeps its number, so the corrected
-invoice is posted under the next invoice number (**Invoice #** can't be changed while you edit). Bills, checks and expenses open the same way from
+both stay in the journal and the audit trail. The corrected invoice keeps the original's number, so
+your customer, statements, payments and reports go on showing the same invoice number; the voided
+original keeps it too, in the audit trail (**Invoice #** can't be changed while you edit). Bills, checks and expenses open the same way from
 their lists.
 
 An invoice with payments or credits applied can be edited too. The form says how much is applied

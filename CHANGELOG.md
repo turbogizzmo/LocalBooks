@@ -23,6 +23,9 @@ people using LocalBooks.
   and offers the next free number. Estimates, sales receipts, credit memos and sales orders have
   the same box (Estimate #, Sale #, Credit #, Order #). Duplicate still gives the copy the next
   number.
+- **An edited invoice keeps its number.** Saving changes to a posted invoice used to post the
+  corrected invoice under a new number; it now keeps the original's number, so customers,
+  statements, payments and reports go on showing the same one.
 
 ## [0.14.0]
 

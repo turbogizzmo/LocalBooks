@@ -75,7 +75,7 @@ impl DocKind {
     /// What a used number belongs to, for the message: the customer and date of that form.
     fn owner_sql(self) -> &'static str {
         match self {
-            DocKind::Invoice => "SELECT COALESCE(c.name, d.customer_name), d.issue_date FROM invoices d LEFT JOIN customers c ON c.id = d.customer_id WHERE d.invoice_number = ?1",
+            DocKind::Invoice => "SELECT COALESCE(c.name, d.customer_name), d.issue_date FROM invoices d LEFT JOIN customers c ON c.id = d.customer_id WHERE d.invoice_number = ?1 AND d.is_replaced = 0",
             DocKind::Estimate => "SELECT c.name, d.estimate_date FROM estimates d LEFT JOIN customers c ON c.id = d.customer_id WHERE d.estimate_number = ?1",
             DocKind::SalesReceipt => "SELECT c.name, d.receipt_date FROM sales_receipts d LEFT JOIN customers c ON c.id = d.customer_id WHERE d.receipt_number = ?1",
             DocKind::CreditMemo => "SELECT c.name, d.credit_date FROM credit_memos d LEFT JOIN customers c ON c.id = d.customer_id WHERE d.credit_number = ?1",

@@ -31,8 +31,8 @@ import { useOpenFromList, useUnsavedChanges, useWindowContent } from '../lib/win
 import NameField from './NameField.jsx';
 import DocNumberBox, { useDocNumber } from './DocNumberBox.jsx';
 
-// Saving changes voids the posted invoice, which keeps its number, and posts the corrected one.
-const EDITED_NUMBER = 'Saving your changes voids this invoice, which keeps this number, and posts the corrected invoice under the next number.';
+// Saving changes voids the posted invoice and posts the corrected one under the same number.
+const EDITED_NUMBER = 'An edited invoice keeps its number.';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
 import DateBox from './DateBox.jsx';

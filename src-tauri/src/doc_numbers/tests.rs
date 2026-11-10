@@ -160,15 +160,79 @@ async fn each_sales_form_takes_a_typed_number() {
 }
 
 #[tokio::test]
-async fn an_edited_invoice_takes_the_next_number_and_a_duplicate_too() {
+async fn an_edited_invoice_keeps_its_number_and_a_duplicate_takes_the_next() {
     let pool = test_pool().await;
     let income = services(&pool).await;
     let first = create_and_post_invoice(&pool, invoice(Some(1200), "Acme", income)).await.unwrap();
-    // The voided original keeps 1200, so the corrected one is posted under the next number.
     let edited = crate::edits::replace_invoice(&pool, first.id, invoice(None, "Acme", income)).await.unwrap();
-    let number: i64 = sqlx::query_scalar("SELECT invoice_number FROM invoices WHERE id = ?1").bind(edited).fetch_one(&pool).await.unwrap();
-    assert_eq!(number, 1201);
-    // A duplicate is a new invoice with no number of its own: it gets the next.
+    let (number, voided): (i64, bool) = sqlx::query_as("SELECT invoice_number, is_voided FROM invoices WHERE id = ?1").bind(edited).fetch_one(&pool).await.unwrap();
+    assert_eq!((number, voided), (1200, false), "the corrected invoice keeps the number");
+    // The original keeps it too, voided and marked replaced; edited again, the number still holds.
+    let (old_number, old_voided, replaced): (i64, bool, bool) = sqlx::query_as("SELECT invoice_number, is_voided, is_replaced FROM invoices WHERE id = ?1").bind(first.id).fetch_one(&pool).await.unwrap();
+    assert_eq!((old_number, old_voided, replaced), (1200, true, true));
+    let again = crate::edits::replace_invoice(&pool, edited, invoice(None, "Acme", income)).await.unwrap();
+    let number: i64 = sqlx::query_scalar("SELECT invoice_number FROM invoices WHERE id = ?1").bind(again).fetch_one(&pool).await.unwrap();
+    assert_eq!(number, 1200);
+
+    // The number is still taken for a new invoice, and the next one carries on after it.
+    let err = create_and_post_invoice(&pool, invoice(Some(1200), "Bayside", income)).await.unwrap_err();
+    assert!(err.starts_with("DOC_NUMBER_TAKEN: Invoice #1200 is already used"), "{err}");
     let copy = create_and_post_invoice(&pool, invoice(None, "Acme", income)).await.unwrap();
-    assert_eq!(copy.invoice_number, 1202);
+    assert_eq!(copy.invoice_number, 1201, "a duplicate is a new invoice and takes the next number");
+
+    // A replaced invoice can't be marked live again, and a live one can't be marked replaced.
+    assert!(sqlx::query("UPDATE invoices SET is_replaced = 0 WHERE id = ?1").bind(first.id).execute(&pool).await.is_err());
+    assert!(sqlx::query("UPDATE invoices SET is_replaced = 1 WHERE id = ?1").bind(copy.id).execute(&pool).await.is_err());
+}
+
+#[tokio::test]
+async fn a_part_paid_invoice_keeps_its_number_and_its_payment_when_edited() {
+    let pool = test_pool().await;
+    let income = services(&pool).await;
+    let checking: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(&pool).await.unwrap();
+    let mut input = invoice(None, "Acme", income);
+    input.lines[0].rate_cents = 10_000;
+    let first = create_and_post_invoice(&pool, input).await.unwrap();
+    crate::invoices::record_payment(
+        &pool,
+        crate::invoices::PaymentInput { invoice_id: first.id, deposit_account_id: checking, payment_date: d(10), amount_cents: 4_000, payment_method: "CHECK".into(), payment_method_id: None, reference: None, exchange_rate_e6: None, discount_cents: 0 },
+    )
+    .await
+    .unwrap();
+    let mut changed = invoice(None, "Acme", income);
+    changed.lines[0].rate_cents = 12_000;
+    let edited = crate::edits::replace_invoice(&pool, first.id, changed).await.unwrap();
+    let after = crate::invoices::get_summary(&pool, edited).await.unwrap();
+    assert_eq!((after.invoice_number, after.amount_paid_cents, after.status.as_str()), (first.invoice_number, 4_000, "PARTIAL"));
+    // The payment, Receive Payments and the customer's open invoices all name the same number.
+    let paid_on: i64 = sqlx::query_scalar("SELECT i.invoice_number FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.is_voided = 0").fetch_one(&pool).await.unwrap();
+    assert_eq!(paid_on, first.invoice_number);
+}
+
+#[tokio::test]
+async fn a_changed_sales_order_keeps_its_number() {
+    let pool = test_pool().await;
+    let income = services(&pool).await;
+    let line = crate::sales_orders::SalesOrderLineInput {
+        id: None,
+        line: crate::sales::SalesLineInput { product_service_id: None, description: "Work".into(), quantity_e4: 10_000, rate_cents: 2_000, income_account_id: income, class_id: None, is_taxable: false, service_date: None },
+    };
+    let order = |number: Option<i64>, lines: Vec<crate::sales_orders::SalesOrderLineInput>| crate::sales_orders::SalesOrderInput {
+        customer_name: "Acme".into(),
+        order_number: number,
+        order_date: d(4),
+        expected_date: None,
+        memo: None,
+        lines,
+        tax_rate_id: None,
+        sales_rep_id: None,
+        ship_method_id: None,
+        customer_message_id: None,
+        header: Default::default(),
+    };
+    let saved = crate::sales_orders::create(&pool, &order(Some(30), vec![line.clone()])).await.unwrap();
+    assert_eq!(saved.order_number, 30);
+    // A number sent with a change is ignored: the order keeps its own.
+    let changed = crate::sales_orders::update(&pool, saved.id, &order(Some(99), vec![line.clone(), line])).await.unwrap();
+    assert_eq!((changed.id, changed.order_number), (saved.id, 30));
 }
