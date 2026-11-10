@@ -141,6 +141,9 @@ pub struct AgingReport {
     pub total_cents: i64,
     /// Every open item, oldest due first within each name.
     pub items: Vec<AgingItem>,
+    /// Payables only: goods received on item receipts whose bills aren't entered yet (Items Received
+    /// Not Billed). Not part of the total, which is what A/P holds; shown underneath it.
+    pub received_not_billed_cents: i64,
 }
 
 /// Company preference: aging reports count days from the `due` date (the default) or the
@@ -218,7 +221,9 @@ pub async fn aging(pool: &SqlitePool, payable: bool, as_of: NaiveDate) -> Result
         row.total_cents += item.open_cents;
         totals[b] += item.open_cents;
     }
+    let received_not_billed_cents = if payable { crate::item_receipts::received_not_billed(pool, as_of).await? } else { 0 };
     Ok(AgingReport {
+        received_not_billed_cents,
         kind: if payable { "PAYABLE" } else { "RECEIVABLE" }.into(),
         as_of,
         basis: if from_transaction_date { "TRANSACTION" } else { "DUE" }.into(),

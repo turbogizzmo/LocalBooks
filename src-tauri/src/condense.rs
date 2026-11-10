@@ -67,6 +67,7 @@ pub const TRANSACTION_TABLES: &[(&str, &[&str])] = &[
     ("credit_memo_lines", &[]),
     ("credit_memos", &["credit_date"]),
     ("credit_refunds", &["refund_date"]),
+    ("deposit_deductions", &[]),
     ("deposit_lines", &[]),
     ("deposits", &["deposit_date"]),
     ("estimate_form_lines", &[]),
@@ -142,6 +143,9 @@ pub const KEPT_TABLES: &[&str] = &[
     "inventory_items",
     "item_group_members",
     "item_groups",
+    "item_receipt_bills",
+    "item_receipt_lines",
+    "item_receipts",
     "key_slots",
     "ledger_audit_log",
     "ledger_chain",
@@ -159,6 +163,8 @@ pub const KEPT_TABLES: &[&str] = &[
     "name_merges",
     "offsite_backup",
     "payment_methods",
+    "payout_feeds",
+    "payouts",
     "payroll_account_map",
     "price_level_items",
     "price_levels",
@@ -721,6 +727,7 @@ struct ArchiveRecord {
 /// Opens `path` on one connection with foreign-key enforcement off: the condense removes whole
 /// groups, and `PRAGMA foreign_key_check` (File Dentist's LINKS check) confirms nothing dangles.
 async fn open_private(path: &Path) -> Result<SqliteConnection, String> {
+    crate::wal_guard::check(path)?;
     let options = SqliteConnectOptions::new().filename(path).foreign_keys(false).create_if_missing(false);
     SqliteConnection::connect_with(&options).await.map_err(|e| format!("CONDENSE_OPEN: cannot open {}: {e}", path.display()))
 }
@@ -1106,6 +1113,7 @@ pub async fn pool_is_archive(pool: &SqlitePool) -> bool {
 }
 
 async fn open_checked(path: &Path) -> Result<SqlitePool, String> {
+    crate::wal_guard::check(path)?;
     let options = SqliteConnectOptions::new().filename(path).foreign_keys(true).create_if_missing(false);
     SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|e| format!("CONDENSE_OPEN: cannot open {}: {e}", path.display()))
 }
