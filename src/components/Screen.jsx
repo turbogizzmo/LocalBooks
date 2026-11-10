@@ -26,6 +26,7 @@ import { MailingLabels, PrintBatch } from './PrintBatches.jsx';
 import DocumentInbox from './DocumentInbox.jsx';
 import BouncedChecks from './BouncedChecks.jsx';
 import PurchaseOrders from './PurchaseOrders.jsx';
+import Approvals from './Approvals.jsx';
 import Reclassify from './Reclassify.jsx';
 import Reconcile from './Reconcile.jsx';
 import Recurring from './Recurring.jsx';
@@ -74,6 +75,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'expenses/bills' && <Bills {...props} />}
       {view === 'expenses/credits' && <VendorCredits {...props} />}
       {view === 'expenses/purchase-orders' && <PurchaseOrders {...props} />}
+      {view === 'expenses/approvals' && <Approvals isAdmin={isAdmin !== false} />}
       {view === 'expenses/vendors' && <PartyList kind="vendor" navigate={navigate} />}
       {view === 'employees/time' && <TimeTracking {...props} />}
       {view === 'employees/mileage' && <MileageTracking {...props} />}

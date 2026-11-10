@@ -230,6 +230,8 @@ const REPORTS: &[Entry] = &[
     Entry::Sub(
         "Company & Financial",
         &[
+            report("Company Snapshot", "snapshot"),
+            Entry::Sep,
             report("Profit & Loss Standard", "pl"),
             report("Profit & Loss Detail", "preset:pl-detail"),
             report("Profit & Loss YTD Comparison", "list:pl-ytd"),
@@ -288,6 +290,7 @@ const REPORTS: &[Entry] = &[
             report("Sales by Rep Detail", "preset:sales-rep-detail"),
             Entry::Sep,
             report("Item Price List", "item-price-list"),
+            report("Sales by Ship To Address", "list:sales-ship-to"),
             report("Sales Graph", "graph-sales"),
         ],
     ),
@@ -331,6 +334,7 @@ const REPORTS: &[Entry] = &[
             report("Accounts Payable Graph", "graph-ap"),
             Entry::Sep,
             report("Sales Tax Liability", "sales-tax"),
+            report("Sales Tax Revenue Summary", "list:sales-tax-revenue"),
             Entry::Sep,
             report("1099 Summary", "1099"),
             report("1099 Detail", "preset:1099-detail"),
@@ -394,9 +398,14 @@ const REPORTS: &[Entry] = &[
             Entry::Sep,
             report("Income Tax Summary", "income-tax-summary"),
             report("Income Tax Detail", "income-tax-detail"),
+            Entry::Sep,
+            report("Memorized Transaction Listing", "list:memorized-transactions"),
+            report("Realized Gains & Losses", "list:realized-gains"),
+            report("Unrealized Gains & Losses", "list:unrealized-gains"),
+            report("Commented Reports", "commented"),
         ],
     ),
-    Entry::Sub("Budgets & Forecasts", &[report("Budget vs. Actual", "bva"), report("Balance Sheet Budget vs. Actual", "bs-bva"), Entry::Sep, report("Budget vs. Actual Graph", "graph-bva")]),
+    Entry::Sub("Budgets & Forecasts", &[report("Budget Overview", "list:budget-overview"), report("Budget vs. Actual", "bva"), report("Balance Sheet Budget vs. Actual", "bs-bva"), Entry::Sep, report("Budget vs. Actual Graph", "graph-bva")]),
     Entry::Sub("List", &[
         report("Account Listing", "list:account-listing"),
         report("Item Listing", "list:item-listing"),
@@ -406,6 +415,8 @@ const REPORTS: &[Entry] = &[
         report("Customer Contact List", "list:customer-contact"),
         report("Vendor Phone List", "list:vendor-phone"),
         report("Vendor Contact List", "list:vendor-contact"),
+        Entry::Sep,
+        report("To Do Notes", "list:todo-notes"),
     ]),
 ];
 
