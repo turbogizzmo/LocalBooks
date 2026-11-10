@@ -88,8 +88,8 @@ page of widgets you choose, each a summary of one report:
 | Income breakdown | The five largest income accounts, then Others; the total is all income | Profit and Loss |
 | Expense breakdown | The five largest cost of sales and expense accounts, then Others | Profit and Loss |
 | Year over year | Income, expenses and net income, beside the same dates a year earlier and the change | Profit and Loss for each period |
-| To-dos | Open to-dos due by the period's end, and those with no date, soonest first; the total is how many | To Do Notes |
-| Note | Text you type and keep on the page (it saves when you click away) | — |
+| To-dos | Your open to-dos (yours and unassigned ones, as your reminders show them) due by the period's end, and those with no date, soonest first; the total is how many | To Do Notes |
+| Note | Text you type and keep on the page (it saves when you click away). Everyone who opens the company sees the same page and notes | — |
 
 - **Add a widget…** puts it at the end of the page; **✕** removes it; **↑** and **↓** move it.
 - Each widget has its own period: today (the balance widgets show balances as of the period's
@@ -471,6 +471,7 @@ the others, and a click on a line opens its transaction or account where it has 
 | **Unpaid Bills by Job** | What you owe | Bills with a balance as of a date, under the customer or job on their lines. A bill for several jobs is split by its lines' amounts; lines with no job are under **No customer or job** |
 | **Open Purchase Orders Detail** | Expenses and vendors | Every line of the purchase orders still open, by vendor (the **Open Purchase Orders** report has one row per order) |
 | **Unbilled Costs by Job** | Jobs | Billable lines of checks, expenses and bills not yet on an invoice, under each customer or job, with a total per job (**Customers › Bill Costs** puts them on an invoice) |
+| **Open Purchase Orders by Job** | Jobs | The same open lines under the customer or job on each line, lines for no one last; its total matches Open Purchase Orders Detail |
 | **Time by Job Summary** and **Detail** · **Time by Name** · **Time by Item** | Jobs | Hours from the timesheet in the period, by customer or job, by employee or by service item, with the billable hours |
 | **Physical Inventory Worksheet** | Inventory | Every tracked item with today's quantity on hand and a blank **Physical Count** column to print and fill in |
 | **Inventory Stock Status by Vendor** | Inventory | Each tracked item under its preferred vendor, with its reorder point, quantity on hand and quantity on open purchase orders; **Order** marks the items at or below the reorder point even counting what is on order |

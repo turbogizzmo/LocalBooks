@@ -297,7 +297,7 @@ pub fn write(file: &File) -> Result<String, String> {
         digits(file_credit, 12),
         alpha("", 39),
     ));
-    while lines.len() % BLOCKING_FACTOR != 0 {
+    while !lines.len().is_multiple_of(BLOCKING_FACTOR) {
         lines.push("9".repeat(RECORD_LEN));
     }
     debug_assert!(lines.iter().all(|l| l.len() == RECORD_LEN), "every record is 94 characters");
@@ -353,7 +353,7 @@ pub fn validate(text: &str) -> Result<Summary, String> {
     let mut problems: Vec<String> = Vec::new();
     let lines: Vec<&str> = text.split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l)).collect();
     let lines: &[&str] = match lines.split_last() {
-        Some((last, rest)) if last.is_empty() => rest,
+        Some((&"", rest)) => rest,
         _ => &lines,
     };
     for (i, line) in lines.iter().enumerate() {
@@ -369,7 +369,7 @@ pub fn validate(text: &str) -> Result<Summary, String> {
     if lines.is_empty() {
         return Err("the file is empty".into());
     }
-    if lines.len() % BLOCKING_FACTOR != 0 {
+    if !lines.len().is_multiple_of(BLOCKING_FACTOR) {
         problems.push(format!("the file has {} records, not a multiple of 10", lines.len()));
     }
 

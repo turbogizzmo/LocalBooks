@@ -66,6 +66,7 @@ mod info_panel;
 mod inventory;
 mod item_receipts;
 mod invoices;
+mod item_details;
 mod item_categories;
 mod item_prices;
 mod item_types;
@@ -286,6 +287,18 @@ fn main() {
                 loop {
                     commands::run_due_payout_fetches(&payouts).await;
                     tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
+                }
+            });
+
+            // Idle sign-out even when no window asks: once a minute, so an encrypted company file
+            // (gap R1) is closed, and its key leaves memory, soon after the idle limit passes.
+            let idle_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                    if idle_handle.state::<db::Db>().idle_expired() {
+                        commands::sign_out_after_idle(&idle_handle).await;
+                    }
                 }
             });
 

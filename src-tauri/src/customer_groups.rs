@@ -57,7 +57,7 @@ pub struct CustomerFacts {
 
 /// The state and ZIP code from the last line of an address such as "Springfield, OR 97477-1234".
 pub fn state_and_zip(address: Option<&str>) -> (Option<String>, Option<String>) {
-    let Some(last) = address.unwrap_or_default().lines().map(str::trim).filter(|l| !l.is_empty()).next_back() else { return (None, None) };
+    let Some(last) = address.unwrap_or_default().lines().map(str::trim).rfind(|l| !l.is_empty()) else { return (None, None) };
     let tokens: Vec<&str> = last.split(|c: char| c == ',' || c.is_whitespace()).filter(|t| !t.is_empty()).collect();
     let Some(zip_at) = tokens.iter().rposition(|t| t.chars().next().is_some_and(|c| c.is_ascii_digit())) else {
         return (None, None);

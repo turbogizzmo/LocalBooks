@@ -101,7 +101,7 @@ fn clean(text: Option<&str>) -> Option<&str> {
 }
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     match work(&mut tx).await {
         Ok(value) => crate::ledger::commit_write(tx).await.map(|()| value).map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),

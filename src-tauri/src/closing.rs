@@ -82,7 +82,7 @@ async fn current(tx: &mut sqlx::SqliteConnection) -> Result<Option<(Option<Naive
 /// Refuses an entry dated on or before the closing date in force, unless an External Accountant
 /// is signed in (their postings appear in the Closing Date Exceptions report, with who made them).
 pub async fn check_open(tx: &mut Transaction<'_, Sqlite>, date: NaiveDate) -> Result<(), String> {
-    let closed = matches!(current(&mut **tx).await?, Some((Some(lock_date), _)) if date <= lock_date);
+    let closed = matches!(current(tx).await?, Some((Some(lock_date), _)) if date <= lock_date);
     let exception = closed && crate::permissions::may_post_in_closed_period();
     // Lets this transaction past the database's closed-period backstop (migration 0137);
     // `ledger::commit_write` clears it again before committing.
@@ -142,7 +142,7 @@ pub struct ClosingInput {
 }
 
 pub async fn set_closing_date(pool: &SqlitePool, input: &ClosingInput) -> Result<ClosingStatus, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let (current_date, current_hash) = current(&mut tx).await?.unwrap_or((None, None));
     if let Some(hash) = &current_hash {
         let given = input.current_passcode.as_deref().unwrap_or_default();

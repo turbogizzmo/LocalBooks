@@ -1,0 +1,58 @@
+# The macOS Rust suite on demand: adding the `macos` label to a pull request runs it right away,
+# without another push. (After that, release.yml's `Test (macos-latest)` also runs on each push to
+# the labelled PR.)
+#
+# This lives in its own workflow, not as a `labeled` trigger in release.yml, because a label event
+# there would start a whole Release run: it would cancel the PR's run in progress (same concurrency
+# group), and post skipped `Test (ubuntu-latest)` / `Test (windows-latest)` checks for the head
+# commit that could stand in for a failed required check. This job has a different name from the
+# required `Test (macos-latest)` for the same reason, so it never stands in for that check either.
+
+name: macOS tests (label)
+
+on:
+  pull_request:
+    branches: [main]
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Any other label gets a group of its own (the run id), so adding it never cancels a run.
+  group: >-
+    macos-label-${{ github.event.label.name == 'macos' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  test-macos:
+    name: Test on macOS (label)
+    # Only the `macos` label starts it; the review:* labels and any other label start nothing.
+    if: github.event.label.name == 'macos'
+    runs-on: macos-latest
+    # As release.yml's `Test (macos-latest)`.
+    timeout-minutes: 110
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: test-macos-latest
+          # Reads main's cache; a pull request's copy could only be read by that PR.
+          save-if: false
+
+      - name: Run ledger test suite
+        working-directory: src-tauri
+        run: cargo test --locked

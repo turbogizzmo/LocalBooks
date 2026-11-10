@@ -316,7 +316,7 @@ pub(crate) async fn get_summary(pool: &SqlitePool, invoice_id: i64) -> Result<In
 
 /// Creates the invoice and posts it to the ledger atomically; the invoice comes back UNPAID.
 pub async fn create_and_post_invoice(pool: &SqlitePool, input: InvoiceInput) -> Result<InvoiceSummary, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let invoice_id = match write_invoice(&mut tx, &input).await {
         Ok(id) => id,
         Err(err) => return Err(rollback(tx, err).await),
@@ -549,7 +549,7 @@ pub async fn receive_payment(pool: &SqlitePool, input: ReceivePaymentInput) -> R
     } else {
         None
     };
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     for input in &inputs {
         if let Err(err) = write_payment(&mut tx, input, discount_account).await {
             return Err(rollback(tx, err).await);
@@ -570,7 +570,7 @@ pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &Paym
     if input.payment_method_id.is_none() && !PAYMENT_METHODS.contains(&input.payment_method.as_str()) {
         return Err(format!("INV_BAD_METHOD: unknown payment method '{}'", input.payment_method));
     }
-    let (method_id, method) = crate::profile_lists::resolve_payment_method(&mut **tx, input.payment_method_id, Some(&input.payment_method), "INV").await?;
+    let (method_id, method) = crate::profile_lists::resolve_payment_method(tx, input.payment_method_id, Some(&input.payment_method), "INV").await?;
     if input.amount_cents <= 0 {
         return Err("INV_BAD_AMOUNT: payment amount must be greater than zero".into());
     }

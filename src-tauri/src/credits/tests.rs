@@ -79,7 +79,7 @@ async fn credit_memos_reduce_receivables_apply_to_invoices_and_refund() {
         .await
         .unwrap();
     assert_eq!(refunded.remaining_cents, 0);
-    assert_eq!(balance(&pool, ar).await, 10_000 + 0, "only the other customer's invoice is still owed");
+    assert_eq!(balance(&pool, ar).await, 10_000, "only the other customer's invoice is still owed");
     let refund_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM credit_refunds").fetch_one(&pool).await.unwrap();
     crate::ledger::void_transaction(&pool, refund_entry).await.unwrap();
     assert_eq!(credit_memo(&pool, memo.id).await.unwrap().remaining_cents, 5_000);

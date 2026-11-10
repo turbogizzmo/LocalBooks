@@ -16,7 +16,7 @@ handlers![
 ];
 
 /// The signed-in user (nobody in a file without users) and the open file's pool.
-async fn viewer(db: &Db) -> Result<(sqlx::SqlitePool, Viewer), String> {
+pub(crate) async fn viewer(db: &Db) -> Result<(sqlx::SqlitePool, Viewer), String> {
     let (pool, slot) = db.pool_and_session().await?;
     let viewer = slot.lock().await.as_ref().map(|s| Viewer { user_id: Some(s.user.id), role: Some(s.user.role) }).unwrap_or_default();
     Ok((pool, viewer))

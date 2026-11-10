@@ -329,7 +329,7 @@ async fn job_amounts_follow_the_documents() {
     let invoiced: Vec<(i64, i64, Option<f64>)> =
         progress.rows.iter().filter(|r| r.kind == RowKind::Detail).map(|r| (cents(&r.cells[3]), cents(&r.cells[4]), r.cells[5].as_f64())).collect();
     assert_eq!(invoiced, vec![(700_000, 700_000, Some(100.0)), (550_000, 0, Some(0.0))]);
-    assert!(progress.rows.iter().filter(|r| r.kind == RowKind::Detail).next().unwrap().journal_entry_id.is_some(), "an invoiced estimate opens its invoice");
+    assert!(progress.rows.iter().find(|r| r.kind == RowKind::Detail).unwrap().journal_entry_id.is_some(), "an invoiced estimate opens its invoice");
 }
 
 #[tokio::test]

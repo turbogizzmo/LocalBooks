@@ -49,6 +49,8 @@ jobs:
         with:
           workspaces: src-tauri -> target
           shared-key: lint
+          # Pull requests read main's cache; saving a copy per PR pushed main's out of the 10 GB limit.
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Clippy
         working-directory: src-tauri

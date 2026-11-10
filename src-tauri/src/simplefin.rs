@@ -547,7 +547,7 @@ impl SimpleFin {
 
     async fn refresh_locked(&self, pool: &SqlitePool, connection_id: i64, access: &Access, protocol: i64) -> Result<(), String> {
         let set = self.fetch(access, protocol, &[("balances-only", "1".into())]).await?;
-        let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+        let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
         for account in &set.accounts {
             if let Err(err) = upsert_account(&mut tx, connection_id, &set, account).await {
                 return Err(rollback(tx, err).await);
@@ -612,7 +612,7 @@ impl SimpleFin {
             }
         }
 
-        let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+        let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
         match write_sync(&mut tx, connection_id, &linked, &from_dates, &sets, &mut summary, now).await {
             Ok(()) => crate::ledger::commit_write(tx).await.map_err(db_err)?,
             Err(err) => return Err(rollback(tx, err).await),

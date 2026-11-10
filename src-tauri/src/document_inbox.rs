@@ -164,7 +164,7 @@ pub async fn remove(pool: &SqlitePool, id: i64) -> Result<(), String> {
 /// Attaches a waiting document to the posted transaction it was entered as, and takes it out of
 /// the inbox, in one write.
 pub async fn attach(pool: &SqlitePool, id: i64, journal_entry_id: i64) -> Result<AttachmentView, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let posted: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM journal_entries WHERE id = ?1 AND status = 'POSTED')")
             .bind(journal_entry_id)

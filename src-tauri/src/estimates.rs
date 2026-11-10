@@ -72,7 +72,7 @@ async fn get_estimate(pool: &SqlitePool, id: i64) -> Result<EstimateSummary, Str
 }
 
 pub async fn create_estimate(pool: &SqlitePool, input: EstimateInput) -> Result<EstimateSummary, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let id = match write_estimate(&mut tx, &input).await {
         Ok(id) => id,
         Err(err) => return Err(rollback(tx, err).await),
@@ -205,7 +205,7 @@ pub async fn convert_to_invoice(
 ) -> Result<EstimateSummary, String> {
     // Zero-amount lines (headings, optional extras priced at nothing) can stay off the invoice.
     let drop_zero = crate::sales_prefs::drop_zero_lines(pool).await?;
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let customer_name = check_convertible(&mut tx, estimate_id).await?;
         let carried = crate::sales_lists::details_in_tx(&mut tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
@@ -356,7 +356,7 @@ pub async fn invoice_from_estimate(pool: &SqlitePool, estimate_id: i64, mut inpu
     input.details.form_lines = crate::item_types::without_items(std::mem::take(&mut input.details.form_lines), &kept);
     let lines = std::mem::take(&mut input.lines);
     input.lines = lines.into_iter().zip(&kept).filter(|(_, k)| **k).map(|(l, _)| l).collect();
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         check_convertible(&mut tx, estimate_id).await?;
         // Details the form kept from the estimate come over even if they would not be offered now.

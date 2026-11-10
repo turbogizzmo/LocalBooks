@@ -22,7 +22,7 @@ fn slot(username: &str) -> HeaderSlot {
 }
 
 fn header(username: &str) -> Header {
-    Header { page_size: 4096, slots: vec![slot(username)] }
+    Header { file_id: String::new(), page_size: 4096, slots: vec![slot(username)] }
 }
 
 // The layout fits: after the signature, the copies don't overlap, and both fit in the header.
@@ -89,7 +89,7 @@ fn plain_files_and_oversized_headers_are_refused() {
     assert!(write(&plain, &header("x")).unwrap_err().starts_with("FILE_NOT_ENCRYPTED"));
     assert_eq!(std::fs::read(&plain).unwrap(), b"SQLite format 3\0rest", "a plain file is never written to");
 
-    let huge = Header { page_size: 4096, slots: (0..1000).map(|i| slot(&format!("user{i}"))).collect() };
+    let huge = Header { file_id: String::new(), page_size: 4096, slots: (0..1000).map(|i| slot(&format!("user{i}"))).collect() };
     assert!(create(&dir.join("huge.db"), &huge).unwrap_err().starts_with("FILE_HEADER_FULL"));
     assert!(!dir.join("huge.db").exists(), "nothing is left behind");
     let _ = std::fs::remove_dir_all(&dir);

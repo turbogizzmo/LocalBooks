@@ -533,7 +533,7 @@ pub async fn pay_bills_with_credits(
             lines: vec![crate::credits::VendorCreditLineInput { account_id: account, amount_cents: d.amount_cents, memo: Some(memo), class_id: None, customer_id: None }],
         }));
     }
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         for (d, credit) in &taken {
             let credit_id = crate::credits::write_vendor_credit(&mut tx, credit).await?;

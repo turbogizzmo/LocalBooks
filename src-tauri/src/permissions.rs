@@ -205,6 +205,12 @@ const READ: &[&str] = &[
     "set_todo_done",
 ];
 
+/// The commands that run without a signed-in user (the sign-in screen, opening files, windows).
+#[cfg(test)]
+pub(crate) fn open_commands() -> &'static [&'static str] {
+    OPEN
+}
+
 pub fn need(command: &str) -> Need {
     if OPEN.contains(&command) {
         Need::Open

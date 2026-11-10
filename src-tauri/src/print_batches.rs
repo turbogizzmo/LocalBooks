@@ -165,7 +165,7 @@ pub fn layout(sheet: LabelSheet, labels: &[Vec<String>], skip: usize) -> Vec<Pag
     let mut pages: Vec<Page> = Vec::new();
     for (n, lines) in labels.iter().enumerate() {
         let slot = n + skip;
-        if slot % per_sheet == 0 || pages.is_empty() {
+        if slot.is_multiple_of(per_sheet) || pages.is_empty() {
             pages.push(Page { width: sheet.width, height: sheet.height, ops: Vec::new() });
         }
         let place = slot % per_sheet;

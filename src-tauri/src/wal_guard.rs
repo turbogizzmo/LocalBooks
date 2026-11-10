@@ -174,7 +174,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let db = dir.join("books.db");
-        let header = crate::file_cipher::header::Header { page_size: 4096, slots: Vec::new() };
+        let header = crate::file_cipher::header::Header { file_id: String::new(), page_size: 4096, slots: Vec::new() };
         crate::file_cipher::header::create(&db, &header).unwrap();
         std::fs::write(wal_path(&db), wal_header(4096)).unwrap();
         assert!(check(&db).is_ok(), "a log with the header's page size");

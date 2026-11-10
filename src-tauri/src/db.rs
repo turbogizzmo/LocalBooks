@@ -31,6 +31,23 @@ struct Live {
     /// A remembered sign-in is tried once per opening, and never after someone signs out or the
     /// idle limit signs them out.
     remembered_tried: std::sync::atomic::AtomicBool,
+    /// Set for an encrypted company file (gap R1): its id and, once unlocked, its page key.
+    cipher: Option<Cipher>,
+}
+
+/// An encrypted company file's state. While `page_key` is None the file is **locked**: nothing in
+/// it has been read, `pool` is an empty in-memory database like [`Db::closed`], and the sign-in
+/// screen unlocks it ([`Db::unlock_with_password`], [`Db::unlock_with_recovery_key`]).
+struct Cipher {
+    /// The key header's file id, read before the file was opened (it names the file for remembered
+    /// sign-ins and the sign-in wait, which can't read the locked database).
+    file_id: String,
+    page_key: Option<crate::file_cipher::keys::PageKey>,
+}
+
+/// The stand-in database of a locked encrypted file: empty, in memory, refusing writes.
+fn locked_pool() -> SqlitePool {
+    SqlitePoolOptions::new().max_connections(1).connect_lazy_with(SqliteConnectOptions::new().filename(":memory:").pragma("query_only", "ON"))
 }
 
 /// When the signed-in user last did something, and how long they may be idle. Wall-clock time, so
@@ -68,7 +85,14 @@ pub struct Db {
     refreshing: tokio::sync::Mutex<()>,
     /// The open file is an archive left by condensing (see `condense`): it opens read-only.
     archive: std::sync::atomic::AtomicBool,
+    /// One change to an encrypted file's key header at a time, so none is lost.
+    header_changes: tokio::sync::Mutex<()>,
 }
+
+/// Restoring, condensing or moving an encrypted company file (gap R1) arrives with phase 3b, which
+/// teaches every copy path about the key header; until then those are refused rather than reopening
+/// the file without its key.
+pub const ENCRYPTED_NOT_YET: &str = "FILE_ENCRYPTED_NOT_YET: restoring, condensing or moving an encrypted company file isn't available yet";
 
 /// Returned by operations that need an open company file while none is.
 pub const NO_COMPANY_OPEN: &str = "NO_COMPANY_OPEN: no company file is open. Open or create one from the File menu.";
@@ -123,8 +147,16 @@ async fn open_live(path: &Path, backups: Option<&Path>) -> Result<Live, String> 
     let storage = storage::classify(dir);
     let lock = if storage.is_shared() { Some(FileLock::acquire(path)?) } else { None };
     remove_stale_replaced(path);
-    let pool = open_for(path, &storage, backups).await?;
-    Ok(Live { path: path.to_path_buf(), pool, storage, lock, opened_from_file: false, session: SessionSlot::default(), remembered_tried: Default::default() })
+    // An encrypted file opens locked: nothing is read from it until someone signs in. Its header is
+    // read here, while this process has no connection to the file (see `file_cipher::header`).
+    let (pool, cipher) = if crate::file_cipher::header::is_encrypted(path) {
+        crate::wal_guard::check(path)?;
+        let header = crate::file_cipher::header::read(path)?;
+        (locked_pool(), Some(Cipher { file_id: header.file_id, page_key: None }))
+    } else {
+        (open_for(path, &storage, backups, None).await?, None)
+    };
+    Ok(Live { path: path.to_path_buf(), pool, storage, lock, opened_from_file: false, session: SessionSlot::default(), remembered_tried: Default::default(), cipher })
 }
 
 impl Db {
@@ -141,6 +173,7 @@ impl Db {
             idle: std::sync::Mutex::new(Idle { last: std::time::SystemTime::now(), limit: None }),
             refreshing: tokio::sync::Mutex::new(()),
             archive: std::sync::atomic::AtomicBool::new(false),
+            header_changes: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -408,6 +441,121 @@ impl Db {
         Ok((live.pool.clone(), live.session.clone()))
     }
 
+    /// Whether the open company file is encrypted (gap R1).
+    pub async fn is_encrypted(&self) -> bool {
+        self.live.read().await.as_ref().is_some_and(|live| live.cipher.is_some())
+    }
+
+    /// Whether the open company file is encrypted and not yet unlocked.
+    pub async fn is_locked(&self) -> bool {
+        self.live.read().await.as_ref().and_then(|live| live.cipher.as_ref()).is_some_and(|c| c.page_key.is_none())
+    }
+
+    /// An encrypted file's id from its key header (None for a plain file), readable while locked.
+    pub async fn encrypted_file_id(&self) -> Option<String> {
+        self.live.read().await.as_ref().and_then(|live| live.cipher.as_ref()).map(|c| c.file_id.clone())
+    }
+
+    /// Unlocks an encrypted company file with a user's password and opens it (migrating it, with a
+    /// copy saved first, if this LocalBooks is newer). Nothing to do for a plain or unlocked file.
+    /// A wrong password or unknown user name gives the same answer, after the same work, as
+    /// [`crate::users::sign_in`]; the caller signs the user in on the opened file afterwards.
+    pub async fn unlock_with_password(&self, username: &str, password: &str) -> Result<(), String> {
+        self.unlock(|header| async move { Ok(crate::file_cipher::keys::unlock_with_password(&header, username, password).await?.map(|(key, _)| key)) }, crate::users::SIGN_IN_FAILED).await
+    }
+
+    /// Unlocks an encrypted company file with its recovery key (see [`Db::unlock_with_password`]).
+    pub async fn unlock_with_recovery_key(&self, recovery_key: &str) -> Result<(), String> {
+        self.unlock(|header| async move { crate::file_cipher::keys::unlock_with_recovery_key(&header, recovery_key).await }, "KEY_WRONG_RECOVERY: that is not this company file's recovery key").await
+    }
+
+    async fn unlock<F, Fut>(&self, open_key: F, wrong: &str) -> Result<(), String>
+    where
+        F: FnOnce(crate::file_cipher::header::Header) -> Fut,
+        Fut: std::future::Future<Output = Result<Option<crate::file_cipher::keys::PageKey>, String>>,
+    {
+        let mut guard = self.live.write().await;
+        let live = guard.as_mut().ok_or_else(|| NO_COMPANY_OPEN.to_string())?;
+        let Some(cipher) = live.cipher.as_ref() else { return Ok(()) };
+        if cipher.page_key.is_some() {
+            return Ok(());
+        }
+        // Locked, so no connection to the file is open in this process: reading by path is safe.
+        let header = crate::file_cipher::header::read(&live.path)?;
+        let key = open_key(header).await?.ok_or_else(|| wrong.to_string())?;
+        let pool = open_for(&live.path, &live.storage, Some(&self.config.backups_dir), Some(&key)).await?;
+        let stand_in = std::mem::replace(&mut live.pool, pool);
+        stand_in.close().await;
+        if let Some(cipher) = live.cipher.as_mut() {
+            cipher.page_key = Some(key);
+        }
+        Ok(())
+    }
+
+    /// Locks an unlocked encrypted company file again (sign-out, idle sign-out): closes it, so
+    /// SQLCipher wipes the page key, and forgets ours. Nothing to do for a plain file.
+    pub async fn relock(&self) {
+        let mut guard = self.live.write().await;
+        let Some(live) = guard.as_mut() else { return };
+        let Some(cipher) = live.cipher.as_mut() else { return };
+        if cipher.page_key.take().is_none() {
+            return;
+        }
+        let open = std::mem::replace(&mut live.pool, locked_pool());
+        *live.session.lock().await = None;
+        close_pool(&open).await;
+    }
+
+    /// A new header slot opening the unlocked encrypted file's page key with `password`; None for a
+    /// plain file. Refused while the file is locked.
+    pub async fn new_password_slot(&self, user_id: i64, username: &str, password: &str) -> Result<Option<crate::file_cipher::header::HeaderSlot>, String> {
+        let guard = self.live.read().await;
+        let Some(cipher) = guard.as_ref().and_then(|live| live.cipher.as_ref()) else { return Ok(None) };
+        let key = cipher.page_key.as_ref().ok_or_else(|| crate::users::SIGN_IN_REQUIRED.to_string())?;
+        crate::file_cipher::keys::password_slot(key, &cipher.file_id, user_id, username, password).await.map(Some)
+    }
+
+    /// A new recovery slot for the unlocked encrypted file; None for a plain file.
+    pub async fn new_recovery_slot(&self, recovery_key: &str) -> Result<Option<crate::file_cipher::header::HeaderSlot>, String> {
+        let guard = self.live.read().await;
+        let Some(cipher) = guard.as_ref().and_then(|live| live.cipher.as_ref()) else { return Ok(None) };
+        let key = cipher.page_key.as_ref().ok_or_else(|| crate::users::SIGN_IN_REQUIRED.to_string())?;
+        crate::file_cipher::keys::recovery_slot(key, &cipher.file_id, recovery_key).await.map(Some)
+    }
+
+    /// The unlocked encrypted file's key header, through the live connection's own file handle; None
+    /// for a plain file.
+    pub async fn key_header(&self) -> Result<Option<crate::file_cipher::header::Header>, String> {
+        let guard = self.live.read().await;
+        let Some(live) = guard.as_ref() else { return Err(NO_COMPANY_OPEN.into()) };
+        let Some(cipher) = live.cipher.as_ref() else { return Ok(None) };
+        if cipher.page_key.is_none() {
+            return Err(crate::users::SIGN_IN_REQUIRED.into());
+        }
+        let mut conn = live.pool.acquire().await.map_err(|e| e.to_string())?;
+        crate::file_cipher::header::read_open(&mut conn).await.map(Some)
+    }
+
+    /// Changes an unlocked encrypted file's key header with `change`, through the live connection's
+    /// own file handle (so SQLite's locks stay in place). Nothing to do for a plain file; refused
+    /// while the file is locked. Nothing is written when `change` leaves the header as it was.
+    pub async fn update_key_header(&self, change: impl FnOnce(crate::file_cipher::header::Header) -> crate::file_cipher::header::Header) -> Result<(), String> {
+        let _one_at_a_time = self.header_changes.lock().await;
+        let guard = self.live.read().await;
+        let Some(live) = guard.as_ref() else { return Err(NO_COMPANY_OPEN.into()) };
+        let Some(cipher) = live.cipher.as_ref() else { return Ok(()) };
+        if cipher.page_key.is_none() {
+            return Err(crate::users::SIGN_IN_REQUIRED.into());
+        }
+        let mut conn = live.pool.acquire().await.map_err(|e| e.to_string())?;
+        let header = crate::file_cipher::header::read_open(&mut conn).await?;
+        let next = change(header.clone());
+        if next == header {
+            return Ok(());
+        }
+        crate::file_cipher::header::write_open(&mut conn, &next).await
+    }
+
     /// The open company file, or [`NO_COMPANY_OPEN`].
     pub async fn path(&self) -> Result<PathBuf, String> {
         self.live.read().await.as_ref().map(|live| live.path.clone()).ok_or_else(|| NO_COMPANY_OPEN.to_string())
@@ -464,6 +612,9 @@ impl Db {
     async fn swap_in_file(&self, staged: &Path, fallback: &Path, unchanged: Option<&str>) -> Result<(), String> {
         let mut guard = self.live.write().await;
         let live = guard.as_mut().ok_or_else(|| NO_COMPANY_OPEN.to_string())?;
+        if live.cipher.is_some() {
+            return Err(ENCRYPTED_NOT_YET.into());
+        }
         if let Some(expected) = unchanged {
             if crate::condense::content_digest(&live.pool).await? != expected {
                 return Err("CONDENSE_BOOKS_CHANGED: the books changed while the condensed file was being made, so they were left as they were; run Condense Data again".into());
@@ -479,11 +630,11 @@ impl Db {
             Ok(aside) => aside,
             Err(e) => {
                 // Nothing was moved: reopen the books as they were.
-                live.pool = open_for(&path, &storage, None).await.map_err(|open| format!("RESTORE_FAILED: {e}; reopening your books failed: {open}"))?;
+                live.pool = open_for(&path, &storage, None, None).await.map_err(|open| format!("RESTORE_FAILED: {e}; reopening your books failed: {open}"))?;
                 return Err(format!("RESTORE_SWAP: {e}; your current books were left in place"));
             }
         };
-        match open_for(&path, &storage, None).await {
+        match open_for(&path, &storage, None, None).await {
             Ok(pool) => {
                 live.pool = pool;
                 // The restored file has its own users; whoever was signed in signs in again.
@@ -503,7 +654,7 @@ impl Db {
                     while_in_use(|| std::fs::copy(fallback, &path).map(|_| ())).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; putting the previous books back also failed: {e}"))?;
                 }
                 remove_sidecars(&path).await?;
-                live.pool = open_for(&path, &storage, None).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}"))?;
+                live.pool = open_for(&path, &storage, None, None).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}"))?;
                 Err(format!("RESTORE_FAILED: {open_err}; your previous books were put back"))
             }
         }
@@ -513,6 +664,9 @@ impl Db {
     /// An existing file there must pass the same checks as a restore; the new file is fully opened
     /// before the old one is closed, so a failure leaves the current books in use.
     pub async fn relocate(&self, new_dir: &Path, mode: RelocateMode) -> Result<StorageStatus, String> {
+        if self.is_encrypted().await {
+            return Err(ENCRYPTED_NOT_YET.into());
+        }
         let resolved = storage::resolve_network_path(new_dir);
         let new_dir = resolved.as_path();
         storage::check_writable_dir(new_dir)?;
@@ -752,7 +906,11 @@ async fn open_company_file(path: &Path, backups: &Path) -> Result<Live, String> 
     if !path.is_file() {
         return Err(format!("OPEN_NOT_FOUND: {} does not exist", path.display()));
     }
-    crate::backup::inspect(path).await?;
+    // An encrypted file can't be inspected before it is unlocked; it opens locked, and is checked
+    // like any company file when the sign-in opens it.
+    if !crate::file_cipher::header::is_encrypted(path) {
+        crate::backup::inspect(path).await?;
+    }
     let mut live = open_live(path, Some(backups)).await?;
     live.opened_from_file = true;
     Ok(live)
@@ -776,7 +934,7 @@ pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 /// WAL + `synchronous = FULL` gives full durability: a committed entry survives power loss.
 pub async fn open(path: &Path) -> Result<SqlitePool, String> {
     let dir = path.parent().unwrap_or(Path::new("."));
-    open_for(path, &storage::classify(dir), None).await
+    open_for(path, &storage::classify(dir), None, None).await
 }
 
 /// Opens with settings suited to where the file lives. Shared locations (network or synced folders)
@@ -785,7 +943,7 @@ pub async fn open(path: &Path) -> Result<SqlitePool, String> {
 /// When an existing company file needs schema upgrades (a newer LocalBooks opening it for the first
 /// time) and `backups` is given, a verified copy is saved there first, so an upgrade can always be
 /// undone by restoring it.
-async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) -> Result<SqlitePool, String> {
+async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>, page_key: Option<&crate::file_cipher::keys::PageKey>) -> Result<SqlitePool, String> {
     // Before SQLite reads it: a log that doesn't belong to the file is refused (RUSTSEC-2026-0459).
     crate::wal_guard::check(path)?;
     // The diagnostics log names the file, never its contents.
@@ -794,8 +952,13 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
         std::fs::create_dir_all(dir).map_err(|e| format!("cannot create data directory {}: {e}", dir.display()))?;
     }
 
-    let base = SqliteConnectOptions::new()
-        .filename(path)
+    // An encrypted file (gap R1) opens through the VFS that skips its key header, with its page key
+    // set before anything else; a plain file opens as it always has.
+    let start = match page_key {
+        Some(key) => crate::file_cipher::open_options(path, Some(key))?,
+        None => SqliteConnectOptions::new().filename(path),
+    };
+    let base = start
         .create_if_missing(true)
         .foreign_keys(true)
         .synchronous(SqliteSynchronous::Full)
@@ -855,7 +1018,8 @@ async fn prepare(pool: &SqlitePool, path: &Path, backups: Option<&Path>) -> Resu
 /// left behind (seen on Linux and Windows); one connection opened and closed on its own does it.
 /// Best effort: the data is safe either way, the next open replays the log.
 async fn checkpoint_closed(path: &Path) {
-    if !crate::wal_guard::wal_path(path).exists() || crate::wal_guard::check(path).is_err() {
+    // An encrypted file can't be opened without its key; its log is replayed at the next unlock.
+    if crate::file_cipher::header::is_encrypted(path) || !crate::wal_guard::wal_path(path).exists() || crate::wal_guard::check(path).is_err() {
         return;
     }
     let options = SqliteConnectOptions::new().filename(path).busy_timeout(Duration::from_secs(5));
@@ -954,21 +1118,50 @@ async fn record_migrations(conn: &mut sqlx::SqliteConnection) -> Result<(), Stri
     .map_err(|e| format!("cannot record migrations in the audit trail: {e}"))
 }
 
+/// A fresh in-memory company database with every migration applied.
+///
+/// Applying all the migrations took most of a small test's time (about 1.3 s of 1.4 s in a debug
+/// build, Nov 2026), so they run once per test binary: each call gets its own copy of that migrated
+/// database's bytes. The copy is the same file a fresh `migrate` would write, audit trail included,
+/// except that every copy shares one `ledger_chain.file_id`.
 #[cfg(test)]
 pub(crate) async fn test_pool() -> SqlitePool {
+    static MIGRATED: tokio::sync::OnceCell<Vec<u8>> = tokio::sync::OnceCell::const_new();
+    let bytes = MIGRATED
+        .get_or_init(|| async {
+            let pool = empty_test_pool().await;
+            migrate(&pool).await.expect("apply migrations");
+            let mut conn = pool.acquire().await.expect("acquire");
+            let bytes = conn.serialize(None).await.expect("serialize migrated database").to_vec();
+            drop(conn);
+            pool.close().await;
+            bytes
+        })
+        .await;
+    let pool = empty_test_pool().await;
+    let data = sqlx::sqlite::SqliteOwnedBuf::try_from(bytes.as_slice()).expect("copy migrated database");
+    pool.acquire()
+        .await
+        .expect("acquire")
+        .deserialize(None, data, false)
+        .await
+        .expect("load migrated database");
+    pool
+}
+
+#[cfg(test)]
+async fn empty_test_pool() -> SqlitePool {
     use std::str::FromStr;
 
     // One connection: every connection to `sqlite::memory:` would otherwise be its own database.
     let options = SqliteConnectOptions::from_str("sqlite::memory:")
         .expect("valid sqlite url")
         .foreign_keys(true);
-    let pool = SqlitePoolOptions::new()
+    SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(options)
         .await
-        .expect("open in-memory database");
-    migrate(&pool).await.expect("apply migrations");
-    pool
+        .expect("open in-memory database")
 }
 
 #[cfg(test)]

@@ -239,6 +239,36 @@ async fn a_lower_price_takes_stock_value_down_to_zero_and_the_rest_to_cogs() {
 }
 
 #[tokio::test]
+async fn a_po_line_s_job_carries_through_the_receipt_to_the_bill() {
+    let s = shop().await;
+    let mut tx = s.pool.begin().await.unwrap();
+    let job = crate::sales::find_or_create_named(&mut tx, crate::sales::Party::Customer, "Kitchen remodel").await.unwrap();
+    tx.commit().await.unwrap();
+    sqlx::query("INSERT OR REPLACE INTO system_preferences (key, value) VALUES (?1, 'true')").bind(crate::preferences::tax_time::EXPENSES_BILLABLE).execute(&s.pool).await.unwrap();
+    // Widgets for the job; freight for no one.
+    let input: crate::workflows::PurchaseOrderInput = serde_json::from_value(json!({
+        "vendorName": "Supplier", "poDate": "2026-04-01", "memo": null,
+        "lines": [
+            { "accountId": s.inventory, "productServiceId": s.product, "description": "Widget", "quantityE4": 100_000, "rateCents": 1_000, "amountCents": 10_000, "customerId": job },
+            { "accountId": s.freight, "description": "Freight", "amountCents": 2_000 }
+        ]
+    }))
+    .unwrap();
+    let po = crate::workflows::create_purchase_order(&s.pool, input).await.unwrap();
+    let lines = order_receiving(&s.pool, po).await.unwrap();
+    assert_eq!(lines.iter().map(|l| (l.customer_id, l.customer_name.as_deref())).collect::<Vec<_>>(), vec![(Some(job), Some("Kitchen remodel")), (None, None)]);
+
+    let freight = ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: 2_000, class_id: None };
+    let receipt = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 10), freight])).await.unwrap();
+    let received = receipt_lines(&s.pool, receipt.id).await.unwrap();
+    assert_eq!(received.iter().map(|l| l.customer_id).collect::<Vec<_>>(), vec![Some(job), None]);
+
+    let bill = bill_for(&s, &receipt, &[10_000, 2_000]).await.unwrap();
+    let billed: Vec<(Option<i64>, bool)> = sqlx::query_as("SELECT customer_id, is_billable FROM bill_lines WHERE bill_id = ?1 ORDER BY line_number").bind(bill).fetch_all(&s.pool).await.unwrap();
+    assert_eq!(billed, vec![(Some(job), true), (None, false)], "the job's line is billable by the company's preference; a line for no one never is");
+}
+
+#[tokio::test]
 async fn a_receipts_bill_takes_the_orders_discounts_and_charges_once() {
     let s = shop().await;
     // 10 widgets at $10.00 with 10% off, and $20.00 freight with a $5.00 handling charge.
@@ -261,7 +291,7 @@ async fn a_receipts_bill_takes_the_orders_discounts_and_charges_once() {
     // First shipment: 4 widgets and half the freight. The bill takes 10% of $40.00 and the handling.
     let first = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 4), freight(1_000)])).await.unwrap();
     let preview = receipt_bill_form_lines(&s.pool, first.id).await.unwrap();
-    assert_eq!(preview.iter().map(|f| (f.after_line, f.description.as_str())).collect::<Vec<_>>(), [(1, "Volume discount"), (2, "Handling")]);
+    assert_eq!(preview.iter().map(|f| (f.line.after_line, f.line.description.as_str())).collect::<Vec<_>>(), [(1, "Volume discount"), (2, "Handling")]);
     let bill = bill_for(&s, &first, &[4_000, 1_000]).await.unwrap();
     let carried = crate::purchase_lines::lines_of(&s.pool, crate::purchase_lines::PurchaseDoc::Bill, bill).await.unwrap();
     assert_eq!(carried.iter().map(|f| (f.after_line, f.amount_cents)).collect::<Vec<_>>(), [(1, 400), (2, 500)]);
@@ -281,4 +311,27 @@ async fn a_receipts_bill_takes_the_orders_discounts_and_charges_once() {
     // A receipt not against an order takes nothing.
     let loose = receive_items(&s.pool, receive(&s, None, d(7), vec![widgets(&s, None, 1)])).await.unwrap();
     assert!(receipt_bill_form_lines(&s.pool, loose.id).await.unwrap().is_empty());
+}
+
+/// One receipt with two lines from the same order line: a fixed discount too big for the first goes
+/// after the second, once.
+#[tokio::test]
+async fn a_fixed_discount_goes_after_the_receipt_line_that_can_take_it() {
+    let s = shop().await;
+    let input: crate::workflows::PurchaseOrderInput = serde_json::from_value(json!({
+        "vendorName": "Supplier", "poDate": "2026-04-01", "memo": null,
+        "lines": [{ "accountId": s.inventory, "productServiceId": s.product, "description": "Widget", "quantityE4": 100_000, "rateCents": 1_000, "amountCents": 10_000 }],
+        "formLines": [{ "afterLine": 1, "kind": "DISCOUNT", "amountCents": 2_500, "accountId": s.sales, "description": "Rebate" }]
+    }))
+    .unwrap();
+    let po = crate::workflows::create_purchase_order(&s.pool, input).await.unwrap();
+    let lines = order_receiving(&s.pool, po).await.unwrap();
+    // 2 widgets ($20.00, less than the $25.00 rebate) and 8 more ($80.00) on one receipt.
+    let r = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 2), widgets(&s, Some(lines[0].id), 8)])).await.unwrap();
+    assert_eq!(receipt_bill_form_lines(&s.pool, r.id).await.unwrap().iter().map(|f| (f.line.after_line, f.source)).collect::<Vec<_>>(), [(1, 0), (2, 0)]);
+    let bill = bill_for(&s, &r, &[2_000, 8_000]).await.unwrap();
+    let carried = crate::purchase_lines::lines_of(&s.pool, crate::purchase_lines::PurchaseDoc::Bill, bill).await.unwrap();
+    assert_eq!(carried.iter().map(|f| (f.after_line, f.amount_cents)).collect::<Vec<_>>(), [(2, 2_500)]);
+    let total: i64 = sqlx::query_scalar("SELECT total_cents FROM bills WHERE id = ?1").bind(bill).fetch_one(&s.pool).await.unwrap();
+    assert_eq!(total, 10_000 - 2_500);
 }

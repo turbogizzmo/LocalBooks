@@ -26,9 +26,12 @@ posted lives in Rust and in the schema; the screens only display and collect inp
 
 CI (`.github/workflows/`) runs the Rust tests on Windows and Linux, end-to-end tests on Windows
 and Linux, Clippy, and the JS unit tests and lint, on every pull request. The Rust tests on macOS
-(the slowest, with few runners) run on `batch/*` PRs, PRs labelled `macos`, pushes to `main` and
-tags. Feature PRs merge through a batch PR, so every change passes macOS before it lands. A PR
-merges only when all of its checks are green.
+(the slowest, with few runners) and CodeQL run on `batch/*` PRs, pushes to `main` and tags, and on
+a PR labelled `macos` or `codeql`. Feature PRs merge through a batch PR, so every change passes
+macOS before it lands. A PR merges only when all of its checks are green. The Claude review labels
+each feature PR `review:clean`, `review:problems` or `review:failed`; read the review comment of a
+`review:problems` PR before it goes into a batch. How the pipeline runs and what it costs:
+`docs/dev/ci-pipeline-review.md`.
 
 ## Non-negotiable rules
 
@@ -89,7 +92,8 @@ merges only when all of its checks are green.
 
 Several branches are usually open at once. Follow `docs/dev/parallel-work.md`: one feature per
 branch, new commands in their own `src-tauri/src/commands/<feature>.rs`, screen wrappers in
-`src/lib/api/<feature>.js`, merge only when 0 commits behind `main` with CI green on that head.
+`src/lib/api/<feature>.js`; feature PRs land through a batch PR, merged only when 0 commits behind
+`main` with CI green on that head.
 
 In a shared checkout, commit only the paths you changed (`git commit -- <paths>`) and leave other
 uncommitted work alone.

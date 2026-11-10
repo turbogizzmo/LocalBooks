@@ -65,7 +65,8 @@ jobs:
       matrix:
         platform: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.platform }}
-    # The macOS runners take about 41 minutes for the full suite (Nov 2026), so 45 left no room.
+    # The suite took 20 to 40 minutes here in Nov 2026, before SQLite's memory statistics were
+    # turned off (src-tauri/.cargo/config.toml); 75 leaves room until new timings are in.
     timeout-minutes: 75
     steps:
       - name: Checkout
@@ -87,6 +88,9 @@ jobs:
         with:
           workspaces: src-tauri -> target
           shared-key: test-${{ matrix.platform }}
+          # Only main, tags and manual runs save: each pull request's 600-850 MB copy was scoped to
+          # that PR alone and pushed main's caches out of the 10 GB limit (Nov 2026).
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Run ledger test suite
         working-directory: src-tauri
@@ -97,8 +101,9 @@ jobs:
     name: Test (macos-latest)
     # macOS runners are few and slow (about 41 minutes for the suite), and a queue of per-PR runs
     # held batch PRs for hours. So on a pull request the macOS suite runs only for batch branches
-    # (`batch/*`, which merge every feature PR) or a PR labelled `macos`. Pushes to main, tags and
-    # manual runs always run it. A skipped job counts as passing for required checks.
+    # (`batch/*`, which merge every feature PR) or a PR labelled `macos` (adding the label runs the
+    # suite at once through macos-label.yml). Pushes to main, tags and manual runs always run it. A
+    # skipped job counts as passing for required checks.
     if: >-
       github.event_name != 'pull_request' ||
       startsWith(github.head_ref, 'batch/') ||
@@ -201,6 +206,8 @@ jobs:
         with:
           workspaces: src-tauri -> target
           shared-key: build-${{ matrix.platform }}
+          # A tag's cache can only be read by that same tag, so saving it only takes space from main.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install frontend dependencies
         # No install scripts: the only ones (esbuild, fsevents) are optional, and none should run in

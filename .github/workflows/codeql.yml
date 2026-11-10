@@ -1,5 +1,10 @@
 # Static security analysis of the Rust backend, the React frontend and these workflows.
 # Findings appear under the repository's Security › Code scanning tab.
+#
+# Runs on pushes to main, weekly, and on pull requests from batch branches (`batch/*`) or labelled
+# `codeql`. Feature PRs reach main only through a batch PR, which is analysed before it merges, so
+# analysing every push to every feature PR (1,580 jobs and 6,500 runner minutes in Nov 1-10, 2026,
+# the most jobs of any workflow) only queued ahead of the runs that gate merges.
 name: CodeQL
 
 on:
@@ -7,15 +12,31 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # `labeled`, so adding the `codeql` label starts an analysis without another push.
+    types: [opened, synchronize, reopened, labeled]
   schedule:
     - cron: '23 6 * * 1'
 
 permissions:
   contents: read
 
+concurrency:
+  # Any other label gets a group of its own (the run id), so adding it never cancels an analysis.
+  group: >-
+    codeql-${{ github.event_name }}-${{
+    github.event.action == 'labeled' && github.event.label.name != 'codeql' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
+    # Adding a label starts an analysis only when the label is `codeql`; the review:* labels and
+    # any other label start nothing.
+    if: >-
+      (github.event_name != 'pull_request' ||
+      startsWith(github.head_ref, 'batch/') ||
+      contains(github.event.pull_request.labels.*.name, 'codeql')) &&
+      (github.event.action != 'labeled' || github.event.label.name == 'codeql')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

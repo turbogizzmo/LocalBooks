@@ -927,7 +927,7 @@ pub async fn import_file(pool: &SqlitePool, path: &Path, bank_account_id: i64, g
         }
     };
 
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     match write_import(&mut tx, &rows, bank_account_id).await {
         Ok(summary) => {
             crate::ledger::commit_write(tx).await.map_err(db_err)?;
@@ -1050,7 +1050,7 @@ pub struct Approval {
 /// payee), learns a matching rule, and adds the line to the suggestion model.
 pub async fn approve(pool: &SqlitePool, suggester: &Suggester, file: &str, transaction_id: i64, approval: Approval) -> Result<i64, String> {
     let before = Suggester::signature(pool).await?;
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     match write_approval(&mut tx, transaction_id, &approval).await {
         Ok((entry_id, example)) => {
             crate::ledger::commit_write(tx).await.map_err(db_err)?;
@@ -1068,7 +1068,7 @@ pub async fn approve_many(pool: &SqlitePool, suggester: &Suggester, file: &str, 
         return Err("BANK_NOTHING_TO_ADD: tick the lines to add".into());
     }
     let before = Suggester::signature(pool).await?;
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let mut written = Vec::with_capacity(approvals.len());
     for (id, approval) in &approvals {
         match write_approval(&mut tx, *id, approval).await {

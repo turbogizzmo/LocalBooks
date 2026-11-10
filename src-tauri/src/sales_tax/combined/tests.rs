@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::ledger::Cents;
 use crate::sales_tax::{create_tax_rate, pay_sales_tax, update_tax_rate, SalesTaxPaymentInput, TaxRateInput};
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
@@ -67,7 +68,7 @@ async fn a_combined_rate_posts_by_agency_and_files_a_return_per_agency() {
     let rates = crate::sales_tax::list_tax_rates(&pool).await.unwrap();
     assert_eq!(rates.iter().find(|r| r.id == combined.id).unwrap().rate_ppm, 90_000);
 
-    pay_sales_tax(&pool, SalesTaxPaymentInput { tax_rate_id: Some(state.id), liability_account_id: None, account_id: checking, payment_date: d(7, 31), amount_cents: 6_000, reference: None }).await.unwrap();
+    pay_sales_tax(&pool, SalesTaxPaymentInput { tax_rate_id: Some(state.id), liability_account_id: None, account_id: checking, payment_date: d(7, 31), amount_cents: Cents::from(6_000), reference: None }).await.unwrap();
 
     let r = sales_tax_return(&pool, d(7, 1), d(7, 31), Basis::Accrual).await.unwrap();
     let agencies: Vec<(&str, i64, i64)> = r.agencies.iter().map(|a| (a.agency_name.as_str(), a.tax_cents, a.paid_cents)).collect();

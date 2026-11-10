@@ -60,6 +60,13 @@ the company file, so they're in your backups, and they stay with the bill if you
 Expenses, checks, invoices, sales receipts, deposits and journal entries take attachments the same
 way.
 
+## Purchase orders for a job
+
+On a purchase order (**Expenses › Purchase Orders**), the **Customer:Job** column names the
+customer or job a line is for, as on a bill. When the order becomes a bill, each line keeps its job,
+so the cost shows up in job reports and can be billed to the customer. **Reports › Jobs › Open
+Purchase Orders by Job** lists the lines still on order under each job.
+
 ## Approvals for bills and purchase orders
 
 A company can have bills and purchase orders approved before they count. Under **Expenses ›
@@ -121,11 +128,14 @@ in Items Received Not Billed and puts the bill's total in Accounts Payable. When
 different price, the difference goes to the line's expense account, or for stock to Inventory Asset
 for the units still on hand and to Cost of Goods Sold for any already sold.
 
+A purchase order line's **Customer:Job** shows on the receipt and carries to the bill line, which is
+billable when Preferences › Time & Expenses marks expenses billable, as on a bill entered by hand.
+
 The purchase order's discounts and charges come over to the bill too, listed under the lines: a
 percent is taken of each bill's line for that order line, so every part shipment gets its share, and
-a fixed amount goes on the first bill that has that order line. A fixed discount more than a part
-shipment's line waits for a later bill whose line can take it; the bill says so. If no more is
-coming, enter the discount as a vendor credit.
+a fixed amount goes on the bill once, after the first line from that order line that can take it.
+A fixed discount more than every such line on a bill (a part shipment) waits for a later bill whose
+line can take it; the bill says so. If no more is coming, enter the discount as a vendor credit.
 
 To undo a receipt, click **Void** beside it: its stock leaves inventory. A billed receipt can't be
 voided; void its bill first, which makes the receipt wait for a bill again. A bill entered for a

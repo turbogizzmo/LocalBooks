@@ -19,7 +19,8 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
 }
 
 async fn pool(path: &std::path::Path, key: Option<&[u8; 32]>, connections: u32) -> Result<SqlitePool, sqlx::Error> {
-    let options = open_options(path, key).unwrap().create_if_missing(true).journal_mode(SqliteJournalMode::Wal).pragma("secure_delete", "ON");
+    let key = key.map(|k| crate::file_cipher::keys::PageKey::from_bytes(*k));
+    let options = open_options(path, key.as_ref()).unwrap().create_if_missing(true).journal_mode(SqliteJournalMode::Wal).pragma("secure_delete", "ON");
     SqlitePoolOptions::new().max_connections(connections).connect_with(options).await
 }
 
@@ -33,7 +34,7 @@ async fn checkpoint(pool: &SqlitePool) {
 }
 
 fn new_header() -> Header {
-    Header { page_size: 4096, slots: Vec::new() }
+    Header { file_id: String::new(), page_size: 4096, slots: Vec::new() }
 }
 
 #[test]
@@ -84,12 +85,12 @@ async fn an_encrypted_file_keeps_its_header_and_hides_its_data() {
     assert!(bytes.len() > usize::try_from(HEADER_LEN).unwrap());
 
     // The header can change while the database stays readable.
-    header::write(&path, &Header { page_size: 4096, slots: vec![] }).unwrap();
+    header::write(&path, &Header { file_id: String::new(), page_size: 4096, slots: vec![] }).unwrap();
     let books = pool(&path, Some(&KEY), 1).await.unwrap();
     // While it is open, the header is read and written through the connection's own handle.
     let mut conn = books.acquire().await.unwrap();
-    assert_eq!(header::read_open(&mut conn).await.unwrap(), Header { page_size: 4096, slots: vec![] });
-    let renamed = Header { page_size: 4096, slots: vec![] };
+    assert_eq!(header::read_open(&mut conn).await.unwrap(), Header { file_id: String::new(), page_size: 4096, slots: vec![] });
+    let renamed = Header { file_id: String::new(), page_size: 4096, slots: vec![] };
     header::write_open(&mut conn, &renamed).await.unwrap();
     assert_eq!(header::read_open(&mut conn).await.unwrap(), renamed);
     drop(conn);
@@ -110,7 +111,7 @@ async fn an_encrypted_file_keeps_its_header_and_hides_its_data() {
         Err(e) => Err(e),
     };
     assert!(direct.unwrap_err().to_string().contains("not a database"), "the header hides the database from plain SQLite");
-    assert_eq!(header::read(&path).unwrap(), Header { page_size: 4096, slots: vec![] }, "SQLite never wrote into the header");
+    assert_eq!(header::read(&path).unwrap(), Header { file_id: String::new(), page_size: 4096, slots: vec![] }, "SQLite never wrote into the header");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

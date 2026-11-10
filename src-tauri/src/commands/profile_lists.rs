@@ -50,9 +50,9 @@ pub async fn set_terms_active(app: AppHandle, db: State<'_, Db>, id: i64, active
 
 #[tauri::command]
 pub async fn delete_terms(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
-    let out = pl::delete_terms(&db.pool().await, id).await?;
+    pl::delete_terms(&db.pool().await, id).await?;
     notify(&app);
-    Ok(out)
+    Ok(())
 }
 
 #[tauri::command]
@@ -83,9 +83,9 @@ pub async fn set_payment_method_active(app: AppHandle, db: State<'_, Db>, id: i6
 
 #[tauri::command]
 pub async fn delete_payment_method(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
-    let out = pl::delete_payment_method(&db.pool().await, id).await?;
+    pl::delete_payment_method(&db.pool().await, id).await?;
     notify(&app);
-    Ok(out)
+    Ok(())
 }
 
 #[tauri::command]
@@ -116,7 +116,7 @@ pub async fn set_profile_entry_active(app: AppHandle, db: State<'_, Db>, id: i64
 
 #[tauri::command]
 pub async fn delete_profile_entry(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
-    let out = pl::delete_profile_entry(&db.pool().await, id).await?;
+    pl::delete_profile_entry(&db.pool().await, id).await?;
     notify(&app);
-    Ok(out)
+    Ok(())
 }

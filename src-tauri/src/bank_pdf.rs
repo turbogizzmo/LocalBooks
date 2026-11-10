@@ -417,7 +417,7 @@ fn yearless_month(text: &str) -> Option<u32> {
         }
         let candidate = with_year(&format!("{sep}2000"));
         let (a, b): (u32, u32) = (parts[0].parse().ok()?, parts[1].parse().ok()?);
-        return parses_as_date(&candidate).then(|| if a <= 12 { a } else { b });
+        return parses_as_date(&candidate).then_some(if a <= 12 { a } else { b });
     }
     let date = parse_date_ordered(&with_year(" 2000"), DateOrder::Mdy).or_else(|_| parse_date_ordered(&with_year(", 2000"), DateOrder::Mdy)).ok()?;
     t.chars().any(|c| c.is_ascii_alphabetic()).then(|| date.month())
@@ -619,11 +619,7 @@ fn table_from_lines(lines: &[Line]) -> Result<PdfTable, String> {
                         // When a column marks both sides, DR is money out and CR money in. When it
                         // marks only one side, that side is the exception: card statements mark
                         // payments CR, some bank statements mark withdrawals DR.
-                        let negate = match (r.markers[i], markers_used[i]) {
-                            (Some(Marker::Dr), _) => true,
-                            (Some(Marker::Cr), (_, false)) => true,
-                            _ => false,
-                        };
+                        let negate = matches!((r.markers[i], markers_used[i]), (Some(Marker::Dr), _) | (Some(Marker::Cr), (_, false)));
                         if negate && !r.cells[i].is_empty() {
                             r.cells[i] = format!("-{}", r.cells[i].trim_start_matches('+'));
                         }

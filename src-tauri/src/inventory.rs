@@ -485,7 +485,7 @@ pub async fn adjust(pool: &SqlitePool, input: &AdjustInput) -> Result<InventoryI
     if input.qty_change_e4 == 0 {
         return Err("STOCK_ADJUST_ZERO: enter the quantity to add or remove".into());
     }
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let product: i64 = sqlx::query_scalar("SELECT product_id FROM inventory_items WHERE id = ?1")
             .bind(input.item_id)

@@ -136,8 +136,8 @@ async fn a_schedule_can_send_password_protected_pdfs_with_the_password_kept_off_
 
     let files = files_for(&pool, &saved, d(2026, 6, 1), &passwords).await.unwrap();
     for (name, bytes, _) in &files {
-        assert!(lopdf::Document::load_mem_with_password(bytes, "month-end 2026").is_ok(), "{name} opens with the password");
-        assert!(lopdf::Document::load_mem_with_password(bytes, "guess").is_err(), "{name} not with another");
+        assert!(lopdf::Document::load_mem_with_options(bytes, lopdf::LoadOptions::with_password("month-end 2026")).is_ok(), "{name} opens with the password");
+        assert!(lopdf::Document::load_mem_with_options(bytes, lopdf::LoadOptions::with_password("guess")).is_err(), "{name} not with another");
     }
 
     // Saving again without a new password keeps it; turning protection off forgets it.

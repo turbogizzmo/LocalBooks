@@ -497,9 +497,15 @@ async fn write_sales_receipt(
     books: &Books,
 ) -> Result<(i64, i64, i64, i64), String> {
     let SourceDocument::SalesReceipt { customer_id, number: doc_num, method, lines, sales } = doc else { unreachable!() };
-    // The money went into a bank or Undeposited Funds; a discount line and the cost of inventory
-    // sold are debits too, but not the money.
-    let (into, total) = debit_into(t, |l| matches!(books.kind(l.0), "BANK" | "OTHER_CURRENT_ASSET"))?;
+    // The money went into a bank or Undeposited Funds. A discount line and the cost of inventory
+    // sold are debits too, and Inventory Asset is a current asset like Undeposited Funds, so look
+    // for those two first; a receipt into another current asset account is still taken.
+    let money = |l: &Line| books.kind(l.0) == "BANK" || books.is_undeposited(l.0);
+    let (into, total) = if t.lines.iter().any(|l| l.1 < 0 && money(l)) {
+        debit_into(t, money)?
+    } else {
+        debit_into(t, |l| books.kind(l.0) == "OTHER_CURRENT_ASSET")?
+    };
     if !matches!(books.kind(into), "BANK" | "OTHER_CURRENT_ASSET") {
         return Err("the money did not go into a bank or Undeposited Funds account".into());
     }

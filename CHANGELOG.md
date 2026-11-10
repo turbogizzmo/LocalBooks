@@ -6,6 +6,19 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
+  job carries over to the bill, and Open Purchase Orders by Job lists what is still on order for
+  each job.
+- **Jobs on received items.** Receiving items from a purchase order keeps each line's customer or
+  job, and the bill entered for the received items carries it, ready to bill to the customer.
+- **Safer company-file imports.** Amounts read from a damaged QuickBooks Desktop file are now
+  added with overflow checks, a cost row read twice counts once, and a sales receipt that also
+  moves inventory finds the account its money went into. Batches staged by an earlier version
+  label their fixed asset items correctly when you bring in their lists.
+- **More on items.** An item's record takes Subitem of, a description for purchase forms and a cost
+  (also brought in from IIF files). The item list has a search row, tick boxes to make several
+  items inactive or active at once, and Add/Edit Multiple for rows pasted from a spreadsheet. The
+  item box on sales forms has Find & Select Items to add several lines at once.
 - **Discounts and charges on credit memos.** Credit memos and refund receipts take subtotals,
   discount lines, percentage charges and groups, as invoices do. They print in their places, and a
   discount lowers the credit and the sales tax given back.
@@ -19,8 +32,6 @@ people using LocalBooks.
   Charge item or straight to an account. A purchase order's discounts and charges print on it and
   carry over to its bill, including bills entered for received items. Other Charge and Discount
   items can have their own expense account for these forms.
-  carry over to its bill. Other Charge and Discount items can have their own expense account for
-  these forms.
 - **Discounts come in as discount lines from QuickBooks Desktop files.** A company file's
   discount items become LocalBooks discount items (a percent one keeps its percent), and a full
   import keeps an invoice's or sales receipt's subtotal and discount lines where they were, instead

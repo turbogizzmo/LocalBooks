@@ -203,7 +203,7 @@ pub async fn start_with_charges(
     statement_ending_balance_cents: i64,
     charges: &[ReconcileCharge],
 ) -> Result<Reconciliation, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let existing: Option<i64> =
             sqlx::query_scalar("SELECT id FROM reconciliations WHERE account_id = ?1 AND is_locked = 0")
@@ -314,7 +314,7 @@ pub async fn set_lines_cleared(
     line_ids: &[i64],
     cleared: bool,
 ) -> Result<ReconcileProgress, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     match write_cleared(&mut tx, reconciliation_id, line_ids, cleared).await {
         Ok(progress) => {
             crate::ledger::commit_write(tx).await.map_err(db_err)?;
@@ -352,7 +352,7 @@ async fn write_cleared(
 
 /// Completes the reconciliation once the difference is exactly zero, freezing every cleared line.
 pub async fn lock(pool: &SqlitePool, reconciliation_id: i64) -> Result<Reconciliation, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let progress = cleared_balance(&mut *tx, reconciliation_id).await?;
         if progress.difference_cents != 0 {
@@ -402,7 +402,7 @@ pub async fn lock(pool: &SqlitePool, reconciliation_id: i64) -> Result<Reconcili
 /// trail. Nothing is posted. Returns how many lines were released.
 pub async fn undo_last(pool: &SqlitePool, reconciliation_id: i64, reason: Option<&str>) -> Result<i64, String> {
     let reason = reason.map(str::trim).filter(|r| !r.is_empty());
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let (account_id, account_name, statement_end_date): (i64, String, String) = sqlx::query_as(
             "SELECT r.account_id, a.name, r.statement_end_date FROM reconciliations r JOIN chart_of_accounts a ON a.id = r.account_id WHERE r.id = ?1",
@@ -469,7 +469,7 @@ pub async fn undo_last(pool: &SqlitePool, reconciliation_id: i64, reason: Option
 /// Statement files attached to it go with it: they belonged only to a reconciliation that no
 /// longer exists (they are marked deleted, then removed, as `attachments_library` requires).
 pub async fn cancel(pool: &SqlitePool, reconciliation_id: i64) -> Result<(), String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let removed = sqlx::query("DELETE FROM reconciliations WHERE id = ?1 AND is_locked = 0")
             .bind(reconciliation_id)
