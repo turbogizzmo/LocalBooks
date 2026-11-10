@@ -130,6 +130,14 @@ export const topics = [
     guide: 'customer-payments',
   },
   {
+    id: 'overpayments', area: 'sales', views: ['sales/invoices', 'sales/credits', 'sales/customers', 'banking/transfers'],
+    title: 'Overpayments, prepayments and unapplied payments',
+    body: 'Receive Payments takes more than the invoices are owed, and payments from a customer with no open invoice. The amount left over is shown as the Unapplied amount, with a choice: leave it as the customer’s credit, refund it from a bank or card account, or write it off to an income account. Kept as credit, it is listed in Credit Memos & Refunds as an Unapplied payment, and the Customer Center shows the Unapplied amount and Remaining credit; apply it to a later invoice, refund it or write it off from there. Deposited to Undeposited Funds, it waits in Make Deposits as Payment (unapplied).',
+    keywords: 'overpayment overpaid prepayment prepaid deposit retainer advance unapplied amount payment credit remaining credit refund write off extra too much paid',
+    go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
+    guide: 'customer-payments',
+  },
+  {
     id: 'early-payment-discount', area: 'sales', views: ['sales/invoices'],
     title: 'Take a customer’s early-payment discount',
     body: 'For an invoice on terms such as 2% 10 Net 30, choose a Discount account (an income account such as Sales Discounts) in Preferences › Payments, and tick Take customers’ early-payment discounts automatically if you want it filled in. Receive Payments then shows a Discount column: an invoice paid in full by the discount’s last day takes the discount on its open balance (what is left of a part-paid one) and the payment is the rest. Change or clear the discount on the row. One entry posts the money to the deposit account and the discount to the discount account, both off Accounts Receivable; voiding the payment, or recording it as a bounced check, reverses both. An invoice in another currency takes its discount in that currency, at the invoice’s own exchange rate.',

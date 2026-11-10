@@ -19,6 +19,12 @@ people using LocalBooks.
 - **Says plainly that LocalBooks is for US businesses.** The README, the tester page and Help
   (search "US") explain what that means: US-style sales tax with no VAT or GST, IRS 1099s,
   US federal tax features, ACH and check formats, and US date and number formats.
+- **Overpayments and prepayments.** Receive Payments takes more than a customer owes, and payments
+  from a customer with no open invoice. The amount left over can stay as the customer's credit (to
+  use on a later invoice), be refunded straight away, or be written off to income. Credit Memos &
+  Refunds lists it as an unapplied payment, the Customer Center shows the unapplied amount and
+  remaining credit, and Make Deposits picks it up from Undeposited Funds. Any credit left can now
+  also be written off.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

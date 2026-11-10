@@ -185,7 +185,7 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
                 <input type="checkbox" className="accent-qb-green" checked={picked.has(key(i))} onClick={(e) => e.stopPropagation()} onChange={() => toggle(i)} aria-label={`Deposit ${formatCents(i.amountCents)}`} />
               </td>
               <td className="qb-grid-cell">{formatDate(i.date)}</td>
-              <td className="qb-grid-cell">{i.kind === 'PAYMENT' ? 'Payment' : 'Sales Receipt'}</td>
+              <td className="qb-grid-cell">{i.kind === 'PAYMENT' ? 'Payment' : i.kind === 'CREDIT' ? 'Payment (unapplied)' : 'Sales Receipt'}</td>
               <td className="qb-grid-cell">{i.customerName ?? ''}</td>
               <td className="qb-grid-cell">{i.paymentMethodName ?? kindLabel(i.paymentMethod)}</td>
               <td className="qb-grid-cell">{i.reference ?? ''}</td>

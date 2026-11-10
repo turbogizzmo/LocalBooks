@@ -129,6 +129,7 @@ features![
     tax_and_time,
     timesheet,
     txf,
+    unapplied_payments,
     users,
     vendor_1099,
     vouchers,

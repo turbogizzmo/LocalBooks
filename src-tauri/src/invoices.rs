@@ -501,8 +501,39 @@ pub(crate) const DISCOUNT_LINE_MEMO: &str = "Early-payment discount on invoice #
 /// A payment may take its invoice's early-payment discount (Preferences › Payments names the
 /// account it goes to).
 pub async fn record_payments(pool: &SqlitePool, inputs: Vec<PaymentInput>) -> Result<usize, String> {
-    if inputs.is_empty() {
+    receive_payment(pool, ReceivePaymentInput { payments: inputs, unapplied: None }).await.map(|r| r.invoice_count)
+}
+
+/// One Receive Payments save: what is applied to invoices, and any amount left over.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceivePaymentInput {
+    #[serde(default)]
+    pub payments: Vec<PaymentInput>,
+    /// Money received beyond what is applied to invoices (or all of it, for a customer with no open
+    /// invoice): kept as the customer's credit, refunded or written off.
+    #[serde(default)]
+    pub unapplied: Option<crate::credits::UnappliedPaymentInput>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceivedPayment {
+    pub invoice_count: usize,
+    /// The customer credit holding the unapplied amount, when there was one.
+    pub credit_id: Option<i64>,
+}
+
+/// Receive Payments: the invoice payments and the unapplied amount post together, or not at all.
+/// The unapplied amount is in the home currency, so a payment against foreign-currency invoices
+/// can't leave one.
+pub async fn receive_payment(pool: &SqlitePool, input: ReceivePaymentInput) -> Result<ReceivedPayment, String> {
+    let inputs = input.payments;
+    if inputs.is_empty() && input.unapplied.is_none() {
         return Err("INV_NOTHING_TO_APPLY: enter an amount for at least one invoice".into());
+    }
+    if input.unapplied.is_some() && inputs.iter().any(|i| i.exchange_rate_e6.is_some()) {
+        return Err("INV_FOREIGN_UNAPPLIED: a foreign-currency payment can't leave an unapplied amount; apply all of it to invoices".into());
     }
     let discount_account = if inputs.iter().any(|i| i.discount_cents != 0) {
         let account = crate::preferences::get(pool, crate::sales_prefs::PAYMENT_DISCOUNT_ACCOUNT)
@@ -520,8 +551,15 @@ pub async fn record_payments(pool: &SqlitePool, inputs: Vec<PaymentInput>) -> Re
             return Err(rollback(tx, err).await);
         }
     }
+    let credit_id = match &input.unapplied {
+        Some(extra) => match crate::credits::write_unapplied_payment(&mut tx, extra).await {
+            Ok(id) => Some(id),
+            Err(err) => return Err(rollback(tx, err).await),
+        },
+        None => None,
+    };
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
-    Ok(inputs.len())
+    Ok(ReceivedPayment { invoice_count: inputs.len(), credit_id })
 }
 
 pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, discount_account: Option<i64>) -> Result<(), String> {

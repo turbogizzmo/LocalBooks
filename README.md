@@ -341,6 +341,8 @@ its entry form with focus in the first field.
 | Invoice | Accounts Receivable | Income (per line's account) |
 | Finance charge (an invoice per customer, from Assess Finance Charges) | Accounts Receivable | The finance charge income account |
 | Receive payment | Bank or Undeposited Funds | Accounts Receivable |
+| Unapplied payment (overpayment or prepayment kept as credit) | Bank or Undeposited Funds | Accounts Receivable |
+| Unapplied payment written off | Accounts Receivable | Income account |
 | Sales receipt | Bank or Undeposited Funds | Income |
 | Bill | Expense / asset (one debit per distinct split account) | Accounts Payable |
 | Payment on a foreign invoice | Bank (at payment rate) + Exchange **loss** | A/R (at booked rate) + Exchange **gain** |
