@@ -8,7 +8,8 @@
 //! - **A new password** (a reset, your own change, the recovery key) gets its slot **beside** the
 //!   old one before the users table changes, and the old slot goes once the change is saved. A crash
 //!   in between leaves both passwords able to unlock the file, and the users table decides which one
-//!   signs in, so nobody is locked out by a half-saved change.
+//!   signs in. The next sign-in keeps the slot **the password that signed in opened** (the one the
+//!   users table agrees with) and drops the other, so nobody is locked out by a half-saved change.
 //! - **Turning a user off** removes their slot: they can no longer decrypt the file, even outside
 //!   LocalBooks.
 //! - **A new recovery key** replaces the recovery slot.
@@ -61,6 +62,30 @@ where
     result
 }
 
+/// After a sign-in: if an interrupted password change left the user two slots, keeps the one
+/// `password` (which the users table just accepted) opens, and drops the other. Never the newest by
+/// position: that may be a password that was never saved.
+async fn keep_slot_that_signed_in(db: &Db, user_id: i64, password: &str) -> Result<(), String> {
+    let Some(header) = db.key_header().await? else { return Ok(()) };
+    let mine: Vec<_> = header.slots.iter().filter(|s| s.user_id == Some(user_id)).collect();
+    if mine.len() < 2 {
+        return Ok(());
+    }
+    let mut keep = None;
+    for slot in mine.iter().rev() {
+        if keys::opens(slot, &header.file_id, password).await? {
+            keep = Some(slot.salt.clone());
+            break;
+        }
+    }
+    let Some(keep) = keep else { return Ok(()) };
+    db.update_key_header(|mut header| {
+        header.slots.retain(|s| s.user_id != Some(user_id) || s.salt == keep);
+        header
+    })
+    .await
+}
+
 /// Signs in, unlocking an encrypted file first. The error for a wrong password or unknown user name
 /// is the same whether the file is encrypted or not.
 pub async fn sign_in(db: &Db, username: &str, password: &str) -> Result<Session, String> {
@@ -70,9 +95,7 @@ pub async fn sign_in(db: &Db, username: &str, password: &str) -> Result<Session,
     match users::sign_in(&pool, username, password).await {
         Ok(session) => {
             if was_locked {
-                // Leftover slots from an interrupted password change go now.
-                let id = session.user.id;
-                if let Err(e) = db.update_key_header(|header| keeping_newest(header, id)).await {
+                if let Err(e) = keep_slot_that_signed_in(db, session.user.id, password).await {
                     eprintln!("LocalBooks: could not tidy the key header: {e}");
                 }
             }
@@ -104,8 +127,20 @@ pub async fn recover(db: &Db, recovery_key: &str, username: &str, new_password: 
         }
     };
     let id = session.user.id;
-    if let Some(slot) = db.new_password_slot(id, &session.user.username, new_password).await? {
-        db.update_key_header(|header| keys::with_user_slot(&header, id, slot)).await?;
+    let slotted = async {
+        if let Some(slot) = db.new_password_slot(id, &session.user.username, new_password).await? {
+            db.update_key_header(|header| keys::with_user_slot(&header, id, slot)).await?;
+        }
+        Ok::<(), String>(())
+    }
+    .await;
+    if let Err(e) = slotted {
+        // The new password is saved but can't open the file yet: lock it again rather than leave it
+        // open with nobody signed in. The recovery key still works, so this can simply be retried.
+        if was_locked {
+            db.relock().await;
+        }
+        return Err(format!("FILE_KEY_NOT_SAVED: the new password was saved but couldn't be added to the encrypted company file ({e}); use the recovery key again"));
     }
     Ok(session)
 }

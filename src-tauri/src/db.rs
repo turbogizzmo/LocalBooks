@@ -523,6 +523,19 @@ impl Db {
         crate::file_cipher::keys::recovery_slot(key, &cipher.file_id, recovery_key).await.map(Some)
     }
 
+    /// The unlocked encrypted file's key header, through the live connection's own file handle; None
+    /// for a plain file.
+    pub async fn key_header(&self) -> Result<Option<crate::file_cipher::header::Header>, String> {
+        let guard = self.live.read().await;
+        let Some(live) = guard.as_ref() else { return Err(NO_COMPANY_OPEN.into()) };
+        let Some(cipher) = live.cipher.as_ref() else { return Ok(None) };
+        if cipher.page_key.is_none() {
+            return Err(crate::users::SIGN_IN_REQUIRED.into());
+        }
+        let mut conn = live.pool.acquire().await.map_err(|e| e.to_string())?;
+        crate::file_cipher::header::read_open(&mut conn).await.map(Some)
+    }
+
     /// Changes an unlocked encrypted file's key header with `change`, through the live connection's
     /// own file handle (so SQLite's locks stay in place). Nothing to do for a plain file; refused
     /// while the file is locked. Nothing is written when `change` leaves the header as it was.

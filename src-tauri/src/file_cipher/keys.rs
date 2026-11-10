@@ -119,6 +119,11 @@ async fn open(slot: &HeaderSlot, file_id: &str, secret: &str) -> Result<Option<P
     Ok(Some(PageKey(Zeroizing::new(key))))
 }
 
+/// Whether `secret` opens `slot` of the file `file_id`.
+pub async fn opens(slot: &HeaderSlot, file_id: &str, secret: &str) -> Result<bool, String> {
+    Ok(open(slot, file_id, secret).await?.is_some())
+}
+
 /// Unlocks the page key with a user's password. The user name is compared without case, as the
 /// users table does. An unknown name does the same Argon2id work as a wrong password, so the time
 /// taken doesn't reveal which names exist. Returns the key and the id of the user whose slot opened.

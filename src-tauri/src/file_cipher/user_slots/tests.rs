@@ -272,3 +272,27 @@ async fn a_plain_file_is_unchanged() {
     assert!(std::fs::read(&path).unwrap().starts_with(b"SQLite format 3\0"), "nothing was written in front of the database");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A password change interrupted after its new slot was written, but before the users table
+/// changed: the old password still signs in, and the tidy-up keeps the old slot (the one the users
+/// table agrees with), not the newer one whose password was never saved.
+#[tokio::test]
+async fn an_interrupted_password_change_never_locks_anyone_out() {
+    let dir = scratch("interrupted");
+    let (path, _) = encrypted_company(&dir).await;
+    let db = open_db(&dir, &path).await;
+    let ann = sign_in(&db, "ann", "ann password 1").await.unwrap();
+    // The first half of a change: the new slot beside the old, and then the "crash".
+    let slot = db.new_password_slot(ann.user.id, "ann", "never saved 1").await.unwrap().unwrap();
+    db.update_key_header(|header| keys::adding_user_slot(&header, slot)).await.unwrap();
+    relock(&db).await;
+
+    sign_in(&db, "ann", "ann password 1").await.unwrap();
+    let left = db.key_header().await.unwrap().unwrap();
+    assert_eq!(left.slots.iter().filter(|s| s.user_id == Some(ann.user.id)).count(), 1, "one slot is left");
+    relock(&db).await;
+    sign_in(&db, "ann", "ann password 1").await.expect("and it is the password the users table holds");
+    relock(&db).await;
+    assert_eq!(sign_in(&db, "ann", "never saved 1").await.unwrap_err(), users::SIGN_IN_FAILED);
+    let _ = std::fs::remove_dir_all(&dir);
+}
