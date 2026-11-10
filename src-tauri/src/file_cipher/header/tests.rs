@@ -25,12 +25,8 @@ fn header(username: &str) -> Header {
     Header { page_size: 4096, slots: vec![slot(username)] }
 }
 
-#[test]
-fn layout_fits_inside_the_header() {
-    assert!(COPY_A >= 16, "after the signature");
-    assert!(COPY_A + COPY_LEN <= COPY_B, "the copies don't overlap");
-    assert!(COPY_B + COPY_LEN <= u64::try_from(HEADER_LEN).unwrap(), "both fit in the header");
-}
+// The layout fits: after the signature, the copies don't overlap, and both fit in the header.
+const _: () = assert!(COPY_A >= 16 && COPY_A + COPY_LEN <= COPY_B && COPY_B + COPY_LEN <= HEADER_LEN as u64);
 
 #[test]
 fn a_new_header_reads_back_and_marks_the_file() {
