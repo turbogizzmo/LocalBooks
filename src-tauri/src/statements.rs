@@ -188,7 +188,7 @@ async fn pl_movement(
 const DEFERRED_ENTRIES: &str = "WITH deferred AS (
         SELECT e.id FROM journal_entries e
         WHERE e.source_type IN ('INVOICE', 'BILL', 'VENDOR_CREDIT')
-           OR (e.source_type = 'CREDIT_MEMO' AND (SELECT refund_account_id FROM credit_memos WHERE id = e.source_id) IS NULL)
+           OR (e.source_type = 'CREDIT_MEMO' AND EXISTS (SELECT 1 FROM credit_memos m WHERE m.id = e.source_id AND m.refund_account_id IS NULL AND m.payment_account_id IS NULL))
     )";
 
 /// Cash-basis movement: everything paid at the time (sales receipts, expenses, checks, deposits,
@@ -243,7 +243,7 @@ async fn cash_basis_movement(pool: &SqlitePool, chart: &Chart, start: NaiveDate,
                              WHERE a.credit_memo_id = m.id AND a.is_voided = 0 AND a.applied_date BETWEEN ?1 AND ?2), 0)
                  + COALESCE((SELECT SUM(r.amount_cents) FROM credit_refunds r JOIN journal_entries re ON re.id = r.journal_entry_id
                              WHERE r.credit_memo_id = m.id AND re.is_voided = 0 AND r.refund_date BETWEEN ?1 AND ?2), 0)
-            FROM credit_memos m WHERE m.is_voided = 0 AND m.refund_account_id IS NULL AND m.journal_entry_id IS NOT NULL
+            FROM credit_memos m WHERE m.is_voided = 0 AND m.refund_account_id IS NULL AND m.payment_account_id IS NULL AND m.journal_entry_id IS NOT NULL
             UNION ALL
             SELECT c.journal_entry_id, c.total_cents,
                    COALESCE((SELECT SUM(a.amount_cents) FROM vendor_credit_applications a
