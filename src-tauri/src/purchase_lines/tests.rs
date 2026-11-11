@@ -19,7 +19,7 @@ async fn payable(pool: &SqlitePool) -> i64 {
 }
 
 fn line(after: usize, kind: PurchaseLineKind, percent: Option<i64>, amount: Option<i64>, account_id: i64) -> PurchaseFormLineInput {
-    PurchaseFormLineInput { after_line: after, kind, description: String::new(), product_service_id: None, percent_ppm: percent, amount_cents: amount, account_id, class_id: None }
+    PurchaseFormLineInput { after_line: after, kind, description: String::new(), product_service_id: None, percent_ppm: percent, amount_cents: amount.map(Cents), account_id, class_id: None }
 }
 
 fn code(err: String) -> String {

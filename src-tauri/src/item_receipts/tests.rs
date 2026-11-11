@@ -70,8 +70,8 @@ fn widgets(s: &Shop, po_line: Option<i64>, qty: i64) -> ReceiptLineInput {
         product_service_id: Some(s.product),
         description: Some("Widget".into()),
         quantity_e4: Some(qty * 10_000),
-        rate_cents: Some(1_000),
-        amount_cents: qty * 1_000,
+        rate_cents: Some(Cents(1_000)),
+        amount_cents: Cents(qty * 1_000),
         class_id: None,
     }
 }
@@ -91,7 +91,7 @@ async fn invoice(s: &Shop, qty: i64) {
 
 async fn bill_for(s: &Shop, receipt: &ReceiptView, amounts: &[i64]) -> Result<i64, String> {
     let lines = receipt_lines(&s.pool, receipt.id).await.unwrap();
-    let lines = lines.iter().zip(amounts).map(|(l, a)| ReceiptBillLine { receipt_line_id: l.id, amount_cents: *a }).collect();
+    let lines = lines.iter().zip(amounts).map(|(l, a)| ReceiptBillLine { receipt_line_id: l.id, amount_cents: Cents(*a) }).collect();
     bill_received_items(&s.pool, ReceiptBillInput { item_receipt_id: receipt.id, bill_number: Some("INV-9".into()), bill_date: d(20), due_date: d(30), terms_id: None, memo: None, lines }).await
 }
 
@@ -99,7 +99,7 @@ async fn bill_for(s: &Shop, receipt: &ReceiptView, amounts: &[i64]) -> Result<i6
 async fn a_receipt_raises_stock_against_the_clearing_account_not_payables() {
     let s = shop().await;
     let (po, lines) = order(&s).await;
-    let freight = ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: 2_000, class_id: None };
+    let freight = ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: Cents(2_000), class_id: None };
     let r = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 4), freight])).await.unwrap();
     assert_eq!((r.receipt_number, r.total_cents, r.po_number.is_some(), r.bill_id, r.is_voided), (1, 6_000, true, None, false));
 
@@ -144,7 +144,7 @@ async fn the_bill_clears_the_receipt_and_posts_its_price_difference() {
         gl(&s.pool, id).await
     };
     // 10 widgets received at $10.00; 4 sold before the bill comes.
-    let freight = ReceiptLineInput { purchase_order_line_id: None, account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: 2_000, class_id: None };
+    let freight = ReceiptLineInput { purchase_order_line_id: None, account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: Cents(2_000), class_id: None };
     let r = receive_items(&s.pool, receive(&s, None, d(5), vec![widgets(&s, None, 10), freight])).await.unwrap();
     invoice(&s, 4).await;
     assert_eq!(stock(&s).await, (60_000, 6_000));
@@ -209,13 +209,13 @@ async fn receipts_and_their_bills_are_checked() {
     assert!(list_receipts(&s.pool, false).await.unwrap().is_empty(), "nothing saved");
 
     // Receiving more than ordered is allowed; the order closes.
-    let r = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 12), ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: None, quantity_e4: None, rate_cents: None, amount_cents: 2_000, class_id: None }])).await.unwrap();
+    let r = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 12), ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: None, quantity_e4: None, rate_cents: None, amount_cents: Cents(2_000), class_id: None }])).await.unwrap();
     assert_eq!(r.total_cents, 14_000);
     let receipt_line = receipt_lines(&s.pool, r.id).await.unwrap();
     // The bill names every receipt line once, with an amount above zero, dated no later than due.
     let bill = |lines: Vec<ReceiptBillLine>, due: NaiveDate| bill_received_items(&s.pool, ReceiptBillInput { item_receipt_id: r.id, bill_number: None, bill_date: d(20), due_date: due, terms_id: None, memo: None, lines });
-    assert!(bill(vec![ReceiptBillLine { receipt_line_id: receipt_line[0].id, amount_cents: 12_000 }], d(30)).await.unwrap_err().starts_with("RECEIPT_BILL_LINES"));
-    let both = |a: i64| vec![ReceiptBillLine { receipt_line_id: receipt_line[0].id, amount_cents: a }, ReceiptBillLine { receipt_line_id: receipt_line[1].id, amount_cents: 2_000 }];
+    assert!(bill(vec![ReceiptBillLine { receipt_line_id: receipt_line[0].id, amount_cents: Cents(12_000) }], d(30)).await.unwrap_err().starts_with("RECEIPT_BILL_LINES"));
+    let both = |a: i64| vec![ReceiptBillLine { receipt_line_id: receipt_line[0].id, amount_cents: Cents(a) }, ReceiptBillLine { receipt_line_id: receipt_line[1].id, amount_cents: Cents(2_000) }];
     assert!(bill(both(0), d(30)).await.unwrap_err().starts_with("RECEIPT_BAD_AMOUNT"));
     assert!(bill(both(12_000), d(19)).await.unwrap_err().starts_with("BILL_DUE_BEFORE_DATE"));
     let id = bill(both(12_000), d(30)).await.unwrap();
@@ -263,7 +263,7 @@ async fn a_po_line_s_job_carries_through_the_receipt_to_the_bill() {
     let lines = order_receiving(&s.pool, po).await.unwrap();
     assert_eq!(lines.iter().map(|l| (l.customer_id, l.customer_name.as_deref())).collect::<Vec<_>>(), vec![(Some(job), Some("Kitchen remodel")), (None, None)]);
 
-    let freight = ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: 2_000, class_id: None };
+    let freight = ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: Cents(2_000), class_id: None };
     let receipt = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 10), freight])).await.unwrap();
     let received = receipt_lines(&s.pool, receipt.id).await.unwrap();
     assert_eq!(received.iter().map(|l| l.customer_id).collect::<Vec<_>>(), vec![Some(job), None]);
@@ -291,7 +291,7 @@ async fn a_receipts_bill_takes_the_orders_discounts_and_charges_once() {
     .unwrap();
     let po = crate::workflows::create_purchase_order(&s.pool, input).await.unwrap();
     let lines = order_receiving(&s.pool, po).await.unwrap();
-    let freight = |cents: i64| ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: cents, class_id: None };
+    let freight = |cents: i64| ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: Cents(cents), class_id: None };
 
     // First shipment: 4 widgets and half the freight. The bill takes 10% of $40.00 and the handling.
     let first = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 4), freight(1_000)])).await.unwrap();
@@ -361,4 +361,17 @@ async fn an_order_received_against_cant_be_edited_or_deleted_even_once_the_recei
     assert!(err.starts_with("PO_HAS_RECEIPTS"), "{err}");
     let err = crate::workflows::delete_purchase_order(&s.pool, po).await.unwrap_err();
     assert!(err.starts_with("PO_HAS_RECEIPTS"), "{err}");
+}
+
+#[test]
+fn receipt_and_purchase_form_amounts_are_bare_integers_in_json() {
+    let line: ReceiptLineInput = serde_json::from_value(json!({"accountId": 5, "quantityE4": 20_000, "rateCents": 1_250, "amountCents": 2_500})).unwrap();
+    assert_eq!((line.rate_cents, line.amount_cents), (Some(Cents(1_250)), Cents(2_500)));
+    let billed: ReceiptBillLine = serde_json::from_value(json!({"receiptLineId": 7, "amountCents": 2_400})).unwrap();
+    assert_eq!(billed.amount_cents, Cents(2_400));
+    let form: crate::purchase_lines::PurchaseFormLineInput =
+        serde_json::from_value(json!({"afterLine": 1, "kind": "DISCOUNT", "amountCents": 300, "accountId": 9})).unwrap();
+    assert_eq!(form.amount_cents, Some(Cents(300)));
+    assert_eq!(serde_json::to_value(&form).unwrap()["amountCents"], json!(300), "it goes back out as a bare integer");
+    assert!(serde_json::from_value::<ReceiptBillLine>(json!({"receiptLineId": 7, "amountCents": 24.5})).is_err(), "a fractional amount is refused");
 }
