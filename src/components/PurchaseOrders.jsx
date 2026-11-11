@@ -13,7 +13,7 @@ import PurchaseFormLines, { usePurchaseFormLines } from './PurchaseFormLines.jsx
 import { purchaseLineMessage } from '../lib/purchaseLines.js';
 import { useFormClass } from './ClassSelect.jsx';
 import { isCategory } from './Bills.jsx';
-import { isHeldForApproval } from '../lib/approvals.js';
+import { isHeldForApproval, purchaseOrderStatus } from '../lib/approvals.js';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
@@ -23,8 +23,6 @@ import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
 import { useFormPrinter } from './FormPages.jsx';
-
-const STATUS = { OPEN: 'Open', CLOSED: 'Closed', BILLED: 'Billed' };
 
 /**
  * `copyOf` (from Duplicate) starts the order as a copy of a saved one, dated today. With
@@ -167,15 +165,20 @@ function BillDialog({ order, onClose, onDone }) {
   const [number, setNumber] = useState('');
   const [error, setError] = useState(null);
   const create = async () => {
+    const billNumber = number.trim() || null;
     try {
-      await api.billPurchaseOrder(order.id, billDate, dueDate, number.trim() || null);
+      await api.billPurchaseOrder(order.id, billDate, dueDate, billNumber);
       onDone(`PO #${order.poNumber} turned into a bill from ${order.vendorName} for ${formatCents(order.totalCents)}; the bill is posted to Accounts Payable.`);
     } catch (err) {
-      setError(
-        isHeldForApproval(err)
-          ? `${errorText(err)}. A bill from a purchase order can't be submitted from here yet: enter it in Enter Bills and choose Submit for approval, then close this purchase order once the bill is approved.`
-          : errorText(err),
-      );
+      if (!isHeldForApproval(err)) return setError(errorText(err));
+      // An approval rule holds this bill: it waits under Expenses › Approvals, and approving it
+      // posts the bill and marks this order billed.
+      try {
+        await api.submitPurchaseOrderBillForApproval(order.id, billDate, dueDate, billNumber);
+        onDone(`Bill from PO #${order.poNumber} (${order.vendorName}, ${formatCents(order.totalCents)}) sent for approval. It isn't posted until it is approved under Expenses › Approvals; approving it marks this order billed, and rejecting it leaves the order open.`);
+      } catch (submitErr) {
+        setError(errorText(submitErr));
+      }
     }
   };
   return (
@@ -223,7 +226,7 @@ export default function PurchaseOrders({ accounts, intent }) {
     vendor: (o) => o.vendorName,
     expected: (o) => o.expectedDate,
     memo: (o) => o.memo,
-    status: (o) => STATUS[o.status] ?? o.status,
+    status: (o) => purchaseOrderStatus(o),
     total: (o) => o.totalCents,
   }, { storageKey: 'purchase-orders' });
   const list = sorter.sorted;
@@ -307,7 +310,7 @@ export default function PurchaseOrders({ accounts, intent }) {
       {composing && viewing ? (
         <SavedDocView
           label="Purchase order"
-          title={`PO #${viewing.poNumber} · ${viewing.vendorName} · ${STATUS[viewing.status] ?? viewing.status}`}
+          title={`PO #${viewing.poNumber} · ${viewing.vendorName} · ${purchaseOrderStatus(viewing)}`}
           step={saved.step}
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
@@ -322,7 +325,7 @@ export default function PurchaseOrders({ accounts, intent }) {
               { id: 'delete-po', label: 'Delete', icon: 'Void', hint: viewing.status === 'BILLED' ? 'A billed purchase order stays' : 'Delete this purchase order', disabled: viewing.status === 'BILLED', onClick: () => remove(viewing) },
             ],
             [
-              { id: 'bill', label: 'Create Bill', icon: 'HomeBill', hint: viewing.status === 'OPEN' ? 'Turn this purchase order into a bill' : 'Only an open purchase order can be billed', disabled: viewing.status !== 'OPEN', onClick: () => setBilling(viewing) },
+              { id: 'bill', label: 'Create Bill', icon: 'HomeBill', hint: viewing.awaitingApproval ? 'A bill from it is waiting for approval' : viewing.status === 'OPEN' ? 'Turn this purchase order into a bill' : 'Only an open purchase order can be billed', disabled: viewing.status !== 'OPEN' || viewing.awaitingApproval, onClick: () => setBilling(viewing) },
               viewing.status === 'CLOSED'
                 ? { id: 'reopen', label: 'Reopen', icon: 'ReopenDoc', hint: 'Reopen this purchase order', onClick: () => setClosed(viewing, false) }
                 : { id: 'close-po', label: 'Close PO', icon: 'CloseDoc', hint: viewing.status === 'OPEN' ? 'Close it without billing' : 'Only an open purchase order can be closed', disabled: viewing.status !== 'OPEN', onClick: () => setClosed(viewing, true) },
@@ -405,7 +408,7 @@ export default function PurchaseOrders({ accounts, intent }) {
                   <td className="qb-grid-cell">{o.vendorName}</td>
                   <td className="qb-grid-cell">{o.expectedDate ? formatDate(o.expectedDate) : ''}</td>
                   <td className="qb-grid-cell text-qb-ink-muted">{o.memo ?? ''}</td>
-                  <td className="qb-grid-cell">{STATUS[o.status] ?? o.status}</td>
+                  <td className="qb-grid-cell">{purchaseOrderStatus(o)}</td>
                   <td className="qb-grid-cell num">{formatCents(o.totalCents)}</td>
                   <td className="qb-grid-cell">
                     <RowMenu
@@ -414,7 +417,7 @@ export default function PurchaseOrders({ accounts, intent }) {
                         { label: 'Open', onSelect: () => openOrder(o) },
                         { label: 'Edit…', disabled: !editable(o), onSelect: () => edit(o) },
                         ...(inventoryOn ? [{ label: 'Duplicate', hint: 'A new purchase order copied from this one, dated today', onSelect: () => duplicate(o) }] : []),
-                        { label: 'Create bill…', disabled: o.status !== 'OPEN', onSelect: () => setBilling(o) },
+                        { label: 'Create bill…', disabled: o.status !== 'OPEN' || o.awaitingApproval, onSelect: () => setBilling(o) },
                         { label: 'Print or save as PDF', onSelect: () => print(o) },
                         o.status === 'CLOSED'
                           ? { label: 'Reopen', onSelect: () => setClosed(o, false) }

@@ -18,6 +18,10 @@ becomes its release notes on GitHub and in the app's update window (see
 - **Clearer colors.** A deep spruce green and dark sidebar replace the old bright green, and every
   label and button meets the WCAG AA contrast guideline. Invoice and estimate designs you already
   made keep their colors; new ones start in spruce.
+- **Create Bill on a purchase order works with approval rules.** When an approval rule holds the
+  bill, Create Bill now sends it for approval instead of asking you to re-enter it in Enter Bills.
+  The order shows "bill awaiting approval"; approving posts the bill and marks the order billed with
+  it, and rejecting leaves the order open.
 - **More accurate company-file imports.** Memorized transactions (templates) are no longer
   imported as real ones, which doubled some balances. Files whose description of a line table is
   missing several columns now read those lines, and a payment and deposit that a file keeps as two

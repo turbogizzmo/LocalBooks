@@ -9,6 +9,10 @@
 //!
 //! Who may approve is decided in `permissions.rs` (`approve_request` and `reject_request` are
 //! Admin commands).
+//!
+//! A bill made from a purchase order (Create Bill) keeps the order it came from
+//! (`from_purchase_order_id`): approving it posts the bill and marks that order billed in the same
+//! transaction; rejecting it leaves the order open.
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -150,12 +154,18 @@ pub struct ApprovalRequest {
     pub note: Option<String>,
     pub bill_id: Option<i64>,
     pub purchase_order_id: Option<i64>,
+    /// For a bill made from a purchase order (Create Bill): the order, which approving marks
+    /// billed, and its number.
+    pub from_purchase_order_id: Option<i64>,
+    pub from_po_number: Option<i64>,
     /// The form as entered (JSON).
     pub input_json: String,
 }
 
 const SELECT: &str = "SELECT id, kind, vendor_name, total_cents, document_date, reference, status, requested_by, requested_at, decided_by, decided_at, note,
-                             bill_id, purchase_order_id, input_json FROM approval_requests";
+                             bill_id, purchase_order_id, from_purchase_order_id,
+                             (SELECT po_number FROM purchase_orders o WHERE o.id = from_purchase_order_id) AS from_po_number,
+                             input_json FROM approval_requests";
 
 /// What the document would be: (vendor, total, date, reference), validated as its form would be.
 fn describe(kind: Kind, input: &Value) -> Result<(String, i64, NaiveDate, Option<String>), String> {
@@ -198,6 +208,51 @@ pub async fn submit(pool: &SqlitePool, kind: Kind, input: &Value, requested_by: 
     get(pool, id).await
 }
 
+/// Holds a bill made from purchase order `order_id` (Create Bill's [`crate::workflows::purchase_order_bill`])
+/// for approval. The order must still be open with nothing received, and only one bill from it
+/// waits at a time. Approving posts the bill and marks the order billed; rejecting leaves it open.
+pub async fn submit_purchase_order_bill(pool: &SqlitePool, order_id: i64, bill: &BillInput, requested_by: &str) -> Result<ApprovalRequest, String> {
+    let input = serde_json::to_value(bill).map_err(|e| format!("APPROVAL_BAD_INPUT: the bill could not be saved ({e})"))?;
+    let (vendor, total, date, reference) = describe(Kind::Bill, &input)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
+    let result: Result<i64, String> = async {
+        let head: Option<(String, i64)> = sqlx::query_as("SELECT status, po_number FROM purchase_orders WHERE id = ?1").bind(order_id).fetch_optional(&mut *tx).await.map_err(db_err)?;
+        let (status, number) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
+        if status != "OPEN" {
+            return Err("PO_NOT_OPEN: only an open purchase order can be billed".into());
+        }
+        if crate::item_receipts::order_has_receipts(&mut tx, order_id).await? {
+            return Err(format!("PO_HAS_RECEIPTS: items on purchase order #{number} have been received; enter the bill from Enter Bill for Received Items"));
+        }
+        if crate::workflows::awaiting_approval(&mut tx, order_id).await?.is_some() {
+            return Err(format!("PO_AWAITING_APPROVAL: a bill from purchase order #{number} is already waiting for approval under Expenses › Approvals"));
+        }
+        sqlx::query_scalar(
+            "INSERT INTO approval_requests (kind, vendor_name, total_cents, document_date, reference, input_json, requested_by, from_purchase_order_id)
+             VALUES ('BILL', ?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id",
+        )
+        .bind(&vendor)
+        .bind(total)
+        .bind(date)
+        .bind(reference)
+        .bind(input.to_string())
+        .bind(requested_by)
+        .bind(order_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err)
+    }
+    .await;
+    let id = match result {
+        Ok(id) => {
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
+            id
+        }
+        Err(e) => return Err(crate::ledger::rollback(tx, e).await),
+    };
+    get(pool, id).await
+}
+
 /// Requests with `status` (all when `None`), newest first.
 pub async fn list(pool: &SqlitePool, status: Option<&str>) -> Result<Vec<ApprovalRequest>, String> {
     sqlx::query_as(&format!("{SELECT} WHERE ?1 IS NULL OR status = ?1 ORDER BY (status = 'PENDING') DESC, id DESC")).bind(status).fetch_all(pool).await.map_err(db_err)
@@ -226,7 +281,12 @@ pub async fn approve(pool: &SqlitePool, id: i64, decided_by: &str) -> Result<App
         let (bill_id, po_id) = match kind {
             Kind::Bill => {
                 let bill: BillInput = serde_json::from_value(input.clone()).map_err(bad)?;
-                (Some(crate::expenses::write_bill(&mut tx, &bill).await?), None)
+                let bill_id = match request.from_purchase_order_id {
+                    // From Create Bill: the order is billed with it, if it is still open with nothing received.
+                    Some(order) => crate::workflows::bill_order_in_tx(&mut tx, order, &bill).await?,
+                    None => crate::expenses::write_bill(&mut tx, &bill).await?,
+                };
+                (Some(bill_id), None)
             }
             Kind::PurchaseOrder => {
                 let po: PurchaseOrderInput = serde_json::from_value(input.clone()).map_err(bad)?;
@@ -259,7 +319,8 @@ pub async fn approve(pool: &SqlitePool, id: i64, decided_by: &str) -> Result<App
     get(pool, id).await
 }
 
-/// Rejects a pending request with a note saying why. The request is kept; nothing is recorded.
+/// Rejects a pending request with a note saying why. The request is kept; nothing is recorded,
+/// and a purchase order a held bill came from stays open.
 pub async fn reject(pool: &SqlitePool, id: i64, decided_by: &str, note: &str) -> Result<ApprovalRequest, String> {
     let note = note.trim();
     if note.is_empty() {
