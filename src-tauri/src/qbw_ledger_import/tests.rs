@@ -56,6 +56,7 @@ fn ledger() -> Ledger {
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
         classes: Vec::new(),
+        stock: Default::default(),
     }
 }
 
@@ -156,6 +157,7 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
         classes: Vec::new(),
+        stock: Default::default(),
     };
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
@@ -434,6 +436,7 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
         classes: Vec::new(),
+        stock: Default::default(),
     };
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
@@ -553,6 +556,7 @@ async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
         classes: Vec::new(),
+        stock: Default::default(),
     };
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
@@ -678,6 +682,19 @@ async fn posts_a_real_company_file() {
             crate::ledger::format_cents(waiting.iter().map(|w| w.amount_cents).sum()),
             crate::ledger::format_cents(uf)
         );
+        // Item quantities: each tracked item against the file's own quantity and value.
+        for d in &summary.stock.differences {
+            println!(
+                "  item {:<40} file {:?} / {:?}, imported {} / {}: {}",
+                d.name,
+                d.expected_qty_e4,
+                d.expected_value_cents,
+                d.imported_qty_e4,
+                d.imported_value_cents,
+                d.note.as_deref().unwrap_or("-")
+            );
+        }
+        println!("inventory items matching the file: {} of {}", summary.stock.matching, summary.stock.items);
     }
     let total: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM journal_lines").fetch_one(&pool).await.unwrap();
     assert_eq!(total, 0, "the books must balance");
@@ -744,6 +761,7 @@ async fn reimporting_after_a_reverse_reuses_the_accounts_it_created() {
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
         classes: Vec::new(),
+        stock: Default::default(),
     };
     let first = stage(&pool, Path::new("/books/Books.qbw"), 1, &books()).await.unwrap();
     auto_map_accounts(&pool, first).await.unwrap();
@@ -786,6 +804,7 @@ async fn reimporting_after_a_reverse_reuses_the_accounts_it_created() {
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
         classes: Vec::new(),
+        stock: Default::default(),
     };
     let third = stage(&pool, Path::new("/books/Other.qbw"), 1, &tools).await.unwrap();
     auto_map_accounts(&pool, third).await.unwrap();

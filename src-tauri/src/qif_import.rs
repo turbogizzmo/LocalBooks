@@ -269,6 +269,7 @@ pub fn read(bytes: &[u8], default_account: &str) -> Result<Ledger, String> {
         quality,
         sales_lists: Default::default(),
         classes: Vec::new(),
+        stock: Default::default(),
     })
 }
 

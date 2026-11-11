@@ -10,7 +10,7 @@ import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
 import { askConfirm, askText } from '../lib/dialogs.jsx';
 import { takePendingMigration } from './CompanyFiles.jsx';
-import { formatCents } from '../lib/money.js';
+import { formatCents, formatQuantity } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import { ACCOUNT_TYPE_NAMES } from '../lib/accountTypes.js';
 import DateBox from './DateBox.jsx';
@@ -597,6 +597,58 @@ function BalanceDifferences({ items, posted }) {
   );
 }
 
+/** The file's inventory items whose quantity or value as imported differs from the file. */
+function StockDifferences({ stock, posted }) {
+  const items = stock?.differences ?? [];
+  if (!items.length) return null;
+  const qty = (e4) => (e4 == null ? '—' : formatQuantity(e4));
+  const cents = (c) => (c == null ? '—' : formatCents(c));
+  return (
+    <div className="border-b border-qb-border">
+      <p className="px-3 py-1.5 text-xs">
+        <strong>
+          {countOf(items.length, ['item’s', 'items’'])} quantity on hand {items.length === 1 ? 'does' : 'do'} not match the file
+        </strong>
+        {posted
+          ? '. Your books carry the imported quantity: count these items, or compare them with the original program’s stock status report, and adjust them in Inventory.'
+          : '. Quantities on hand come in with a full import. Check these items against the original program’s stock status report after posting.'}
+      </p>
+      <table className="qb-grid">
+        <colgroup>
+          <col />
+          <col className="w-[90px]" />
+          <col className="w-[110px]" />
+          <col className="w-[90px]" />
+          <col className="w-[110px]" />
+          <col className="w-[260px]" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="qb-grid-head">Item</th>
+            <th className="qb-grid-head text-right">File’s qty</th>
+            <th className="qb-grid-head text-right">File’s value</th>
+            <th className="qb-grid-head text-right">Imported qty</th>
+            <th className="qb-grid-head text-right">Imported value</th>
+            <th className="qb-grid-head">Why</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((d) => (
+            <tr key={d.name}>
+              <td className="qb-grid-cell">{d.name}</td>
+              <td className="qb-grid-cell num">{qty(d.expectedQtyE4)}</td>
+              <td className="qb-grid-cell num">{cents(d.expectedValueCents)}</td>
+              <td className="qb-grid-cell num font-semibold">{qty(d.importedQtyE4)}</td>
+              <td className="qb-grid-cell num font-semibold">{cents(d.importedValueCents)}</td>
+              <td className="qb-grid-cell">{d.note ?? 'A line that could not be read leaves the item short.'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function FallbackList({ items }) {
   return (
     <table className="qb-grid">
@@ -839,6 +891,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
           </div>
         )}
         <BalanceDifferences items={summary.balanceDifferences} posted={summary.liveEntryCount > 0} />
+        <StockDifferences stock={summary.stock} posted={summary.liveEntryCount > 0 && summary.mode === 'FULL'} />
         <div className="flex items-center gap-2 px-3 py-1.5">
           <span className="text-xs text-qb-ink-muted">
             {unmapped === 0 ? '✓ Every account has a LocalBooks account.' : `Choose an account for ${unmapped} account${unmapped === 1 ? '' : 's'}, or:`}
@@ -902,6 +955,16 @@ function LedgerReview({ summary, accounts, busy, run }) {
             <Notice
               kind="error"
               text={`${countOf(summary.balanceDifferences.length, ['account does', 'accounts do'])} not match the balance the file stores. They are listed in step 2 with the file’s balance, the imported balance and the difference.`}
+            />
+          )}
+          {summary.liveEntryCount > 0 && summary.mode === 'FULL' && summary.stock?.items > 0 && (
+            <Notice
+              kind={summary.stock.differences.length > 0 ? 'error' : 'success'}
+              text={
+                summary.stock.differences.length > 0
+                  ? `${countOf(summary.stock.differences.length, ['item’s', 'items’'])} quantity on hand ${summary.stock.differences.length === 1 ? 'does' : 'do'} not match the file. They are listed in step 2 with the file’s quantity and value, what was imported and why.`
+                  : `The quantity on hand and value of all ${countOf(summary.stock.items, ['inventory item', 'inventory items'])} match the file.`
+              }
             />
           )}
           {fallbacks.length > 0 && (

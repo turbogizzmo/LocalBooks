@@ -901,7 +901,7 @@ pub fn ledger(book: &Book) -> Ledger {
         sales_lists.add_ship_method(name, *active);
     }
     sales_lists.ship_methods.sort();
-    Ledger { accounts, customers, vendors, items, transactions, unbalanced, unreadable, quality, sales_lists, classes: Vec::new() }
+    Ledger { accounts, customers, vendors, items, transactions, unbalanced, unreadable, quality, sales_lists, classes: Vec::new(), stock: Default::default() }
 }
 
 #[cfg(test)]

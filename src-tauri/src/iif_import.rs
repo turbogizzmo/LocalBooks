@@ -500,6 +500,7 @@ pub(crate) fn assemble(
         quality,
         sales_lists,
         classes: Vec::new(),
+        stock: Default::default(),
     }
 }
 

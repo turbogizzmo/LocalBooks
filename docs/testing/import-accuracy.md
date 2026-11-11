@@ -77,8 +77,8 @@ after posting with a notice in step 3. What is left on the files above:
   Cost of Goods Sold now differ from the file only by the cost pair of one unreadable invoice line
   ($180) and the lines of the invoices that can't be posted because a line is damaged.
 - **Assembly builds.** A build moves value from its component items into the assembled item, all
-  within Inventory Asset, so it changes no account balance. LocalBooks does not bring in item
-  quantities from a company file yet, so builds are not imported (gap R3c).
+  within Inventory Asset, so it changes no account balance. Builds now come in with item
+  quantities (gap R3c, below).
 - **Payroll.** Paychecks and payroll liability payments keep their payroll-item lines in tables of
   their own; the reader reads them (R3a, #327).
 - **Check lines in upgraded files.** In files upgraded from an older QuickBooks version, damaged
@@ -170,3 +170,75 @@ by hand, accounts that differ). Gap R3d tracks them.
 - **An adjustment line on an account that isn't in the account list** (bank accounts chapter):
   one inventory adjustment's value line posts to an account id the file no longer lists, so the
   adjustment is unbalanced ($699).
+
+## Item quantities, 2026-11-11 (R3c)
+
+A full import now tracks each inventory part and assembly the file tracks, and records every
+change the file made to its stock as a stock movement on the entry its transaction became. The
+check: after a full import, each item's quantity on hand and value in LocalBooks against the
+quantity and value the file stores for it (the figures its stock status report shows).
+
+### Where the file keeps stock
+
+- **What it stores per item:** `abmc_item_internal` holds the quantity on hand, the value on hand
+  and the average cost, signed as debits are (negative = stock on hand). The assembly's row also
+  holds how many are in pending builds.
+- **Each change** is a line on the item's inventory asset account that carries a quantity, signed
+  as its amount (negative = into stock): purchase lines of bills, item receipts, checks and card
+  charges; inventory adjustment lines; and the cost rows of invoices, sales receipts and credit
+  memos (kept apart from the form line and linked to it by line id). A bill's own cost rows change
+  the value of stock already sold, not its quantity.
+- **Assembly builds** are in `abmc_item_assembly_lineitem`: the assembly's row puts it into stock
+  and the component rows take them out, all on the inventory asset account; they post nothing in
+  the file. The reader turns each build into a transaction whose lines cancel. The file marks no
+  build as pending; it keeps the pending quantity on the assembly. The latest builds that add up to
+  exactly that quantity are taken as pending and left out, since a pending build moves no stock.
+  On the construction sample both builds (15 kits) are pending, and the file's quantities leave
+  them out.
+
+How to run it: `LOCALBOOKS_QBW_CHECK=<file> cargo test --release -- --ignored compares_stock_of_a_real_file --nocapture`
+compares what the reader reads with what the file stores, per item, and lists each transaction
+whose inventory asset lines don't add up to the stock it moves. The full-import check
+(`posts_a_real_company_file` with `LOCALBOOKS_QBW_MODE=full`) now also prints each item that
+differs after posting and the reason the import gives.
+
+### Results (full import)
+
+The contractor-course files and the real backup track no inventory, and neither does the textbook
+appendix on company files. That leaves the construction sample, the textbook sample company (12
+items) and 18 textbook chapter and appendix files (6 items each).
+
+| File | Items matching / tracked | What differs, and why |
+|---|---|---|
+| Construction sample | 12 / 12 | — |
+| 11 textbook chapter and appendix files (online banking, estimating, letters, getting started, lists, selling your product, payments, bills, graphs, sales tax, payroll) | 6 / 6 each | — |
+| Textbook, memorizing transactions | 5 / 6 | One item's stored row doesn't decode, so the file's own quantity can't be compared; the import gives it 2 on hand, and every account matches |
+| Textbook, customizing forms | 5 / 6 | The same item and reason |
+| Textbook, reports | 3 / 6 | The same item; two items each have a sale whose cost rows don't decode, so the stock it took out is missing (1 and 3 units) |
+| Textbook, invoicing for services | 5 / 6 | One item has a sale whose cost rows don't decode (3 units) |
+| Textbook, bank accounts | 5 / 6 | The adjustment on an account the file no longer lists can't be posted (20 units) |
+| Textbook, other accounts | 3 / 6 | One bill's lines lost their item and quantity columns from the catalog, so its 7 units ($389.85) can't be given to their items; Inventory Asset still matches |
+| Textbook, setting up inventory | 2 / 6 | The bill and check lines don't decode (column types that don't match the rows), so the purchases are missing |
+| Textbook sample company | 4 / 12 | Seven items are on transactions that can't be posted (damaged lines); one has a sale whose cost rows don't decode |
+
+Every difference comes from a row the reader can't decode, the same faults gap R3d tracks; none
+comes from how a decoded change is imported. Each differing item is listed in step 2 of the
+import, before and after posting, with the file's quantity and value, what was imported and the
+reason when the import knows it.
+
+### How the stock is recorded
+
+- Changes are applied in date order. One that would leave quantity and value of different signs
+  (LocalBooks refuses such stock: say, a sale recorded before the purchase on the same day) is
+  carried into the item's next change. None of the samples needed this.
+- A purchase into stock also sets the item's last unit cost, which LocalBooks uses to cost a sale
+  beyond what is on hand.
+- An item LocalBooks already tracked before the import keeps its stock and is listed; so is an item
+  whose inventory account isn't an Other Current Asset account in LocalBooks. A file cost account
+  that isn't a Cost of Goods Sold account is replaced by LocalBooks' own.
+- A journal import doesn't track stock.
+
+Regression tests on synthetic data: `qbw_stock_import::tests` (a full import with purchases, a
+sale, a build and an adjustment; voiding an imported entry puts its stock back; the carry rule),
+`qbw_stock::tests` (pending builds, line signs) and
+`qbw_company::tests::sold_stock_moves_with_its_cost_rows`.

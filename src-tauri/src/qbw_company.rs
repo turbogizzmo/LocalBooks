@@ -59,12 +59,14 @@ const TRANSACTION_TABLES: [(&str, &str); 16] = [
 /// Where the cost of inventory sold on a form is kept, and the form's line table. Each sold
 /// line has a pair of cost rows, cost of goods sold and the inventory asset it came out of,
 /// keyed by the form line's `target_id` rather than by transaction. A bill has them too, when it
-/// changes the cost of stock already sold (the cost moves between the two accounts).
-const INVENTORY_COST_TABLES: [(&str, &str); 4] = [
-    ("abmc_invoice_inventory_lineitem", "abmc_invoice_lineitem"),
-    ("abmc_bill_inventory_lineitem", "abmc_bill_lineitem"),
-    ("abmc_sale_receipt_inventory_lineitem", "abmc_sales_receipt_lineitem"),
-    ("abmc_credit_memo_inventory_lineitem", "abmc_credit_memo_lineitem"),
+/// changes the cost of stock already sold (the cost moves between the two accounts); its rows
+/// change the value of stock but not its quantity, which the bill line itself brought in. The
+/// last field says whether the rows' quantities move stock.
+const INVENTORY_COST_TABLES: [(&str, &str, bool); 4] = [
+    ("abmc_invoice_inventory_lineitem", "abmc_invoice_lineitem", true),
+    ("abmc_bill_inventory_lineitem", "abmc_bill_lineitem", false),
+    ("abmc_sale_receipt_inventory_lineitem", "abmc_sales_receipt_lineitem", true),
+    ("abmc_credit_memo_inventory_lineitem", "abmc_credit_memo_lineitem", true),
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -384,6 +386,8 @@ pub struct Ledger {
     /// The class list: full `Parent:Child` paths with whether each is active. Classes the lines
     /// use are on it too (see [`Ledger::add_classes_used`]).
     pub classes: Vec<(String, bool)>,
+    /// The items the file tracks in stock and the transactions that changed their stock.
+    pub stock: crate::qbw_stock::SourceStock,
 }
 
 /// Deepest class path LocalBooks keeps (see `classes`).
@@ -425,21 +429,27 @@ impl Ledger {
     }
 }
 
+/// A form line's transaction, class and item, by the line's `target_id`.
+type FormLines = HashMap<i64, (i64, Option<String>, Option<i64>)>;
+
 /// Adds the cost of inventory sold to the forms it was sold on. `form_lines` maps a form line's
-/// `target_id` to its transaction and class. A row read twice counts once. A line's cost rows are
-/// used only together, and only as pairs (as many debits as credits) that net to zero, so they
-/// never unbalance their transaction; others are rejected.
+/// `target_id` to its transaction, class and item. A row read twice counts once. A line's cost
+/// rows are used only together, and only as pairs (as many debits as credits) that net to zero,
+/// so they never unbalance their transaction; others are rejected. The rows used that move an
+/// item's stock are added to `stock` (with their quantities when `moves_quantity`).
 fn add_inventory_cost(
     transactions: &mut BTreeMap<i64, SourceTransaction>,
-    form_lines: &HashMap<i64, (i64, Option<String>)>,
+    form_lines: &FormLines,
     cost_rows: &[Row],
     known_accounts: &HashSet<i64>,
     quality: &mut LedgerQuality,
+    stock: &mut crate::qbw_stock::SourceStock,
+    moves_quantity: bool,
 ) {
     // A row read twice (the same record from a re-solved page) is one row, not two. Only rows
     // that carry their record id can be told to be the same; rows without one are all kept.
     let mut seen: HashSet<(i64, Option<i64>, i64, i64, i64)> = HashSet::new();
-    let mut by_line: BTreeMap<i64, Vec<(i64, i64)>> = BTreeMap::new();
+    let mut by_line: BTreeMap<i64, Vec<(i64, i64, i64)>> = BTreeMap::new();
     for r in cost_rows {
         let (Some(target), Some(account_id), Some(cents)) = (r.get("target_id").as_int(), r.get("account_id").as_int(), r.get("amount_amt").as_cents()) else {
             continue;
@@ -449,27 +459,41 @@ fn add_inventory_cost(
             None => true,
         };
         if cents != 0 && first {
-            by_line.entry(target).or_default().push((account_id, cents));
+            let quantity = if moves_quantity { crate::qbw_stock::quantity_e4(r) } else { 0 };
+            by_line.entry(target).or_default().push((account_id, cents, quantity));
         }
     }
     for (target, rows) in by_line {
         // A sold line's cost comes in pairs (a debit and a credit), more than one when it drew on
         // several purchases; together they net to zero.
-        let debits = rows.iter().filter(|(_, c)| *c < 0).count();
-        let pairs = debits * 2 == rows.len() && checked_total(rows.iter().map(|(_, c)| *c)) == Some(0);
+        let debits = rows.iter().filter(|(_, c, _)| *c < 0).count();
+        let pairs = debits * 2 == rows.len() && checked_total(rows.iter().map(|(_, c, _)| *c)) == Some(0);
         let reason = if !pairs {
             "inventory cost is not pairs that net to zero"
-        } else if rows.iter().any(|(a, _)| !known_accounts.contains(a)) {
+        } else if rows.iter().any(|(a, _, _)| !known_accounts.contains(a)) {
             "unknown account"
         } else {
-            match form_lines.get(&target).and_then(|(tid, class)| Some((transactions.get_mut(tid)?, class))) {
-                Some((txn, class)) => {
-                    txn.lines.extend(rows.iter().map(|&(account_id, cents)| SourceLine { account_id, cents, memo: None, class: class.clone() }));
+            match form_lines.get(&target).and_then(|(tid, class, item)| Some((transactions.get_mut(tid)?, class, *item))) {
+                Some((txn, class, item)) => {
+                    txn.lines.extend(rows.iter().map(|&(account_id, cents, _)| SourceLine { account_id, cents, memo: None, class: class.clone() }));
+                    for &(account_id, cents, quantity) in &rows {
+                        if let Some(item) = stock.tracked(item, account_id) {
+                            let item_id = item.item_id;
+                            stock.add(txn.id, item_id, cents, quantity);
+                        }
+                    }
                     continue;
                 }
                 None => "inventory cost of a form line that was not read",
             }
         };
+        // A sold line whose cost rows can't be used leaves its item's stock short; one whose form
+        // was not read at all (a memorized one, say) moved no stock.
+        if let (true, Some(&(_, _, Some(item)))) = (reason != "inventory cost of a form line that was not read", form_lines.get(&target)) {
+            if stock.items.iter().any(|i| i.item_id == item) {
+                *stock.unread_sales.entry(item).or_default() += 1;
+            }
+        }
         quality.rejected_lines += rows.len();
         *quality.rejected_by_reason.entry(reason).or_default() += rows.len();
     }
@@ -993,6 +1017,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     let mut quality = LedgerQuality { pages: page_stats, refined_pages: refined, ..Default::default() };
     let accounts = read_accounts(&pages, &catalog);
     let known_accounts: HashSet<i64> = accounts.iter().map(|a| a.id).collect();
+    let mut stock = crate::qbw_stock::read_items(&pages, &catalog);
     let customers = names(&pages, &catalog, "abmc_customer_user", "customer_id");
     let vendors = names(&pages, &catalog, "abmc_vendor_user", "vendor_id");
     let employees = names(&pages, &catalog, "abmc_employee", "employee_id");
@@ -1115,15 +1140,19 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
             if cents != 0 {
                 txn.lines.push(SourceLine { account_id, cents, memo: text(&r, "memo"), class: class_of(&r) });
             }
+            if let Some(item) = stock.tracked(r.get("item_id").as_int(), account_id) {
+                let item_id = item.item_id;
+                stock.add(tid, item_id, cents, crate::qbw_stock::quantity_e4(&r));
+            }
         }
     }
 
-    for (cost_table, line_table) in INVENTORY_COST_TABLES {
+    for (cost_table, line_table, moves_quantity) in INVENTORY_COST_TABLES {
         let (Some(cost_table), Some(line_table)) = (catalog.table_id(cost_table), catalog.table_id(line_table)) else { continue };
-        let form_lines: HashMap<i64, (i64, Option<String>)> = table_rows(&pages, &catalog, line_table)
+        let form_lines: FormLines = table_rows(&pages, &catalog, line_table)
             .rows
             .iter()
-            .filter_map(|r| Some((r.get("target_id").as_int()?, (r.get("transaction_id").as_int()?, class_of(r)))))
+            .filter_map(|r| Some((r.get("target_id").as_int()?, (r.get("transaction_id").as_int()?, class_of(r), r.get("item_id").as_int()))))
             .collect();
         let costs = table_rows(&pages, &catalog, cost_table);
         // Not transaction lines, so not listed with them; a lost row leaves its pair out below.
@@ -1132,7 +1161,11 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
             quality.rejected_lines += lost;
             *quality.rejected_by_reason.entry("inventory cost row not read").or_default() += lost;
         }
-        add_inventory_cost(&mut transactions, &form_lines, &costs.rows, &known_accounts, &mut quality);
+        add_inventory_cost(&mut transactions, &form_lines, &costs.rows, &known_accounts, &mut quality, &mut stock, moves_quantity);
+    }
+    // Builds post nothing in the file; they come in as transactions whose lines cancel.
+    for build in crate::qbw_stock::read_builds(&pages, &catalog, &mut stock, &known_accounts, &(earliest..=latest)) {
+        transactions.entry(build.id).or_insert(build);
     }
 
     for (tid, line) in recover_damaged_lines(&mut transactions, salvage) {
@@ -1159,6 +1192,9 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     }
 
     quality.joined_transactions = join_split_halves(&mut transactions);
+    // Stock moves only with transactions that were read; a memorized one, or one whose lines
+    // were all rejected, moves nothing.
+    stock.moves.retain(|m| transactions.get(&m.transaction_id).is_some_and(|t| !t.lines.is_empty()));
     let (mut balanced, mut unbalanced): (Vec<_>, Vec<_>) =
         transactions.into_values().filter(|t| !t.lines.is_empty()).partition(|t| t.imbalance_cents() == 0);
     balanced.sort_by_key(|t| (t.date, t.id));
@@ -1205,7 +1241,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     sales_lists.ship_methods.sort();
     (sales_lists.price_levels, sales_lists.customer_price_levels) = read_price_levels(&pages, &catalog);
     sales_lists.item_groups = read_item_groups(&pages, &catalog);
-    let mut ledger = Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality, sales_lists, classes: Vec::new() };
+    let mut ledger = Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality, sales_lists, classes: Vec::new(), stock };
     for (name, active) in class_list {
         ledger.add_class(&name, active);
     }

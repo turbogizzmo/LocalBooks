@@ -109,6 +109,8 @@ mod qbw_import;
 mod qbw_ledger_import;
 mod qbw_pages;
 mod qbw_records;
+mod qbw_stock;
+mod qbw_stock_import;
 mod qif_import;
 mod report_import;
 mod reconcile;
