@@ -64,7 +64,7 @@ pub async fn party_summary(pool: &SqlitePool, kind: &str, id: i64) -> Result<Par
             Ok(PartySummary {
                 open_balance_cents: vendor.open_balance_cents,
                 open_po_count: pos.len() as i64,
-                open_po_cents: sum(pos.iter().map(|o| o.total_cents))?,
+                open_po_cents: sum(pos.iter().map(|o| o.total_cents.get()))?,
                 ..PartySummary::default()
             })
         }

@@ -42,7 +42,7 @@ async fn company() -> (SqlitePool, i64, i64) {
         po_date: date,
         expected_date: Some(d(2026, 1, 15)),
         memo: Some("Paper and toner".into()),
-        lines: vec![crate::workflows::PurchaseOrderLineInput { account_id: office, product_service_id: None, description: None, quantity_e4: None, rate_cents: None, amount_cents: amount, class_id: None, customer_id: None }],
+        lines: vec![crate::workflows::PurchaseOrderLineInput { account_id: office, product_service_id: None, description: None, quantity_e4: None, rate_cents: None, amount_cents: crate::money::Cents(amount), class_id: None, customer_id: None }],
     };
     crate::workflows::create_purchase_order(&pool, po("Pacific Office Outfitters", d(2025, 12, 18), 64_000)).await.expect("po");
     crate::workflows::create_purchase_order(&pool, po("Riverside Print Shop", d(2025, 12, 22), 23_500)).await.expect("po");

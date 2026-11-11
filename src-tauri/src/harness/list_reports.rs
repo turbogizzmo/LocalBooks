@@ -69,8 +69,8 @@ async fn company() -> SqlitePool {
         product_service_id: item,
         description: Some(description.into()),
         quantity_e4: qty,
-        rate_cents: rate,
-        amount_cents: amount,
+        rate_cents: rate.map(crate::money::Cents),
+        amount_cents: crate::money::Cents(amount),
         class_id: None,
         customer_id: None,
     };
@@ -566,7 +566,7 @@ async fn open_purchase_orders_by_job_tie_out_and_the_job_reaches_the_bill() {
         description: Some(description.into()),
         quantity_e4: None,
         rate_cents: None,
-        amount_cents,
+        amount_cents: crate::money::Cents(amount_cents),
         class_id: None,
         customer_id,
     };

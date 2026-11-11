@@ -309,7 +309,7 @@ async fn open_purchase_orders_leave_out_closed_ones() {
         po_date: date,
         expected_date: Some(date + chrono::Days::new(14)),
         memo: Some("Paper".into()),
-        lines: vec![crate::workflows::PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: None, quantity_e4: None, rate_cents: None, amount_cents: amount, class_id: None, customer_id: None }],
+        lines: vec![crate::workflows::PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: None, quantity_e4: None, rate_cents: None, amount_cents: Cents(amount), class_id: None, customer_id: None }],
     };
     crate::workflows::create_purchase_order(&pool, po("Staples", d(2025, 5, 1), 12_000)).await.unwrap();
     let closed = crate::workflows::create_purchase_order(&pool, po("Staples", d(2025, 5, 2), 5_000)).await.unwrap();

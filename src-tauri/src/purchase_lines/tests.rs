@@ -163,7 +163,7 @@ async fn a_purchase_orders_lines_carry_to_its_bill() {
     .unwrap();
     let id = crate::workflows::create_purchase_order(&pool, order).await.unwrap();
     let po = crate::workflows::list_purchase_orders(&pool).await.unwrap().into_iter().find(|o| o.id == id).unwrap();
-    assert_eq!(po.total_cents, 31_500);
+    assert_eq!(po.total_cents.get(), 31_500);
     let d = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
     let bill_id = crate::workflows::bill_purchase_order(&pool, id, d, d, None).await.unwrap();
     let carried = lines_of(&pool, PurchaseDoc::Bill, bill_id).await.unwrap();

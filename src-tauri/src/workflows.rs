@@ -734,8 +734,8 @@ pub struct PurchaseOrderLineInput {
     #[serde(default)]
     pub quantity_e4: Option<i64>,
     #[serde(default)]
-    pub rate_cents: Option<i64>,
-    pub amount_cents: i64,
+    pub rate_cents: Option<Cents>,
+    pub amount_cents: Cents,
     #[serde(default)]
     pub class_id: Option<i64>,
     /// The customer or job the line is for; it carries over to the bill.
@@ -767,7 +767,7 @@ pub struct PurchaseOrderView {
     pub po_date: String,
     pub expected_date: Option<String>,
     pub memo: Option<String>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
     pub status: String,
     pub bill_id: Option<i64>,
 }
@@ -779,8 +779,8 @@ pub struct PurchaseOrderLineView {
     pub product_service_id: Option<i64>,
     pub description: Option<String>,
     pub quantity_e4: Option<i64>,
-    pub rate_cents: Option<i64>,
-    pub amount_cents: i64,
+    pub rate_cents: Option<Cents>,
+    pub amount_cents: Cents,
     pub class_id: Option<i64>,
     pub customer_id: Option<i64>,
 }
@@ -819,12 +819,12 @@ pub fn validate_purchase_order(input: &PurchaseOrderInput) -> Result<i64, String
     }
     let mut total: i64 = 0;
     for (idx, line) in input.lines.iter().enumerate() {
-        if !(1..=MAX_LINE_CENTS).contains(&line.amount_cents) {
+        if !(1..=MAX_LINE_CENTS).contains(&line.amount_cents.get()) {
             return Err(format!("PO_BAD_AMOUNT: line {} needs an amount above zero", idx + 1));
         }
-        total = total.checked_add(line.amount_cents).filter(|t| *t <= MAX_LINE_CENTS).ok_or_else(|| format!("PO_TOO_LARGE: the order exceeds {}", format_cents(MAX_LINE_CENTS)))?;
+        total = total.checked_add(line.amount_cents.get()).filter(|t| *t <= MAX_LINE_CENTS).ok_or_else(|| format!("PO_TOO_LARGE: the order exceeds {}", format_cents(MAX_LINE_CENTS)))?;
     }
-    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents.get()).collect();
     let (_, total) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "PO")?;
     Ok(total)
 }
@@ -832,7 +832,7 @@ pub fn validate_purchase_order(input: &PurchaseOrderInput) -> Result<i64, String
 /// Writes a validated purchase order (`total` from [`validate_purchase_order`]) in `tx`.
 pub(crate) async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, input: &PurchaseOrderInput, total: i64) -> Result<i64, String> {
     {
-        let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+        let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents.get()).collect();
         let (form_amounts, _) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "PO")?;
         crate::purchase_lines::check(tx, &input.form_lines, "PO").await?;
         let vendor = crate::sales::find_or_create_named(tx, crate::sales::Party::Vendor, &input.vendor_name).await?;
@@ -907,7 +907,7 @@ pub async fn update_purchase_order(pool: &SqlitePool, id: i64, input: PurchaseOr
         if status != "OPEN" {
             return Err(format!("PO_NOT_OPEN: purchase order #{number} is closed; reopen it to change it"));
         }
-        let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+        let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents.get()).collect();
         let (form_amounts, _) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "PO")?;
         crate::purchase_lines::check(tx, &input.form_lines, "PO").await?;
         let vendor = crate::sales::find_or_create_named(tx, crate::sales::Party::Vendor, &input.vendor_name).await?;
@@ -1004,10 +1004,10 @@ pub async fn purchase_order_bill(pool: &SqlitePool, id: i64, bill_date: NaiveDat
             .iter()
             .map(|l| BillLineInput {
                 account_id: l.account_id,
-                amount_cents: Cents(l.amount_cents),
+                amount_cents: l.amount_cents,
                 memo: l.description.clone(),
                 quantity_e4: l.quantity_e4,
-                rate_cents: l.rate_cents.map(Cents),
+                rate_cents: l.rate_cents,
                 product_service_id: l.product_service_id,
                 class_id: l.class_id,
                 customer_id: l.customer_id,

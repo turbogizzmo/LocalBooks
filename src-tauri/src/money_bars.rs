@@ -125,7 +125,7 @@ pub async fn bill_segments(pool: &SqlitePool, today: NaiveDate) -> Result<Vec<Ba
             name: o.vendor_name,
             number: Some(o.po_number.to_string()),
             memo: o.memo,
-            amount_cents: o.total_cents,
+            amount_cents: o.total_cents.get(),
             customer_id: None,
         })
         .collect();
