@@ -20,6 +20,7 @@ use sqlx::SqlitePool;
 
 use crate::banking::{DepositDeduction, DepositInput, DepositOtherLine};
 use crate::ledger::{db_err, format_cents};
+use crate::money::Cents;
 use crate::secrets::SecretStore;
 
 const KEYCHAIN_SERVICE: &str = "LocalBooks payout feeds";
@@ -168,23 +169,23 @@ pub fn deposit_for(feed: &PayoutFeed, arrival: NaiveDate, payout_id: &str, b: &B
         let memo = Some(item.description.chars().take(200).collect::<String>());
         match (item.kind.as_str(), item.amount_cents) {
             (_, 0) => {}
-            ("CHARGE", a) if a > 0 => other_lines.push(DepositOtherLine { account_id: feed.sales_account_id, amount_cents: a, memo, class_id: None, customer_id: None, vendor_id: None }),
-            ("CHARGE", a) => deductions.push(DepositDeduction { account_id: feed.sales_account_id, amount_cents: -a, memo, kind: "OTHER".into() }),
-            ("REFUND", a) if a > 0 => deductions.push(DepositDeduction { account_id: feed.refund_account_id, amount_cents: a, memo, kind: "REFUND".into() }),
-            ("REFUND", a) => other_lines.push(DepositOtherLine { account_id: feed.refund_account_id, amount_cents: -a, memo, class_id: None, customer_id: None, vendor_id: None }),
-            (_, a) if a > 0 => deductions.push(DepositDeduction { account_id: feed.chargeback_account_id, amount_cents: a, memo, kind: "CHARGEBACK".into() }),
-            (_, a) => other_lines.push(DepositOtherLine { account_id: feed.chargeback_account_id, amount_cents: -a, memo, class_id: None, customer_id: None, vendor_id: None }),
+            ("CHARGE", a) if a > 0 => other_lines.push(DepositOtherLine { account_id: feed.sales_account_id, amount_cents: Cents(a), memo, class_id: None, customer_id: None, vendor_id: None }),
+            ("CHARGE", a) => deductions.push(DepositDeduction { account_id: feed.sales_account_id, amount_cents: Cents(-a), memo, kind: "OTHER".into() }),
+            ("REFUND", a) if a > 0 => deductions.push(DepositDeduction { account_id: feed.refund_account_id, amount_cents: Cents(a), memo, kind: "REFUND".into() }),
+            ("REFUND", a) => other_lines.push(DepositOtherLine { account_id: feed.refund_account_id, amount_cents: Cents(-a), memo, class_id: None, customer_id: None, vendor_id: None }),
+            (_, a) if a > 0 => deductions.push(DepositDeduction { account_id: feed.chargeback_account_id, amount_cents: Cents(a), memo, kind: "CHARGEBACK".into() }),
+            (_, a) => other_lines.push(DepositOtherLine { account_id: feed.chargeback_account_id, amount_cents: Cents(-a), memo, class_id: None, customer_id: None, vendor_id: None }),
         }
     }
     let processor = processor_name(&feed.processor);
     match b.fee_cents {
-        f if f > 0 => deductions.push(DepositDeduction { account_id: feed.fee_account_id, amount_cents: f, memo: Some(format!("{processor} fees")), kind: "FEE".into() }),
-        f if f < 0 => other_lines.push(DepositOtherLine { account_id: feed.fee_account_id, amount_cents: -f, memo: Some(format!("{processor} fees returned")), class_id: None, customer_id: None, vendor_id: None }),
+        f if f > 0 => deductions.push(DepositDeduction { account_id: feed.fee_account_id, amount_cents: Cents(f), memo: Some(format!("{processor} fees")), kind: "FEE".into() }),
+        f if f < 0 => other_lines.push(DepositOtherLine { account_id: feed.fee_account_id, amount_cents: Cents(-f), memo: Some(format!("{processor} fees returned")), class_id: None, customer_id: None, vendor_id: None }),
         _ => {}
     }
     match b.other_cents {
-        o if o > 0 => other_lines.push(DepositOtherLine { account_id: feed.fee_account_id, amount_cents: o, memo: Some(format!("{processor} adjustments")), class_id: None, customer_id: None, vendor_id: None }),
-        o if o < 0 => deductions.push(DepositDeduction { account_id: feed.fee_account_id, amount_cents: -o, memo: Some(format!("{processor} adjustments")), kind: "OTHER".into() }),
+        o if o > 0 => other_lines.push(DepositOtherLine { account_id: feed.fee_account_id, amount_cents: Cents(o), memo: Some(format!("{processor} adjustments")), class_id: None, customer_id: None, vendor_id: None }),
+        o if o < 0 => deductions.push(DepositDeduction { account_id: feed.fee_account_id, amount_cents: Cents(-o), memo: Some(format!("{processor} adjustments")), kind: "OTHER".into() }),
         _ => {}
     }
     DepositInput {

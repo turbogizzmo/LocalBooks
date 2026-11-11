@@ -162,11 +162,11 @@ async fn deposits_refuse_deductions_that_leave_nothing_in_the_bank() {
         deposit_date: NaiveDate::from_ymd_opt(2026, 3, 9).unwrap(),
         memo: None,
         items: Vec::new(),
-        other_lines: vec![DepositOtherLine { account_id: input.sales_account_id, amount_cents: 1_000, memo: None, class_id: None, customer_id: None, vendor_id: None }],
+        other_lines: vec![DepositOtherLine { account_id: input.sales_account_id, amount_cents: Cents(1_000), memo: None, class_id: None, customer_id: None, vendor_id: None }],
         cash_back: None,
         deductions,
     };
-    let fee = |a: i64, account: i64, kind: &str| DepositDeduction { account_id: account, amount_cents: a, memo: None, kind: kind.into() };
+    let fee = |a: i64, account: i64, kind: &str| DepositDeduction { account_id: account, amount_cents: Cents(a), memo: None, kind: kind.into() };
     assert!(crate::banking::post_bank_deposit(&pool, deposit(vec![fee(1_000, input.fee_account_id, "FEE")])).await.unwrap_err().starts_with("DEP_NOTHING_BANKED"));
     assert!(crate::banking::post_bank_deposit(&pool, deposit(vec![fee(0, input.fee_account_id, "FEE")])).await.unwrap_err().starts_with("DEP_BAD_DEDUCTION"));
     assert!(crate::banking::post_bank_deposit(&pool, deposit(vec![fee(10, bank, "FEE")])).await.unwrap_err().starts_with("DEP_DEDUCTION_ACCOUNT"));

@@ -86,7 +86,7 @@ async fn a_deposit_from_a_customer_or_vendor_shows_them_as_payee_and_in_their_tr
             deposit_date: d("2026-03-05"),
             memo: None,
             items: vec![],
-            other_lines: vec![DepositOtherLine { account_id: supplies, amount_cents: 2_500, memo: Some("Returned toner".into()), class_id: None, customer_id: None, vendor_id: Some(vendor) }],
+            other_lines: vec![DepositOtherLine { account_id: supplies, amount_cents: Cents(2_500), memo: Some("Returned toner".into()), class_id: None, customer_id: None, vendor_id: Some(vendor) }],
             cash_back: None,
             deductions: Vec::new(),
         },
@@ -111,7 +111,7 @@ async fn a_deposit_from_a_customer_or_vendor_shows_them_as_payee_and_in_their_tr
     assert_eq!(listed(NameKind::Vendor, vendor).await, vec![refund_entry]);
 
     // A line names a customer or a vendor, not both.
-    let both = DepositOtherLine { account_id: sales, amount_cents: 100, memo: None, class_id: None, customer_id: Some(customer), vendor_id: Some(vendor) };
+    let both = DepositOtherLine { account_id: sales, amount_cents: Cents(100), memo: None, class_id: None, customer_id: Some(customer), vendor_id: Some(vendor) };
     let err = crate::banking::post_bank_deposit(&pool, DepositInput { bank_account_id: checking, deposit_date: d("2026-03-06"), memo: None, items: vec![], other_lines: vec![both], cash_back: None, deductions: Vec::new() }).await.unwrap_err();
     assert!(err.starts_with("DEP_TWO_NAMES"), "{err}");
 }
@@ -122,7 +122,7 @@ async fn a_deposit_whose_lines_name_different_people_has_no_payee_and_unknown_na
     let (checking, sales) = (account(&pool, "1010").await, account(&pool, "4000").await);
     let a = crate::sales::create_customer(&pool, "Ann", None).await.unwrap().id;
     let b = crate::sales::create_customer(&pool, "Bo", None).await.unwrap().id;
-    let line = |customer_id| DepositOtherLine { account_id: sales, amount_cents: 1_000, memo: None, class_id: None, customer_id: Some(customer_id), vendor_id: None };
+    let line = |customer_id| DepositOtherLine { account_id: sales, amount_cents: Cents(1_000), memo: None, class_id: None, customer_id: Some(customer_id), vendor_id: None };
     let id = crate::banking::post_bank_deposit(&pool, DepositInput { bank_account_id: checking, deposit_date: d("2026-03-05"), memo: None, items: vec![], other_lines: vec![line(a), line(b)], cash_back: None, deductions: Vec::new() }).await.unwrap();
     let entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
     let party: Option<String> = sqlx::query_scalar("SELECT party_name FROM v_entry_party WHERE journal_entry_id = ?1").bind(entry).fetch_one(&pool).await.unwrap();

@@ -199,7 +199,7 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
     // Opening: the owner's capital and a bank loan; part of it parked in savings.
     journal(p, d(2025, 1, 2), "Owner investment", vec![JournalLine::debit(c.checking, 5_000_000), JournalLine::credit(c.owner_investment, 5_000_000)]).await;
     journal(p, d(2025, 1, 3), "Equipment loan proceeds", vec![JournalLine::debit(c.checking, 2_400_000), JournalLine::credit(c.loan, 2_400_000)]).await;
-    crate::banking::post_transfer(p, TransferInput { from_account_id: c.checking, to_account_id: c.savings, transfer_date: d(2025, 1, 6), amount_cents: 1_500_000, memo: Some("Reserve".into()) })
+    crate::banking::post_transfer(p, TransferInput { from_account_id: c.checking, to_account_id: c.savings, transfer_date: d(2025, 1, 6), amount_cents: Cents(1_500_000), memo: Some("Reserve".into()) })
         .await
         .expect("transfer to savings");
     expense(p, "CHECK", "Pacific Office Outfitters", c.checking, d(2025, 1, 8), Some("1001"), vec![(c.equipment, 1_875_000, "Workstations and plotter")]).await;
@@ -327,7 +327,7 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
         // Pay the card off from checking each month.
         let card_balance: i64 = sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1").bind(c.card).fetch_one(p).await.unwrap();
         if card_balance > 0 {
-            crate::banking::post_transfer(p, TransferInput { from_account_id: c.checking, to_account_id: c.card, transfer_date: d(2025, month, 26), amount_cents: card_balance, memo: Some("Card payment".into()) })
+            crate::banking::post_transfer(p, TransferInput { from_account_id: c.checking, to_account_id: c.card, transfer_date: d(2025, month, 26), amount_cents: Cents(card_balance), memo: Some("Card payment".into()) })
                 .await
                 .expect("card payment");
         }

@@ -89,7 +89,7 @@ async fn a_deposit_copies_only_its_other_lines_and_a_transfer_its_accounts() {
     let (checking, savings) = (account("1010").await, account("1020").await);
     let transfer = crate::banking::post_transfer(
         &pool,
-        crate::banking::TransferInput { transfer_date: chrono::NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(), from_account_id: checking, to_account_id: savings, amount_cents: 50_000, memo: Some("To savings".into()) },
+        crate::banking::TransferInput { transfer_date: chrono::NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(), from_account_id: checking, to_account_id: savings, amount_cents: Cents(50_000), memo: Some("To savings".into()) },
     )
     .await
     .unwrap();

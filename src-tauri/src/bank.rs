@@ -11,6 +11,8 @@ use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
+use crate::money::Cents;
+
 pub mod matching;
 pub mod payee_rules;
 pub mod suggest;
@@ -1136,7 +1138,7 @@ async fn write_approval(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, a
             deposit_date: date,
             memo: Some(description.clone()),
             items: Vec::new(),
-            other_lines: vec![DepositOtherLine { account_id: category_account_id, amount_cents: amount, memo: Some(description.clone()), class_id, customer_id: None, vendor_id: None }],
+            other_lines: vec![DepositOtherLine { account_id: category_account_id, amount_cents: Cents(amount), memo: Some(description.clone()), class_id, customer_id: None, vendor_id: None }],
             cash_back: None,
             deductions: Vec::new(),
         };

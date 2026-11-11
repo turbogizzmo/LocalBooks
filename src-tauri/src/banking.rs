@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::ledger::{db_err, format_cents, post_entry_in_tx, rollback, EntrySource, JournalEntry, JournalLine, MAX_LINE_CENTS};
+use crate::money::Cents;
 
 fn clean(text: Option<&str>) -> Option<&str> {
     text.map(str::trim).filter(|s| !s.is_empty())
@@ -43,7 +44,7 @@ pub struct DepositItemRef {
 #[serde(rename_all = "camelCase")]
 pub struct DepositOtherLine {
     pub account_id: i64,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub memo: Option<String>,
     #[serde(default)]
     pub class_id: Option<i64>,
@@ -77,7 +78,7 @@ pub struct DepositInput {
 #[serde(rename_all = "camelCase")]
 pub struct DepositDeduction {
     pub account_id: i64,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub memo: Option<String>,
     /// `FEE`, `REFUND`, `CHARGEBACK` or `OTHER`.
     pub kind: String,
@@ -88,7 +89,7 @@ pub struct DepositDeduction {
 #[serde(rename_all = "camelCase")]
 pub struct CashBack {
     pub account_id: i64,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub memo: Option<String>,
 }
 
@@ -98,7 +99,7 @@ pub struct TransferInput {
     pub from_account_id: i64,
     pub to_account_id: i64,
     pub transfer_date: NaiveDate,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub memo: Option<String>,
 }
 
@@ -225,7 +226,7 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
     }
 
     let mut total: i64 = 0;
-    let amounts = resolved.iter().map(|r| r.2).chain(input.other_lines.iter().map(|l| l.amount_cents));
+    let amounts = resolved.iter().map(|r| r.2).chain(input.other_lines.iter().map(|l| l.amount_cents.get()));
     for (idx, amount) in amounts.enumerate() {
         if !(1..=MAX_LINE_CENTS).contains(&amount) {
             return Err(format!("DEP_BAD_AMOUNT: deposit line {} amount must be greater than zero", idx + 1));
@@ -238,8 +239,8 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
 
     // Cash back comes out of what the bank gets, which must stay above zero.
     let cash_back = match &input.cash_back {
-        Some(c) if c.amount_cents != 0 => {
-            if c.amount_cents < 0 || c.amount_cents >= total {
+        Some(c) if !c.amount_cents.is_zero() => {
+            if c.amount_cents.is_negative() || c.amount_cents.get() >= total {
                 return Err(format!("DEP_BAD_CASH_BACK: cash back must be more than zero and less than the deposit total, {}", format_cents(total)));
             }
             if c.account_id == input.bank_account_id {
@@ -249,11 +250,11 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
         }
         _ => None,
     };
-    let cash_back_cents = cash_back.map_or(0, |c| c.amount_cents);
+    let cash_back_cents = cash_back.map_or(0, |c| c.amount_cents.get());
     // Deductions also come out of what the bank gets, which must stay above zero.
     let mut deducted: i64 = 0;
     for (idx, d) in input.deductions.iter().enumerate() {
-        if !(1..=MAX_LINE_CENTS).contains(&d.amount_cents) {
+        if !(1..=MAX_LINE_CENTS).contains(&d.amount_cents.get()) {
             return Err(format!("DEP_BAD_DEDUCTION: deduction {} must be more than zero", idx + 1));
         }
         if d.account_id == input.bank_account_id {
@@ -262,9 +263,12 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
         if !matches!(d.kind.as_str(), "FEE" | "REFUND" | "CHARGEBACK" | "OTHER") {
             return Err(format!("DEP_BAD_DEDUCTION: unknown deduction kind '{}'", d.kind));
         }
-        deducted = deducted.checked_add(d.amount_cents).ok_or_else(|| "DEP_AMOUNT_TOO_LARGE: the deductions are out of range".to_string())?;
+        deducted = deducted.checked_add(d.amount_cents.get()).ok_or_else(|| "DEP_AMOUNT_TOO_LARGE: the deductions are out of range".to_string())?;
     }
-    let banked = total - cash_back_cents - deducted;
+    let banked = total
+        .checked_sub(cash_back_cents)
+        .and_then(|b| b.checked_sub(deducted))
+        .ok_or_else(|| "DEP_AMOUNT_TOO_LARGE: the deductions are out of range".to_string())?;
     if banked <= 0 {
         return Err(format!("DEP_NOTHING_BANKED: cash back and deductions must leave the bank more than zero of the {} deposited", format_cents(total)));
     }
@@ -333,12 +337,12 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
-        credits.push(JournalLine::credit(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id));
+        credits.push(JournalLine::credit(line.account_id, line.amount_cents.get()).with_memo(line.memo.as_deref()).with_class(line.class_id));
     }
 
     let mut lines = vec![JournalLine::debit(input.bank_account_id, banked)];
     if let Some(c) = cash_back {
-        lines.push(JournalLine::debit(c.account_id, c.amount_cents).with_memo(Some(clean(c.memo.as_deref()).unwrap_or("Cash back"))));
+        lines.push(JournalLine::debit(c.account_id, c.amount_cents.get()).with_memo(Some(clean(c.memo.as_deref()).unwrap_or("Cash back"))));
     }
     for (idx, d) in input.deductions.iter().enumerate() {
         sqlx::query("INSERT INTO deposit_deductions (deposit_id, line_number, account_id, amount_cents, memo, kind) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
@@ -351,7 +355,7 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
             .execute(&mut **tx)
             .await
             .map_err(db_err)?;
-        lines.push(JournalLine::debit(d.account_id, d.amount_cents).with_memo(clean(d.memo.as_deref())));
+        lines.push(JournalLine::debit(d.account_id, d.amount_cents.get()).with_memo(clean(d.memo.as_deref())));
     }
     lines.extend(credits);
     let description = clean(input.memo.as_deref()).map_or_else(|| "Deposit".to_string(), |m| format!("Deposit: {m}"));
@@ -370,7 +374,7 @@ pub async fn post_transfer(pool: &SqlitePool, input: TransferInput) -> Result<i6
     if input.from_account_id == input.to_account_id {
         return Err("XFER_SAME_ACCOUNT: choose two different accounts".into());
     }
-    if !(1..=MAX_LINE_CENTS).contains(&input.amount_cents) {
+    if !(1..=MAX_LINE_CENTS).contains(&input.amount_cents.get()) {
         return Err("XFER_BAD_AMOUNT: transfer amount must be greater than zero".into());
     }
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
@@ -393,8 +397,8 @@ pub async fn post_transfer(pool: &SqlitePool, input: TransferInput) -> Result<i6
             date: input.transfer_date,
             description,
             lines: vec![
-                JournalLine::debit(input.to_account_id, input.amount_cents),
-                JournalLine::credit(input.from_account_id, input.amount_cents),
+                JournalLine::debit(input.to_account_id, input.amount_cents.get()),
+                JournalLine::credit(input.from_account_id, input.amount_cents.get()),
             ],
             currency: None,
         };
