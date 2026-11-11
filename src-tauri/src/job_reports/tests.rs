@@ -94,6 +94,7 @@ async fn estimates_without_invoices() {
     let services = account_id(&pool, "4100").await;
     let line = crate::sales::SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: 10_000, rate_cents: 50_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
     let input = crate::estimates::EstimateInput {
+        estimate_number: None,
         customer_name: "Acme:Kitchen".into(),
         estimate_date: d(2),
         expiration_date: None,

@@ -200,6 +200,9 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
         });
     }
 
+    // A check or charge pays a vendor or other name already on the list: a typed name the person
+    // hasn't added is refused, not added as a new vendor.
+    crate::sales::require_listed_payee(pool, input.payee_name.as_deref()).await?;
     let expense = ExpenseInput { form_lines: Vec::new(),
         payment_method_id: None,
         kind: kind.into(),

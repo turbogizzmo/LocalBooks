@@ -62,6 +62,9 @@ async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transacti
 #[serde(rename_all = "camelCase")]
 pub struct CreditMemoInput {
     pub customer_name: String,
+    /// The number typed in the form's number box; `None` takes the next one (`doc_numbers`).
+    #[serde(default)]
+    pub credit_number: Option<i64>,
     pub credit_date: NaiveDate,
     pub memo: Option<String>,
     /// Set for a refund receipt: the bank or card account the money was paid back from.
@@ -156,9 +159,10 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
     let customer = input.customer_name.trim();
     let customer_id = find_or_create_named(tx, Party::Customer, customer).await?;
 
+    let credit_number = crate::doc_numbers::take_number(tx, crate::doc_numbers::DocKind::CreditMemo, input.credit_number).await?;
     let (memo_id, number): (i64, i64) = sqlx::query_as(
         "INSERT INTO credit_memos (credit_number, customer_id, credit_date, memo, refund_account_id, total_cents, tax_rate_id, tax_cents)
-         VALUES ((SELECT COALESCE(MAX(credit_number), 0) + 1 FROM credit_memos), ?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         VALUES (?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7)
          RETURNING id, credit_number",
     )
     .bind(customer_id)
@@ -168,6 +172,7 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
     .bind(total)
     .bind(tax.as_ref().and_then(|t| t.rate_id))
     .bind(tax_cents)
+    .bind(credit_number)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -303,7 +308,8 @@ pub(crate) async fn apply_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite>
     if voided || refund.is_some() {
         return Err("CM_NOT_AVAILABLE: a voided credit memo or a refund receipt has no credit to apply".into());
     }
-    let invoice: Option<(Option<i64>, i64, i64, bool, String, Option<String>)> = sqlx::query_as(
+    type InvoiceRow = (Option<i64>, i64, i64, bool, String, Option<String>);
+    let invoice: Option<InvoiceRow> = sqlx::query_as(
         "SELECT customer_id, total_cents, amount_paid_cents, is_voided, status, currency_code FROM invoices WHERE id = ?1",
     )
     .bind(input.document_id)

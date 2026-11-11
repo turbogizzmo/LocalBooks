@@ -151,6 +151,7 @@ pub fn file_name(sheet: &Sheet) -> String {
 }
 
 /// The sheet as PDF bytes.
+#[cfg(test)]
 pub fn to_pdf(sheet: &Sheet, symbol: &str) -> Vec<u8> {
     pdf::write_pdf(&layout(sheet, symbol), None, sheet.title.trim())
 }

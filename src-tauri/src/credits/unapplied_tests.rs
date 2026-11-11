@@ -4,6 +4,7 @@ use super::*;
 use crate::banking::{list_undeposited, post_bank_deposit, DepositInput, DepositItemRef};
 use crate::db::test_pool;
 use crate::invoices::{receive_payment, PaymentInput, ReceivePaymentInput};
+use crate::money::Cents;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -39,12 +40,12 @@ fn pay(invoice_id: i64, account: i64, cents: i64) -> PaymentInput {
         invoice_id,
         deposit_account_id: account,
         payment_date: d(10),
-        amount_cents: cents,
+        amount_cents: Cents(cents),
         payment_method: "CHECK".into(),
         payment_method_id: None,
         reference: Some("4471".into()),
         exchange_rate_e6: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
     }
 }
 
@@ -184,7 +185,7 @@ async fn the_center_totals_unapplied_payments_and_credit_left_and_takes_only_und
     let id: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Lakeview'").fetch_one(&pool).await.unwrap();
     receive_payment(&pool, ReceivePaymentInput { payments: vec![], unapplied: Some(extra("Lakeview", undeposited, 4_000, "CREDIT", None)) }).await.unwrap();
     let line = SalesLineInput { product_service_id: None, description: "Returned".into(), quantity_e4: 10_000, rate_cents: 1_500, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
-    create_credit_memo(&pool, CreditMemoInput { customer_name: "Lakeview".into(), credit_date: d(11), memo: None, refund_account_id: None, lines: vec![line], tax_rate_id: None, header: Default::default(), form_lines: Vec::new() })
+    create_credit_memo(&pool, CreditMemoInput { credit_number: None, customer_name: "Lakeview".into(), credit_date: d(11), memo: None, refund_account_id: None, lines: vec![line], tax_rate_id: None, header: Default::default(), form_lines: Vec::new() })
         .await
         .unwrap();
     let credit = customer_credit(&pool, id).await.unwrap();

@@ -24,6 +24,7 @@ import { centsToInput, formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
+import DocNumberBox, { useDocNumber } from './DocNumberBox.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { defaultDepositAccount, useSalesPrefs } from '../lib/salesPrefs.js';
@@ -50,6 +51,8 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms, savedSte
   const [memo, setMemo] = useState(copyOf?.memo ?? '');
   const [lines, setLines] = useState(() => (copyOf ? linesFromDocument(copyOf.lines, copyOf.formLines, defaultIncome) : Array.from({ length: 3 }, () => blankLine(defaultIncome))));
   const [busy, setBusy] = useState(false);
+  // Sale #: the next number, shown before saving; the person may type another.
+  const docNumber = useDocNumber('SALES_RECEIPT', 'Sale');
   const [error, setError] = useState(null);
   // Files picked before posting; attached once the receipt posts.
   const [files, setFiles] = useState([]);
@@ -92,7 +95,11 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms, savedSte
     if (warning) return setError(warning);
     setBusy(true);
     try {
+      const chosen = await docNumber.resolve();
+      if (chosen.cancelled) return;
+      if (chosen.error) return setError(chosen.error);
       const receipt = await api.postSalesReceipt({
+        receiptNumber: chosen.value,
         customerName: customer.trim() || null,
         receiptDate: date,
         depositAccountId: depositId,
@@ -147,6 +154,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms, savedSte
           <span className="qb-label">Sales receipt date</span>
           <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
+        <DocNumberBox number={docNumber} />
         <label>
           <span className="qb-label">Reference no.</span>
           <input className="qb-input w-[96px]" value={reference} onChange={(e) => setReference(e.target.value)} />

@@ -36,9 +36,7 @@ impl std::fmt::Debug for PageKey {
 }
 
 impl PageKey {
-    /// A new random key, for a file being encrypted. Test-only until turning encryption on ships
-    /// (phase 3b): nothing else in LocalBooks can make an encrypted file yet.
-    #[cfg(test)]
+    /// A new random key, for a file being encrypted ([`super::whole_file::encrypt`]).
     pub fn generate() -> Result<Self, String> {
         Ok(PageKey(Zeroizing::new(crypto::random::<KEY_LEN>()?)))
     }
@@ -54,8 +52,7 @@ impl PageKey {
     }
 }
 
-/// A new random id for a file being encrypted. Test-only until phase 3b, like [`PageKey::generate`].
-#[cfg(test)]
+/// A new random id for a file being encrypted.
 pub fn new_file_id() -> Result<String, String> {
     Ok(crypto::random::<16>()?.iter().map(|b| format!("{b:02x}")).collect())
 }
