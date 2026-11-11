@@ -1,4 +1,5 @@
 ; Installer hooks for the Windows (NSIS) installer, see bundle.windows.nsis.installerHooks.
+; The release check's installer upgrade step (release-check.yml) proves this on every release.
 ;
 ; Until 0.16 the app was called LocalBooks. Tauri's installer keys the install folder, the
 ; uninstall entry and the shortcuts on the product name, so the first Tillhouse installer finds
@@ -6,6 +7,8 @@
 ; copy it replaces: its program files, shortcuts and uninstall entry. Company files, settings,
 ; backups and saved passwords are not touched: they are keyed on the bundle identifier
 ; (com.localbooks.desktop), which did not change.
+
+!include LogicLib.nsh
 
 !macro NSIS_HOOK_POSTINSTALL
   ; The old install's folder, as its installer recorded it ("Software\<manufacturer>\<product>").

@@ -58,10 +58,29 @@ https://claude.ai/artifact/BHgvY6tz4kUG3QjL3UhBFo (private to the maintainer).
 - **Linux.** The package name follows the product name (`local-books` → `tillhouse`). The `.deb`
   conflicts with and replaces `local-books`; the `.rpm` obsoletes it. The AppImage updates in place.
 
-**Before releasing:** install 0.15.0 on Windows, run the in-app update to the first Tillhouse
-build, and check that one copy remains (Start menu, Installed apps, `%LOCALAPPDATA%`), the company
-file opens, and saved email and bank passwords still work. Then the same from the `.msi`, from a
-macOS DMG and from a Linux `.deb`. CI's release check covers a fresh install, not this upgrade.
+**Proved on every release, not by hand.** The release check (`.github/workflows/release-check.yml`,
+step **Installer upgrade**, `docs/testing/release-check.md`) runs when the first Tillhouse version
+is published as a pre-release, before it can reach testers, and on each release after. It installs
+the previous release, applies the new one the way tauri-plugin-updater 2.14.1 does, and checks:
+
+- [ ] **Windows (NSIS):** previous `-setup.exe /S`, then the new `-setup.exe /P /UPDATE` (the
+      updater's arguments for installMode `passive`: `config.rs` `nsis_args`, `updater.rs`
+      `updater_parameters`; it also passes `/R /ARGS`, which only relaunches the app). Exactly one
+      uninstall entry, Tillhouse; the LocalBooks entry, install folder, `Software\localbooks\LocalBooks`
+      key and Start menu shortcut gone; the Tillhouse shortcut present.
+- [ ] **Linux:** `dpkg -i` of the new `.deb` over `local-books` leaves `tillhouse` installed and
+      `local-books` removed; `rpm -U` of the new `.rpm` does the same through Obsoletes.
+- [ ] **macOS:** the new `.app.tar.gz` swapped into the old bundle's path. Tauri's updater keeps the
+      running bundle's path (`updater.rs`: `extract_path_from_executable`, then `swap_bundle` or
+      `replace_bundle` on `self.extract_path`), so an updated copy stays at `LocalBooks.app` and
+      shows Tillhouse; the check asserts it launches from there.
+- [ ] **Everywhere:** the `com.localbooks.desktop` data folder keeps every file, and the upgraded app
+      opens each seeded company with `--check-file` with unchanged balances.
+
+The `.msi` and the AppImage are not covered: the `.msi` is not what the updater installs on
+Windows (it uses the `-setup.exe`), and the AppImage is replaced as one file at its own path.
+A pull request that changes the release check runs it against the newest release, whose previous
+release has the same name, so the rename itself is first exercised by the Tillhouse pre-release.
 
 ## Later
 
