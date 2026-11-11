@@ -81,6 +81,9 @@ window title and recent list (`company_changed`), and the daily automatic backup
 
   It does not reload the page for this: a reload landing in the middle of a WebDriver command
   leaves WebKit's driver (Linux end-to-end tests) waiting on it for good.
+  For the same reason, `company-opening` is not sent before the main window's first page has
+  loaded. When it has, the page is sent the current state once, so an open that ended in between
+  isn't missed.
 - For in-app opens, a small overlay on every screen shows the same *Opening <name>…* panel while a
   `company-opening` state is set. It blocks clicks so nothing is changed in the company being
   closed. The window already reloads on `company-file-changed` once the new file is live. On

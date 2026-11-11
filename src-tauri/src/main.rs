@@ -177,6 +177,7 @@ fn main() {
         .on_page_load(|webview, payload| {
             if webview.label() == windows::MAIN && payload.event() == tauri::webview::PageLoadEvent::Finished {
                 diagnostics::first_page_loaded();
+                opening::page_loaded();
             }
         })
         .menu(|handle| {

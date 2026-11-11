@@ -103,26 +103,50 @@ pub fn begin_at_launch(app: &AppHandle, file: Option<(&Path, Option<String>)>) -
 pub fn note(step: &str) {
     let Some(app) = APP.get() else { return };
     let Some(opening) = app.try_state::<Opening>() else { return };
-    let changed = {
-        let mut state = opening.state.lock().expect("opening state");
-        match state.as_mut() {
-            Some(current) if current.step != step => {
-                current.step = step.to_string();
-                Some(current.clone())
-            }
-            _ => None,
-        }
+    let mut state = opening.state.lock().expect("opening state");
+    if let Some(current) = state.as_mut().filter(|current| current.step != step) {
+        current.step = step.to_string();
+        let changed = current.clone();
+        emit(app, Some(changed));
+    }
+}
+
+/// Set once the main window's first page has loaded (see [`page_loaded`]).
+static PAGE_LOADED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The main window's first page has loaded: from now on the window hears each change. Before, it
+/// hears nothing, and asks `get_opening_state` when it loads (then again once it listens).
+///
+/// Script run in a WebKitGTK page that is still loading leaves WebKit's WebDriver waiting for good on
+/// the next command (every Linux end-to-end spec hung on its first element lookup), so nothing is
+/// sent to a page before it has loaded.
+///
+/// The page may have asked before an open ended and loaded after, so it hears where things stand
+/// now, once. Changes and what is sent go under one lock, so they arrive in order.
+pub fn page_loaded() {
+    let Some(opening) = APP.get().and_then(|app| app.try_state::<Opening>()) else {
+        PAGE_LOADED.store(true, std::sync::atomic::Ordering::Relaxed);
+        return;
     };
-    if let Some(state) = changed {
-        let _ = app.emit(COMPANY_OPENING, Some(state));
+    let app = APP.get().expect("installed");
+    let state = opening.state.lock().expect("opening state");
+    if !PAGE_LOADED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        let _ = app.emit(COMPANY_OPENING, state.clone());
     }
 }
 
 fn set(app: &AppHandle, state: Option<OpeningState>) {
-    if let Some(opening) = app.try_state::<Opening>() {
-        *opening.state.lock().expect("opening state") = state.clone();
+    let Some(opening) = app.try_state::<Opening>() else { return };
+    let mut current = opening.state.lock().expect("opening state");
+    *current = state.clone();
+    emit(app, state);
+}
+
+/// Sends `state` once the main window's first page has loaded. Called with the state locked.
+fn emit(app: &AppHandle, state: Option<OpeningState>) {
+    if PAGE_LOADED.load(std::sync::atomic::Ordering::Relaxed) {
+        let _ = app.emit(COMPANY_OPENING, state);
     }
-    let _ = app.emit(COMPANY_OPENING, state);
 }
 
 /// `name` when there is one, else the file's name without its folder (`localbooks.db` for the
