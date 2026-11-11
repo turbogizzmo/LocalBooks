@@ -36,6 +36,7 @@ mod customer_groups;
 mod db;
 mod desktop;
 mod diagnostics;
+mod doc_numbers;
 mod document_inbox;
 mod duplicates;
 mod edits;
@@ -264,6 +265,7 @@ fn main() {
                 let app = handoff_handle.clone();
                 tauri::async_runtime::spawn(async move { commands::handle_hand_off(&app, request).await });
             }));
+            steps.step("services and hand-off listener");
             match guard {
                 Ok(guard) => {
                     app.manage(std::sync::Mutex::new(Some(guard)));

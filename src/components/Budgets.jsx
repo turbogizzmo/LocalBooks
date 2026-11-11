@@ -5,6 +5,8 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import { useUnsavedChanges } from '../lib/windows.js';
+import { budgetYearChoices, fiscalStartMonth } from '../lib/budgetYears.js';
 
 const PL_TYPES = new Set(['INCOME', 'COST_OF_GOODS_SOLD', 'EXPENSE', 'OTHER_INCOME', 'OTHER_EXPENSE']);
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -17,6 +19,7 @@ const key = (accountId, period) => `${accountId}:${period}`;
  */
 export default function Budgets({ accounts, navigate }) {
   const budgets = useLedgerQuery(api.listBudgets);
+  const prefs = useLedgerQuery(api.getPreferences).data;
   const [budgetId, setBudgetId] = useState(null);
   const [cells, setCells] = useState({}); // key -> text as typed
   const [saved, setSaved] = useState({}); // key -> cents as stored
@@ -51,6 +54,10 @@ export default function Budgets({ accounts, navigate }) {
   };
   const invalid = Object.keys(cells).filter((k) => cents(k) === null);
   const changed = Object.keys({ ...cells, ...saved }).filter((k) => cents(k) !== null && cents(k) !== (saved[k] ?? 0));
+  // A typed amount that isn't valid money yet is still unsaved work.
+  const unsaved = changed.length > 0 || invalid.length > 0;
+  // Closing the window (or quitting) with amounts not saved asks first.
+  useUnsavedChanges('budget', unsaved);
   const rowTotal = (id) => MONTHS.reduce((s, m) => s + (cents(key(id, m)) ?? 0), 0);
 
   const save = async () => {
@@ -72,7 +79,8 @@ export default function Budgets({ accounts, navigate }) {
   };
   const create = async () => {
     try {
-      const made = await api.createBudget(creating.name, `${creating.year}-06-30`);
+      // The fiscal year's first day: the year chosen is the one that starts on it.
+      const made = await api.createBudget(creating.name, creating.start);
       setCreating(null);
       await budgets.reload();
       setBudgetId(made.id);
@@ -91,14 +99,20 @@ export default function Budgets({ accounts, navigate }) {
     }
   };
 
-  const thisYear = Number(todayIso().slice(0, 4));
+  const years = budgetYearChoices(todayIso(), fiscalStartMonth(prefs?.fiscal_year_start));
+  const thisYear = years.find((y) => y.current);
+  const startNew = async () => {
+    const pending = changed.length + invalid.length;
+    if (unsaved && !(await askConfirm(`“${budget.name}” has ${pending} amount${pending === 1 ? '' : 's'} not saved. Start a new budget and lose them?`, { confirmLabel: 'Discard and continue', danger: true }))) return;
+    setCreating({ name: `FY${thisYear.start.slice(0, 4)} Budget`, start: thisYear.start });
+  };
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       <div className="qb-panel flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         {list.length > 0 && (
           <label>
             <span className="qb-label">Budget</span>
-            <select className="qb-input w-[240px]" value={budget?.id ?? ''} onChange={(e) => setBudgetId(Number(e.target.value))} disabled={changed.length > 0}>
+            <select className="qb-input w-[240px]" value={budget?.id ?? ''} onChange={(e) => setBudgetId(Number(e.target.value))} disabled={unsaved}>
               {list.map((b) => (
                 <option key={b.id} value={b.id}>{b.name} (FY from {formatDate(b.fiscalYearStart)})</option>
               ))}
@@ -121,10 +135,10 @@ export default function Budgets({ accounts, navigate }) {
               <input className="qb-input w-[200px]" value={creating.name} onChange={(e) => setCreating({ ...creating, name: e.target.value })} autoFocus />
             </label>
             <label>
-              <span className="qb-label">Fiscal year containing</span>
-              <select className="qb-input w-[90px]" value={creating.year} onChange={(e) => setCreating({ ...creating, year: Number(e.target.value) })}>
-                {[thisYear - 1, thisYear, thisYear + 1, thisYear + 2].map((y) => (
-                  <option key={y} value={y}>{y}</option>
+              <span className="qb-label">Fiscal year</span>
+              <select className="qb-input w-[190px]" value={creating.start} onChange={(e) => setCreating({ ...creating, start: e.target.value })}>
+                {years.map((y) => (
+                  <option key={y.start} value={y.start}>{y.label}{y.current ? ' (this year)' : ''}</option>
                 ))}
               </select>
             </label>
@@ -132,7 +146,7 @@ export default function Budgets({ accounts, navigate }) {
             <button type="button" className="qb-btn" onClick={() => setCreating(null)}>Cancel</button>
           </>
         ) : (
-          <button type="button" className="qb-btn" onClick={() => setCreating({ name: `FY${thisYear} Budget`, year: thisYear })}>New budget…</button>
+          <button type="button" className="qb-btn" onClick={startNew}>New budget…</button>
         )}
         {budget && !creating && (
           <div className="ml-auto flex gap-2">
@@ -148,7 +162,7 @@ export default function Budgets({ accounts, navigate }) {
       {budgets.error && <Notice kind="error" text={budgets.error} />}
       {invalid.length > 0 && <Notice kind="error" text="Some amounts are not valid numbers; they are outlined in red." />}
       {budgets.data && list.length === 0 && !creating && (
-        <Notice kind="info" text="Budgets set expected income and expenses (and, if you like, month-end balances) per account for each month of a fiscal year. Choose New budget to start one, then compare it with your books in Reports › Profit and Loss Budget vs. Actual or Balance Sheet Budget vs. Actual." />
+        <Notice kind="info" text="Budgets set expected income and expenses (and, if you like, month-end balances) per account for each month of a fiscal year. Choose New budget to start one, then compare it with your books in Reports › Budgets & Forecasts › Budget vs. Actual or Balance Sheet Budget vs. Actual." />
       )}
       {budget && side === 'bs' && (
         <Notice kind="info" text="For balance sheet accounts, enter the balance you expect at the end of each month (not the change). The Balance Sheet Budget vs. Actual report compares them with the actual balances." />

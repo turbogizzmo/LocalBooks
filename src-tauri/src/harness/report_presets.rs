@@ -21,6 +21,7 @@ use crate::custom_reports::{self, Column, ColumnKind, CustomReport, Filters, Gro
 use crate::credits::{ApplyCreditInput, CreditMemoInput, VendorCreditInput, VendorCreditLineInput};
 use crate::expenses::{BillInput, BillLineInput};
 use crate::invoices::{InvoiceInput, InvoiceLineInput};
+use crate::money::Cents;
 use crate::sales::SalesLineInput;
 
 /// The date the reports run as of (stands in for "today").
@@ -44,7 +45,7 @@ pub(super) async fn company() -> SqlitePool {
     let line = |description: &str, item: i64, qty: i64, rate: i64, class: Option<i64>| InvoiceLineInput {
         description: description.into(),
         quantity_e4: qty * 10_000,
-        rate_cents: rate,
+        rate_cents: Cents(rate),
         income_account_id: sales,
         product_service_id: Some(item),
         class_id: class,
@@ -54,13 +55,14 @@ pub(super) async fn company() -> SqlitePool {
     let invoice = crate::invoices::create_and_post_invoice(
         p,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Brightwater Cafe".into(),
             issue_date: d(2025, 11, 14),
             due_date: d(2025, 12, 14),
             lines: vec![line("Logo refresh", logo, 1, 120_000, Some(studio)), line("Menu posters", prints, 40, 2_500, Some(studio))],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details,
         },
     )
@@ -69,7 +71,7 @@ pub(super) async fn company() -> SqlitePool {
     .id;
     let memo = crate::credits::create_credit_memo(
         p,
-        CreditMemoInput { form_lines: Vec::new(),
+        CreditMemoInput { credit_number: None, form_lines: Vec::new(),
             customer_name: "Brightwater Cafe".into(),
             credit_date: d(2025, 11, 20),
             memo: Some("Misprinted posters".into()),
@@ -627,13 +629,14 @@ async fn columns_by_class_customer_job_and_vendor_tie_out() {
     crate::invoices::create_and_post_invoice(
         p,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Brightwater Cafe:Patio Menu".into(),
             issue_date: d(2025, 12, 3),
             due_date: d(2025, 12, 17),
-            lines: vec![InvoiceLineInput { description: "Patio menu design".into(), quantity_e4: 10_000, rate_cents: 42_000, income_account_id: sales, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput { description: "Patio menu design".into(), quantity_e4: 10_000, rate_cents: Cents(42_000), income_account_id: sales, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )

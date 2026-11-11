@@ -35,7 +35,8 @@ struct Item {
 }
 
 async fn item_for_product(tx: &mut Transaction<'_, Sqlite>, product_id: i64) -> Result<Option<Item>, String> {
-    let row: Option<(i64, String, i64, i64, i64, i64, Option<i64>)> = sqlx::query_as(
+    type ProductRow = (i64, String, i64, i64, i64, i64, Option<i64>);
+    let row: Option<ProductRow> = sqlx::query_as(
         "SELECT i.id, p.name, i.asset_account_id, i.cogs_account_id, i.qty_on_hand_e4, i.value_cents, i.last_unit_cost_cents
          FROM inventory_items i JOIN products_services p ON p.id = i.product_id WHERE i.product_id = ?1",
     )
@@ -63,17 +64,20 @@ fn format_qty(qty_e4: i64) -> String {
     if frac.is_empty() { format!("{sign}{}", abs / 10_000) } else { format!("{sign}{}.{frac}", abs / 10_000) }
 }
 
-/// Appends a movement continuing from the item's current quantity and value.
-async fn record_movement(
-    tx: &mut Transaction<'_, Sqlite>,
+/// One stock movement for `record_movement`.
+struct Movement<'a> {
     item_id: i64,
     date: NaiveDate,
-    kind: &str,
+    kind: &'a str,
     qty_change_e4: i64,
     value_change_cents: i64,
     journal_entry_id: i64,
     reverses_id: Option<i64>,
-) -> Result<i64, String> {
+}
+
+/// Appends a movement continuing from the item's current quantity and value.
+async fn record_movement(tx: &mut Transaction<'_, Sqlite>, movement: Movement<'_>) -> Result<i64, String> {
+    let Movement { item_id, date, kind, qty_change_e4, value_change_cents, journal_entry_id, reverses_id } = movement;
     let (name, qty, value): (String, i64, i64) = sqlx::query_as(
         "SELECT p.name, i.qty_on_hand_e4, i.value_cents FROM inventory_items i JOIN products_services p ON p.id = i.product_id WHERE i.id = ?1",
     )
@@ -179,7 +183,8 @@ pub(crate) struct SaleCost {
 /// different classes, the Cost of Goods Sold is split between those classes by quantity.
 pub(crate) async fn cost_of_sale(tx: &mut Transaction<'_, Sqlite>, lines: &[(Option<i64>, i64, Option<i64>)]) -> Result<SaleCost, String> {
     // Per product: total quantity, and quantity per class in first-appearance order.
-    let mut per_product: BTreeMap<i64, (i64, Vec<(Option<i64>, i64)>)> = BTreeMap::new();
+    type ProductLayers = (i64, Vec<(Option<i64>, i64)>);
+    let mut per_product: BTreeMap<i64, ProductLayers> = BTreeMap::new();
     for (product, qty, class) in lines {
         if let Some(p) = product {
             let (total, by_class) = per_product.entry(*p).or_default();
@@ -232,7 +237,7 @@ impl SaleCost {
     /// Records the stock leaving, against the sale's posted journal entry.
     pub async fn record(&self, tx: &mut Transaction<'_, Sqlite>, date: NaiveDate, journal_entry_id: i64) -> Result<(), String> {
         for (item, qty, cost) in &self.movements {
-            record_movement(tx, *item, date, "SALE", -qty, -cost, journal_entry_id, None).await?;
+            record_movement(tx, Movement { item_id: *item, date, kind: "SALE", qty_change_e4: -qty, value_change_cents: -cost, journal_entry_id, reverses_id: None }).await?;
         }
         Ok(())
     }
@@ -287,9 +292,9 @@ impl Receipt {
             // The true-up comes first: recorded alone, a purchase into negative stock could leave a
             // moment where quantity is still below zero but value is above it.
             if variance != 0 {
-                record_movement(tx, item, date, "COST_TRUE_UP", 0, -variance, journal_entry_id, None).await?;
+                record_movement(tx, Movement { item_id: item, date, kind: "COST_TRUE_UP", qty_change_e4: 0, value_change_cents: -variance, journal_entry_id, reverses_id: None }).await?;
             }
-            record_movement(tx, item, date, "PURCHASE", qty, cost, journal_entry_id, None).await?;
+            record_movement(tx, Movement { item_id: item, date, kind: "PURCHASE", qty_change_e4: qty, value_change_cents: cost, journal_entry_id, reverses_id: None }).await?;
             remember_unit_cost(tx, item, qty, cost).await?;
         }
         Ok(())
@@ -335,7 +340,7 @@ impl PriceDifference {
     /// Records the change in the stock's value against the bill's posted entry.
     pub async fn record(&self, tx: &mut Transaction<'_, Sqlite>, date: NaiveDate, journal_entry_id: i64) -> Result<(), String> {
         if let Some((item, value)) = self.movement {
-            record_movement(tx, item, date, "COST_TRUE_UP", 0, value, journal_entry_id, None).await?;
+            record_movement(tx, Movement { item_id: item, date, kind: "COST_TRUE_UP", qty_change_e4: 0, value_change_cents: value, journal_entry_id, reverses_id: None }).await?;
         }
         Ok(())
     }
@@ -364,7 +369,7 @@ pub(crate) async fn reverse_for_entry(tx: &mut Transaction<'_, Sqlite>, journal_
     .await
     .map_err(db_err)?;
     for (id, item, qty, value) in movements {
-        record_movement(tx, item, date, "VOID", -qty, -value, reversal_entry_id, Some(id)).await?;
+        record_movement(tx, Movement { item_id: item, date, kind: "VOID", qty_change_e4: -qty, value_change_cents: -value, journal_entry_id: reversal_entry_id, reverses_id: Some(id) }).await?;
     }
     Ok(())
 }
@@ -526,9 +531,9 @@ pub async fn adjust(pool: &SqlitePool, input: &AdjustInput) -> Result<InventoryI
             return Err("STOCK_ADJUST_FREE: adding stock at no cost needs a cost of at least 0.01, so the books record it".to_string());
         };
         if variance != 0 {
-            record_movement(&mut tx, item.id, input.date, "COST_TRUE_UP", 0, -variance, entry_id, None).await?;
+            record_movement(&mut tx, Movement { item_id: item.id, date: input.date, kind: "COST_TRUE_UP", qty_change_e4: 0, value_change_cents: -variance, journal_entry_id: entry_id, reverses_id: None }).await?;
         }
-        record_movement(&mut tx, item.id, input.date, "ADJUSTMENT", input.qty_change_e4, value, entry_id, None).await?;
+        record_movement(&mut tx, Movement { item_id: item.id, date: input.date, kind: "ADJUSTMENT", qty_change_e4: input.qty_change_e4, value_change_cents: value, journal_entry_id: entry_id, reverses_id: None }).await?;
         if value > 0 {
             remember_unit_cost(&mut tx, item.id, input.qty_change_e4, value).await?;
         }

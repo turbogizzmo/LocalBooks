@@ -116,6 +116,7 @@ pub async fn remove(pool: &SqlitePool, id: i64) -> Result<(), String> {
 
 /// The text a renaming rule would start from for a description: its first distinctive words, as
 /// the bank writes them ("AMZN MKTP US*2K4" → "AMZN MKTP").
+#[cfg(test)]
 pub fn suggested_pattern(description: &str) -> String {
     let words: Vec<&str> = description.split_whitespace().take_while(|w| w.chars().any(|c| c.is_ascii_alphabetic())).take(2).collect();
     match words.as_slice() {

@@ -19,6 +19,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 use crate::custom_reports::{ColumnHead, ColumnKind, RowKind};
 use crate::invoices::{InvoiceInput, InvoiceLineInput, InvoiceSummary, MAX_QUANTITY_E4};
 use crate::ledger::{db_err, mul_div_round, rollback, QUANTITY_SCALE};
+use crate::money::Cents;
 
 /// Rates are dollars per mile × 10,000; the largest is $100 a mile.
 pub const RATE_SCALE: i64 = 10_000;
@@ -456,7 +457,8 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillTripsInput)
 
     let mut lines = Vec::with_capacity(input.trip_ids.len());
     for (n, trip_id) in input.trip_ids.iter().enumerate() {
-        let trip: Option<(String, i64, Option<String>, Option<i64>, bool, Option<i64>, Option<bool>, String)> = sqlx::query_as(
+        type TripRow = (String, i64, Option<String>, Option<i64>, bool, Option<i64>, Option<bool>, String);
+        let trip: Option<TripRow> = sqlx::query_as(
             "SELECT t.trip_date, t.miles_e4, t.notes, t.customer_id, t.billable, t.invoice_id, i.is_voided, v.name
              FROM mileage_trips t JOIN vehicles v ON v.id = t.vehicle_id LEFT JOIN invoices i ON i.id = t.invoice_id
              WHERE t.id = ?1",
@@ -488,7 +490,7 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillTripsInput)
         lines.push(InvoiceLineInput {
             description,
             quantity_e4: miles,
-            rate_cents: input.rate_cents,
+            rate_cents: Cents(input.rate_cents),
             income_account_id: income_account,
             product_service_id: Some(input.product_service_id),
             class_id: None,
@@ -497,13 +499,14 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillTripsInput)
     }
 
     let invoice = InvoiceInput {
+        invoice_number: None,
         customer_name: customer,
         issue_date: input.issue_date,
         due_date: input.due_date,
         lines,
         currency: None,
         tax_rate_id: input.tax_rate_id,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     let invoice_id = crate::invoices::write_invoice(tx, &invoice).await?;

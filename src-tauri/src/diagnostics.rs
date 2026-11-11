@@ -146,7 +146,7 @@ impl Drop for StartupSteps {
 /// "startup took 2400 ms: open company 2100 ms, ..." with the steps of 50 ms or more, slowest first.
 fn startup_line(total_ms: u128, steps: &[(&'static str, u128)]) -> String {
     let mut slow: Vec<_> = steps.iter().filter(|(_, ms)| *ms >= 50).collect();
-    slow.sort_by(|a, b| b.1.cmp(&a.1));
+    slow.sort_by_key(|s| std::cmp::Reverse(s.1));
     let parts: Vec<String> = slow.iter().map(|(name, ms)| format!("{name} {ms} ms")).collect();
     if parts.is_empty() {
         format!("startup took {total_ms} ms")
@@ -184,7 +184,7 @@ pub async fn bundle(pool: Option<&SqlitePool>, company_file: Option<&Path>, log_
             }
             let check: Vec<String> = sqlx::query_scalar("PRAGMA quick_check").fetch_all(pool).await.map_err(db_err)?;
             db.push_str(&format!("Integrity (quick check): {}\n", check.join("; ")));
-            let (pages, page_size): (i64, i64) = sqlx::query_as("SELECT (SELECT page_count FROM pragma_page_count), (SELECT page_size FROM pragma_page_size)")
+            let (pages, page_size): (i64, i64) = sqlx::query_as("SELECT (SELECT page_count FROM pragma_page_count), CAST((SELECT page_size FROM pragma_page_size) AS INTEGER)")
                 .fetch_one(pool)
                 .await
                 .map_err(db_err)?;

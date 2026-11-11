@@ -8,14 +8,28 @@
 3. Click **Add**.
 
 The list shows each customer's open balance in Accounts Receivable, or what you still owe each
-vendor. Use **Find a customer** to filter the list. Customers are also added automatically when you
-post an invoice for a new name.
+vendor. Use **Find a customer** to filter the list.
+
+### Adding a name while you enter a transaction
 
 You can also add a customer or vendor while you enter a transaction. In the **Customer** box on an
-invoice, sales receipt, estimate or credit memo, or the **Vendor** box on a bill, check, expense,
-purchase order or vendor credit, type the name. If nobody matches, the list offers
+invoice, sales receipt, estimate, credit memo or sales order, or the **Vendor** box on a bill,
+check, expense, purchase order or vendor credit, type the name. If nobody matches, the list offers
 **＋ Add "…" as a new customer** (or vendor), added straight away, and **Add with details…**, which
 adds the name and opens its record for the address, terms and (for vendors) 1099 status.
+
+LocalBooks never adds a name you didn't ask for, so a typo can't turn into a second customer. If you
+leave the name box, or save the form, with a name that isn't on the list, LocalBooks stops and asks
+"*name* isn't on your customer list." (or vendor list):
+
+- **Quick add** adds the name as you typed it, and the save goes on.
+- **Set up…** adds the name and opens its record. Close the record and the save goes on.
+- **Cancel** adds nothing and saves nothing, and puts you back in the name box to fix the name or
+  pick one from the list. Leaving the box again doesn't ask about the same name; saving does.
+
+The same goes for the payee you type in a bank or credit card register, where other names
+(below) count as on the list. Importing a company file, IIF or spreadsheet still adds the names it
+brings in without asking.
 
 ### Other names
 
@@ -429,9 +443,10 @@ due date. Choose another term and the due date follows it; you can still type a 
 date. The invoice or bill keeps the term it was entered with, and printed invoices show it.
 
 When a term has a discount, **Receive Payments** and **Pay Bills** show the discount offered on
-each invoice or bill, and the last day to take it. Printed invoices show it too. LocalBooks
-doesn't yet take the discount for you: to give or take it, record the payment for the reduced
-amount and enter the difference as a credit memo or vendor credit.
+each invoice or bill, and the last day to take it. Printed invoices show it too. Receive Payments
+and Pay Bills take the discount on the invoice's or bill's row, or automatically when Preferences
+says so (see [Take a customer's early-payment discount](customer-payments.md#take-a-customers-early-payment-discount)
+and [Take early-payment discounts](bills.md#take-early-payment-discounts)).
 
 Changing a term's days changes the due dates of new invoices and bills only. Ones already entered
 keep their due dates.

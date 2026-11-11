@@ -634,10 +634,13 @@ fn custom_values_of(pages: &[LogicalPage], catalog: &Catalog, owner: FieldOwner)
     custom_values(&definitions, &values, owner)
 }
 
+/// A list's entries by id: the name and whether it is active.
+pub(crate) type NamedList = HashMap<i64, (String, bool)>;
+
 /// The sales rep list (`abmc_sales_rep`: initials and the name record they belong to) as
 /// "initials" or "initials:name", with whether each is active; and the Ship Via list
 /// (`abmc_shipping`). Keyed by their ids, as headers and customers refer to them.
-pub(crate) fn read_sales_lists(pages: &[LogicalPage], catalog: &Catalog) -> (HashMap<i64, (String, bool)>, HashMap<i64, (String, bool)>) {
+pub(crate) fn read_sales_lists(pages: &[LogicalPage], catalog: &Catalog) -> (NamedList, NamedList) {
     let active = |r: &Row| r.get("is_hidden_bool").as_int() != Some(1) && r.get("is_deleted_bool").as_int() != Some(1);
     let reps_rows = rows_of(pages, catalog, "abmc_sales_rep");
     let contacts = if reps_rows.is_empty() { HashMap::new() } else { current_contacts(pages, catalog) };
