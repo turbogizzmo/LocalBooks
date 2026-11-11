@@ -158,7 +158,7 @@ pub async fn library(pool: &SqlitePool, query: Option<&str>, include_deleted: bo
             LEFT JOIN expenses x ON e.source_type IN ('EXPENSE', 'CHECK') AND x.id = e.source_id
             LEFT JOIN (SELECT id, CAST(invoice_number AS TEXT) AS invoice_number FROM invoices) inv ON e.source_type = 'INVOICE' AND inv.id = e.source_id
             LEFT JOIN (SELECT id, CAST(receipt_number AS TEXT) AS receipt_number FROM sales_receipts) sr ON e.source_type = 'SALES_RECEIPT' AND sr.id = e.source_id
-            LEFT JOIN (SELECT id, CAST(credit_number AS TEXT) AS credit_number FROM credit_memos) cm ON e.source_type = 'CREDIT_MEMO' AND cm.id = e.source_id
+            LEFT JOIN (SELECT id, CASE WHEN payment_account_id IS NULL THEN CAST(credit_number AS TEXT) ELSE payment_reference END AS credit_number FROM credit_memos) cm ON e.source_type = 'CREDIT_MEMO' AND cm.id = e.source_id
             LEFT JOIN bills bl ON e.source_type = 'BILL' AND bl.id = e.source_id
             LEFT JOIN vendor_credits vc ON e.source_type = 'VENDOR_CREDIT' AND vc.id = e.source_id
             LEFT JOIN bill_payments bp ON e.source_type = 'BILL_PAYMENT' AND bp.id = e.source_id

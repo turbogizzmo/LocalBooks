@@ -50,7 +50,8 @@ pub async fn list(pool: &SqlitePool, kind: BatchKind, from: NaiveDate, to: Naive
         BatchKind::CreditMemo => {
             "SELECT m.id, CAST(m.credit_number AS TEXT) AS number, m.credit_date AS date, c.name, m.total_cents, m.is_voided
              FROM credit_memos m JOIN customers c ON c.id = m.customer_id
-             WHERE m.credit_date BETWEEN ?1 AND ?2 ORDER BY m.credit_date, m.credit_number"
+             -- Unapplied payments kept as credit aren't credit memos and have no form.
+             WHERE m.credit_date BETWEEN ?1 AND ?2 AND m.payment_account_id IS NULL ORDER BY m.credit_date, m.credit_number"
         }
         BatchKind::SalesReceipt => {
             "SELECT r.id, CAST(r.receipt_number AS TEXT) AS number, r.receipt_date AS date, COALESCE(c.name, '') AS name, r.total_cents, r.is_voided

@@ -372,7 +372,7 @@ async fn job_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate) 
              WHERE e.status = 'POSTED' AND (?1 IS NULL OR e.entry_date >= ?1) AND e.entry_date <= ?2)
          SELECT e.id AS journal_entry_id, e.entry_date AS date, {DISPLAY_SOURCE_TYPE} AS source_type,
                 e.reverses_entry_id IS NOT NULL AS is_reversal, e.doc_type, e.doc_id, e.doc_entry,
-                COALESCE(CAST(inv.invoice_number AS TEXT), ip.reference, CAST(sr.receipt_number AS TEXT), CAST(cm.credit_number AS TEXT),
+                COALESCE(CAST(inv.invoice_number AS TEXT), ip.reference, CAST(sr.receipt_number AS TEXT), CASE WHEN cm.payment_account_id IS NULL THEN CAST(cm.credit_number AS TEXT) ELSE cm.payment_reference END,
                          bl.bill_number, vc.reference, x.check_number,
                          CASE WHEN e.doc_type IN ('JOURNAL', 'OPENING_BALANCE') THEN CAST(e.entry_number AS TEXT) END) AS num,
                 p.party_name AS name, COALESCE(l.memo, e.memo) AS memo,
