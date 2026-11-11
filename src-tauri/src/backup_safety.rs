@@ -4,10 +4,15 @@
 //! or a lost laptop takes them with it, and a backup that was never opened might not restore. This
 //! module records the two things that guard against that and says when either is overdue:
 //!
-//! - **a copy off this disk**: an offsite backup (`offsite.rs`), or a backup saved (Create Local
-//!   Backup › Save a copy…) to a different drive, a network share or a synced folder;
-//! - **a test restore**: a backup opened and checked as a restore would, without replacing the books
-//!   (here, or for an offsite copy in `offsite::test_restore`).
+//! - **a copy off this disk**: a backup saved with Back up to…, or made by the offsite backup
+//!   (`offsite.rs`), on a different drive (volume), a network share or a synced folder. A copy on
+//!   the company file's own disk doesn't count, offsite or not;
+//! - **a test restore**: a backup of these books opened and checked as a restore would, its schema
+//!   upgrade rehearsed on a throwaway copy when it is from an older version, without replacing the
+//!   books (here, or for an offsite copy in `offsite::test_restore`).
+//!
+//! Each is a row in `backup_safety_events` (migration 0176), with where it was. Nothing is sent
+//! anywhere: the check is the file system's own answer to "which volume is this folder on".
 
 use std::path::Path;
 
@@ -18,36 +23,78 @@ use sqlx::SqlitePool;
 use crate::backup::{self, CompanyFileInfo};
 use crate::ledger::db_err;
 
-/// When a backup was last saved off this disk (outside the offsite backup), in `system_preferences`.
-const OFF_DISK_KEY: &str = "backup_last_off_disk_at";
-/// When a backup was last test-restored here (outside the offsite backup).
-const TEST_RESTORE_KEY: &str = "backup_last_test_restore_at";
+/// What `backup_safety_events` records (migration 0176).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    /// A backup saved off the disk the company file is on.
+    OffDiskCopy,
+    /// A backup of these books passed a test restore.
+    TestRestore,
+}
+
+impl Kind {
+    fn code(self) -> &'static str {
+        match self {
+            Kind::OffDiskCopy => "OFF_DISK_COPY",
+            Kind::TestRestore => "TEST_RESTORE",
+        }
+    }
+}
+
+/// How it was done: `BACK_UP_TO` (Back up to…), `OFFSITE` (the offsite backup) or `LOCAL` (a backup
+/// file tested here).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Source {
+    BackUpTo,
+    Offsite,
+    Local,
+}
+
+impl Source {
+    fn code(self) -> &'static str {
+        match self {
+            Source::BackUpTo => "BACK_UP_TO",
+            Source::Offsite => "OFFSITE",
+            Source::Local => "LOCAL",
+        }
+    }
+}
 
 /// The newest copy off this disk and the newest test restore, as local date-times
-/// (`YYYY-MM-DDTHH:MM:SS`), from whichever of the two ways was most recent.
+/// (`YYYY-MM-DDTHH:MM:SS`), with where each was (the folder or file; `None` for one carried over
+/// from before LocalBooks kept it).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Safety {
     pub last_off_disk: Option<String>,
+    pub last_off_disk_location: Option<String>,
     pub last_test_restore: Option<String>,
+    pub last_test_restore_location: Option<String>,
+    /// The offsite backup's folder is on the same disk as the company file, so its copies don't
+    /// count as off this disk. Filled in by [`offsite_on_same_disk`]; [`status`] leaves it false.
+    pub offsite_on_same_disk: bool,
 }
 
 fn now() -> String {
     Local::now().format("%Y-%m-%dT%H:%M:%S").to_string()
 }
 
-async fn stored(pool: &SqlitePool, key: &str) -> Result<Option<String>, String> {
-    sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(key).fetch_optional(pool).await.map_err(db_err)
-}
-
-async fn record(pool: &SqlitePool, key: &str, at: &str) -> Result<(), String> {
-    sqlx::query("INSERT INTO system_preferences (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")
-        .bind(key)
+/// Records one event at `at`.
+async fn record_at(pool: &SqlitePool, kind: Kind, source: Source, location: Option<&Path>, at: &str) -> Result<(), String> {
+    sqlx::query("INSERT INTO backup_safety_events (kind, source, at, location) VALUES (?1, ?2, ?3, ?4)")
+        .bind(kind.code())
+        .bind(source.code())
         .bind(at)
+        .bind(location.map(|p| p.display().to_string()))
         .execute(pool)
         .await
         .map_err(db_err)?;
     Ok(())
+}
+
+/// Records one event now.
+pub async fn record(pool: &SqlitePool, kind: Kind, source: Source, location: Option<&Path>) -> Result<(), String> {
+    record_at(pool, kind, source, location, &now()).await
 }
 
 /// A stored time: `YYYY-MM-DDTHH:MM:SS`, with or without fractional seconds and a trailing `Z`, or
@@ -57,24 +104,33 @@ fn parse_at(text: &str) -> Option<NaiveDateTime> {
     NaiveDateTime::parse_from_str(t, "%Y-%m-%dT%H:%M:%S%.f").or_else(|_| NaiveDateTime::parse_from_str(t, "%Y-%m-%d %H:%M:%S%.f")).ok()
 }
 
-/// The later of two stored times, compared as times (a time that doesn't parse loses).
-fn newest(a: Option<String>, b: Option<String>) -> Option<String> {
-    match (a, b) {
-        (Some(a), Some(b)) => Some(if parse_at(&b) > parse_at(&a) { b } else { a }),
-        (a, b) => a.or(b),
-    }
+/// The newest event of `kind`, compared as times (a time that doesn't parse loses), and its location.
+async fn newest(pool: &SqlitePool, kind: Kind) -> Result<(Option<String>, Option<String>), String> {
+    let rows: Vec<(String, Option<String>)> =
+        sqlx::query_as("SELECT at, location FROM backup_safety_events WHERE kind = ?1 ORDER BY id DESC").bind(kind.code()).fetch_all(pool).await.map_err(db_err)?;
+    let best = rows.into_iter().fold(None::<(String, Option<String>)>, |best, row| match best {
+        Some(b) if parse_at(&row.0) <= parse_at(&b.0) => Some(b),
+        _ => Some(row),
+    });
+    Ok(best.map_or((None, None), |(at, location)| (Some(at), location)))
 }
 
+/// When a backup was last copied off this disk and last test-restored, and where.
 pub async fn status(pool: &SqlitePool) -> Result<Safety, String> {
-    let offsite: Option<(Option<String>, Option<String>)> = sqlx::query_as("SELECT last_backup_at, last_test_restore_at FROM offsite_backup WHERE id = 1")
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
-    let (offsite_copy, offsite_test) = offsite.unwrap_or_default();
-    Ok(Safety {
-        last_off_disk: newest(stored(pool, OFF_DISK_KEY).await?, offsite_copy),
-        last_test_restore: newest(stored(pool, TEST_RESTORE_KEY).await?, offsite_test),
-    })
+    let (last_off_disk, last_off_disk_location) = newest(pool, Kind::OffDiskCopy).await?;
+    let (last_test_restore, last_test_restore_location) = newest(pool, Kind::TestRestore).await?;
+    Ok(Safety { last_off_disk, last_off_disk_location, last_test_restore, last_test_restore_location, offsite_on_same_disk: false })
+}
+
+/// Whether the offsite backup is on and its folder is, as far as this computer can tell, on the
+/// same disk as the company file at `company` (a folder that isn't there, such as an unplugged
+/// drive, can't be told and isn't flagged).
+pub async fn offsite_on_same_disk(pool: &SqlitePool, company: &Path) -> Result<bool, String> {
+    let folder: Option<String> = sqlx::query_scalar("SELECT folder FROM offsite_backup WHERE id = 1").fetch_optional(pool).await.map_err(db_err)?;
+    Ok(folder.is_some_and(|f| {
+        let f = Path::new(&f);
+        f.is_dir() && !is_off_disk(&f.join("copy"), company)
+    }))
 }
 
 /// Whether `a` and `b` are on the same disk (volume).
@@ -108,26 +164,38 @@ pub fn is_off_disk(destination: &Path, company: &Path) -> bool {
     !same_volume(dest_dir, company_dir) || (crate::storage::classify(dest_dir).is_shared() && !crate::storage::classify(company_dir).is_shared())
 }
 
-/// Notes a backup saved to `destination`; counts it when it is off the company file's disk.
-pub async fn saved_copy(pool: &SqlitePool, destination: &Path, company: &Path) -> Result<bool, String> {
+/// Notes a backup saved to `destination` by `source`; records it when it is off the company file's
+/// disk, and says whether it was.
+pub async fn saved_copy(pool: &SqlitePool, destination: &Path, company: &Path, source: Source) -> Result<bool, String> {
     let off = is_off_disk(destination, company);
     if off {
-        record(pool, OFF_DISK_KEY, &now()).await?;
+        record(pool, Kind::OffDiskCopy, source, Some(destination)).await?;
     }
     Ok(off)
 }
 
+/// Whether a backup described by `info` is of the books open in `pool` (the same company name).
+pub async fn is_these_books(pool: &SqlitePool, info: &CompanyFileInfo) -> bool {
+    let ours = crate::preferences::get(pool, "company_name").await.unwrap_or_default();
+    info.company_name.as_deref().is_some_and(|n| n.trim().eq_ignore_ascii_case(ours.trim()))
+}
+
 /// Test restore: opens the backup at `path` read-only and checks it as a restore would (a LocalBooks
-/// company file, its integrity and its version), without touching the open books. Records the time
-/// in the open company when it passes.
-/// Only a backup of these books (the same company name) counts as their test restore.
-pub async fn test_restore(pool: Option<&SqlitePool>, path: &Path) -> Result<CompanyFileInfo, String> {
+/// company file, its integrity, its links, balanced entries and its version), and when it is from
+/// an older version also upgrades a copy of it in `scratch` (then deletes the copy), without
+/// touching the open books. When it passes and is a backup of the open books, the test restore is
+/// recorded in them.
+pub async fn test_restore(pool: Option<&SqlitePool>, scratch: &Path, path: &Path) -> Result<CompanyFileInfo, String> {
     let info = backup::inspect(path).await?;
+    if info.needs_upgrade {
+        backup::rehearse_upgrade(path, scratch).await?;
+    }
     if let Some(pool) = pool {
-        let ours = crate::preferences::get(pool, "company_name").await.unwrap_or_default();
-        let same = info.company_name.as_deref().is_some_and(|n| n.trim().eq_ignore_ascii_case(ours.trim()));
-        if same {
-            record(pool, TEST_RESTORE_KEY, &now()).await?;
+        // A passing test stays passed if noting it fails.
+        if is_these_books(pool, &info).await {
+            if let Err(e) = record(pool, Kind::TestRestore, Source::Local, Some(path)).await {
+                crate::diagnostics::log(&format!("backup safety: could not note the test restore: {e}"));
+            }
         }
     }
     Ok(info)
@@ -180,7 +248,7 @@ mod tests {
         let never = Safety::default();
         let items = due(&never, d("2026-11-09"), 30);
         assert_eq!(items.iter().map(|i| i.label.as_str()).collect::<Vec<_>>(), ["Copy a backup off this computer", "Test-restore a backup"]);
-        let recent = Safety { last_off_disk: Some("2026-10-20T09:00:00".into()), last_test_restore: Some("2026-09-01T09:00:00".into()) };
+        let recent = Safety { last_off_disk: Some("2026-10-20T09:00:00".into()), last_test_restore: Some("2026-09-01T09:00:00".into()), ..Default::default() };
         let items = due(&recent, d("2026-11-09"), 30);
         assert_eq!(items.len(), 1, "the copy is 20 days old; the test restore 69");
         assert_eq!(items[0].label, "Test-restore a backup");
@@ -189,16 +257,11 @@ mod tests {
     }
 
     #[test]
-    fn stored_times_compare_as_times_whatever_their_form() {
+    fn stored_times_parse_in_every_form_written() {
         assert_eq!(parse_at("2026-10-05T08:00:00").map(|t| t.date()), Some(d("2026-10-05")));
         assert_eq!(parse_at("2026-10-05T08:00:00.123Z").map(|t| t.date()), Some(d("2026-10-05")));
         assert_eq!(parse_at("2026-10-05 08:00:00").map(|t| t.date()), Some(d("2026-10-05")));
         assert_eq!(parse_at("soon"), None);
-        // Lexically "2026-10-05T09…" < "2026-10-05T10…Z" either way, but a fraction or Z must not
-        // decide it: the later time wins.
-        assert_eq!(newest(Some("2026-10-05T10:00:00.500Z".into()), Some("2026-10-05T09:59:59".into())).as_deref(), Some("2026-10-05T10:00:00.500Z"));
-        assert_eq!(newest(Some("2026-10-05T09:00:00".into()), Some("2026-10-06 08:00:00".into())).as_deref(), Some("2026-10-06 08:00:00"));
-        assert_eq!(newest(None, Some("2026-10-05T09:00:00".into())).as_deref(), Some("2026-10-05T09:00:00"));
     }
 
     #[test]
@@ -209,51 +272,150 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// A different volume: on Linux, `/dev/shm` (tmpfs) when the temp folder is on another device.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_copy_on_another_volume_is_off_the_disk() {
+        use std::os::unix::fs::MetadataExt;
+        let tmp = std::env::temp_dir();
+        let shm = Path::new("/dev/shm");
+        let (Ok(a), Ok(b)) = (std::fs::metadata(&tmp), std::fs::metadata(shm)) else { return };
+        if a.dev() == b.dev() {
+            return;
+        }
+        assert!(is_off_disk(&shm.join("copy.localbooks"), &tmp.join("Books.localbooks")));
+        assert!(!is_off_disk(&tmp.join("copy.localbooks"), &tmp.join("Books.localbooks")));
+    }
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("lb-{name}-{}-{}", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[tokio::test]
-    async fn the_newest_of_this_and_the_offsite_backup_counts_and_a_test_restore_is_recorded() {
+    async fn the_newest_event_of_each_kind_counts_with_where_it_was() {
         let pool = test_pool().await;
         assert_eq!(status(&pool).await.unwrap(), Safety::default());
-        record(&pool, OFF_DISK_KEY, "2026-10-01T08:00:00").await.unwrap();
+        record_at(&pool, Kind::OffDiskCopy, Source::BackUpTo, Some(Path::new("/media/usb/Books.localbooks")), "2026-10-05T10:00:00.500Z").await.unwrap();
+        // Recorded later, but an earlier time: the time decides, not the order or the text.
+        record_at(&pool, Kind::OffDiskCopy, Source::Offsite, Some(Path::new("/sync/offsite")), "2026-10-05T09:59:59").await.unwrap();
+        record_at(&pool, Kind::TestRestore, Source::Local, None, "2026-09-01 08:00:00").await.unwrap();
+        let s = status(&pool).await.unwrap();
+        assert_eq!(s.last_off_disk.as_deref(), Some("2026-10-05T10:00:00.500Z"));
+        assert_eq!(s.last_off_disk_location.as_deref(), Some("/media/usb/Books.localbooks"));
+        assert_eq!(s.last_test_restore.as_deref(), Some("2026-09-01 08:00:00"));
+        assert_eq!(s.last_test_restore_location, None);
+        // An offsite backup by itself is no copy off this disk.
         sqlx::query(
             "INSERT INTO offsite_backup (id, folder, salt, kdf_memory_kib, kdf_iterations, kdf_parallelism, key_check, last_backup_at, last_test_restore_at)
-             VALUES (1, '/offsite', 'salt', 8, 1, 1, '00000000000000000000000000000000', '2026-10-05T08:00:00', '2026-09-01T08:00:00')",
+             VALUES (1, '/offsite', 'salt', 8, 1, 1, '00000000000000000000000000000000', '2026-11-05T08:00:00', NULL)",
         )
         .execute(&pool)
         .await
         .unwrap();
-        let s = status(&pool).await.unwrap();
-        assert_eq!(s.last_off_disk.as_deref(), Some("2026-10-05T08:00:00"), "the offsite copy is newer");
-        assert_eq!(s.last_test_restore.as_deref(), Some("2026-09-01T08:00:00"));
+        assert_eq!(status(&pool).await.unwrap().last_off_disk.as_deref(), Some("2026-10-05T10:00:00.500Z"));
+    }
 
-        // A real backup passes the test restore, which is then the newest.
-        let dir = std::env::temp_dir().join(format!("lb-test-restore-{}-{}", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let live = dir.join("Books.localbooks");
-        let books = crate::db::open(&live).await.unwrap();
-        // A backup of these books: the same company name.
+    #[tokio::test]
+    async fn a_copy_saved_on_the_same_disk_is_not_recorded_and_flags_an_offsite_folder_there() {
+        let pool = test_pool().await;
+        let dir = scratch("same-disk");
+        let company = dir.join("Books.localbooks");
+        assert!(!saved_copy(&pool, &dir.join("copy.localbooks"), &company, Source::BackUpTo).await.unwrap());
+        assert_eq!(status(&pool).await.unwrap().last_off_disk, None);
+
+        assert!(!offsite_on_same_disk(&pool, &company).await.unwrap(), "no offsite backup");
+        let folder = dir.join("offsite");
+        std::fs::create_dir_all(&folder).unwrap();
+        sqlx::query("INSERT INTO offsite_backup (id, folder, salt, kdf_memory_kib, kdf_iterations, kdf_parallelism, key_check) VALUES (1, ?1, 'salt', 8, 1, 1, '00000000000000000000000000000000')")
+            .bind(folder.display().to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(offsite_on_same_disk(&pool, &company).await.unwrap());
+        // A folder that isn't there (an unplugged drive) can't be told, and isn't flagged.
+        sqlx::query("UPDATE offsite_backup SET folder = ?1").bind(dir.join("gone").display().to_string()).execute(&pool).await.unwrap();
+        assert!(!offsite_on_same_disk(&pool, &company).await.unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    async fn books_named(path: &Path, name: &str) -> SqlitePool {
+        let books = crate::db::open(path).await.unwrap();
+        sqlx::query("INSERT INTO system_preferences (key, value) VALUES ('company_name', ?1) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+            .bind(name)
+            .execute(&books)
+            .await
+            .unwrap();
+        books
+    }
+
+    #[tokio::test]
+    async fn a_test_restore_of_these_books_is_recorded_and_others_are_not() {
+        let pool = test_pool().await;
         let ours = crate::preferences::get(&pool, "company_name").await.unwrap();
-        record(&books, "company_name", &ours).await.unwrap();
+        let dir = scratch("test-restore");
+        let live = dir.join("Books.localbooks");
+        let books = books_named(&live, &ours).await;
         let copy = dir.join("copy.localbooks");
         backup::snapshot(&books, &live, &copy).await.unwrap();
         crate::db::close_pool(&books).await;
-        test_restore(Some(&pool), &copy).await.unwrap();
-        let tested = status(&pool).await.unwrap().last_test_restore.unwrap();
-        assert!(tested.as_str() > "2026-09-01T08:00:00");
+
+        let info = test_restore(Some(&pool), &dir.join("scratch"), &copy).await.unwrap();
+        assert!(!info.needs_upgrade);
+        let s = status(&pool).await.unwrap();
+        assert!(s.last_test_restore.is_some());
+        assert_eq!(s.last_test_restore_location.as_deref(), Some(copy.display().to_string().as_str()));
+
         // Something that isn't a company file fails and records nothing.
         let junk = dir.join("junk.localbooks");
         std::fs::write(&junk, b"not a database").unwrap();
-        assert!(test_restore(Some(&pool), &junk).await.unwrap_err().starts_with("RESTORE_NOT_SQLITE"));
-        assert_eq!(status(&pool).await.unwrap().last_test_restore.unwrap(), tested);
+        assert!(test_restore(Some(&pool), &dir, &junk).await.unwrap_err().starts_with("RESTORE_NOT_SQLITE"));
         // A backup of other books opens fine but doesn't count as these books' test restore.
-        record(&pool, TEST_RESTORE_KEY, "2026-09-01T08:00:00").await.unwrap();
         let other = dir.join("Other.localbooks");
-        let others = crate::db::open(&other).await.unwrap();
-        record(&others, "company_name", "Someone Else Ltd").await.unwrap();
+        let others = books_named(&other, "Someone Else Ltd").await;
         let other_copy = dir.join("other-copy.localbooks");
         backup::snapshot(&others, &other, &other_copy).await.unwrap();
         crate::db::close_pool(&others).await;
-        test_restore(Some(&pool), &other_copy).await.unwrap();
-        assert_eq!(status(&pool).await.unwrap().last_test_restore.as_deref(), Some("2026-09-01T08:00:00"));
+        test_restore(Some(&pool), &dir, &other_copy).await.unwrap();
+        let events: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM backup_safety_events WHERE kind = 'TEST_RESTORE'").fetch_one(&pool).await.unwrap();
+        assert_eq!(events, 1, "only the passing test of these books");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A backup from an older version is upgraded on a copy as a restore would, and the copy is
+    /// gone afterwards; the backup itself is unchanged.
+    #[tokio::test]
+    async fn a_test_restore_of_an_older_backup_rehearses_the_upgrade() {
+        use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+        let pool = test_pool().await;
+        let dir = scratch("rehearse");
+        // A backup from the previous release: every migration but the latest.
+        let copy = dir.join("old-copy.localbooks");
+        let latest = crate::db::MIGRATOR.iter().map(|m| m.version).max().unwrap();
+        {
+            let options = SqliteConnectOptions::new().filename(&copy).create_if_missing(true).foreign_keys(true);
+            let old = SqlitePoolOptions::new().max_connections(1).connect_with(options).await.unwrap();
+            let previous = sqlx::migrate::Migrator {
+                migrations: crate::db::MIGRATOR.iter().filter(|m| m.version < latest).cloned().collect::<Vec<_>>().into(),
+                ..sqlx::migrate::Migrator::DEFAULT
+            };
+            crate::db::migrate_with(&old, &previous).await.unwrap();
+            let ours = crate::preferences::get(&pool, "company_name").await.unwrap();
+            sqlx::query("INSERT INTO system_preferences (key, value) VALUES ('company_name', ?1) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+                .bind(ours)
+                .execute(&old)
+                .await
+                .unwrap();
+            crate::db::close_pool(&old).await;
+        }
+
+        let scratch_dir = dir.join("scratch");
+        let info = test_restore(Some(&pool), &scratch_dir, &copy).await.unwrap();
+        assert!(info.needs_upgrade);
+        assert_eq!(std::fs::read_dir(&scratch_dir).unwrap().count(), 0, "the rehearsal copy is deleted");
+        assert!(backup::inspect(&copy).await.unwrap().needs_upgrade, "the backup itself is not upgraded");
+        assert!(status(&pool).await.unwrap().last_test_restore.is_some());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

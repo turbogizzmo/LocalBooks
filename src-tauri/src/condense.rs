@@ -127,6 +127,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "ach_originators",
     "approval_requests",
     "approval_rules",
+    "backup_safety_events",
     "bank_format_templates",
     "bank_payee_rules",
     "bank_rules",

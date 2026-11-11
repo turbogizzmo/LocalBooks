@@ -229,7 +229,7 @@ export const topics = [
   {
     id: 'backup-safety', area: 'company', views: ['settings/data', 'dashboard'],
     title: 'Keep a backup off this computer, and test that it restores',
-    body: 'Backup safety in File & Data Controls shows when a backup was last copied off this computer (Back up to… on another drive, a network or synced folder, or the offsite backup) and last test-restored. Test beside a snapshot, or Test restore a backup…, opens a backup and checks it as a restore would without replacing your books. Reminders lists either one after 30 days; change the days in Preferences › Reminders.',
+    body: 'Backup safety in File & Data Controls shows when, and where, a backup was last copied off this computer (Back up to… on another drive, a network or synced folder, or the offsite backup when its folder is on another drive or synced) and last test-restored. LocalBooks compares the drive the copy is on with the company file’s; nothing is sent anywhere. Test beside a snapshot, or Test restore a backup…, opens a backup and checks it as a restore would, upgrading a throwaway copy of an older one, without replacing your books. Reminders lists either one after 30 days (a monthly routine); change the days in Preferences › Reminders.',
     keywords: 'backup safety offsite another drive usb test restore verify check reminder disk failure',
     go: { label: 'Go to File & Data Controls', view: 'settings/data' },
     guide: 'backups-and-company-files',

@@ -40,7 +40,8 @@ store (the Keychain on a Mac), so copies need no password. On another computer, 
 removed, copies stop until you click **Change…** and enter the password again.
 
 **Test restore** opens a copy with the password and checks it like a restore would (that it's an
-undamaged, balanced Tillhouse file), without changing your books. Do it now and then, so you know
+undamaged, balanced Tillhouse file, and that a copy from an older version upgrades), without
+changing your books. Do it now and then, so you know
 your copies work. **Restore** replaces your books with the copy, after saving the current books as
 a snapshot, like any restore. To restore on a new computer, create or open any company, set up
 offsite backup with the same folder and password, and click **Restore** beside the copy, or use
@@ -55,17 +56,27 @@ The daily backups are kept on this computer, so a failed disk or a lost laptop t
 a backup nobody has opened might not restore. **Backup safety** in File & Data Controls shows when
 each of these was last done:
 
-- **A copy off this computer**: a backup saved with **Back up to…** onto another drive, a network
-  share or a synced folder, or made by the offsite backup. A copy saved to another folder on the
-  same disk doesn't count, and nor does one beside books that already live on a network share.
+- **A copy off this computer**: a backup saved with **Back up to…** onto another drive (a USB
+  drive, a second disk), a network share or a synced folder, or made by the offsite backup into a
+  folder like that. LocalBooks asks the computer which drive (volume) the folder is on and compares
+  it with the company file's; nothing is sent anywhere to find out. A copy saved to another folder
+  on the same disk doesn't count, and nor does one beside books that already live on a network
+  share. If the offsite backup's folder is on the same disk as your books, Backup safety says so:
+  those copies don't count until you choose a folder on another drive or a synced folder.
 - **A test restore**: **Test** beside a snapshot, **Test restore a backup…** for any backup file,
   or **Test restore** on an offsite copy. Tillhouse opens the backup and checks it as a restore
-  would (that it's an undamaged Tillhouse file, and how many entries it has), without replacing
-  your books. Only a backup of these books (the same company name) counts here.
+  would (that it's an undamaged, balanced Tillhouse file, and how many entries it has). A backup
+  from an older version of Tillhouse is also upgraded, on a throwaway copy that is deleted
+  afterwards, so you know the upgrade a restore runs works on it. Your books are not replaced. Only
+  a backup of these books (the same company name) counts here.
+
+The screen shows the date and where each was done (the file or folder). Every copy and test is
+kept as a record in the company file.
 
 **Reminders** lists **Copy a backup off this computer** or **Test-restore a backup** when either
-hasn't been done in 30 days. Change the days, or turn it off, under **Backup safety** in
-**Edit › Preferences › Reminders**.
+hasn't been done in 30 days. Thirty days matches a monthly routine (most books are closed and
+reconciled monthly), so at most a month of work is at risk if the disk fails. Change the days
+(1 to 365), or turn it off, under **Backup safety** in **Edit › Preferences › Reminders**.
 
 ## Restore a backup
 
