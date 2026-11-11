@@ -1025,12 +1025,12 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>, pa
         .max_connections(connections)
         .connect_with(options)
         .await
-        .map_err(|e| format!("cannot open company file {}: {e}", path.display()))?;
+        .map_err(|e| explain_open_error(path, format!("cannot open company file {}: {e}", path.display())))?;
 
     if let Err(e) = prepare(&pool, path, backups).await {
         // Closed before returning, so a caller can move or remove the file straight away.
         close_pool(&pool).await;
-        return Err(e);
+        return Err(explain_open_error(path, e));
     }
     // Seal anything written outside a write transaction (the migration records) into the audit chain.
     // Best effort: the books must still open (and be verifiable) if sealing fails; the next write
@@ -1044,6 +1044,16 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>, pa
     }
 
     Ok(pool)
+}
+
+/// When opening failed because the VFS refused the file's log as SQLite opened it (it changed after
+/// [`crate::wal_guard::check`] looked, gap R24), says so plainly instead of SQLite's "unable to
+/// open"; any other error is returned as it was.
+fn explain_open_error(path: &Path, error: String) -> String {
+    match crate::wal_guard::check(path) {
+        Err(mismatch) => mismatch,
+        Ok(()) => error,
+    }
 }
 
 /// Checks and upgrades a newly opened company file (see [`open_for`]).
@@ -1068,7 +1078,8 @@ async fn checkpoint_closed(path: &Path) {
     if crate::file_cipher::header::is_encrypted(path) || !crate::wal_guard::wal_path(path).exists() || crate::wal_guard::check(path).is_err() {
         return;
     }
-    let options = SqliteConnectOptions::new().filename(path).busy_timeout(Duration::from_secs(5));
+    let Ok(options) = crate::file_cipher::open_options(path, None) else { return };
+    let options = options.busy_timeout(Duration::from_secs(5));
     if let Ok(mut conn) = sqlx::SqliteConnection::connect_with(&options).await {
         // Reading the file attaches the log; as the only connection, closing then removes it.
         let _ = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&mut conn).await;

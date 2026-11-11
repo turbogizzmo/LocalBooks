@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Safer opening of company files from others.** The check that refuses a company file with a
+  mismatched log file next to it now also runs at the moment the file is opened, so the log can't
+  be swapped in between.
 - **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
   "Company default" start at it on new sales forms. Before, once a company had two or more rates,
   those customers got no tax unless someone picked a rate on each form.
