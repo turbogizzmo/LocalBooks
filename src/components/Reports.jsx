@@ -713,7 +713,7 @@ export default function Reports({ navigate, intent }) {
                       aria-pressed={starred}
                       aria-label={starred ? `Remove ${label} from Favorites` : `Add ${label} to Favorites`}
                       title={starred ? 'Remove from Favorites' : 'Add to Favorites'}
-                      className={`flex-none px-1.5 py-0.5 text-sm ${starred ? 'text-[#c99700]' : 'text-qb-ink-faint opacity-0 group-hover:opacity-100 focus:opacity-100'}`}
+                      className={`flex-none px-1.5 py-0.5 text-sm ${starred ? 'text-[#a87e00]' : 'text-qb-ink-faint opacity-0 group-hover:opacity-100 focus:opacity-100'}`}
                     >
                       {starred ? '★' : '☆'}
                     </button>

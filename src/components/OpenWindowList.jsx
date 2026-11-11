@@ -13,7 +13,7 @@ import BrandMark from './BrandMark.jsx';
 export default function OpenWindowList({ asSidebar = false, companyName = 'Tillhouse' }) {
   const { windows, activeId, focus } = useContext(WindowManagerContext);
   return (
-    <nav className={`no-print flex w-[190px] flex-none flex-col bg-qb-nav text-sm text-qb-nav-text ${asSidebar ? '' : 'border-l border-white/10'}`} aria-label="Open Windows">
+    <nav className={`no-print flex w-[190px] flex-none flex-col bg-qb-nav text-sm text-qb-nav-text ${asSidebar ? '' : 'border-l border-white/10'}`} aria-label="Open Windows" data-f6-region="">
       {asSidebar && (
         <div className="flex h-toolbar flex-none items-center gap-2 border-b border-white/10 px-3">
           <BrandMark />

@@ -139,7 +139,7 @@ export function EnvelopeDesigner({ tabs }) {
             <div className="flex h-row flex-none items-center gap-2 border-b border-qb-border px-2 text-xs text-qb-ink-muted">
               <span className="font-semibold text-qb-ink">Preview</span>
               <span>Sample envelope</span>
-              {dirty && <span className="font-semibold text-qb-warning">Unsaved changes</span>}
+              {dirty && <span className="font-semibold text-qb-warning-ink">Unsaved changes</span>}
             </div>
             <div className="min-h-0 flex-1 overflow-auto p-3 scrollbar-thin">
               <div className="mx-auto max-w-[720px]">{preview?.pages.map((page, i) => <FormSheet key={i} page={page} logo={null} className="w-full border border-qb-border shadow-md" />)}</div>

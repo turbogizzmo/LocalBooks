@@ -82,12 +82,13 @@ function Step({ number, title, state = 'active', aside, children }) {
   const badge =
     state === 'done' ? 'bg-qb-green-active text-white' : state === 'active' ? 'bg-qb-nav text-white' : 'bg-qb-canvas text-qb-ink-faint';
   return (
-    <section className={`qb-panel ${state === 'locked' ? 'opacity-60' : ''}`}>
+    // A locked step is greyed by its text colour, not by fading the card, so its title stays readable.
+    <section className="qb-panel">
       <div className="flex min-h-[36px] items-center gap-2 border-b border-qb-border px-3 py-1">
         <span className={`flex h-5 w-5 flex-none items-center justify-center rounded-full text-xs font-semibold ${badge}`}>
           {state === 'done' ? '✓' : number}
         </span>
-        <h3 className="text-md font-semibold">{title}</h3>
+        <h3 className={`text-md font-semibold ${state === 'locked' ? 'text-qb-ink-muted' : ''}`}>{title}</h3>
         {aside && <div className="ml-auto flex items-center gap-2">{aside}</div>}
       </div>
       {state !== 'locked' && children}

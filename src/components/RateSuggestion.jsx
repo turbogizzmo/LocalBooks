@@ -60,7 +60,7 @@ export function useSuggestedRate({ currency, date, rate, setRate, initialIsDefau
 
   let note = null;
   if (state?.status === 'loading') note = <span className="text-qb-ink-faint">Looking up rate…</span>;
-  else if (state?.status === 'error') note = <span className="text-qb-warning" title={state.message}>No rate found; enter it yourself</span>;
+  else if (state?.status === 'error') note = <span className="text-qb-warning-ink" title={state.message}>No rate found; enter it yourself</span>;
   else if (state?.status === 'ok') {
     const s = state.suggestion;
     const text = formatRate(s.rateE6);
