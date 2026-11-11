@@ -19,6 +19,7 @@ import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
+import DocNumberBox, { useDocNumber } from './DocNumberBox.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
@@ -43,6 +44,8 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep, copyOf = 
   const [refundFrom, setRefundFrom] = useState(copyOf?.accountId ?? defaultBank);
   const [lines, setLines] = useState(() => (copyOf ? linesFromDocument(copyOf.lines, copyOf.formLines ?? [], defaultIncome) : Array.from({ length: 3 }, () => blankLine(defaultIncome))));
   const [busy, setBusy] = useState(false);
+  // Credit #: the next number, shown before saving; the person may type another.
+  const docNumber = useDocNumber('CREDIT_MEMO', 'Credit');
   const [error, setError] = useState(null);
   // Files picked before posting; attached once it posts.
   const [files, setFiles] = useState([]);
@@ -70,6 +73,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep, copyOf = 
   const { tax: taxCents, total } = documentTotals(payload, tax.rate, 0, formLines);
 
   const clear = () => {
+    docNumber.reset();
     setCustomer('');
     setMemo('');
     setLines(Array.from({ length: 3 }, () => blankLine(defaultIncome)));
@@ -92,7 +96,11 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep, copyOf = 
     if (warning) return setError(warning);
     setBusy(true);
     try {
+      const chosen = await docNumber.resolve();
+      if (chosen.cancelled) return;
+      if (chosen.error) return setError(chosen.error);
       const memoRow = await api.createCreditMemo({
+        creditNumber: chosen.value,
         customerName: customer.trim(),
         creditDate: date,
         memo: memo.trim() || null,
@@ -143,6 +151,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep, copyOf = 
           <span className="qb-label">Date</span>
           <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
+        <DocNumberBox number={docNumber} />
         {refund && (
           <label>
             <span className="qb-label">Refund from</span>

@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, InvoiceInput, InvoiceLineInput};
+use crate::money::Cents;
 
 fn d(m: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, m, day).expect("valid date")
@@ -15,13 +16,14 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, due: Naive
     create_and_post_invoice(
         pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: customer.into(),
             issue_date: issue,
             due_date: due,
-            lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(cents), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -123,7 +125,7 @@ async fn recurring_due_follows_next_date_activity_and_end_date() {
     let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
     let check = serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-01",
         "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 120_000, "memo": null }] });
-    let template = |name: &str, next: NaiveDate, end: Option<NaiveDate>| crate::workflows::RecurringInput {
+    let template = |name: &str, next: NaiveDate, end: Option<NaiveDate>| crate::workflows::RecurringInput { anchor_day: None,
         name: name.into(), kind: "EXPENSE".into(), payload: check.clone(), frequency: "MONTHLY".into(), every: 1, next_date: next, end_date: end,
     };
     let rent_id = crate::workflows::save_recurring(&pool, None, template("Rent", d(3, 1), None)).await.unwrap();

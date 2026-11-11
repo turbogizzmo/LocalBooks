@@ -55,7 +55,9 @@ enum Backend {
 pub struct SecretStore {
     backend: Backend,
     /// The credential store's service name.
+    #[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code, reason = "only the system store reads it"))]
     service: &'static str,
+    #[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code, reason = "only the system store reads it"))]
     what: &'static str,
 }
 

@@ -28,6 +28,7 @@ pub async fn create_invoice(
     billable: Option<crate::billable_costs::OnInvoice>,
 ) -> Result<InvoiceSummary, String> {
     let pool = db.pool().await;
+    crate::sales::require_listed(&pool, crate::sales::Party::Customer, &input.customer_name).await?;
     guards::check(&pool, guards::invoice(&input, None), confirmed.as_deref()).await?;
     // The invoice can wait in the print queue (File › Print Forms › Invoices), can carry the
     // payment taken when it was written, and can bill costs and time chosen with Add billable

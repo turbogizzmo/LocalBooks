@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::expenses::ExpenseInput;
+use crate::money::Cents;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -65,16 +66,17 @@ async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
     // An edit of the invoice keeps the cost billed; voiding it frees the cost again.
     let lines = crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap().items;
     let edited = crate::invoices::InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme".into(),
         issue_date: d(11),
         due_date: d(31),
         lines: lines
             .iter()
-            .map(|l| crate::invoices::InvoiceLineInput { description: l.description.clone(), quantity_e4: l.quantity_e4, rate_cents: l.rate_cents, income_account_id: l.income_account_id, product_service_id: None, class_id: None, is_taxable: false, service_date: None })
+            .map(|l| crate::invoices::InvoiceLineInput { description: l.description.clone(), quantity_e4: l.quantity_e4, rate_cents: Cents(l.rate_cents), income_account_id: l.income_account_id, product_service_id: None, class_id: None, is_taxable: false, service_date: None })
             .collect(),
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     let new_invoice = crate::edits::replace_invoice(&pool, invoice.id, edited).await.unwrap();
@@ -298,13 +300,14 @@ async fn an_edited_reimbursement_line_can_move_to_another_expense_account() {
     .await
     .unwrap();
     let edited = |account_id: i64| crate::invoices::InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme".into(),
         issue_date: d(11),
         due_date: d(31),
-        lines: vec![crate::invoices::InvoiceLineInput { description: "Lumber".into(), quantity_e4: 10_000, rate_cents: 20_000, income_account_id: account_id, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![crate::invoices::InvoiceLineInput { description: "Lumber".into(), quantity_e4: 10_000, rate_cents: Cents(20_000), income_account_id: account_id, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     let err = crate::edits::replace_invoice(&pool, invoice.id, edited(checking)).await.unwrap_err();
@@ -333,13 +336,14 @@ async fn a_billable_card_charge_is_invoiced_from_the_invoice_form() {
 
     crate::preferences::set(&pool, "billable_markup_account_id", &services.to_string()).await.unwrap();
     let form = |customer: &str| crate::invoices::InvoiceInput {
+        invoice_number: None,
         customer_name: customer.into(),
         issue_date: d(10),
         due_date: d(31),
-        lines: vec![crate::invoices::InvoiceLineInput { description: "Installation".into(), quantity_e4: QUANTITY_SCALE, rate_cents: 50_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![crate::invoices::InvoiceLineInput { description: "Installation".into(), quantity_e4: QUANTITY_SCALE, rate_cents: Cents(50_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     let chosen = OnInvoice { costs: vec![CostRef { source: "EXPENSE".into(), line_id: unbilled[0].line_id }], time: Vec::new(), markup_percent: Some("10".into()) };

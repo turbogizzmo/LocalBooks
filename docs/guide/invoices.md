@@ -9,9 +9,11 @@ Receivable** (what customers owe you) and to the income account on each line.
    top of the screen.
 2. In **Customer**, type the customer's name. Matching customers are listed as you type. For a new
    name, choose **Add as a new customer** (or **Add with details…** to fill in the address and
-   terms first); a name you type and post without choosing is added too.
+   terms first). A name that isn't on the list is never added without asking: see
+   [Adding a name while you enter a transaction](customers-and-products.md#adding-a-name-while-you-enter-a-transaction).
 3. Check **Invoice date**, then pick **Terms** (Due on receipt, Net 15, Net 30 or Net 60). The
    **Due date** fills in for you; change it to use custom terms.
+   **Invoice #** shows the number the invoice will get: see [Invoice numbers](#invoice-numbers).
 4. Fill in the line items:
    - Choose a **Product/Service** to fill in its description, rate and income account, or type
      a **Description** yourself. To add a new product or service on the spot, choose
@@ -129,6 +131,26 @@ A saved credit memo or refund receipt opens as its printed form, with its Credit
 No., lines and total; **Print**, **Save as PDF** and **Email** use the **Credit memo** layout in
 Settings › Custom Forms.
 
+### Invoice numbers
+
+**Invoice #** on a new invoice shows the next number before you save: one more than the highest
+invoice number so far, starting at 1001. Leave it, and the invoice gets the next number when it
+posts (if another window posts an invoice first, the box moves on to the following number). Type
+another number to use it instead, for example to carry on from the numbers in your old system.
+Numbering then carries on from the highest number used, so after 5000 the next invoice is 5001.
+**Duplicate** gives the copy the next number, too.
+
+Each invoice number is used once. If you type a number another invoice already has (voided ones
+included), saving says which invoice has it and offers the next free number: **Use #…** saves the
+invoice under that number, and **Cancel** takes you back to **Invoice #** to type a different one.
+LocalBooks doesn't allow two invoices with the same number, because the number is how you, your
+customer and your reports tell invoices apart: payments, statements and the Find window all list
+invoices by number.
+
+Estimates (**Estimate #**), sales receipts (**Sale #**), credit memos and refund receipts
+(**Credit #**) and sales orders (**Order #**) work the same way, each with its own numbers. A
+memorized invoice takes the next number each time you enter it.
+
 ## Subtotals, discounts, charges and groups
 
 The **Product/Service** list on invoices, sales receipts, estimates, credit memos and refund
@@ -216,7 +238,9 @@ details and custom fields over.
 
 Double-click the invoice in the list (or choose **Edit…** in its **Actions** menu) to open it, make
 your changes and save. LocalBooks voids the original and posts the corrected invoice in its place;
-both stay in the journal and the audit trail. Bills, checks and expenses open the same way from
+both stay in the journal and the audit trail. The corrected invoice keeps the original's number, so
+your customer, statements, payments and reports go on showing the same invoice number; the voided
+original keeps it too, in the audit trail (**Invoice #** can't be changed while you edit). Bills, checks and expenses open the same way from
 their lists.
 
 An invoice with payments or credits applied can be edited too. The form says how much is applied

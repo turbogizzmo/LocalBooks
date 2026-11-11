@@ -47,7 +47,8 @@ pub struct RevaluationPreview {
 
 /// Open foreign invoices as of `as_of`, restated at `rates` (code → home units per foreign unit ×1,000,000).
 pub async fn preview(pool: &SqlitePool, as_of: NaiveDate, rates: &BTreeMap<String, i64>) -> Result<RevaluationPreview, String> {
-    let open: Vec<(i64, i64, String, String, i64, i64, i64, i64, i64)> = sqlx::query_as(
+    type OpenRow = (i64, i64, String, String, i64, i64, i64, i64, i64);
+    let open: Vec<OpenRow> = sqlx::query_as(
         "SELECT i.id, i.invoice_number, i.customer_name, i.currency_code, i.exchange_rate_e6, i.total_cents, i.home_total_cents,
                 COALESCE((SELECT SUM(p.amount_cents) FROM invoice_payments p WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date <= ?1), 0),
                 COALESCE((SELECT SUM(p.ar_relief_cents) FROM invoice_payments p WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date <= ?1), 0)

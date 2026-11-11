@@ -27,14 +27,18 @@ pub async fn get_sales_order(db: State<'_, Db>, id: i64) -> Result<SalesOrderDet
 
 #[tauri::command]
 pub async fn create_sales_order(app: AppHandle, db: State<'_, Db>, input: SalesOrderInput) -> Result<SalesOrderSummary, String> {
-    let order = sales_orders::create(&db.pool().await, &input).await?;
+    let pool = db.pool().await;
+    crate::sales::require_listed(&pool, crate::sales::Party::Customer, &input.customer_name).await?;
+    let order = sales_orders::create(&pool, &input).await?;
     notify(&app);
     Ok(order)
 }
 
 #[tauri::command]
 pub async fn update_sales_order(app: AppHandle, db: State<'_, Db>, id: i64, input: SalesOrderInput) -> Result<SalesOrderSummary, String> {
-    let order = sales_orders::update(&db.pool().await, id, &input).await?;
+    let pool = db.pool().await;
+    crate::sales::require_listed(&pool, crate::sales::Party::Customer, &input.customer_name).await?;
+    let order = sales_orders::update(&pool, id, &input).await?;
     notify(&app);
     Ok(order)
 }
@@ -64,6 +68,7 @@ pub async fn delete_sales_order(app: AppHandle, db: State<'_, Db>, id: i64) -> R
 #[tauri::command]
 pub async fn invoice_from_sales_order(app: AppHandle, db: State<'_, Db>, id: i64, input: InvoiceInput, takes: Vec<Take>, confirmed: Option<Vec<String>>) -> Result<InvoiceSummary, String> {
     let pool = db.pool().await;
+    crate::sales::require_listed(&pool, crate::sales::Party::Customer, &input.customer_name).await?;
     guards::check(&pool, guards::invoice(&input, None), confirmed.as_deref()).await?;
     let invoice = sales_orders::invoice_from_order(&pool, id, &input, &takes).await?;
     notify(&app);

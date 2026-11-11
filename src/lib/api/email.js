@@ -9,7 +9,8 @@ export default {
   getSmtpSettings: () => invoke('get_smtp_settings'),
   sendSmtpTestEmail: (settings, password = null) => invoke('send_smtp_test_email', { settings, password }),
   getEmailHistory: (kind, documentId) => invoke('get_email_history', { kind, documentId }),
-  listEmailStatuses: (kind) => invoke('list_email_statuses', { kind }),
+  // A statement's marks are for one period: pass its end date (the statement date).
+  listEmailStatuses: (kind, periodEnd = null) => invoke('list_email_statuses', { kind, periodEnd }),
   setEmailLater: (kind, documentId, queued) => invoke('set_email_later', { kind, documentId, queued }),
   listEmailQueue: () => invoke('list_email_queue'),
   saveSmtpSettings: (settings, password = null) => invoke('save_smtp_settings', { settings, password }),

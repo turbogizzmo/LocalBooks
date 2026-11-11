@@ -37,6 +37,7 @@ use chrono::NaiveDate;
 
 use crate::invoices::{InvoiceInput, InvoiceLineInput, InvoiceSummary};
 use crate::ledger::{db_err, mul_div_round, rollback, MAX_LINE_CENTS, QUANTITY_SCALE};
+use crate::money::Cents;
 use crate::preferences::tax_time;
 
 /// A billable cost not yet on a live invoice.
@@ -262,13 +263,14 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
         .map_err(db_err)?
         .ok_or("COST_UNKNOWN_CUSTOMER: that customer or job does not exist")?;
     let invoice = InvoiceInput {
+        invoice_number: None,
         customer_name: customer,
         issue_date: input.issue_date,
         due_date: input.due_date,
         lines: Vec::new(),
         currency: None,
         tax_rate_id: input.tax_rate_id,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     let chosen = OnInvoice { costs: input.costs.clone(), time: input.time.clone(), markup_percent: None };
@@ -367,7 +369,7 @@ async fn write_with_billing(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInp
         lines.push(InvoiceLineInput {
             description: format!("{what} ({}{from}{foreign})", found.date),
             quantity_e4: QUANTITY_SCALE,
-            rate_cents: found.amount_cents,
+            rate_cents: Cents(found.amount_cents),
             income_account_id: account,
             product_service_id: None,
             class_id: None,
@@ -395,7 +397,7 @@ async fn write_with_billing(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInp
         lines.push(InvoiceLineInput {
             description: format!("{what} ({}, {})", found.date, found.employee_name),
             quantity_e4: hours,
-            rate_cents: found.hourly_rate_cents,
+            rate_cents: Cents(found.hourly_rate_cents),
             income_account_id,
             product_service_id: Some(item),
             class_id: None,
@@ -409,7 +411,7 @@ async fn write_with_billing(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInp
         lines.push(InvoiceLineInput {
             description: format!("Markup ({}%)", crate::finance_charges::format_rate(markup)),
             quantity_e4: QUANTITY_SCALE,
-            rate_cents: markup_total,
+            rate_cents: Cents(markup_total),
             income_account_id: account,
             product_service_id: None,
             class_id: None,

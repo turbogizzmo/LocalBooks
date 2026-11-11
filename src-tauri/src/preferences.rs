@@ -197,6 +197,14 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
             Ok(days) if days <= crate::guards::MAX_WARN_DAYS => Ok(days.to_string()),
             _ => Err(format!("PREF_BAD_WARN_DAYS: enter 0 (don't warn) to {} days", crate::guards::MAX_WARN_DAYS)),
         },
+        // The rate for customers set to Company default (Sales › Sales Tax); blank for none.
+        crate::sales_tax::DEFAULT_RATE_PREF => match v {
+            "" => Ok(String::new()),
+            _ => match v.parse::<i64>() {
+                Ok(id) if id > 0 => Ok(id.to_string()),
+                _ => Err("PREF_BAD_TAX_RATE: choose a sales tax rate".into()),
+            },
+        },
         "hours_format" => match v {
             "decimal" | "hhmm" => Ok(v.to_string()),
             _ => Err("PREF_BAD_HOURS_FORMAT: show hours as decimal or hhmm".into()),

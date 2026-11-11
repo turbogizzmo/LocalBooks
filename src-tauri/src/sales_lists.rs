@@ -455,7 +455,8 @@ pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Resu
 
 /// A document's details inside a write, to carry them onto another document.
 pub(crate) async fn details_in_tx(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64) -> Result<SalesDetails, String> {
-    let (sales_rep_id, ship_date, ship_method_id, terms_id, customer_message_id, form_style_id): (Option<i64>, Option<NaiveDate>, Option<i64>, Option<i64>, Option<i64>, Option<i64>) =
+    type DetailsRow = (Option<i64>, Option<NaiveDate>, Option<i64>, Option<i64>, Option<i64>, Option<i64>);
+    let (sales_rep_id, ship_date, ship_method_id, terms_id, customer_message_id, form_style_id): DetailsRow =
         sqlx::query_as(&format!("SELECT d.sales_rep_id, d.ship_date, d.ship_method_id, {}, d.customer_message_id, d.form_style_id FROM {} d WHERE d.id = ?1", terms_column(doc), doc.table()))
             .bind(id)
             .fetch_one(&mut **tx)
