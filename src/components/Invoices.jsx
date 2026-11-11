@@ -35,6 +35,7 @@ import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { defaultDepositAccount, useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
 import { BillablePickerDialog, markupOf, percentText } from './BillablePicker.jsx';
+import { billableOfferText } from '../lib/billableOffer.js';
 
 const INITIAL_ROWS = 4;
 
@@ -1158,10 +1159,9 @@ export default function Invoices({ accounts, intent }) {
       const [costs, time] = await Promise.all([api.listUnbilledCosts(id), api.listUnbilledTime(id)]).catch(() => [[], []]);
       if (!live || offered.current.has(id)) return;
       offered.current.add(id);
-      if (costs.length + time.length === 0) return;
-      const what = [costs.length ? `${costs.length} unbilled cost${costs.length === 1 ? '' : 's'}` : null, time.length ? `${time.length} unbilled time entr${time.length === 1 ? 'y' : 'ies'}` : null]
-        .filter(Boolean)
-        .join(' and ');
+      // Only what the picker can tick: time without a service item isn't offered.
+      const what = billableOfferText(costs, time);
+      if (!what) return;
       const add = await askConfirm(`${chosenCustomer.name} has ${what}. Add them to this invoice?\n\n(You can turn this question off in Preferences › Time & Expenses.)`, {
         confirmLabel: 'Add billable costs…',
         cancelLabel: 'Not now',

@@ -3,6 +3,7 @@ import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
 import { formatCents, formatMoney, formatQuantity, mulDivRound } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
+import { timeBillable } from '../lib/billableOffer.js';
 
 // The billable costs and time of one customer or job, picked to bill: shared by Sales › Bill Costs
 // and the invoice form's Add billable costs…, so both show the same rows, markup and rules. The
@@ -30,8 +31,7 @@ export function parseMarkup(text, fallback) {
 /** round_half_away(amount × milli / 100,000), as the backend works it out per cost. */
 export const markupOf = (cents, milli) => mulDivRound(cents, milli, 100_000) ?? 0;
 
-/** Time without a service item can't be billed (its line needs the item's income account). */
-export const timeBillable = (t) => t.productServiceId !== null;
+export { timeBillable };
 
 /**
  * The picked costs and time among `shown` and `shownTime`. They start as `initial` (sets of cost
