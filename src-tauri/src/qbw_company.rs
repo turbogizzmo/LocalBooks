@@ -126,12 +126,17 @@ fn memorized(line: &Row, header: Option<&Row>) -> bool {
 /// Some files keep one movement of money as two transactions that each hold half of it: a
 /// customer payment deposited straight to the bank holds only its receivables line, and a deposit
 /// on the same day holds only the bank line. Neither balances alone. Two unbalanced transactions
-/// on the same date whose differences cancel exactly, each the other's only such match, are read
-/// as one: the lines go to the one that names a customer, vendor or number (else the lower id).
-/// Returns how many pairs were joined.
+/// on the same date, each a single line, whose differences cancel exactly, each the other's only
+/// such match, are read as one: the lines go to the one that names a customer, vendor or number
+/// (else the lower id), and its memo says so. A transaction with more lines that lost one is
+/// damaged, not a half, and is left as it is. Returns how many pairs were joined.
 fn join_split_halves(transactions: &mut BTreeMap<i64, SourceTransaction>) -> usize {
-    let off: Vec<(i64, NaiveDate, i64)> =
-        transactions.values().map(|t| (t.id, t.date, t.imbalance_cents())).filter(|(_, _, d)| *d != 0 && *d != i64::MAX).collect();
+    let off: Vec<(i64, NaiveDate, i64)> = transactions
+        .values()
+        .filter(|t| t.lines.len() == 1)
+        .map(|t| (t.id, t.date, t.imbalance_cents()))
+        .filter(|(_, _, d)| *d != 0 && *d != i64::MAX)
+        .collect();
     let partners = |id: i64, date: NaiveDate, d: i64| off.iter().filter(move |(o, od, odiff)| *o != id && *od == date && odiff.checked_neg() == Some(d)).map(|(o, _, _)| *o);
     let mut pairs = Vec::new();
     for &(id, date, d) in &off {
@@ -150,7 +155,11 @@ fn join_split_halves(transactions: &mut BTreeMap<i64, SourceTransaction>) -> usi
         if let Some(gone) = transactions.remove(&drop) {
             if let Some(t) = transactions.get_mut(&keep) {
                 t.lines.extend(gone.lines);
-                t.memo = t.memo.take().or(gone.memo);
+                let note = format!("Read together with transaction {drop} of the file, which held the other half");
+                t.memo = Some(match t.memo.take().or(gone.memo) {
+                    Some(memo) => format!("{memo} ({note})"),
+                    None => note,
+                });
             }
         }
     }

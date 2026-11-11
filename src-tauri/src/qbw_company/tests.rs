@@ -545,6 +545,9 @@ fn split_halves_of_one_movement_are_joined() {
         half(80, "2025-04-01", None, vec![line(1, -10_000)]),
         half(81, "2025-04-01", None, vec![line(4, 10_000)]),
         half(82, "2025-04-01", None, vec![line(4, 10_000)]),
+        // A transaction with two lines that lost a third is damaged, not a half.
+        half(70, "2025-06-01", Some("Damaged"), vec![line(4, 1_000), line(2, 1_000)]),
+        half(71, "2025-06-01", None, vec![line(1, -2_000)]),
         // The same amounts on different days are not one movement.
         half(90, "2025-05-01", None, vec![line(1, -5_000)]),
         half(91, "2025-05-02", None, vec![line(4, 5_000)]),
@@ -555,5 +558,6 @@ fn split_halves_of_one_movement_are_joined() {
     assert_eq!(join_split_halves(&mut txns), 1);
     assert!(!txns.contains_key(&77), "the unnamed half goes into the named one");
     assert_eq!((txns[&62].lines.len(), txns[&62].imbalance_cents()), (2, 0));
-    assert_eq!(txns.values().filter(|t| t.imbalance_cents() != 0).count(), 5);
+    assert_eq!(txns[&62].memo.as_deref(), Some("Read together with transaction 77 of the file, which held the other half"));
+    assert_eq!(txns.values().filter(|t| t.imbalance_cents() != 0).count(), 7);
 }

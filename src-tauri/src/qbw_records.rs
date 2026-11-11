@@ -373,8 +373,36 @@ fn read_value(r: &[u8], o: usize, col: &Column) -> Option<(Value, usize)> {
     })
 }
 
-/// Walks a row against a column list; `None` unless it ends exactly on the row length.
+/// Walks a row against a column list; `None` unless it ends exactly on the row length. The
+/// offsets are checked first, so a reading that doesn't fit builds no map of values.
 fn walk_columns(r: &[u8], cols: &[Column]) -> Option<HashMap<String, Value>> {
+    if walk_end(r, cols)? != r.len() {
+        return None;
+    }
+    read_columns(r, cols)
+}
+
+/// Where a walk of the columns ends, without keeping the values.
+fn walk_end(r: &[u8], cols: &[Column]) -> Option<usize> {
+    let nullable = cols.iter().filter(|c| c.nullable).count();
+    let bitmap_len = nullable.div_ceil(8);
+    let bitmap = r.get(3..3 + bitmap_len)?;
+    let mut o = 3 + bitmap_len;
+    let mut bit = 0;
+    for col in cols {
+        if col.nullable {
+            let present = bitmap[bit / 8] >> (7 - bit % 8) & 1 == 1;
+            bit += 1;
+            if !present {
+                continue;
+            }
+        }
+        o = read_value(r, o, col)?.1;
+    }
+    Some(o)
+}
+
+fn read_columns(r: &[u8], cols: &[Column]) -> Option<HashMap<String, Value>> {
     let nullable = cols.iter().filter(|c| c.nullable).count();
     let bitmap_len = nullable.div_ceil(8);
     let bitmap = r.get(3..3 + bitmap_len)?;
