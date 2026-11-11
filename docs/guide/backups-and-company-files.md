@@ -58,7 +58,7 @@ each of these was last done:
 
 - **A copy off this computer**: a backup saved with **Back up to…** onto another drive (a USB
   drive, a second disk), a network share or a synced folder, or made by the offsite backup into a
-  folder like that. LocalBooks asks the computer which drive (volume) the folder is on and compares
+  folder like that. Tillhouse asks the computer which drive (volume) the folder is on and compares
   it with the company file's; nothing is sent anywhere to find out. A copy saved to another folder
   on the same disk doesn't count, and nor does one beside books that already live on a network
   share. If the offsite backup's folder is on the same disk as your books, Backup safety says so:

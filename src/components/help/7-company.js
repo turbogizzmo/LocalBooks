@@ -229,7 +229,7 @@ export const topics = [
   {
     id: 'backup-safety', area: 'company', views: ['settings/data', 'dashboard'],
     title: 'Keep a backup off this computer, and test that it restores',
-    body: 'Backup safety in File & Data Controls shows when, and where, a backup was last copied off this computer (Back up to… on another drive, a network or synced folder, or the offsite backup when its folder is on another drive or synced) and last test-restored. LocalBooks compares the drive the copy is on with the company file’s; nothing is sent anywhere. Test beside a snapshot, or Test restore a backup…, opens a backup and checks it as a restore would, upgrading a throwaway copy of an older one, without replacing your books. Reminders lists either one after 30 days (a monthly routine); change the days in Preferences › Reminders.',
+    body: 'Backup safety in File & Data Controls shows when, and where, a backup was last copied off this computer (Back up to… on another drive, a network or synced folder, or the offsite backup when its folder is on another drive or synced) and last test-restored. Tillhouse compares the drive the copy is on with the company file’s; nothing is sent anywhere. Test beside a snapshot, or Test restore a backup…, opens a backup and checks it as a restore would, upgrading a throwaway copy of an older one, without replacing your books. Reminders lists either one after 30 days (a monthly routine); change the days in Preferences › Reminders.',
     keywords: 'backup safety offsite another drive usb test restore verify check reminder disk failure',
     go: { label: 'Go to File & Data Controls', view: 'settings/data' },
     guide: 'backups-and-company-files',
@@ -324,8 +324,8 @@ export const topics = [
   },
   {
     id: 'keyboard', area: 'company', views: [],
-    title: 'Use LocalBooks from the keyboard',
-    body: 'Every page, form, list and dialog works without a mouse. F6 moves between the sidebar, the toolbar and the window you are working in (Shift+F6 goes back); Tab moves through the fields and buttons of that part, and in a window it goes round that window’s own fields. In the sidebar, Tab to a page and press Enter to open it. Ctrl+F6 brings the next window to the front and Esc closes the active one. LocalBooks aims to meet WCAG 2.1 AA, and every page is checked automatically for names, contrast and focus.',
+    title: 'Use Tillhouse from the keyboard',
+    body: 'Every page, form, list and dialog works without a mouse. F6 moves between the sidebar, the toolbar and the window you are working in (Shift+F6 goes back); Tab moves through the fields and buttons of that part, and in a window it goes round that window’s own fields. In the sidebar, Tab to a page and press Enter to open it. Ctrl+F6 brings the next window to the front and Esc closes the active one. Tillhouse aims to meet WCAG 2.1 AA, and every page is checked automatically for names, contrast and focus.',
     keywords: 'keyboard accessibility accessible screen reader no mouse without mouse f6 tab focus sidebar toolbar wcag contrast navigate',
     go: null,
     guide: 'keyboard',

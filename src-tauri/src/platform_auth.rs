@@ -35,7 +35,7 @@ pub const fn kind() -> Kind {
     }
 }
 
-pub const UNSUPPORTED: &str = "MFA_DEVICE_UNSUPPORTED: this computer has no Touch ID or Windows Hello that LocalBooks can use; use your authenticator app";
+pub const UNSUPPORTED: &str = "MFA_DEVICE_UNSUPPORTED: this computer has no Touch ID or Windows Hello that Tillhouse can use; use your authenticator app";
 #[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code, reason = "only the macOS and Windows prompts can refuse"))]
 pub const NOT_CONFIRMED: &str = "MFA_DEVICE_NOT_CONFIRMED: the computer did not confirm it's you; try again, or use your authenticator app";
 

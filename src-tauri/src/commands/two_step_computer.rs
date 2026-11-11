@@ -70,7 +70,7 @@ pub async fn finish_two_step_sign_in_with_computer(app: AppHandle, window: tauri
             return Err(device::NOT_HERE.into());
         }
     }
-    confirm(parent_of(&window), format!("sign in to LocalBooks as {username}")).await?;
+    confirm(parent_of(&window), format!("sign in to Tillhouse as {username}")).await?;
     device::check(&pool, &store, user_id).await?;
     super::mfa::finish_held(&app, &db, started).await
 }
@@ -111,7 +111,7 @@ pub async fn add_this_computer_two_step(app: AppHandle, window: tauri::WebviewWi
         return Err(platform_auth::UNSUPPORTED.into());
     }
     // The prompt can take a while: nothing is held locked meanwhile.
-    confirm(parent_of(&window), "let this computer sign you in to LocalBooks".into()).await?;
+    confirm(parent_of(&window), "let this computer sign you in to Tillhouse".into()).await?;
     let guard = slot.lock().await;
     let session = guard.as_ref().filter(|s| s.user.id == user_id).ok_or_else(|| users::SIGN_IN_REQUIRED.to_string())?;
     device::add(&pool, &store(&app)?, session, platform_auth::kind(), &crate::storage::host_name()).await

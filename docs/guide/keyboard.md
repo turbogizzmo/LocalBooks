@@ -1,17 +1,17 @@
-# Use LocalBooks from the keyboard
+# Use Tillhouse from the keyboard
 
-Everything in LocalBooks can be done without a mouse: every page in the sidebar, every form and
+Everything in Tillhouse can be done without a mouse: every page in the sidebar, every form and
 dialog, the lists, the reports and Help. This page gathers the keys in one place. On a Mac, **Alt**
 is the **Option** key and most **Ctrl** shortcuts are **⌘**.
 
-LocalBooks aims to meet the Web Content Accessibility Guidelines (WCAG) 2.1 at level AA: every
+Tillhouse aims to meet the Web Content Accessibility Guidelines (WCAG) 2.1 at level AA: every
 field has a name a screen reader reads out, focus is always visible, and text has enough contrast
 against its background. An automated check (axe) runs over every page in the sidebar, every form on
 **+ New**, the **+ New** dialog and Help on Windows and Linux before each change is accepted.
 
 ## Move between the sidebar, the toolbar and the window
 
-LocalBooks' window has three parts: the **sidebar** on the left, the **toolbar** across the top (the
+Tillhouse' window has three parts: the **sidebar** on the left, the **toolbar** across the top (the
 page title, search, your sign-in, text size and Help) and the **window** you are working in.
 
 | Key | What it does |
@@ -47,7 +47,7 @@ in [Find things in the menu bar](getting-started.md#find-things-in-the-menu-bar)
 |---|---|
 | **Ctrl+F6** or **Ctrl+Tab** | Brings the next open window to the front (with **Shift**, the one before). |
 | **Esc** or **Ctrl+F4** | Closes the active window. Esc is left to a menu, a dialog or a list of suggestions while one is open, and to a field you are typing in. |
-| **Ctrl+Shift+N** | Opens another LocalBooks window (⇧⌘N on a Mac). |
+| **Ctrl+Shift+N** | Opens another Tillhouse window (⇧⌘N on a Mac). |
 | **Ctrl +** / **Ctrl −** / **Ctrl 0** | Larger text, smaller text, or back to normal, for this kind of window. |
 
 See [Work in more than one window](getting-started.md#work-in-more-than-one-window) for the rest.

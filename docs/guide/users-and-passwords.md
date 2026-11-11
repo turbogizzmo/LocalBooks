@@ -140,13 +140,13 @@ the code. The app stays: other computers, and copies of the company file, still 
   the company setting going to Off. **Set Up Again…** for the app keeps your computers.
 - **How it works.** Adding the computer saves a random secret in the computer's own credential
   store (the macOS Keychain or Windows Credential Manager); the company file keeps only a one-way
-  fingerprint of it. Touch ID or Windows Hello is asked before LocalBooks reads the secret. No
-  fingerprint, face or PIN ever reaches LocalBooks: the system checks them.
+  fingerprint of it. Touch ID or Windows Hello is asked before Tillhouse reads the secret. No
+  fingerprint, face or PIN ever reaches Tillhouse: the system checks them.
 - **What it's worth.** Touch ID and Windows Hello let the computer's own password or PIN stand in
   for a fingerprint, so on this computer the second step is as strong as the computer's sign-in.
-  Someone who knows both your LocalBooks password and your computer's password can sign in here.
+  Someone who knows both your Tillhouse password and your computer's password can sign in here.
   If that matters for you, don't add the computer, and keep using the app's code.
-- **Not on Linux.** Linux has no common fingerprint or face check that LocalBooks can use, so the
+- **Not on Linux.** Linux has no common fingerprint or face check that Tillhouse can use, so the
   option isn't offered there; use the authenticator app. It also needs the computer's check to be
   set up: Touch ID (or a Mac password) in System Settings, or Windows Hello in Windows Settings.
 

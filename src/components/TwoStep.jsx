@@ -408,7 +408,7 @@ function ThisComputer() {
         </div>
       ))}
       {!check ? (
-        <p className="text-xs text-qb-ink-muted">This computer has no Touch ID or Windows Hello that LocalBooks can use, so it always asks for the code from your authenticator app.</p>
+        <p className="text-xs text-qb-ink-muted">This computer has no Touch ID or Windows Hello that Tillhouse can use, so it always asks for the code from your authenticator app.</p>
       ) : !info.available ? (
         <p className="text-xs text-qb-ink-muted">Set up {check} in your computer’s settings first; then you can add this computer here.</p>
       ) : (

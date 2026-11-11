@@ -58,7 +58,7 @@ export default function BackupSafety() {
       )}
       <p className="text-xs text-qb-ink-muted">
         A copy counts as off this computer when it is saved with Back up to…, or made by the offsite backup, on another drive, a network share or a synced
-        folder (LocalBooks compares the drive with the company file’s; nothing is sent anywhere). A test restore opens a backup and checks it as a restore
+        folder (Tillhouse compares the drive with the company file’s; nothing is sent anywhere). A test restore opens a backup and checks it as a restore
         would, upgrading a throwaway copy of one from an older version, without replacing your books. Reminders lists either when it is overdue (Edit ›
         Preferences › Reminders sets how many days; 30 to start).
       </p>
