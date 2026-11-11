@@ -286,3 +286,22 @@ async fn a_bill_paid_with_auto_applied_credits_and_discount_keeps_them_when_edit
     assert!(err.starts_with("EDIT_BELOW_PAID"), "{err}");
     books_balance(&pool).await;
 }
+
+#[tokio::test]
+async fn only_journal_entries_typed_by_hand_are_listed_as_editable_or_can_be_edited() {
+    let pool = test_pool().await;
+    let (checking, payable, rent) = (account(&pool, "1010").await, account(&pool, "2200").await, account(&pool, "6300").await);
+    let manual = crate::ledger::JournalEntry { id: None, date: date(2), description: "Accrual".into(), lines: vec![crate::ledger::JournalLine::debit(rent, 500), crate::ledger::JournalLine::credit(payable, 500)], currency: None };
+    let typed = crate::ledger::post_journal_entry(&pool, manual.clone()).await.unwrap();
+    let rate = crate::sales_tax::create_tax_rate(&pool, crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 60_000, agency_name: Some("State".into()), liability_account_id: None }).await.unwrap();
+    let payment = crate::sales_tax::pay_sales_tax(&pool, crate::sales_tax::SalesTaxPaymentInput { tax_rate_id: Some(rate.id), liability_account_id: None, account_id: checking, payment_date: date(3), amount_cents: crate::ledger::Cents::from(500), reference: None }).await.unwrap();
+    let tax_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM sales_tax_payments WHERE id = ?1").bind(payment).fetch_one(&pool).await.unwrap();
+
+    let listed = crate::ledger::list_journal_entries(&pool, 50).await.unwrap();
+    let manual_of = |id: i64| listed.iter().find(|e| e.id == id).map(|e| (e.source_type.clone(), e.is_manual));
+    assert_eq!(manual_of(typed), Some(("JOURNAL".to_string(), true)));
+    assert_eq!(manual_of(tax_entry), Some(("JOURNAL".to_string(), false)), "a sales tax payment is a journal entry the list doesn't offer to edit");
+
+    let err = replace_journal_entry(&pool, tax_entry, manual).await.unwrap_err();
+    assert!(err.starts_with("EDIT_NOT_MANUAL"), "{err}");
+}

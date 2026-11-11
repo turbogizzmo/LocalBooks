@@ -23,6 +23,10 @@ people using LocalBooks.
   the bill the vendor's terms, so its due date follows them and Pay Bills offers the early-payment
   discount. It also gets the same checks as Enter Bills: a repeated vendor bill number or an
   unusual date asks before saving, and approval rules for bills hold it for approval.
+- **Journal Entries offers Edit… and Duplicate only on entries typed there.** Refunds, write-offs,
+  bounced checks, sales tax payments, class reclassifications and other entries made by another
+  screen now offer only Void. Before, Edit… was refused at save, and Duplicate posted an unlinked
+  copy that, for a reclassification, moved the class a second time.
 ## [0.14.1]
 - **Help for every screen, setting and menu command.** F1 now explains every page in the sidebar,
   including Approvals, Payout Feeds, the Attachments Library, Reps, Ship Via & Fields and each

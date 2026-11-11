@@ -241,16 +241,7 @@ pub async fn replace_journal_entry(pool: &SqlitePool, journal_entry_id: i64, ent
 pub async fn replace_journal_entry_flagged(pool: &SqlitePool, journal_entry_id: i64, entry: JournalEntry, adjusting: Option<bool>) -> Result<i64, String> {
     run(pool, async |tx| {
         let manual: Option<(bool, bool)> = sqlx::query_as(
-            "SELECT e.source_type = 'JOURNAL' AND e.reverses_entry_id IS NULL AND e.is_voided = 0
-                AND NOT EXISTS (SELECT 1 FROM class_reclassifications WHERE journal_entry_id = e.id)
-                AND NOT EXISTS (SELECT 1 FROM credit_refunds WHERE journal_entry_id = e.id)
-                AND NOT EXISTS (SELECT 1 FROM vendor_credit_refunds WHERE journal_entry_id = e.id)
-                AND NOT EXISTS (SELECT 1 FROM sales_tax_payments WHERE journal_entry_id = e.id)
-                AND NOT EXISTS (SELECT 1 FROM bounced_checks WHERE journal_entry_id = e.id)
-                AND NOT EXISTS (SELECT 1 FROM bounced_sales_receipts WHERE journal_entry_id = e.id)
-                AND NOT EXISTS (SELECT 1 FROM item_receipts WHERE journal_entry_id = e.id)
-                AND NOT EXISTS (SELECT 1 FROM fx_revaluations WHERE journal_entry_id = e.id OR reversal_entry_id = e.id)
-             , e.is_adjusting FROM journal_entries e WHERE e.id = ?1",
+            &format!("SELECT e.is_voided = 0 AND {}, e.is_adjusting FROM journal_entries e WHERE e.id = ?1", crate::ledger::MANUAL_JOURNAL),
         )
         .bind(journal_entry_id)
         .fetch_optional(&mut **tx)
