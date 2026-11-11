@@ -37,6 +37,13 @@ people using LocalBooks.
   print a check, with the next check number filled in. A credit memo now lists the refunds and
   write-offs taken from it, each with Print check (for a refund paid by check) and Void, which
   gives the credit back.
+- **Statements say what each line is.** Customer statements now label credit write-offs,
+  bounced checks and other journal entries as what they are, show a refund with its check
+  number, and show an overpayment kept as credit as a Payment with its reference. Before, every
+  such line read "Refund", and an overpayment showed as "Credit Memo #N".
+- **Credit memo numbers don't skip.** An overpayment kept as credit no longer takes the next credit
+  memo number, so credit memos number 1, 2, 3 in a row. Registers and custom reports show such a
+  payment by its reference.
 - **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
   "Company default" start at it on new sales forms. Before, once a company had two or more rates,
   those customers got no tax unless someone picked a rate on each form.

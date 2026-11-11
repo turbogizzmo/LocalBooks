@@ -519,7 +519,7 @@ const ENTRY_COLUMNS: &str = "
     COALESCE(pc.id, pv.id, po.id) AS party_id,
     COALESCE(pc.name, pv.name, po.name) AS name,
     COALESCE(pv.is_1099, 0) AS is_1099,
-    COALESCE(CAST(inv.invoice_number AS TEXT), ip.reference, CAST(sr.receipt_number AS TEXT), CAST(cm.credit_number AS TEXT),
+    COALESCE(CAST(inv.invoice_number AS TEXT), ip.reference, CAST(sr.receipt_number AS TEXT), CASE WHEN cm.payment_account_id IS NULL THEN CAST(cm.credit_number AS TEXT) ELSE cm.payment_reference END,
              bl.bill_number, bp.reference, vc.reference, x.check_number,
              CASE WHEN e.source_type IN ('JOURNAL', 'OPENING_BALANCE') THEN CAST(e.entry_number AS TEXT) END) AS num,
     COALESCE(inv.due_date, bl.due_date, cm.credit_date, vc.credit_date) AS due_date,

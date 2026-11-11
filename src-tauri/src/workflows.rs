@@ -82,14 +82,28 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
                      WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM finance_charge_invoices WHERE invoice_id = l.source_id)
                      THEN 'FINANCE_CHARGE'
                      WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM statement_charge_invoices WHERE invoice_id = l.source_id)
-                     THEN 'STATEMENT_CHARGE' ELSE l.source_type END AS source_type,
+                     THEN 'STATEMENT_CHARGE'
+                     -- An unapplied payment kept as credit is a payment, not a credit memo.
+                     WHEN l.source_type = 'CREDIT_MEMO' AND EXISTS (SELECT 1 FROM credit_memos WHERE id = l.source_id AND payment_account_id IS NOT NULL)
+                     THEN 'UNAPPLIED_PAYMENT'
+                     -- A/R journal entries made by another screen, by what they are.
+                     WHEN l.source_type = 'JOURNAL' AND EXISTS (SELECT 1 FROM credit_refunds WHERE journal_entry_id = l.journal_entry_id AND is_write_off = 1)
+                     THEN 'CREDIT_WRITE_OFF'
+                     WHEN l.source_type = 'JOURNAL' AND EXISTS (SELECT 1 FROM credit_refunds WHERE journal_entry_id = l.journal_entry_id)
+                     THEN 'CREDIT_REFUND'
+                     WHEN l.source_type = 'JOURNAL' AND (EXISTS (SELECT 1 FROM bounced_checks WHERE journal_entry_id = l.journal_entry_id)
+                                                        OR EXISTS (SELECT 1 FROM bounced_sales_receipts WHERE journal_entry_id = l.journal_entry_id))
+                     THEN 'BOUNCED_CHECK'
+                     ELSE l.source_type END AS source_type,
                 p.party_name,
                 CASE l.source_type
                     -- A statement charge has no invoice number of its own to show.
                     WHEN 'INVOICE' THEN (SELECT CAST(invoice_number AS TEXT) FROM invoices WHERE id = l.source_id
                                          AND NOT EXISTS (SELECT 1 FROM statement_charge_invoices WHERE invoice_id = l.source_id))
-                    WHEN 'CREDIT_MEMO' THEN (SELECT CAST(credit_number AS TEXT) FROM credit_memos WHERE id = l.source_id)
+                    WHEN 'CREDIT_MEMO' THEN (SELECT CASE WHEN payment_account_id IS NULL THEN CAST(credit_number AS TEXT) ELSE payment_reference END
+                                             FROM credit_memos WHERE id = l.source_id)
                     WHEN 'RECEIVE_PAYMENT' THEN (SELECT reference FROM invoice_payments WHERE id = l.source_id)
+                    WHEN 'JOURNAL' THEN (SELECT reference FROM credit_refunds WHERE journal_entry_id = l.journal_entry_id AND is_write_off = 0)
                 END AS number,
                 CASE l.source_type
                     WHEN 'INVOICE' THEN (SELECT po_number FROM invoices WHERE id = l.source_id)

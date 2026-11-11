@@ -39,8 +39,13 @@ Other rows you may see:
 - **Statement Charge**: a charge entered on the customer's charge register, with its description.
   See [Bill on the statement instead: statement
   charges](invoices.md#bill-on-the-statement-instead-statement-charges).
-- **Refund**: credit paid back to the customer from **Sales › Credit Memos & Refunds** (see
-  [Credit memos and refunds](credit-memos-and-refunds.md#refund-credit-that-is-left)).
+- **Payment #…**: an overpayment kept as credit, with its reference, the same as any payment.
+- **Refund #…**: credit paid back to the customer from **Sales › Credit Memos & Refunds**, with its
+  check number when it has one (see [Credit memos and
+  refunds](credit-memos-and-refunds.md#refund-credit-that-is-left)).
+- **Write-off**: credit written off to income.
+- **Bounced Check**: a customer's check that bounced, putting the amount back on the account.
+- **Journal Entry**: any other journal entry to Accounts Receivable for the customer.
 - **Void**: a voided transaction. The original stays on the statement, and the **Void** row
   reverses it on the same date, so the two add up to zero. A voided payment, for example, shows as
   the payment and then a **Void** row that puts the amount back.

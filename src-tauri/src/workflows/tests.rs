@@ -215,6 +215,115 @@ async fn an_open_purchase_order_can_be_changed_or_deleted_until_something_is_rec
 }
 
 #[tokio::test]
+async fn statements_label_payments_refunds_and_write_offs_and_credit_memo_numbers_dont_skip() {
+    use crate::credits::{create_credit_memo, refund_customer_credit, write_off_customer_credit, CreditMemoInput, RefundCreditInput, UnappliedPaymentInput};
+    let pool = test_pool().await;
+    let (checking, services) = (account(&pool, "1010").await, account(&pool, "4100").await);
+    let memo = |pool: SqlitePool, day: u32| async move {
+        create_credit_memo(
+            &pool,
+            CreditMemoInput {
+                customer_name: "Acme".into(),
+                credit_number: None,
+                credit_date: d(3, day),
+                memo: None,
+                refund_account_id: None,
+                tax_rate_id: None,
+                lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 5_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
+                header: Default::default(),
+                form_lines: Vec::new(),
+            },
+        )
+        .await
+        .unwrap()
+    };
+    let first = memo(pool.clone(), 2).await;
+    // An overpayment kept as credit takes no credit memo number.
+    let mut tx = crate::ledger::begin_write(&pool).await.unwrap();
+    crate::credits::write_unapplied_payment(
+        &mut tx,
+        &UnappliedPaymentInput { customer_name: "Acme".into(), deposit_account_id: checking, payment_date: d(3, 3), amount_cents: 2_500, payment_method: "CHECK".into(), payment_method_id: None, reference: Some("8812".into()), keep_as: None, account_id: None },
+    )
+    .await
+    .unwrap();
+    crate::ledger::commit_write(tx).await.unwrap();
+    let second = memo(pool.clone(), 4).await;
+    assert_eq!((first.credit_number, second.credit_number), (1, 2), "no number taken by the overpayment");
+
+    write_off_customer_credit(&pool, RefundCreditInput { credit_id: first.id, account_id: services, refund_date: d(3, 5), amount_cents: 1_000, reference: None }).await.unwrap();
+    refund_customer_credit(&pool, RefundCreditInput { credit_id: second.id, account_id: checking, refund_date: d(3, 6), amount_cents: 2_000, reference: Some("1042".into()) }).await.unwrap();
+
+    let acme: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
+    let period = crate::forms::Period { start_date: d(3, 1), end_date: d(3, 31) };
+    let doc = crate::forms::statement_doc(&pool, acme, period, "$").await.unwrap();
+    let labels: Vec<&str> = doc.statement.as_ref().unwrap().rows.iter().skip(1).map(|r| r[1].as_str()).collect();
+    assert_eq!(labels, ["Credit Memo #1", "Payment #8812", "Credit Memo #2", "Write-off", "Refund #1042"]);
+}
+
+#[tokio::test]
+async fn an_old_low_numbered_overpayment_is_skipped_once_and_payment_credits_stay_out_of_credit_memo_lists() {
+    use crate::credits::{create_credit_memo, CreditMemoInput, UnappliedPaymentInput, PAYMENT_CREDIT_NUMBERS};
+    let pool = test_pool().await;
+    let (checking, services) = (account(&pool, "1010").await, account(&pool, "4100").await);
+    let memo = |pool: SqlitePool| async move {
+        create_credit_memo(
+            &pool,
+            CreditMemoInput {
+                customer_name: "Acme".into(),
+                credit_number: None,
+                credit_date: d(3, 2),
+                memo: None,
+                refund_account_id: None,
+                tax_rate_id: None,
+                lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 5_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
+                header: Default::default(),
+                form_lines: Vec::new(),
+            },
+        )
+        .await
+        .unwrap()
+    };
+    assert_eq!(memo(pool.clone()).await.credit_number, 1);
+    // A file from before: an overpayment kept as credit took #2.
+    let acme: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
+    sqlx::query("INSERT INTO credit_memos (credit_number, customer_id, credit_date, total_cents, payment_account_id, payment_method, payment_reference) VALUES (2, ?1, '2026-03-03', 100, ?2, 'CHECK', 'OLD-1')")
+        .bind(acme)
+        .bind(checking)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(memo(pool.clone()).await.credit_number, 3, "the old number is skipped, never reused");
+    let mut tx = crate::ledger::begin_write(&pool).await.unwrap();
+    let paid = crate::credits::write_unapplied_payment(
+        &mut tx,
+        &UnappliedPaymentInput { customer_name: "Acme".into(), deposit_account_id: checking, payment_date: d(3, 4), amount_cents: 2_500, payment_method: "CHECK".into(), payment_method_id: None, reference: Some("8812".into()), keep_as: None, account_id: None },
+    )
+    .await
+    .unwrap();
+    crate::ledger::commit_write(tx).await.unwrap();
+    let paid_number: i64 = sqlx::query_scalar("SELECT credit_number FROM credit_memos WHERE id = ?1").bind(paid).fetch_one(&pool).await.unwrap();
+    assert_eq!(paid_number, PAYMENT_CREDIT_NUMBERS + 1);
+    assert_eq!(memo(pool.clone()).await.credit_number, 4);
+
+    // The payment isn't a credit memo: not in the credit memo print batch, and it can't be queued for email.
+    let batch = crate::print_batches::list(&pool, crate::print_batches::BatchKind::CreditMemo, d(3, 1), d(3, 31)).await.unwrap();
+    assert_eq!(batch.iter().map(|r| r.number.as_deref().unwrap_or("")).collect::<Vec<_>>(), ["1", "3", "4"]);
+    assert!(crate::email_log::set_queued(&pool, crate::forms::FormKind::CreditMemo, paid, true).await.unwrap_err().starts_with("EMAIL_NOT_FOUND"));
+
+    // Once used on an invoice, voiding the payment names it as a payment, not by its number.
+    let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
+        "customerName": "Acme", "issueDate": "2026-03-05", "dueDate": "2026-04-05",
+        "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": 5_000, "incomeAccountId": services, "isTaxable": false }]
+    }))
+    .unwrap();
+    let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
+    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: paid, document_id: inv.id, amount_cents: 1_000, applied_date: d(3, 6) }).await.unwrap();
+    let entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM credit_memos WHERE id = ?1").bind(paid).fetch_one(&pool).await.unwrap();
+    let err = crate::ledger::void_transaction(&pool, entry).await.unwrap_err();
+    assert!(err.contains("this unapplied payment") && !err.contains("1000000001"), "{err}");
+}
+
+#[tokio::test]
 async fn a_monthly_schedule_from_the_31st_keeps_to_month_end_after_a_short_month() {
     use chrono::Datelike;
     let pool = test_pool().await;
@@ -346,4 +455,14 @@ async fn a_bill_from_a_purchase_order_takes_the_vendors_terms_and_the_bill_check
     assert_eq!(input.terms_id, Some(terms));
     let warned = crate::guards::check(&pool, crate::guards::bill(&input, None), None).await.unwrap_err();
     assert!(warned.starts_with("NEEDS_CONFIRMATION"), "{warned}");
+}
+
+#[tokio::test]
+async fn a_typed_credit_memo_number_stays_below_the_unapplied_payment_range() {
+    let pool = test_pool().await;
+    let mut conn = pool.acquire().await.unwrap();
+    let err = crate::doc_numbers::check_number(&mut conn, crate::doc_numbers::DocKind::CreditMemo, crate::credits::PAYMENT_CREDIT_NUMBERS).await.unwrap_err();
+    assert!(err.starts_with("DOC_NUMBER_RANGE") && err.contains("999999999"), "{err}");
+    assert!(crate::doc_numbers::check_number(&mut conn, crate::doc_numbers::DocKind::CreditMemo, 42).await.is_ok());
+    assert!(crate::doc_numbers::check_number(&mut conn, crate::doc_numbers::DocKind::Invoice, crate::credits::PAYMENT_CREDIT_NUMBERS).await.is_ok(), "other forms keep their range");
 }
