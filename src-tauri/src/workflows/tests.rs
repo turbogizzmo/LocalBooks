@@ -182,3 +182,48 @@ async fn the_1099_report_follows_the_account_mapping_and_the_threshold_by_year()
     assert!(crate::preferences::set(&pool, "tax_1099_accounts", r#"{"999999":"NEC-1"}"#).await.unwrap_err().starts_with("PREF_BAD_1099_ACCOUNT"));
     assert!(crate::preferences::set(&pool, "tax_1099_accounts", "not json").await.unwrap_err().starts_with("PREF_BAD_1099_ACCOUNTS"));
 }
+
+#[tokio::test]
+async fn statements_label_payments_refunds_and_write_offs_and_credit_memo_numbers_dont_skip() {
+    use crate::credits::{create_credit_memo, refund_customer_credit, write_off_customer_credit, CreditMemoInput, RefundCreditInput, UnappliedPaymentInput};
+    let pool = test_pool().await;
+    let (checking, services) = (account(&pool, "1010").await, account(&pool, "4100").await);
+    let memo = |pool: SqlitePool, day: u32| async move {
+        create_credit_memo(
+            &pool,
+            CreditMemoInput {
+                customer_name: "Acme".into(),
+                credit_date: d(3, day),
+                memo: None,
+                refund_account_id: None,
+                tax_rate_id: None,
+                lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 5_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
+                header: Default::default(),
+                form_lines: Vec::new(),
+            },
+        )
+        .await
+        .unwrap()
+    };
+    let first = memo(pool.clone(), 2).await;
+    // An overpayment kept as credit takes no credit memo number.
+    let mut tx = crate::ledger::begin_write(&pool).await.unwrap();
+    crate::credits::write_unapplied_payment(
+        &mut tx,
+        &UnappliedPaymentInput { customer_name: "Acme".into(), deposit_account_id: checking, payment_date: d(3, 3), amount_cents: 2_500, payment_method: "CHECK".into(), payment_method_id: None, reference: Some("8812".into()), keep_as: None, account_id: None },
+    )
+    .await
+    .unwrap();
+    crate::ledger::commit_write(tx).await.unwrap();
+    let second = memo(pool.clone(), 4).await;
+    assert_eq!((first.credit_number, second.credit_number), (1, 2), "no number taken by the overpayment");
+
+    write_off_customer_credit(&pool, RefundCreditInput { credit_id: first.id, account_id: services, refund_date: d(3, 5), amount_cents: 1_000, reference: None }).await.unwrap();
+    refund_customer_credit(&pool, RefundCreditInput { credit_id: second.id, account_id: checking, refund_date: d(3, 6), amount_cents: 2_000, reference: Some("1042".into()) }).await.unwrap();
+
+    let acme: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
+    let period = crate::forms::Period { start_date: d(3, 1), end_date: d(3, 31) };
+    let doc = crate::forms::statement_doc(&pool, acme, period, "$").await.unwrap();
+    let labels: Vec<&str> = doc.statement.as_ref().unwrap().rows.iter().skip(1).map(|r| r[1].as_str()).collect();
+    assert_eq!(labels, ["Credit Memo #1", "Payment #8812", "Credit Memo #2", "Write-off", "Refund #1042"]);
+}

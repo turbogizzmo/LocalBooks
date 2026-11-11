@@ -6,6 +6,14 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Statements say what each line is.** Customer statements now label credit write-offs,
+  bounced checks and other journal entries as what they are, show a refund with its check
+  number, and show an overpayment kept as credit as a Payment with its reference. Before, every
+  such line read "Refund", and an overpayment showed as "Credit Memo #N".
+- **Credit memo numbers don't skip.** An overpayment kept as credit no longer takes the next credit
+  memo number, so credit memos number 1, 2, 3 in a row. Registers and custom reports show such a
+  payment by its reference.
+
 ## [0.14.1]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a

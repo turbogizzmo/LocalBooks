@@ -1140,8 +1140,12 @@ fn statement_label(source_type: &str) -> &'static str {
         "STATEMENT_CHARGE" => "Statement Charge",
         "RECEIVE_PAYMENT" => "Payment",
         "CREDIT_MEMO" => "Credit Memo",
+        "UNAPPLIED_PAYMENT" => "Payment",
         "SALES_RECEIPT" => "Sales Receipt",
-        "JOURNAL" => "Refund",
+        "CREDIT_REFUND" => "Refund",
+        "CREDIT_WRITE_OFF" => "Write-off",
+        "BOUNCED_CHECK" => "Bounced Check",
+        "JOURNAL" => "Journal Entry",
         "VOID" => "Void",
         _ => "Adjustment",
     }

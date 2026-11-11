@@ -368,7 +368,7 @@ export const topics = [
   {
     id: 'statements', area: 'sales', views: ['sales/statements', 'sales/customers', 'sales/invoices'],
     title: 'Send customer statements',
-    body: 'Sales › Customer Statements lists customers with a balance or activity in the period. Click one to preview their statement (balance forward, each invoice, payment and credit, the amount due and its aging), tick several to print them together, or use Print…, Save as PDF… or Email… above the preview to send one.',
+    body: 'Sales › Customer Statements lists customers with a balance or activity in the period. Click one to preview their statement (balance forward, each invoice, payment, credit, refund, write-off and bounced check, labelled as what it is, the amount due and its aging), tick several to print them together, or use Print…, Save as PDF… or Email… above the preview to send one.',
     keywords: 'statement customer statement balance forward account summary aging dunning email',
     go: { label: 'Go to Customer Statements', view: 'sales/statements' },
   },

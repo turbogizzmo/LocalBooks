@@ -158,7 +158,7 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
 
     let (memo_id, number): (i64, i64) = sqlx::query_as(
         "INSERT INTO credit_memos (credit_number, customer_id, credit_date, memo, refund_account_id, total_cents, tax_rate_id, tax_cents)
-         VALUES ((SELECT COALESCE(MAX(credit_number), 0) + 1 FROM credit_memos), ?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         VALUES ((SELECT COALESCE(MAX(credit_number), 0) + 1 FROM credit_memos WHERE credit_number < ?8), ?1, ?2, ?3, ?4, ?5, ?6, ?7)
          RETURNING id, credit_number",
     )
     .bind(customer_id)
@@ -168,6 +168,7 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
     .bind(total)
     .bind(tax.as_ref().and_then(|t| t.rate_id))
     .bind(tax_cents)
+    .bind(PAYMENT_CREDIT_NUMBERS)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -551,6 +552,11 @@ pub struct UnappliedPaymentInput {
     pub account_id: Option<i64>,
 }
 
+/// An unapplied payment kept as credit is stored with the credit memos, so it needs a credit number,
+/// but it isn't a credit memo: it takes one from this range and up, which no one sees (screens,
+/// statements and reports show its payment reference), so credit memo numbers never skip.
+pub(crate) const PAYMENT_CREDIT_NUMBERS: i64 = 1_000_000_000;
+
 /// Posts an unapplied payment as the customer's credit (Dr the deposit account / Cr A/R), then
 /// refunds it or writes it off at once if asked. Returns the credit's id.
 pub(crate) async fn write_unapplied_payment(tx: &mut Transaction<'_, Sqlite>, input: &UnappliedPaymentInput) -> Result<i64, String> {
@@ -591,7 +597,7 @@ pub(crate) async fn write_unapplied_payment(tx: &mut Transaction<'_, Sqlite>, in
     let memo_id: i64 = sqlx::query_scalar(
         "INSERT INTO credit_memos (credit_number, customer_id, credit_date, total_cents,
                                    payment_account_id, payment_method, payment_method_id, payment_reference)
-         VALUES ((SELECT COALESCE(MAX(credit_number), 0) + 1 FROM credit_memos), ?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         VALUES ((SELECT MAX(COALESCE(MAX(credit_number), 0), ?8) + 1 FROM credit_memos), ?1, ?2, ?3, ?4, ?5, ?6, ?7)
          RETURNING id",
     )
     .bind(customer_id)
@@ -601,6 +607,7 @@ pub(crate) async fn write_unapplied_payment(tx: &mut Transaction<'_, Sqlite>, in
     .bind(method.as_deref().unwrap_or(&input.payment_method))
     .bind(method_id)
     .bind(reference)
+    .bind(PAYMENT_CREDIT_NUMBERS)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
