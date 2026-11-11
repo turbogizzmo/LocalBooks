@@ -17,6 +17,10 @@ people using LocalBooks.
 - **Closing Date Exceptions no longer misses an entry made at almost the same moment as a close.**
   The report now orders entries and changes to the closing date by when they were recorded in the
   books, not by clock time, which on Windows only advances every few milliseconds.
+- **Sales tax adjustments.** Adjust… on Sales › Sales Tax raises or lowers what is owed on a rate,
+  for example a discount for filing on time, a penalty or a rounding difference, against an income
+  or expense account. The sales tax return shows it under the rate's agency. Before, this took a
+  journal entry, which changed what was owed but not the return.
 - **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
   "Company default" start at it on new sales forms. Before, once a company had two or more rates,
   those customers got no tax unless someone picked a rate on each form.

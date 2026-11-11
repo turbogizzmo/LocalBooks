@@ -9,6 +9,7 @@ import { formatDate, periodRange, todayIso } from '../lib/dates.js';
 import DateBox from './DateBox.jsx';
 import { layOut } from '../lib/itemTypes.js';
 import { CombinedRateDialog, SalesTaxReturn } from './SalesTaxCombined.jsx';
+import { AdjustDialog, AdjustmentList } from './SalesTaxAdjustments.jsx';
 import { companyDefaultRateId, startingTaxRateId } from '../lib/salesTaxDefault.js';
 
 /** Sales tax as set up for the company: on or off, and the rates. */
@@ -321,6 +322,7 @@ export default function SalesTax({ accounts, intent }) {
     <div className="flex h-full flex-col gap-2 p-2">
       {dialog?.mode === 'combined' && <CombinedRateDialog rate={dialog.rate} rates={rates ?? []} onClose={() => setDialog(null)} onSaved={done} />}
       {dialog?.mode === 'rate' && <RateDialog rate={dialog.rate} accounts={accounts} onClose={() => setDialog(null)} onSaved={done} />}
+      {dialog?.mode === 'adjust' && <AdjustDialog rates={rates ?? []} accounts={accounts} onClose={() => setDialog(null)} onSaved={done} />}
       {dialog?.mode === 'pay' && <PayDialog rates={(rates ?? []).filter((r) => r.isActive)} accounts={accounts} owedCents={report?.owedCents ?? 0} onClose={() => setDialog(null)} onPaid={done} />}
       {prefs && (
         <div className={`qb-panel flex flex-none items-center gap-2 px-2 py-1 text-sm ${enabled ? 'bg-qb-green-tint' : 'bg-[#fff4e5]'}`}>
@@ -412,7 +414,10 @@ export default function SalesTax({ accounts, intent }) {
             <DateBox className="qb-input h-row w-[128px] text-sm" value={start} onChange={(e) => setRange([e.target.value, end])} aria-label="From" />
             <span className="text-sm text-qb-ink-muted">to</span>
             <DateBox className="qb-input h-row w-[128px] text-sm" value={end} onChange={(e) => setRange([start, e.target.value])} aria-label="To" />
-            <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" onClick={() => setDialog({ mode: 'pay' })}>
+            <button type="button" className="qb-btn ml-auto h-row" onClick={() => setDialog({ mode: 'adjust' })}>
+              Adjust…
+            </button>
+            <button type="button" className="qb-btn qb-btn-primary h-row" onClick={() => setDialog({ mode: 'pay' })}>
               Pay sales tax
             </button>
           </div>
@@ -495,6 +500,7 @@ export default function SalesTax({ accounts, intent }) {
                 ))}
               </tbody>
             </table>
+            <AdjustmentList onNotice={setNotice} />
           </div>
         </section>
       </div>

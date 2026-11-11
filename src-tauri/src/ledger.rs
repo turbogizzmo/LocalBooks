@@ -967,6 +967,7 @@ pub const MANUAL_JOURNAL: &str = "(e.source_type = 'JOURNAL' AND e.reverses_entr
     AND NOT EXISTS (SELECT 1 FROM credit_refunds WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM vendor_credit_refunds WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM sales_tax_payments WHERE journal_entry_id = e.id)
+    AND NOT EXISTS (SELECT 1 FROM sales_tax_adjustments WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM bounced_checks WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM bounced_sales_receipts WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM item_receipts WHERE journal_entry_id = e.id)

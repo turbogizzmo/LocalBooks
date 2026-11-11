@@ -216,18 +216,22 @@ greyed, and no longer counts as paid (see [Undo a transaction
 
 ## Adjust what you owe
 
-LocalBooks has no separate sales tax adjustment form. When what you owe the agency differs from what
-LocalBooks built up (a discount for filing on time, a penalty, or a rounding difference), record it
-with a journal entry to the liability account (see [Post a manual journal
-entry](journal-entries-and-voids.md#post-a-manual-journal-entry)):
+When what you owe the agency differs from what LocalBooks built up (a discount for filing on time,
+a penalty or interest, or a rounding difference), record a sales tax adjustment:
 
-- **You owe less** (for example a timely-filing discount): Dr the sales tax liability account, Cr an
-  income account.
-- **You owe more** (for example a penalty or interest): Dr an expense account, Cr the sales tax
-  liability account. Then pay it with **Pay sales tax**.
+1. On **Sales › Sales Tax**, click **Adjust…** next to **Pay sales tax**.
+2. Choose the **Rate**, the **Adjustment date**, the **Amount**, and **Reduce sales tax owed** or
+   **Increase sales tax owed**.
+3. Choose the account on the other side: an income account for a reduction (such as a
+   timely-filing discount), an expense account for an increase (such as penalties).
+4. Add a **Memo** if you like, then click **Record adjustment**.
 
-The adjustment changes **Owed as of** on the liability, which reads the account's balance. It doesn't
-change the taxable sales or tax on the liability or the return, and it isn't counted as **Paid**.
+A reduction posts Dr the rate's liability account / Cr the income account; an increase posts Dr
+the expense account / Cr the liability account (pay it with **Pay sales tax**). The adjustment
+changes **Owed as of**, and the [sales tax return](#file-the-sales-tax-return-by-agency) adds it to
+the rate's tax under its agency for the period it is dated in, marked *adj.* A combined rate is
+adjusted one part at a time, so each agency's figure is right. Adjustments are listed under
+**Adjustments** on the Sales Tax screen; choose **Void** in a row's **▾** menu to undo one.
 
 To correct the tax on one sale, edit or void that invoice, sales receipt or credit memo instead.
 
