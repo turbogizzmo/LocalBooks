@@ -380,7 +380,7 @@ export default function PurchaseOrders({ accounts, intent }) {
       setNotice({ kind: 'error', text: errorText(err) });
     }
   };
-  // Only an open order can be changed; one billed or with items received is refused by the books.
+  // Only an open order can be changed; one billed or with items received (even on a voided receipt) is refused by the books.
   const editable = (o) => inventoryOn && o.status === 'OPEN';
   return (
     <div className="flex h-full flex-col gap-2 p-2">

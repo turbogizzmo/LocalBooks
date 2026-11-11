@@ -718,8 +718,10 @@ async fn changeable_order(tx: &mut Transaction<'_, Sqlite>, id: i64, verb: &str)
     if status == "BILLED" {
         return Err(format!("PO_BILLED: purchase order #{number} has been billed and can't be {verb}; void the bill first"));
     }
-    if crate::item_receipts::order_has_receipts(tx, id).await? {
-        return Err(format!("PO_HAS_RECEIPTS: items on purchase order #{number} have been received, so it can't be {verb}; void the receipts first"));
+    // Any receipt against it, even a voided one, still points at the order and its lines.
+    let received: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM item_receipts WHERE purchase_order_id = ?1)").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
+    if received {
+        return Err(format!("PO_HAS_RECEIPTS: items have been received against purchase order #{number} (a voided receipt counts), so it can't be {verb}; close it, or make a new order"));
     }
     Ok(number)
 }

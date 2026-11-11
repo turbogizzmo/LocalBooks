@@ -335,3 +335,25 @@ async fn a_fixed_discount_goes_after_the_receipt_line_that_can_take_it() {
     let total: i64 = sqlx::query_scalar("SELECT total_cents FROM bills WHERE id = ?1").bind(bill).fetch_one(&s.pool).await.unwrap();
     assert_eq!(total, 10_000 - 2_500);
 }
+
+#[tokio::test]
+async fn an_order_received_against_cant_be_edited_or_deleted_even_once_the_receipt_is_voided() {
+    let s = shop().await;
+    let (po, lines) = order(&s).await;
+    let r = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 4)])).await.unwrap();
+    let edit = |pool: SqlitePool| async move {
+        let input: crate::workflows::PurchaseOrderInput = serde_json::from_value(json!({
+            "vendorName": "Supplier", "poDate": "2026-04-01", "memo": null,
+            "lines": [{ "accountId": 1, "description": "Changed", "amountCents": 500 }]
+        }))
+        .unwrap();
+        crate::workflows::update_purchase_order(&pool, po, input).await
+    };
+    assert!(edit(s.pool.clone()).await.unwrap_err().starts_with("PO_HAS_RECEIPTS"));
+    // Voided, the receipt still points at the order's lines: a clear refusal, not a database error.
+    crate::ledger::void_transaction(&s.pool, r.journal_entry_id).await.unwrap();
+    let err = edit(s.pool.clone()).await.unwrap_err();
+    assert!(err.starts_with("PO_HAS_RECEIPTS"), "{err}");
+    let err = crate::workflows::delete_purchase_order(&s.pool, po).await.unwrap_err();
+    assert!(err.starts_with("PO_HAS_RECEIPTS"), "{err}");
+}
