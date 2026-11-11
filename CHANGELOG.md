@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Refund checks and a credit's refunds.** Refunding a customer's credit from a bank account can
+  print a check, with the next check number filled in. A credit memo now lists the refunds and
+  write-offs taken from it, each with Print check (for a refund paid by check) and Void, which
+  gives the credit back.
+
 ## [0.14.1]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a

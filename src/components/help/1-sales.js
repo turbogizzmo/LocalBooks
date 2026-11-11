@@ -23,7 +23,7 @@ export const screens = {
     help: 'Turn on sales tax, set up the rates you charge, see taxable sales and tax owed for any period, and record payments to the tax agency.',
   },
   'sales/credits': {
-    help: 'Credit memos give a customer credit to apply to their open invoices or refund later; refund receipts pay money back straight away.',
+    help: 'Credit memos give a customer credit to apply to their open invoices or refund later; refund receipts pay money back straight away. Refunding credit from a bank account can print a check, and a credit memo lists its refunds and write-offs with Print check and Void.',
   },
   'sales/customers': {
     help: 'Everyone you sell to, with their open receivable balance. Add a customer here or while creating an invoice.',

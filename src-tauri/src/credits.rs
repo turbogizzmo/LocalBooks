@@ -895,6 +895,8 @@ pub async fn refund_vendor_credit(pool: &SqlitePool, input: RefundCreditInput) -
     vendor_credit(pool, input.credit_id).await
 }
 
+pub mod refund_list;
+
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
