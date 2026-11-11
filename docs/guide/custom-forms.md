@@ -1,14 +1,14 @@
 # Design your forms
 
-**Settings › Custom Forms** sets how invoices, estimates, sales receipts and customer statements
-look when you print them or save them as PDF files. Each form type has its own design, and the
-design is saved in your company file.
+**Settings › Custom Forms** sets how invoices, estimates, sales receipts, statements, credit memos,
+sales orders, purchase orders and bill payment stubs look when you print them or save them as PDF
+files. Each form type has its own design, and the design is saved in your company file.
 
 ## Change the design
 
 1. Go to **Settings › Custom Forms** and pick **Invoice**, **Estimate**, **Sales receipt**,
-   **Statement**, **Credit memo**, **Bill payment stub** (sent to a vendor with a payment) or
-   **Sales order**.
+   **Statement**, **Credit memo**, **Bill payment stub** (sent to a vendor with a payment),
+   **Sales order** or **Purchase order**.
 2. Change the layout on the left. The preview on the right updates as you go:
    - **Layout**: **Classic** (company and title side by side over a rule), **Modern** (the title in
      a colored band, banded rows) or **Compact** (smaller type, more lines per page).

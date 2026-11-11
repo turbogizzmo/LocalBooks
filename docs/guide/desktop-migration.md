@@ -509,10 +509,16 @@ full ledger brings, besides accounts, customers, vendors, items and classes:
   liability accounts match the original books. LocalBooks doesn't run payroll itself.
 - **Cost of goods sold.** An invoice or sales receipt that sold inventory brings the cost of what it
   sold, moved from Inventory Asset to Cost of Goods Sold as the original program recorded it.
+- **Inventory adjustments**, and the cost changes a bill made to stock already sold, come in, so
+  Inventory Asset and Cost of Goods Sold match the file. Item quantities on hand and assembly
+  builds don't come in yet: adjust quantities after the import (see
+  [Count and correct stock](inventory.md#count-and-correct-stock)).
 - **Discounts and subtotals.** The file's discount items become LocalBooks discount items (a percent
   discount keeps its percent). In a full import, an invoice's or sales receipt's subtotal and
   discount lines stay where they were on the form, rather than one amount off the whole form.
-  Subtotal, group, payment and sales tax items are not added to your item list as things to sell.
+  Subtotal, payment and sales tax items are not added to your item list as things to sell.
+- **Item groups** come in as LocalBooks groups with their items in order, when you bring in
+  customers, vendors and items (step 2 below).
 - **Deposits split between accounts.** A deposit that went partly into one bank account and partly
   into another comes in as a deposit into the account that got the most, with the rest shown as
   taken out of it. Its payments are marked deposited, so Make Deposits doesn't list them again.
