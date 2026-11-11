@@ -16,6 +16,7 @@ use sqlx::SqlitePool;
 use crate::banking::{DepositInput, DepositItemRef, DepositOtherLine, TransferInput};
 use crate::expenses::{ExpenseInput, SplitLineInput};
 use crate::ledger::db_err;
+use crate::money::Cents;
 
 /// Which column of the register the amount was typed in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -215,7 +216,7 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
         lines: input
             .lines
             .iter()
-            .map(|l| SplitLineInput { account_id: l.account_id, amount_cents: l.amount_cents, memo: l.memo.clone(), class_id: l.class_id, customer_id: l.customer_id, billable: None })
+            .map(|l| SplitLineInput { account_id: l.account_id, amount_cents: Cents(l.amount_cents), memo: l.memo.clone(), class_id: l.class_id, customer_id: l.customer_id, billable: None })
             .collect(),
         currency: None,
     };

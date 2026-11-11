@@ -100,7 +100,7 @@ async fn company() -> SqlitePool {
         amount_cents,
         memo: Some(memo.into()),
         quantity_e4: qty,
-        rate_cents: rate,
+        rate_cents: rate.map(Cents),
         product_service_id: item,
         class_id: None,
         customer_id: job,
@@ -115,11 +115,11 @@ async fn company() -> SqlitePool {
             bill_date: d(2025, 12, 2),
             due_date: d(2025, 12, 17),
             memo: None,
-            total_cents: 15_800,
+            total_cents: Cents(15_800),
             lines: vec![
-                bill_line(tracked.asset_account_id, 10_800, "Mugs", Some(120_000), Some(900), Some(mugs), None),
-                bill_line(office, 3_000, "Menu card stock", None, None, None, Some(cafe)),
-                bill_line(office, 2_000, "Patio sign", None, None, None, Some(patio)),
+                bill_line(tracked.asset_account_id, Cents(10_800), "Mugs", Some(120_000), Some(900), Some(mugs), None),
+                bill_line(office, Cents(3_000), "Menu card stock", None, None, None, Some(cafe)),
+                bill_line(office, Cents(2_000), "Patio sign", None, None, None, Some(patio)),
             ],
         },
     )
@@ -651,8 +651,8 @@ async fn t9_terms_unbilled_stock_and_closing_exceptions_tie_out() {
             bill_date: d(2025, 12, 8),
             due_date: d(2025, 12, 22),
             memo: None,
-            total_cents: 5_000,
-            lines: vec![billable(3_000, "Menu card stock", cafe), billable(2_000, "Patio sign", patio)],
+            total_cents: Cents(5_000),
+            lines: vec![billable(Cents(3_000), "Menu card stock", cafe), billable(Cents(2_000), "Patio sign", patio)],
         },
     )
     .await

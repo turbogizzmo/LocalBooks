@@ -15,6 +15,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 use crate::expenses::{BillInput, ExpenseInput};
 use crate::invoices::InvoiceInput;
 use crate::ledger::{db_err, format_cents, post_entry_in_tx_flagged, rollback, void_in_tx, AppliedTo, EntrySource, JournalEntry, Relinked};
+use crate::money::Cents;
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
@@ -221,7 +222,7 @@ pub(crate) async fn expense_input_in_tx(tx: &mut Transaction<'_, Sqlite>, expens
         memo,
         lines: lines
             .into_iter()
-            .map(|(account_id, amount_cents, memo, class_id, customer_id, billable)| crate::expenses::SplitLineInput { account_id, amount_cents, memo, class_id, customer_id, billable: Some(billable) })
+            .map(|(account_id, amount_cents, memo, class_id, customer_id, billable)| crate::expenses::SplitLineInput { account_id, amount_cents: Cents(amount_cents), memo, class_id, customer_id, billable: Some(billable) })
             .collect(),
         currency: None,
         payment_method_id,

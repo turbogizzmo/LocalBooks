@@ -95,10 +95,10 @@ pub(super) async fn company() -> SqlitePool {
             bill_date: d(2025, 11, 10),
             due_date: d(2025, 12, 10),
             memo: Some("Poster stock".into()),
-            total_cents: 45_000,
+            total_cents: Cents(45_000),
             lines: vec![
-                BillLineInput { account_id: office, amount_cents: 40_000, memo: Some("Poster stock".into()), quantity_e4: Some(5_000_000), rate_cents: Some(80), product_service_id: Some(prints), class_id: Some(studio), customer_id: None, billable: None },
-                BillLineInput { account_id: office, amount_cents: 5_000, memo: Some("Delivery".into()), quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None },
+                BillLineInput { account_id: office, amount_cents: Cents(40_000), memo: Some("Poster stock".into()), quantity_e4: Some(5_000_000), rate_cents: Some(Cents(80)), product_service_id: Some(prints), class_id: Some(studio), customer_id: None, billable: None },
+                BillLineInput { account_id: office, amount_cents: Cents(5_000), memo: Some("Delivery".into()), quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None },
             ],
         },
     )

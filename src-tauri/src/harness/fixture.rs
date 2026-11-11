@@ -92,7 +92,7 @@ async fn receive(pool: &SqlitePool, invoice_id: i64, date: NaiveDate, amount_cen
 }
 
 async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, terms: u64, lines: Vec<(i64, i64, &str)>) -> (i64, i64) {
-    let total = lines.iter().map(|l| l.1).sum();
+    let total: i64 = lines.iter().map(|l| l.1).sum();
     let summary = crate::expenses::post_vendor_bill(
         pool,
         BillInput { form_lines: Vec::new(),
@@ -102,12 +102,12 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, te
             bill_date: date,
             due_date: date + chrono::Days::new(terms),
             memo: None,
-            total_cents: total,
+            total_cents: Cents(total),
             lines: lines
                 .into_iter()
                 .map(|(account_id, amount_cents, memo)| BillLineInput {
                     account_id,
-                    amount_cents,
+                    amount_cents: Cents(amount_cents),
                     memo: Some(memo.into()),
                     quantity_e4: None,
                     rate_cents: None,
@@ -144,7 +144,7 @@ async fn expense(pool: &SqlitePool, kind: &str, payee: &str, from: i64, date: Na
             memo: None,
             lines: lines
                 .into_iter()
-                .map(|(account_id, amount_cents, memo)| SplitLineInput { account_id, amount_cents, memo: Some(memo.into()), class_id: None, customer_id: None, billable: None })
+                .map(|(account_id, amount_cents, memo)| SplitLineInput { account_id, amount_cents: Cents(amount_cents), memo: Some(memo.into()), class_id: None, customer_id: None, billable: None })
                 .collect(),
             currency: None,
         },

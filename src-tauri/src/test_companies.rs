@@ -83,8 +83,8 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, ac
             bill_date: date,
             due_date: date + chrono::Days::new(30),
             memo: None,
-            total_cents: cents,
-            lines: vec![BillLineInput { account_id, amount_cents: cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+            total_cents: Cents(cents),
+            lines: vec![BillLineInput { account_id, amount_cents: Cents(cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
         },
     )
     .await
@@ -108,7 +108,7 @@ async fn expense(pool: &SqlitePool, kind: &str, payee: &str, paid_from: i64, dat
             check_number: (kind == "CHECK").then(|| "1001".into()),
             payment_method: None,
             memo: None,
-            lines: vec![SplitLineInput { account_id, amount_cents: cents, memo: None, class_id: None, customer_id: None, billable: None }],
+            lines: vec![SplitLineInput { account_id, amount_cents: Cents(cents), memo: None, class_id: None, customer_id: None, billable: None }],
             currency: None,
         },
     )
