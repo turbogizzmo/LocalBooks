@@ -208,7 +208,7 @@ async fn billable_time_is_invoiced_once_at_its_hours_and_rate() {
     let pool = test_pool().await;
     let services = account(&pool, "4100").await;
     let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
-    let design = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Design".into(), description: None, rate_cents: 9_500, income_account_id: services, is_taxable: false })
+    let design = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Design".into(), description: None, rate_cents: Cents(9_500), income_account_id: services, is_taxable: false })
         .await
         .unwrap()
         .id;

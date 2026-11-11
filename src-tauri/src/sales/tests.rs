@@ -33,7 +33,7 @@ async fn sales_receipt_debits_cash_and_credits_revenue() {
     let (checking, sales, services) = (account_id(&pool, "1010").await, account_id(&pool, "4000").await, account_id(&pool, "4100").await);
     let widget = create_product(
         &pool,
-        ProductInput { name: "Widget".into(), description: Some("Blue widget".into()), rate_cents: 1_999, income_account_id: sales, is_taxable: true },
+        ProductInput { name: "Widget".into(), description: Some("Blue widget".into()), rate_cents: Cents(1_999), income_account_id: sales, is_taxable: true },
     )
     .await
     .expect("product saved");
@@ -98,7 +98,7 @@ async fn sales_receipt_rejects_non_income_lines_and_rolls_back() {
     .unwrap();
     assert_eq!((receipts, entries, customers), (0, 0, 0));
 
-    let err = create_product(&pool, ProductInput { name: "Bad".into(), description: None, rate_cents: 100, income_account_id: rent, is_taxable: true })
+    let err = create_product(&pool, ProductInput { name: "Bad".into(), description: None, rate_cents: Cents(100), income_account_id: rent, is_taxable: true })
         .await
         .expect_err("product must map to income");
     assert!(err.starts_with("PRODUCT_NOT_INCOME_ACCOUNT"), "{err}");

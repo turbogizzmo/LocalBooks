@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 
 #[tokio::test]
 async fn protected_tax_ids_need_the_key_to_see_or_change() {
@@ -107,10 +108,10 @@ async fn customers_vendors_and_products_can_be_edited_and_inactivated() {
 
     let sales: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4000'").fetch_one(&pool).await.unwrap();
     let rent: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '6300'").fetch_one(&pool).await.unwrap();
-    let widget = crate::sales::create_product(&pool, ProductInput { name: "Widget".into(), description: None, rate_cents: 100, income_account_id: sales, is_taxable: true }).await.unwrap();
-    let edited = update_product(&pool, widget.id, ProductInput { name: "Widget Pro".into(), description: Some("Better".into()), rate_cents: 250, income_account_id: sales, is_taxable: true }).await.unwrap();
+    let widget = crate::sales::create_product(&pool, ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(100), income_account_id: sales, is_taxable: true }).await.unwrap();
+    let edited = update_product(&pool, widget.id, ProductInput { name: "Widget Pro".into(), description: Some("Better".into()), rate_cents: Cents(250), income_account_id: sales, is_taxable: true }).await.unwrap();
     assert_eq!((edited.name.as_str(), edited.rate_cents), ("Widget Pro", 250));
-    let err = update_product(&pool, widget.id, ProductInput { name: "Widget Pro".into(), description: None, rate_cents: 250, income_account_id: rent, is_taxable: true }).await.unwrap_err();
+    let err = update_product(&pool, widget.id, ProductInput { name: "Widget Pro".into(), description: None, rate_cents: Cents(250), income_account_id: rent, is_taxable: true }).await.unwrap_err();
     assert!(err.starts_with("PRODUCT_NOT_INCOME_ACCOUNT"), "{err}");
     assert!(!set_product_active(&pool, widget.id, false).await.unwrap().is_active);
 }

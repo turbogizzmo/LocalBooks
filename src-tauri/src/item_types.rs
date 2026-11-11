@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::ledger::{db_err, mul_div_round, JournalLine, MAX_LINE_CENTS};
+use crate::money::Cents;
 use crate::sales_lists::SalesDoc;
 
 /// What a form line is.
@@ -69,7 +70,7 @@ pub struct FormLineInput {
     pub percent_ppm: Option<i64>,
     /// Discount: the amount taken off (positive), when it is not a percentage.
     #[serde(default)]
-    pub amount_cents: Option<i64>,
+    pub amount_cents: Option<Cents>,
     /// Discount: the account debited.
     #[serde(default)]
     pub account_id: Option<i64>,
@@ -128,7 +129,7 @@ impl FormLineInput {
 
     /// A discount of a percentage (`percent_ppm`) or an amount off the line above.
     pub fn discount(after_lines: usize, account_id: i64, percent_ppm: Option<i64>, amount_cents: Option<i64>, is_taxable: bool) -> Self {
-        FormLineInput { account_id: Some(account_id), percent_ppm, amount_cents, is_taxable, ..Self::blank(after_lines, FormLineKind::Discount) }
+        FormLineInput { account_id: Some(account_id), percent_ppm, amount_cents: amount_cents.map(Cents), is_taxable, ..Self::blank(after_lines, FormLineKind::Discount) }
     }
 
     fn text(&self) -> String {
@@ -232,7 +233,7 @@ pub fn lay_out(items: &[ItemAmount], form: &[FormLineInput], code: &str) -> Resu
                     })?;
                     let off = match (f.percent_ppm, f.amount_cents) {
                         (Some(ppm), None) if (1..=1_000_000).contains(&ppm) => mul_div_round(above, ppm, 1_000_000).unwrap_or(0),
-                        (None, Some(cents)) if cents > 0 => cents,
+                        (None, Some(cents)) if cents.is_positive() => cents.get(),
                         _ => return Err(format!("{code}_BAD_DISCOUNT_AMOUNT: the discount on line {n} needs an amount above zero or a percentage up to 100%")),
                     };
                     if off < 1 {
@@ -580,7 +581,7 @@ pub fn inputs_of(views: &[FormLineView], item_numbers: &[i64]) -> Vec<FormLineIn
                 description: v.description.clone(),
                 product_service_id: v.product_service_id,
                 percent_ppm: v.percent_ppm,
-                amount_cents: if v.kind == "DISCOUNT" && v.percent_ppm.is_none() { Some(-v.amount_cents) } else { None },
+                amount_cents: if v.kind == "DISCOUNT" && v.percent_ppm.is_none() { v.amount_cents.checked_neg().map(Cents) } else { None },
                 account_id: v.account_id,
                 class_id: v.class_id,
                 is_taxable: v.is_taxable,

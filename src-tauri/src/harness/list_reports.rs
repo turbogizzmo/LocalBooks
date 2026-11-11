@@ -90,7 +90,7 @@ async fn company() -> SqlitePool {
     // Twelve mugs into stock on a bill that also carries job costs for the cafe and its patio job;
     // $50.00 of it paid, so its open balance splits unevenly.
     let sales = account(p, "4000").await;
-    let mugs = crate::sales::create_product(p, crate::sales::ProductInput { name: "Gift Mugs".into(), description: Some("Logo mugs".into()), rate_cents: 1_800, income_account_id: sales, is_taxable: true })
+    let mugs = crate::sales::create_product(p, crate::sales::ProductInput { name: "Gift Mugs".into(), description: Some("Logo mugs".into()), rate_cents: Cents(1_800), income_account_id: sales, is_taxable: true })
         .await
         .unwrap()
         .id;

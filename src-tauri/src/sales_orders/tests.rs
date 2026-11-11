@@ -24,8 +24,8 @@ async fn shop() -> Shop {
     let pool = test_pool().await;
     let sales = account(&pool, "4000").await;
     let product = |name: &str, rate| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: rate, income_account_id: sales, is_taxable: false };
-    let widget = crate::sales::create_product(&pool, product("Widget", 2_500)).await.unwrap().id;
-    let service = crate::sales::create_product(&pool, product("Setup", 10_000)).await.unwrap().id;
+    let widget = crate::sales::create_product(&pool, product("Widget", Cents(2_500))).await.unwrap().id;
+    let service = crate::sales::create_product(&pool, product("Setup", Cents(10_000))).await.unwrap().id;
     let item = track_product(&pool, &TrackInput { product_id: widget, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap().id;
     let obe: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Opening Balance Equity'").fetch_one(&pool).await.unwrap();
     adjust(&pool, &AdjustInput { item_id: item, date: d(1), qty_change_e4: 70_000, total_cost_cents: Some(7_000), offset_account_id: obe, memo: None }).await.unwrap();

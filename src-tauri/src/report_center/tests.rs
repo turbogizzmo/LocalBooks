@@ -144,7 +144,7 @@ async fn inventory_valuation_and_stock_status_follow_the_stock_ledger() {
     let (sales, checking) = (account(&pool, "4000").await, account(&pool, "1010").await);
     let product = crate::sales::create_product(
         &pool,
-        crate::sales::ProductInput { name: "Widget".into(), description: Some("Blue widget".into()), rate_cents: 2_500, income_account_id: sales, is_taxable: false },
+        crate::sales::ProductInput { name: "Widget".into(), description: Some("Blue widget".into()), rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false },
     )
     .await
     .unwrap()

@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 use crate::sales::{create_product, list_products, ProductInput};
 
 async fn income(pool: &SqlitePool) -> i64 {
@@ -14,7 +15,7 @@ fn row(name: &str, rate: &str, cost: &str) -> PastedItem {
 async fn purchase_details_batch_activity_and_pasted_items() {
     let pool = test_pool().await;
     let account = income(&pool).await;
-    let bolt = create_product(&pool, ProductInput { name: "Bolt".into(), description: None, rate_cents: 50, income_account_id: account, is_taxable: true }).await.unwrap().id;
+    let bolt = create_product(&pool, ProductInput { name: "Bolt".into(), description: None, rate_cents: Cents(50), income_account_id: account, is_taxable: true }).await.unwrap().id;
 
     set_purchase_details(&pool, bolt, Some(" Hex bolt, box of 100 "), Some(1_200)).await.unwrap();
     let view = list_products(&pool).await.unwrap().into_iter().find(|p| p.id == bolt).unwrap();

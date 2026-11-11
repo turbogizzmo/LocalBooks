@@ -38,7 +38,7 @@ pub(super) async fn company() -> SqlitePool {
     let office = account(p, "6250").await;
     let studio = crate::classes::create_class(p, crate::classes::ClassInput { name: "Studio".into(), parent_id: None }).await.expect("class").id;
     let rep = crate::sales_lists::create_sales_rep(p, crate::sales_lists::SalesRepInput { initials: "MR".into(), name: Some("Mara Reyes".into()) }).await.expect("rep").id;
-    let product = |name: &str, rate: i64| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: rate, income_account_id: sales, is_taxable: false };
+    let product = |name: &str, rate: i64| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: Cents(rate), income_account_id: sales, is_taxable: false };
     let logo = crate::sales::create_product(p, product("Logo Package", 120_000)).await.expect("product").id;
     let prints = crate::sales::create_product(p, product("Poster Prints", 2_500)).await.expect("product").id;
 
