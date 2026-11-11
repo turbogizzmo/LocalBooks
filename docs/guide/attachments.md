@@ -109,7 +109,7 @@ removes a file unless an Admin removes a deleted one for good, and the files are
 
 ## Save every attachment at once
 
-**Settings › File & Data › Save All Attachments…** saves every file attached to any transaction
+**Settings › File & Data Controls › Save All Attachments…** saves every file attached to any transaction
 in one zip file, for your accountant or an auditor, or to keep outside LocalBooks. Inside the zip
 each transaction has its own folder, named by its date, its kind and its number, such as
 `2026-10-01 Bill 118 (entry 42)`; two files with the same name in one transaction are kept as

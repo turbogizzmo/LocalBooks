@@ -36,6 +36,7 @@ mod customer_groups;
 mod db;
 mod desktop;
 mod diagnostics;
+mod doc_numbers;
 mod document_inbox;
 mod duplicates;
 mod edits;
@@ -167,11 +168,17 @@ pub(crate) fn data_dirs<R: tauri::Runtime>(app: &impl Manager<R>) -> tauri::Resu
 }
 
 fn main() {
+    diagnostics::mark_launch();
     // Internal: the release check's headless company-file probe (see release_check.rs).
     if let Some(code) = release_check::run_from_args() {
         std::process::exit(code);
     }
     tauri::Builder::default()
+        .on_page_load(|webview, payload| {
+            if webview.label() == windows::MAIN && payload.event() == tauri::webview::PageLoadEvent::Finished {
+                diagnostics::first_page_loaded();
+            }
+        })
         .menu(|handle| {
             let menu = tauri::menu::Menu::default(handle)?;
             // Tauri's default Help menu is empty on macOS, so the system fills it with a search box
@@ -197,6 +204,7 @@ fn main() {
             app_menu::on_menu_event(app, event.id().as_ref());
         })
         .setup(|app| {
+            let mut steps = diagnostics::StartupSteps::start();
             // Before any secret is read: only the installed app uses the system Keychain or
             // Credential Manager; development and test builds keep files in `config_dir`.
             secrets::install_for_this_build(&app.config().identifier);
@@ -207,10 +215,12 @@ fn main() {
                 diagnostics::install(logs);
             }
             diagnostics::log(&format!("LocalBooks {} started", app.package_info().version));
+            steps.step("settings and logs");
             // Temporary copies an earlier run left (staged mail, an unpacked backup) go now.
             if let Ok(cache) = app.path().app_cache_dir() {
                 temp_files::sweep(&cache, temp_files::KEEP, std::time::SystemTime::now());
             }
+            steps.step("clearing temporary files");
             let config = db::DbConfig {
                 config_dir: config_dir.clone(),
                 default_path: data_dir.join(storage::DB_FILE_NAME),
@@ -222,6 +232,7 @@ fn main() {
             if instance::hand_off(&config_dir, &instance::request_for(launch_file.as_deref())) {
                 std::process::exit(0);
             }
+            steps.step("hand-off check");
             // Otherwise the file opens in place; without one, config.json is honoured, falling back
             // to the local file (with a warning) if that location is unavailable.
             let database = match tauri::async_runtime::block_on(db::Db::startup_with_file(config, launch_file)) {
@@ -232,10 +243,13 @@ fn main() {
                     eprintln!("LocalBooks could not open its company file: {err}");
                     commands::record_startup_failure(&data_dir, &err);
                     app.manage(commands::StartupFailure { message: err, company_file: data_dir.join(storage::DB_FILE_NAME) });
+                    steps.finish("open company (failed)");
                     return Ok(());
                 }
             };
+            steps.step("open company");
             tauri::async_runtime::block_on(database.refresh_gate());
+            steps.step("access gate");
             app.manage(database);
             app.manage(simplefin::SimpleFin::new(simplefin::secret_store(&config_dir))?);
             app.manage(fx_rates::ReqwestHttp::new()?);
@@ -257,6 +271,7 @@ fn main() {
                 let app = handoff_handle.clone();
                 tauri::async_runtime::spawn(async move { commands::handle_hand_off(&app, request).await });
             }));
+            steps.step("services and hand-off listener");
             match guard {
                 Ok(guard) => {
                     app.manage(std::sync::Mutex::new(Some(guard)));
@@ -320,6 +335,7 @@ fn main() {
                     tokio::time::sleep(std::time::Duration::from_secs(60 * 60)).await;
                 }
             });
+            steps.finish("background tasks");
             Ok(())
         })
         .invoke_handler(guarded(commands::handler()))

@@ -19,6 +19,7 @@ pub async fn list_estimates(db: State<'_, Db>) -> Result<Vec<EstimateSummary>, S
 #[tauri::command]
 pub async fn create_estimate(app: AppHandle, db: State<'_, Db>, input: EstimateInput, confirmed: Option<Vec<String>>) -> Result<EstimateSummary, String> {
     let pool = db.pool().await;
+    crate::sales::require_listed(&pool, crate::sales::Party::Customer, &input.customer_name).await?;
     guards::check(&pool, guards::dated(input.estimate_date), confirmed.as_deref()).await?;
     let estimate = estimates::create_estimate(&pool, input).await?;
     notify(&app);
@@ -59,6 +60,7 @@ pub async fn get_estimate_detail(db: State<'_, Db>, estimate_id: i64) -> Result<
 #[tauri::command]
 pub async fn invoice_from_estimate(app: AppHandle, db: State<'_, Db>, estimate_id: i64, input: InvoiceInput, confirmed: Option<Vec<String>>) -> Result<InvoiceSummary, String> {
     let pool = db.pool().await;
+    crate::sales::require_listed(&pool, crate::sales::Party::Customer, &input.customer_name).await?;
     guards::check(&pool, guards::invoice(&input, None), confirmed.as_deref()).await?;
     let invoice = estimates::invoice_from_estimate(&pool, estimate_id, input).await?;
     notify(&app);

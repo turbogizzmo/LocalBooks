@@ -7,12 +7,16 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::invoices::{validate_line, InvoiceInput, InvoiceLineInput};
 use crate::ledger::{db_err, format_cents, rollback, MAX_LINE_CENTS};
+use crate::money::Cents;
 use crate::sales::{find_or_create_named, Party, SalesLineInput};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EstimateInput {
     pub customer_name: String,
+    /// The number typed in the form's number box; `None` takes the next one (`doc_numbers`).
+    #[serde(default)]
+    pub estimate_number: Option<i64>,
     pub estimate_date: NaiveDate,
     pub expiration_date: Option<NaiveDate>,
     pub memo: Option<String>,
@@ -119,9 +123,10 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
     let total = (total - input.discount_cents).checked_add(tax_cents).filter(|t| *t > 0 && *t <= MAX_LINE_CENTS).ok_or("EST_AMOUNT_TOO_LARGE: the estimate total must be above zero and in range")?;
     let customer_id = find_or_create_named(tx, Party::Customer, &input.customer_name).await?;
 
+    let number = crate::doc_numbers::take_number(tx, crate::doc_numbers::DocKind::Estimate, input.estimate_number).await?;
     let estimate_id: i64 = sqlx::query_scalar(
         "INSERT INTO estimates (estimate_number, customer_id, estimate_date, expiration_date, memo, total_cents, tax_rate_id, tax_cents, discount_cents)
-         VALUES ((SELECT COALESCE(MAX(estimate_number), 1000) + 1 FROM estimates), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id",
+         VALUES (?9, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id",
     )
     .bind(customer_id)
     .bind(input.estimate_date)
@@ -131,6 +136,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
     .bind(tax.as_ref().and_then(|t| t.rate_id))
     .bind(tax_cents)
     .bind(input.discount_cents)
+    .bind(number)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -243,6 +249,7 @@ pub async fn convert_to_invoice(
         let mut details = carried.clone();
         details.form_lines = form;
         let invoice = InvoiceInput {
+            invoice_number: None,
             customer_name,
             issue_date,
             due_date,
@@ -251,7 +258,7 @@ pub async fn convert_to_invoice(
                 .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable, _, _, _)| InvoiceLineInput {
                     description,
                     quantity_e4,
-                    rate_cents,
+                    rate_cents: Cents(rate_cents),
                     income_account_id,
                     product_service_id,
                     class_id,
@@ -260,7 +267,7 @@ pub async fn convert_to_invoice(
                 .collect(),
             currency: None,
             tax_rate_id,
-            discount_cents,
+            discount_cents: Cents(discount_cents),
             details,
         };
         // The estimate's rep, shipping and printed fields carry over to its invoice as they are.
@@ -351,7 +358,7 @@ async fn check_convertible(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64) -
 pub async fn invoice_from_estimate(pool: &SqlitePool, estimate_id: i64, mut input: InvoiceInput) -> Result<crate::invoices::InvoiceSummary, String> {
     let drop_zero = crate::sales_prefs::drop_zero_lines(pool).await?;
     // Zero-amount lines the company leaves off; subtotals and the other form lines keep their places.
-    let amounts: Vec<i64> = input.lines.iter().map(|l| crate::ledger::quantity_amount(l.quantity_e4, l.rate_cents).unwrap_or(1)).collect();
+    let amounts: Vec<i64> = input.lines.iter().map(|l| crate::ledger::quantity_amount(l.quantity_e4, l.rate_cents.get()).unwrap_or(1)).collect();
     let kept = crate::item_types::kept_lines(&amounts, drop_zero);
     input.details.form_lines = crate::item_types::without_items(std::mem::take(&mut input.details.form_lines), &kept);
     let lines = std::mem::take(&mut input.lines);

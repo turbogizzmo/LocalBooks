@@ -167,6 +167,8 @@ async fn a_backup_of_an_encrypted_file_is_encrypted_and_opens_with_the_same_pass
     assert!(header::is_encrypted(&copy), "the copy has the key header");
     assert!(!contains(&bytes, MARKER.as_bytes()), "and no plaintext");
 
+    // With the books locked again (their key gone from this process), the copy opens locked too.
+    db.relock().await;
     let other = open_db(&dir, &copy).await;
     assert!(other.is_locked().await);
     sign_in(&other, "bob", "bob password 1").await.unwrap();
@@ -229,13 +231,6 @@ async fn a_locked_file_refuses_every_command_except_unlock() {
     assert!(db.update_key_header(|h| h).await.unwrap_err().starts_with("SIGN_IN_REQUIRED"), "the header can't change while locked");
     assert!(db.is_locked().await, "and none of that unlocked it");
 
-    // Replacing or moving the file waits for phase 3b, locked or not.
-    sign_in(&db, "ann", "ann password 1").await.unwrap();
-    let elsewhere_dir = dir.join("elsewhere");
-    std::fs::create_dir_all(&elsewhere_dir).unwrap();
-    assert_eq!(db.relocate(&elsewhere_dir, crate::db::RelocateMode::MoveCurrent).await.unwrap_err(), crate::db::ENCRYPTED_NOT_YET);
-    assert_eq!(db.swap_in(&dir.join("nothing.db"), &dir.join("nothing.db")).await.unwrap_err(), crate::db::ENCRYPTED_NOT_YET);
-    assert!(path.exists() && header::is_encrypted(&path), "the books stayed where they were");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

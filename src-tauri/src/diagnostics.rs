@@ -68,6 +68,93 @@ fn write_line(dir: &Path, line: &str, limit: u64) {
     }
 }
 
+/// The steps of starting LocalBooks, timed. The window shows nothing until startup finishes (the
+/// window exists before setup runs, and setup opens the company file), so a slow step is a blank
+/// window; [`StartupSteps::finish`] logs how long each step took, in one line.
+pub struct StartupSteps {
+    started: std::time::Instant,
+    last: std::time::Instant,
+    steps: Vec<(&'static str, u128)>,
+    logged: bool,
+}
+
+/// A startup at least this slow is also reported on standard error, where a test run sees it.
+const SLOW_STARTUP_MS: u128 = 2_000;
+
+static LAUNCHED: OnceLock<std::time::Instant> = OnceLock::new();
+static FIRST_PAGE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Notes when the process started, for [`first_page_loaded`]. Call it first thing in `main`.
+pub fn mark_launch() {
+    let _ = LAUNCHED.set(std::time::Instant::now());
+}
+
+/// Logs, once, how long after launch the first window's page finished loading: until then the
+/// window is blank, whether the time went to startup (see [`StartupSteps`]) or to the web view.
+pub fn first_page_loaded() {
+    let Some(launched) = LAUNCHED.get() else { return };
+    if FIRST_PAGE.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    let ms = launched.elapsed().as_millis();
+    let line = format!("first page loaded {ms} ms after launch");
+    if ms >= SLOW_STARTUP_MS {
+        eprintln!("LocalBooks: {line}");
+    }
+    log(&line);
+}
+
+impl StartupSteps {
+    pub fn start() -> Self {
+        let now = std::time::Instant::now();
+        StartupSteps { started: now, last: now, steps: Vec::new(), logged: false }
+    }
+
+    /// Ends the step called `name` (it began when the previous one ended).
+    pub fn step(&mut self, name: &'static str) {
+        let now = std::time::Instant::now();
+        self.steps.push((name, now.duration_since(self.last).as_millis()));
+        self.last = now;
+    }
+
+    /// Logs the steps (the last one called `name`) and the total.
+    pub fn finish(mut self, name: &'static str) {
+        self.log_with(name);
+    }
+
+    fn log_with(&mut self, name: &'static str) {
+        self.step(name);
+        self.logged = true;
+        let total = self.last.duration_since(self.started).as_millis();
+        let line = startup_line(total, &self.steps);
+        if total >= SLOW_STARTUP_MS {
+            eprintln!("LocalBooks: {line}");
+        }
+        log(&line);
+    }
+}
+
+/// A setup that returns early (an error from `?`) still logs its steps.
+impl Drop for StartupSteps {
+    fn drop(&mut self) {
+        if !self.logged {
+            self.log_with("until setup stopped early");
+        }
+    }
+}
+
+/// "startup took 2400 ms: open company 2100 ms, ..." with the steps of 50 ms or more, slowest first.
+fn startup_line(total_ms: u128, steps: &[(&'static str, u128)]) -> String {
+    let mut slow: Vec<_> = steps.iter().filter(|(_, ms)| *ms >= 50).collect();
+    slow.sort_by_key(|s| std::cmp::Reverse(s.1));
+    let parts: Vec<String> = slow.iter().map(|(name, ms)| format!("{name} {ms} ms")).collect();
+    if parts.is_empty() {
+        format!("startup took {total_ms} ms")
+    } else {
+        format!("startup took {total_ms} ms: {}", parts.join(", "))
+    }
+}
+
 /// What goes in the bundle: (name in the zip, text).
 pub async fn bundle(pool: Option<&SqlitePool>, company_file: Option<&Path>, log_dir: Option<&Path>, app_version: &str) -> Result<Vec<(String, String)>, String> {
     let mut files = Vec::new();
@@ -97,7 +184,7 @@ pub async fn bundle(pool: Option<&SqlitePool>, company_file: Option<&Path>, log_
             }
             let check: Vec<String> = sqlx::query_scalar("PRAGMA quick_check").fetch_all(pool).await.map_err(db_err)?;
             db.push_str(&format!("Integrity (quick check): {}\n", check.join("; ")));
-            let (pages, page_size): (i64, i64) = sqlx::query_as("SELECT (SELECT page_count FROM pragma_page_count), (SELECT page_size FROM pragma_page_size)")
+            let (pages, page_size): (i64, i64) = sqlx::query_as("SELECT (SELECT page_count FROM pragma_page_count), CAST((SELECT page_size FROM pragma_page_size) AS INTEGER)")
                 .fetch_one(pool)
                 .await
                 .map_err(db_err)?;
@@ -152,6 +239,15 @@ pub fn write_zip(files: &[(String, String)], path: &Path) -> Result<(), String> 
 mod tests {
     use super::*;
     use crate::db::test_pool;
+
+    #[test]
+    fn startup_lines_name_the_slow_steps_slowest_first() {
+        assert_eq!(startup_line(30, &[("settings", 10), ("open company", 20)]), "startup took 30 ms");
+        assert_eq!(
+            startup_line(16_400, &[("settings", 12), ("open company", 15_900), ("hand-off check", 400), ("access gate", 88)]),
+            "startup took 16400 ms: open company 15900 ms, hand-off check 400 ms, access gate 88 ms"
+        );
+    }
 
     #[test]
     fn the_log_appends_lines_and_rolls_over() {

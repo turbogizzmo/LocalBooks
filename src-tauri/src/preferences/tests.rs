@@ -103,3 +103,12 @@ fn account_and_item_names_follow_the_report_preferences() {
     assert_eq!(ItemNames::Both.label("WIDGET", Some("Blue widget")), "WIDGET – Blue widget");
     assert_eq!(ItemNames::Description.label("WIDGET", Some("  ")), "WIDGET", "no description falls back to the name");
 }
+
+#[test]
+fn the_company_default_sales_tax_rate_is_a_rate_id_or_blank() {
+    let key = crate::sales_tax::DEFAULT_RATE_PREF;
+    assert_eq!(validate(key, " 12 ").unwrap(), "12");
+    assert_eq!(validate(key, "").unwrap(), "");
+    assert!(validate(key, "abc").unwrap_err().starts_with("PREF_BAD_TAX_RATE"));
+    assert!(validate(key, "0").unwrap_err().starts_with("PREF_BAD_TAX_RATE"));
+}

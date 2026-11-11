@@ -16,6 +16,7 @@ use crate::banking::{DepositInput, DepositItemRef, TransferInput};
 use crate::expenses::{BillInput, BillLineInput, BillPaymentInput, ExpenseInput, SplitLineInput};
 use crate::invoices::{InvoiceInput, InvoiceLineInput, PaymentInput};
 use crate::ledger::{ForeignCurrency, JournalEntry, JournalLine};
+use crate::money::Cents;
 use crate::sales::{SalesLineInput, SalesReceiptInput};
 
 pub(crate) fn d(year: i32, month: u32, day: u32) -> NaiveDate {
@@ -68,13 +69,13 @@ async fn journal(pool: &SqlitePool, date: NaiveDate, description: &str, lines: V
 }
 
 fn line(description: &str, quantity_e4: i64, rate_cents: i64, income: i64, is_taxable: bool) -> InvoiceLineInput {
-    InvoiceLineInput { description: description.into(), quantity_e4, rate_cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable, service_date: None }
+    InvoiceLineInput { description: description.into(), quantity_e4, rate_cents: Cents(rate_cents), income_account_id: income, product_service_id: None, class_id: None, is_taxable, service_date: None }
 }
 
 async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, terms: u64, lines: Vec<InvoiceLineInput>, tax_rate_id: Option<i64>, currency: Option<ForeignCurrency>) -> i64 {
     crate::invoices::create_and_post_invoice(
         pool,
-        InvoiceInput { customer_name: customer.into(), issue_date: issue, due_date: issue + chrono::Days::new(terms), lines, currency, tax_rate_id, discount_cents: 0, details: Default::default() },
+        InvoiceInput { invoice_number: None, customer_name: customer.into(), issue_date: issue, due_date: issue + chrono::Days::new(terms), lines, currency, tax_rate_id, discount_cents: Cents::ZERO, details: Default::default() },
     )
     .await
     .unwrap_or_else(|e| panic!("invoice for {customer} on {issue}: {e}"))
@@ -84,7 +85,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, terms: u64
 async fn receive(pool: &SqlitePool, invoice_id: i64, date: NaiveDate, amount_cents: i64, deposit_account_id: i64, exchange_rate_e6: Option<i64>) {
     crate::invoices::record_payment(
         pool,
-        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id, deposit_account_id, payment_date: date, amount_cents, payment_method: "CHECK".into(), reference: None, exchange_rate_e6 },
+        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id, deposit_account_id, payment_date: date, amount_cents: Cents(amount_cents), payment_method: "CHECK".into(), reference: None, exchange_rate_e6 },
     )
     .await
     .unwrap_or_else(|e| panic!("payment on invoice {invoice_id} on {date}: {e}"));
@@ -236,6 +237,7 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
             crate::sales::post_sales_receipt(
                 p,
                 SalesReceiptInput {
+                    receipt_number: None,
                     payment_method_id: None,
                     customer_name: None,
                     receipt_date: d(2025, month, 20),

@@ -96,7 +96,8 @@ pub(super) async fn open_by_item(pool: &SqlitePool, today: NaiveDate) -> Result<
     let columns = columns("Item", "Customer");
     let w = columns.len();
     // By item (lines without one, by their description), name order.
-    let mut groups: BTreeMap<(String, Option<i64>, String), (String, Option<i64>, Vec<&OpenLine>)> = BTreeMap::new();
+    type GroupKey = (String, Option<i64>, String);
+    let mut groups: BTreeMap<GroupKey, (String, Option<i64>, Vec<&OpenLine>)> = BTreeMap::new();
     for l in &open.lines {
         let name = item_of(l);
         let own = if l.product_service_id.is_some() { String::new() } else { name.clone() };

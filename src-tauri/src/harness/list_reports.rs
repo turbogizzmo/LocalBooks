@@ -17,6 +17,7 @@ use crate::accountant_reports::AccountantReport;
 use crate::custom_reports::{ReportRow, RowKind};
 use crate::expenses::{BillInput, BillLineInput, BillPaymentInput};
 use crate::list_reports::{self, Dates};
+use crate::money::Cents;
 
 async fn company() -> SqlitePool {
     let pool = report_presets::company().await;
@@ -155,6 +156,7 @@ Harbor Lane, OR 97001' WHERE id = (SELECT id FROM invoices WHERE customer_id = ?
     crate::sales_orders::create(
         p,
         &crate::sales_orders::SalesOrderInput {
+            order_number: None,
             customer_name: "Brightwater Cafe".into(),
             order_date: d(2025, 12, 8),
             expected_date: Some(d(2026, 1, 15)),
@@ -471,13 +473,14 @@ async fn t49_reports_tie_out_to_the_ledger() {
     crate::invoices::create_and_post_invoice(
         p,
         crate::invoices::InvoiceInput {
+            invoice_number: None,
             customer_name: "Brightwater Cafe".into(),
             issue_date: d(2025, 12, 15),
             due_date: d(2025, 12, 30),
             lines: vec![crate::invoices::InvoiceLineInput {
                 description: "Gift mugs".into(),
                 quantity_e4: 40_000,
-                rate_cents: 1_800,
+                rate_cents: Cents(1_800),
                 income_account_id: sales,
                 product_service_id: Some(mugs),
                 class_id: None,
@@ -486,7 +489,7 @@ async fn t49_reports_tie_out_to_the_ledger() {
             }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )

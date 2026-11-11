@@ -107,7 +107,7 @@ const EMPTY_PASSWORD = { password: '', confirm: '' };
 const passwordReady = (p) => p.password.length >= MIN_PASSWORD && p.password === p.confirm;
 
 /** A one-time view of a recovery key, with what it is for. */
-export function RecoveryKeyPanel({ recoveryKey, onDone, doneLabel = 'Continue' }) {
+export function RecoveryKeyPanel({ recoveryKey, onDone, doneLabel = 'Continue', encrypted = false }) {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const copy = async () => {
@@ -124,6 +124,11 @@ export function RecoveryKeyPanel({ recoveryKey, onDone, doneLabel = 'Continue' }
         This recovery key resets an Admin password if every Admin forgets theirs. LocalBooks does not keep a copy, and nobody else can reset it for you. Write it down or store
         it in a password manager, somewhere apart from this computer.
       </p>
+      {encrypted && (
+        <p role="note" className="border border-qb-negative/40 bg-[#fdf0ef] px-2 py-1 text-sm text-qb-negative">
+          This company file is encrypted. If every Admin forgets their password and this recovery key is lost, nobody can open these books or any backup of them: not you, not LocalBooks' authors.
+        </p>
+      )}
       <div className="flex items-center gap-2">
         <code data-testid="recovery-key" className="flex-1 select-all rounded-xs border border-qb-border-strong bg-qb-canvas px-2 py-1 text-center font-mono text-md tracking-wider">{recoveryKey}</code>
         <button type="button" className="qb-btn qb-btn-secondary flex-none" onClick={copy}>
@@ -181,7 +186,7 @@ function SignInForm({ busy, run, onForgot }) {
   );
 }
 
-function ForgotChoices({ onRecover, onRemoveAll, onBack }) {
+function ForgotChoices({ onRecover, onRemoveAll, onBack, encrypted }) {
   return (
     <div className="flex flex-col gap-2 text-sm">
       <div className="rounded-xs border border-qb-border p-2">
@@ -202,9 +207,13 @@ function ForgotChoices({ onRecover, onRemoveAll, onBack }) {
         <button type="button" className="text-qb-link hover:underline" onClick={onBack}>
           Back to sign in
         </button>
-        <button type="button" className="text-xs text-qb-ink-muted hover:underline" onClick={onRemoveAll}>
-          No Admin password and no recovery key?
-        </button>
+        {encrypted ? (
+          <span className="text-xs text-qb-ink-muted">This file is encrypted: only a password or the recovery key opens it.</span>
+        ) : (
+          <button type="button" className="text-xs text-qb-ink-muted hover:underline" onClick={onRemoveAll}>
+            No Admin password and no recovery key?
+          </button>
+        )}
       </div>
     </div>
   );
@@ -304,7 +313,7 @@ function ChangeOwnPasswordForm({ busy, run, temporary, onDone, submitLabel = 'Ch
  * Shown instead of the app when the open company file has users and nobody is signed in, or when
  * the signed-in user still has a temporary password.
  */
-export default function SignIn({ companyName, user }) {
+export default function SignIn({ companyName, user, encrypted = false }) {
   const [mode, setMode] = useState(user?.mustChangePassword ? 'change' : user?.mustSetUpTwoStep ? 'setup' : 'signin');
   const [codeFor, setCodeFor] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -376,7 +385,7 @@ export default function SignIn({ companyName, user }) {
             )}
           </>
         )}
-        {mode === 'forgot' && <ForgotChoices onRecover={() => go('recover')} onRemoveAll={() => go('removeAll')} onBack={() => go('signin')} />}
+        {mode === 'forgot' && <ForgotChoices encrypted={encrypted} onRecover={() => go('recover')} onRemoveAll={() => go('removeAll')} onBack={() => go('signin')} />}
         {mode === 'recover' && <RecoverForm busy={busy} run={run} onBack={() => go('forgot')} />}
         {mode === 'removeAll' && <RemoveAllForm busy={busy} run={run} onBack={() => go('forgot')} />}
         {mode === 'change' && (
@@ -585,7 +594,7 @@ function UserDialog({ user, me, onClose, onSaved }) {
   );
 }
 
-function UserList({ me }) {
+function UserList({ me, encrypted }) {
   const [users, setUsers] = useState(null);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null); // a user, or 'new'
@@ -623,7 +632,7 @@ function UserList({ me }) {
       {notice && <Notice kind="success" text={notice} onDismiss={() => setNotice(null)} />}
       {recoveryKey && (
         <div className="border-b border-qb-border p-2">
-          <RecoveryKeyPanel recoveryKey={recoveryKey} doneLabel="Done" onDone={() => setRecoveryKey(null)} />
+          <RecoveryKeyPanel recoveryKey={recoveryKey} doneLabel="Done" encrypted={encrypted} onDone={() => setRecoveryKey(null)} />
         </div>
       )}
       <table className="qb-grid">
@@ -713,6 +722,144 @@ function AutoLockSetting({ minutes }) {
   );
 }
 
+/**
+ * Admin: whole-file encryption (off by default). Turning it on encrypts the whole company file,
+ * its attachments and its backups from then on; the project owner decided it must be a choice,
+ * with this warning, because it removes the "Remove all users" way back.
+ */
+function WholeFileEncryption({ me, encrypted }) {
+  const [users, setUsers] = useState(null);
+  const [password, setPassword] = useState('');
+  const [temporary, setTemporary] = useState({});
+  const [understood, setUnderstood] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(null);
+  const [plainBackups, setPlainBackups] = useState([]);
+  const [notice, setNotice] = useState(null);
+
+  useEffect(() => {
+    if (encrypted) api.listUnencryptedBackups().then(setPlainBackups, (err) => setError(errorText(err)));
+    else api.listUsers().then(setUsers, (err) => setError(errorText(err)));
+  }, [encrypted]);
+
+  const others = (users ?? []).filter((u) => u.isActive && u.id !== me.id);
+  const ready = understood && password && others.every((u) => (temporary[u.id] ?? '').length >= MIN_PASSWORD);
+  const run = async (action) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <section className="qb-panel max-w-[600px] p-2">
+        <h2 className="mb-1 text-md font-semibold">The company file is encrypted. Save the new recovery key</h2>
+        <p className="mb-2 text-sm text-qb-ink-muted">The recovery key you had before no longer opens this file. Give the other users their temporary passwords.</p>
+        <RecoveryKeyPanel recoveryKey={done.recoveryKey} encrypted onDone={() => window.location.reload()} />
+      </section>
+    );
+  }
+
+  const deletePlain = () =>
+    run(async () => {
+      if (!(await askConfirm('Delete the backups made before encryption? This cannot be undone.', { confirmLabel: 'Delete Them' }))) return;
+      const n = await api.deleteUnencryptedBackups();
+      setPlainBackups([]);
+      setNotice(`Deleted ${n === 1 ? '1 backup' : `${n} backups`}. Copies in a synced folder's history or on other drives aren't affected.`);
+    });
+  const turnOff = (e) => {
+    e.preventDefault();
+    run(async () => {
+      if (!(await askConfirm('Turn off encryption? The company file goes back to an ordinary, unencrypted file.', { confirmLabel: 'Turn Off' }))) return;
+      await api.decryptCompanyFile(password);
+      window.location.reload();
+    });
+  };
+  const turnOn = () =>
+    run(async () => {
+      const temporaryPasswords = others.map((u) => ({ userId: u.id, password: temporary[u.id] }));
+      setDone(await api.encryptCompanyFile({ password, temporaryPasswords, understood }));
+    });
+
+  return (
+    <section className="qb-panel">
+      <h2 className="border-b border-qb-border bg-qb-row-header px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Encrypt the whole company file</h2>
+      <div className="flex max-w-[600px] flex-col gap-2 p-2 text-sm">
+        {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
+        {notice && <Notice kind="success" text={notice} onDismiss={() => setNotice(null)} />}
+        {encrypted ? (
+          <>
+            <p>This company file is encrypted: the file, its attachments and the backups made from it open only with a user&apos;s password or the recovery key.</p>
+            {plainBackups.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span>{plainBackups.length === 1 ? '1 backup' : `${plainBackups.length} backups`} made before encryption still hold the books unencrypted.</span>
+                <button type="button" className="qb-btn qb-btn-secondary h-row flex-none px-2 text-xs" disabled={busy} onClick={deletePlain}>
+                  Delete Them…
+                </button>
+              </div>
+            )}
+            <form className="flex items-end gap-2" onSubmit={turnOff}>
+              <Field label="Your password">
+                <input type="password" className="qb-input w-[220px]" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} autoComplete="current-password" />
+              </Field>
+              <button type="submit" className="qb-btn qb-btn-secondary" disabled={busy || !password}>
+                Turn Off Encryption…
+              </button>
+            </form>
+          </>
+        ) : (
+          <>
+            <p>
+              Encrypts the whole company file, its attachments and every backup made from it, so a copy that leaves this computer shows nothing readable without a user&apos;s
+              password or the recovery key. It is off unless you turn it on.
+            </p>
+            <p role="note" className="border border-qb-negative/40 bg-[#fdf0ef] px-2 py-1 text-sm text-qb-negative">
+              With it on, if every Admin forgets their password and the recovery key is lost, nobody can open these books or any backup of them: not you, not LocalBooks' authors. Without it, Remove all users can still get you back in.
+            </p>
+            <label className="flex items-start gap-2">
+              <input type="checkbox" className="mt-0.5" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} disabled={busy} />
+              <span>I understand that losing every Admin password and the recovery key means losing these books.</span>
+            </label>
+            <Field label="Your password" hint="It will open the encrypted file.">
+              <input type="password" className="qb-input w-[220px]" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} autoComplete="current-password" />
+            </Field>
+            {others.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <div className="font-semibold">A temporary password for each other user</div>
+                <p className="text-qb-ink-muted">Each user needs a password the encrypted file knows. They choose their own the next time they sign in.</p>
+                {others.map((u) => (
+                  <Field key={u.id} label={`${u.displayName} (${u.username})`}>
+                    <input
+                      type="password"
+                      className="qb-input w-[220px]"
+                      value={temporary[u.id] ?? ''}
+                      onChange={(e) => setTemporary((t) => ({ ...t, [u.id]: e.target.value }))}
+                      disabled={busy}
+                      autoComplete="new-password"
+                    />
+                  </Field>
+                ))}
+              </div>
+            )}
+            <div>
+              <button type="button" className="qb-btn qb-btn-primary" disabled={busy || !ready} onClick={turnOn}>
+                {busy ? 'Encrypting…' : 'Encrypt Company File'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** Settings › Users & Passwords. */
 export function UsersSettings() {
   const [state, setState] = useState(null);
@@ -797,7 +944,8 @@ export function UsersSettings() {
       </section>
       <TwoStepSettings me={me} />
       {me.role === 'ADMIN' && <AutoLockSetting minutes={state.autoLockMinutes} />}
-      {me.role === 'ADMIN' && <UserList me={me} />}
+      {me.role === 'ADMIN' && <UserList me={me} encrypted={state.encrypted} />}
+      {me.role === 'ADMIN' && <WholeFileEncryption me={me} encrypted={state.encrypted} />}
     </div>
   );
 }

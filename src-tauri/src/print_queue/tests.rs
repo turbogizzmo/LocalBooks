@@ -3,6 +3,7 @@ use crate::db::test_pool;
 use crate::expenses::SplitLineInput;
 use crate::invoices::InvoiceLineInput;
 use chrono::NaiveDate;
+use crate::money::Cents;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.expect("seeded account")
@@ -35,13 +36,14 @@ async fn check(pool: &SqlitePool, payee: &str, number: Option<&str>, cents: i64,
 
 fn invoice_input(pool_services: i64) -> InvoiceInput {
     InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme".into(),
         issue_date: d(1),
         due_date: d(31),
         lines: vec![InvoiceLineInput {
             description: "Work".into(),
             quantity_e4: 10_000,
-            rate_cents: 12_500,
+            rate_cents: Cents(12_500),
             income_account_id: pool_services,
             product_service_id: None,
             class_id: None,
@@ -49,7 +51,7 @@ fn invoice_input(pool_services: i64) -> InvoiceInput {
         }],
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     }
 }
@@ -253,7 +255,7 @@ async fn a_payment_taken_on_the_invoice_is_saved_with_it() {
                 .unwrap()
         }
     };
-    let paid = |cents: i64| crate::invoices::PaidNow { deposit_account_id: checking, amount_cents: cents, payment_method: "CHECK".into(), payment_method_id: None, reference: Some("1042".into()) };
+    let paid = |cents: i64| crate::invoices::PaidNow { deposit_account_id: checking, amount_cents: Cents(cents), payment_method: "CHECK".into(), payment_method_id: None, reference: Some("1042".into()) };
 
     // Part paid at the counter: the invoice is PARTIAL and the money is in the bank, dated the invoice's date.
     let part = create_invoice(&pool, invoice_input(services), false, Some(&paid(5_000))).await.unwrap();

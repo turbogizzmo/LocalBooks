@@ -49,7 +49,7 @@ starting point.
 
 Only authorized people may get at customer information, and each only to what their job needs.
 **LocalBooks:** turn on users ([Users, passwords and sensitive data](users-and-passwords.md)).
-Everyone signs in with their own password, and the roles Admin, Standard and View only limit what
+Everyone signs in with their own password, and the roles Admin, Standard, View only and External Accountant limit what
 each can change. Vendor tax IDs and bank details are shown in full only to users allowed to see
 sensitive data. Everyone is signed out after 15 minutes idle by default; an Admin can change that
 limit or turn it off under **Sign out when idle**, so keep it on.
@@ -80,10 +80,13 @@ the Qualified Individual may approve other controls that work as well.
 **LocalBooks, at rest:** with users on, vendor tax IDs and bank details are encrypted in the company
 file (AES-256, key locked by each allowed user's password and the recovery key). Offsite backups are
 encrypted as a whole before they leave LocalBooks.
-**Limits:** the rest of the company file, its local backups and attachments are not encrypted by
-LocalBooks yet (whole-file encryption is planned). Turn on full-disk encryption on every computer
-that holds them: FileVault on a Mac, BitLocker or Device Encryption on Windows. Your Qualified
-Individual can record that as the approved control. Exports are plain files: keep them on encrypted
+An Admin can also **encrypt the whole company file** (Settings › Users & Passwords), which covers
+the file, its attachments and every backup made from it; see
+[Users, passwords and sensitive data](users-and-passwords.md#encrypt-the-whole-company-file).
+**Limits:** without whole-file encryption, the rest of the company file, its local backups and
+attachments are readable by anyone who has them; use full-disk encryption on every computer that
+holds them (FileVault on a Mac, BitLocker or Device Encryption on Windows), which your Qualified
+Individual can record as the approved control. Exports are plain files: keep them on encrypted
 disks too, and delete them when done.
 **In transit:** bank downloads (SimpleFIN), updates and exchange-rate lookups use HTTPS. Email over
 SMTP refuses to send a password without STARTTLS or TLS, but the message and its PDF are only as
@@ -200,6 +203,7 @@ If unencrypted customer information about **500 or more** consumers is taken wit
 you must notify the FTC through the form on its website as soon as possible and within 30 days of
 finding out. This applies whatever your size. Information counts as unencrypted if the key was taken
 too. **LocalBooks:** encrypted tax IDs and bank details are protected only while the passwords and
-recovery key stay safe. **Limits:** the rest of the company file is unencrypted unless the disk is,
-so a stolen laptop without full-disk encryption may be a notification event. State laws can add
+recovery key stay safe. With whole-file encryption on, a stolen copy of the company file or a backup is
+encrypted too. **Limits:** without it (or full-disk encryption), the rest of the company file is
+unencrypted, so a stolen laptop may be a notification event. State laws can add
 their own notice duties.

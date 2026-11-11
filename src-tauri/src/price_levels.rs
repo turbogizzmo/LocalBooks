@@ -248,7 +248,8 @@ async fn read_levels(conn: &mut SqliteConnection, id: Option<i64>) -> Result<Vec
     .fetch_all(&mut *conn)
     .await
     .map_err(db_err)?;
-    let items: Vec<(i64, i64, String, Option<i64>, Option<i64>)> = sqlx::query_as(
+    type ItemRow = (i64, i64, String, Option<i64>, Option<i64>);
+    let items: Vec<ItemRow> = sqlx::query_as(
         "SELECT i.price_level_id, i.product_id, i.basis, i.price_cents, i.percent_milli
          FROM price_level_items i JOIN products_services p ON p.id = i.product_id
          WHERE ?1 IS NULL OR i.price_level_id = ?1 ORDER BY p.name COLLATE NOCASE",

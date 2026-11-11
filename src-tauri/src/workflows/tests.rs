@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -29,7 +30,7 @@ async fn discounts_statements_and_1099s() {
     let discounts: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Discounts Given'").fetch_one(&pool).await.unwrap();
     assert_eq!(balance(&pool, discounts).await, 3_000);
 
-    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: inv.id, deposit_account_id: checking, payment_date: d(3, 20), amount_cents: 10_000, payment_method: "CHECK".into(), reference: Some("1001".into()), exchange_rate_e6: None }).await.unwrap();
+    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: inv.id, deposit_account_id: checking, payment_date: d(3, 20), amount_cents: Cents(10_000), payment_method: "CHECK".into(), reference: Some("1001".into()), exchange_rate_e6: None }).await.unwrap();
     let acme: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
     let statement = customer_statement(&pool, acme, d(3, 1), d(4, 30)).await.unwrap();
     assert_eq!(statement.rows.len(), 2, "the job's invoice and payment appear on the customer's statement");
@@ -62,7 +63,7 @@ async fn a_voided_payment_comes_off_the_customers_statement() {
     let invoice: InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Birch", "issueDate": "2026-03-01", "dueDate": "2026-03-31",
         "lines": [{ "description": "Pruning", "quantityE4": 10_000, "rateCents": 50_000, "incomeAccountId": services, "isTaxable": false }] })).unwrap();
     let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
-    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: inv.id, deposit_account_id: checking, payment_date: d(3, 20), amount_cents: 20_000, payment_method: "CHECK".into(), reference: Some("77".into()), exchange_rate_e6: None }).await.unwrap();
+    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: inv.id, deposit_account_id: checking, payment_date: d(3, 20), amount_cents: Cents(20_000), payment_method: "CHECK".into(), reference: Some("77".into()), exchange_rate_e6: None }).await.unwrap();
     let birch: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Birch'").fetch_one(&pool).await.unwrap();
     assert_eq!(customer_statement(&pool, birch, d(3, 1), d(3, 31)).await.unwrap().closing_balance_cents, 30_000);
 
@@ -92,11 +93,11 @@ async fn recurring_purchase_orders_search_attachments_and_budgets() {
     let (checking, rent, supplies, services) = (account(&pool, "1010").await, account(&pool, "6300").await, account(&pool, "6250").await, account(&pool, "4100").await);
     let rent_check = serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-01",
         "checkNumber": null, "paymentMethod": null, "memo": "Monthly rent", "lines": [{ "accountId": rent, "amountCents": 120_000, "memo": null }] });
-    let id = save_recurring(&pool, None, RecurringInput { name: "Rent".into(), kind: "EXPENSE".into(), payload: rent_check, frequency: "MONTHLY".into(), every: 1, next_date: d(1, 31), end_date: Some(d(4, 30)) }).await.unwrap();
+    let id = save_recurring(&pool, None, RecurringInput { anchor_day: None, name: "Rent".into(), kind: "EXPENSE".into(), payload: rent_check, frequency: "MONTHLY".into(), every: 1, next_date: d(1, 31), end_date: Some(d(4, 30)) }).await.unwrap();
     assert_eq!(enter_due(&pool, d(3, 15), None).await.unwrap(), 2, "January 31 and February 28");
     assert_eq!(balance(&pool, rent).await, 240_000);
     let listed = list_recurring(&pool).await.unwrap();
-    assert_eq!((listed[0].next_date, listed[0].run_count, listed[0].amount_cents), (d(3, 28), 2, 120_000));
+    assert_eq!((listed[0].next_date, listed[0].run_count, listed[0].amount_cents), (d(3, 31), 2, 120_000), "back to month end after February");
     assert_eq!(enter_due(&pool, d(12, 31), Some(id)).await.unwrap(), 2, "March and April, then the end date");
     assert!(!list_recurring(&pool).await.unwrap()[0].is_active);
 
@@ -181,4 +182,75 @@ async fn the_1099_report_follows_the_account_mapping_and_the_threshold_by_year()
     assert!(crate::preferences::set(&pool, "tax_1099_accounts", &format!(r#"{{"{rent}":"MISC-99"}}"#)).await.unwrap_err().starts_with("PREF_BAD_1099_BOX"));
     assert!(crate::preferences::set(&pool, "tax_1099_accounts", r#"{"999999":"NEC-1"}"#).await.unwrap_err().starts_with("PREF_BAD_1099_ACCOUNT"));
     assert!(crate::preferences::set(&pool, "tax_1099_accounts", "not json").await.unwrap_err().starts_with("PREF_BAD_1099_ACCOUNTS"));
+}
+
+#[tokio::test]
+async fn a_monthly_schedule_from_the_31st_keeps_to_month_end_after_a_short_month() {
+    use chrono::Datelike;
+    let pool = test_pool().await;
+    let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
+    let check = serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-31",
+        "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 1_000, "memo": null }] });
+    let monthly = save_recurring(&pool, None, RecurringInput { anchor_day: None, name: "Month end".into(), kind: "EXPENSE".into(), payload: check.clone(), frequency: "MONTHLY".into(), every: 1, next_date: d(1, 31), end_date: None }).await.unwrap();
+    let quarterly = save_recurring(&pool, None, RecurringInput { anchor_day: None, name: "Quarter end".into(), kind: "EXPENSE".into(), payload: check, frequency: "QUARTERLY".into(), every: 1, next_date: d(11, 30).with_year(2025).unwrap(), end_date: None }).await.unwrap();
+    enter_due(&pool, d(5, 31), None).await.unwrap();
+    let runs = |id: i64| {
+        let pool = pool.clone();
+        async move { sqlx::query_scalar::<_, NaiveDate>("SELECT run_date FROM recurring_runs WHERE template_id = ?1 ORDER BY run_date").bind(id).fetch_all(&pool).await.unwrap() }
+    };
+    assert_eq!(runs(monthly).await, vec![d(1, 31), d(2, 28), d(3, 31), d(4, 30), d(5, 31)]);
+    // November 30 → February 28 → May 30: the 30th, not the 28th.
+    assert_eq!(runs(quarterly).await, vec![d(11, 30).with_year(2025).unwrap(), d(2, 28), d(5, 30)]);
+    let next: NaiveDate = sqlx::query_scalar("SELECT next_date FROM recurring_templates WHERE id = ?1").bind(monthly).fetch_one(&pool).await.unwrap();
+    assert_eq!(next, d(6, 30));
+
+    // Saved again on June 30 (renamed, same next date), it still goes to July 31.
+    let check = serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-31",
+        "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 1_000, "memo": null }] });
+    save_recurring(&pool, Some(monthly), RecurringInput { anchor_day: None, name: "Rent at month end".into(), kind: "EXPENSE".into(), payload: check, frequency: "MONTHLY".into(), every: 1, next_date: d(6, 30), end_date: None }).await.unwrap();
+    enter_due(&pool, d(7, 31), Some(monthly)).await.unwrap();
+    assert_eq!(runs(monthly).await.last().copied(), Some(d(7, 31)));
+}
+
+#[tokio::test]
+async fn memorizing_a_transaction_from_the_31st_keeps_its_day_though_it_first_repeats_on_the_28th() {
+    let pool = test_pool().await;
+    let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
+    let check = serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-31",
+        "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 1_000, "memo": null }] });
+    // Memorize on a January 31 check: Next date is February 28, the day kept is the 31st.
+    let memorized = save_recurring(&pool, None, RecurringInput { anchor_day: Some(31), name: "Rent".into(), kind: "EXPENSE".into(), payload: check.clone(), frequency: "MONTHLY".into(), every: 1, next_date: d(2, 28), end_date: None }).await.unwrap();
+    // A Next date typed over to the 15th doesn't match the 31st, so the 15th is kept.
+    let typed = save_recurring(&pool, None, RecurringInput { anchor_day: Some(31), name: "Typed".into(), kind: "EXPENSE".into(), payload: check, frequency: "MONTHLY".into(), every: 1, next_date: d(2, 15), end_date: None }).await.unwrap();
+    enter_due(&pool, d(4, 30), None).await.unwrap();
+    let runs = |id: i64| {
+        let pool = pool.clone();
+        async move { sqlx::query_scalar::<_, NaiveDate>("SELECT run_date FROM recurring_runs WHERE template_id = ?1 ORDER BY run_date").bind(id).fetch_all(&pool).await.unwrap() }
+    };
+    assert_eq!(runs(memorized).await, vec![d(2, 28), d(3, 31), d(4, 30)]);
+    assert_eq!(runs(typed).await, vec![d(2, 15), d(3, 15), d(4, 15)]);
+}
+
+#[tokio::test]
+async fn a_bill_from_a_purchase_order_takes_the_vendors_terms_and_the_bill_checks() {
+    let pool = test_pool().await;
+    let supplies = account(&pool, "6250").await;
+    let terms: i64 = sqlx::query_scalar("INSERT INTO terms (name, net_days, discount_ppm, discount_days) VALUES ('2% 10 Net 30', 30, 20000, 10) RETURNING id").fetch_one(&pool).await.unwrap();
+    let order = |pool: SqlitePool| async move {
+        create_purchase_order(&pool, PurchaseOrderInput { form_lines: Vec::new(), vendor_name: "Staples".into(), po_date: d(5, 1), expected_date: None, memo: None,
+            lines: vec![PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: Some("Paper".into()), quantity_e4: Some(10_000), rate_cents: Some(10_000), amount_cents: 10_000, class_id: None, customer_id: None }] }).await.unwrap()
+    };
+    let po = order(pool.clone()).await;
+    sqlx::query("UPDATE vendors SET terms_id = ?1 WHERE name = 'Staples'").bind(terms).execute(&pool).await.unwrap();
+
+    let bill = bill_purchase_order(&pool, po, d(5, 9), d(6, 8), Some("123".into())).await.unwrap();
+    let kept: Option<i64> = sqlx::query_scalar("SELECT terms_id FROM bills WHERE id = ?1").bind(bill).fetch_one(&pool).await.unwrap();
+    assert_eq!(kept, Some(terms), "the bill carries the vendor's terms, so Pay Bills offers the discount");
+
+    // A second order billed with the same vendor bill number is caught like Enter Bills catches it.
+    let again = order(pool.clone()).await;
+    let input = purchase_order_bill(&pool, again, d(5, 10), d(6, 9), Some("123".into())).await.unwrap();
+    assert_eq!(input.terms_id, Some(terms));
+    let warned = crate::guards::check(&pool, crate::guards::bill(&input, None), None).await.unwrap_err();
+    assert!(warned.starts_with("NEEDS_CONFIRMATION"), "{warned}");
 }

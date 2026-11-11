@@ -1,4 +1,5 @@
 use super::*;
+use sqlx::sqlite::SqliteConnectOptions;
 use std::path::PathBuf;
 use crate::ledger::{post_journal_entry, JournalEntry, JournalLine};
 use chrono::NaiveDate;
