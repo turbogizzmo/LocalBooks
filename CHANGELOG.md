@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Edit and delete purchase orders.** An open purchase order can be changed with Edit… (from its
+  row or the saved order) and keeps its number. Delete removes one nothing was received or billed
+  against. Neither changes the books, as a purchase order posts nothing.
+
 ## [0.14.1]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a

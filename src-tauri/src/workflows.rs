@@ -678,6 +678,14 @@ pub(crate) async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, input
         .fetch_one(&mut **tx)
         .await
         .map_err(db_err)?;
+        write_purchase_order_lines(tx, id, input, &form_amounts).await?;
+        Ok(id)
+    }
+}
+
+/// Writes an order's lines and its discount and charge lines.
+async fn write_purchase_order_lines(tx: &mut Transaction<'_, Sqlite>, id: i64, input: &PurchaseOrderInput, form_amounts: &[i64]) -> Result<(), String> {
+    {
         for (idx, line) in input.lines.iter().enumerate() {
             sqlx::query(
                 "INSERT INTO purchase_order_lines (purchase_order_id, line_number, account_id, product_service_id, description, quantity_e4, rate_cents, amount_cents, class_id, customer_id)
@@ -697,9 +705,74 @@ pub(crate) async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, input
             .await
             .map_err(db_err)?;
         }
-        crate::purchase_lines::write(tx, crate::purchase_lines::PurchaseDoc::PurchaseOrder, id, &input.form_lines, &form_amounts).await?;
-        Ok(id)
+        crate::purchase_lines::write(tx, crate::purchase_lines::PurchaseDoc::PurchaseOrder, id, &input.form_lines, form_amounts).await?;
+        Ok(())
     }
+}
+
+/// Whether an order can still be changed or deleted: open (or closed by hand), with nothing
+/// received against it and not billed. Its number comes back for the messages.
+async fn changeable_order(tx: &mut Transaction<'_, Sqlite>, id: i64, verb: &str) -> Result<i64, String> {
+    let head: Option<(i64, String)> = sqlx::query_as("SELECT po_number, status FROM purchase_orders WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let (number, status) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
+    if status == "BILLED" {
+        return Err(format!("PO_BILLED: purchase order #{number} has been billed and can't be {verb}; void the bill first"));
+    }
+    if crate::item_receipts::order_has_receipts(tx, id).await? {
+        return Err(format!("PO_HAS_RECEIPTS: items on purchase order #{number} have been received, so it can't be {verb}; void the receipts first"));
+    }
+    Ok(number)
+}
+
+/// Saves changes to an open purchase order: vendor, dates, memo and lines. A purchase order posts
+/// nothing, so it is changed in place and keeps its number.
+pub async fn update_purchase_order(pool: &SqlitePool, id: i64, input: PurchaseOrderInput) -> Result<(), String> {
+    crate::inventory::require_enabled(pool).await?;
+    let total = validate_purchase_order(&input)?;
+    run(pool, async |tx| {
+        let number = changeable_order(tx, id, "changed").await?;
+        let status: String = sqlx::query_scalar("SELECT status FROM purchase_orders WHERE id = ?1").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
+        if status != "OPEN" {
+            return Err(format!("PO_NOT_OPEN: purchase order #{number} is closed; reopen it to change it"));
+        }
+        let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+        let (form_amounts, _) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "PO")?;
+        crate::purchase_lines::check(tx, &input.form_lines, "PO").await?;
+        let vendor = crate::sales::find_or_create_named(tx, crate::sales::Party::Vendor, &input.vendor_name).await?;
+        sqlx::query("UPDATE purchase_orders SET vendor_id = ?1, po_date = ?2, expected_date = ?3, memo = ?4, total_cents = ?5 WHERE id = ?6")
+            .bind(vendor)
+            .bind(input.po_date)
+            .bind(input.expected_date)
+            .bind(clean(input.memo.as_deref()))
+            .bind(total)
+            .bind(id)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM purchase_form_lines WHERE purchase_order_id = ?1").bind(id).execute(&mut **tx).await.map_err(db_err)?;
+        sqlx::query("DELETE FROM purchase_order_lines WHERE purchase_order_id = ?1").bind(id).execute(&mut **tx).await.map_err(db_err)?;
+        write_purchase_order_lines(tx, id, &input, &form_amounts).await
+    })
+    .await
+}
+
+/// Deletes a purchase order that nothing was received or billed against. Files attached to it
+/// must be deleted first, so none is lost with it.
+pub async fn delete_purchase_order(pool: &SqlitePool, id: i64) -> Result<(), String> {
+    run(pool, async |tx| {
+        let number = changeable_order(tx, id, "deleted").await?;
+        let files: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM record_attachments WHERE record_kind = 'PURCHASE_ORDER' AND record_id = ?1 AND deleted_at IS NULL)")
+            .bind(id)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(db_err)?;
+        if files {
+            return Err(format!("PO_HAS_FILES: purchase order #{number} has attached files; delete them first"));
+        }
+        sqlx::query("DELETE FROM purchase_orders WHERE id = ?1").bind(id).execute(&mut **tx).await.map_err(db_err)?;
+        Ok(())
+    })
+    .await
 }
 
 /// Closes an open order without billing it, or reopens a closed one.
