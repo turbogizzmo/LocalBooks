@@ -11,6 +11,7 @@ people using LocalBooks.
   missing several columns now read those lines, and a payment and deposit that a file keeps as two
   halves of one movement come in as one. Every sample company in the test kit was checked; what
   still differs is listed in the import, for entry by hand.
+
 ## [0.15.0]
 
 - **Safer opening of company files from others.** The check that refuses a company file with a
