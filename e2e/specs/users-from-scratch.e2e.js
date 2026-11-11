@@ -35,6 +35,10 @@ describe('From no users to a View only user', () => {
     await waitForApp();
     await goTo('Invoices');
     await type(field('Customer'), 'E2E Customer');
+    // The customer is new: the name box offers to add it, and choosing that adds it without a
+    // further question (leaving the box with a new name, or saving, would ask first).
+    await click($('//li[@role="option"][contains(normalize-space(), "as a new customer")]'));
+    await $('//li[@role="option"][contains(normalize-space(), "as a new customer")]').waitForExist({ reverse: true });
     // A line becomes editable when its row is clicked.
     await click($('[data-row="0"] [data-cell="description"]'));
     await type($('[data-row="0"] [data-col="description"]'), 'End-to-end consulting');

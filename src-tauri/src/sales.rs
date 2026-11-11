@@ -48,6 +48,55 @@ pub(crate) async fn find_or_create_named(tx: &mut Transaction<'_, Sqlite>, party
         .map_err(db_err)
 }
 
+/// The error a form gets when it posts a name that is not on the list.
+pub const NAME_NOT_ON_LIST: &str = "NAME_NOT_ON_LIST";
+
+/// Refuses a customer or vendor name that is not on its list.
+///
+/// Forms never add a name on their own: the name box asks first ("Quick add", "Set up…" or
+/// "Cancel") and adds the name before the form is saved, so a typo can't become a new customer or
+/// vendor. The save commands call this before posting. Imports, which add names on purpose, call
+/// the posting code directly and still go through [`find_or_create_named`]. A blank name passes,
+/// so the form's own "enter a name" rule answers it.
+pub(crate) async fn require_listed(pool: &SqlitePool, party: Party, name: &str) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Ok(());
+    }
+    let (full, noun) = match party {
+        Party::Customer => (job_name(name)?, "customer"),
+        Party::Vendor => (name.to_string(), "vendor"),
+    };
+    let listed: bool = sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM {} WHERE name = ?1 COLLATE NOCASE)", party.table()))
+        .bind(&full)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+    if listed {
+        return Ok(());
+    }
+    Err(format!("{NAME_NOT_ON_LIST}: {full} isn't on your {noun} list. Choose a name from the list, or add it first."))
+}
+
+/// [`require_listed`] for an optional name.
+pub(crate) async fn require_listed_opt(pool: &SqlitePool, party: Party, name: Option<&str>) -> Result<(), String> {
+    match name {
+        Some(name) => require_listed(pool, party, name).await,
+        None => Ok(()),
+    }
+}
+
+/// [`require_listed`] for the payee of a check, expense or card credit, which may be a vendor or
+/// an other name (Expenses › Other Names).
+pub(crate) async fn require_listed_payee(pool: &SqlitePool, name: Option<&str>) -> Result<(), String> {
+    let Some(name) = name.map(str::trim).filter(|n| !n.is_empty()) else { return Ok(()) };
+    let other: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM other_names WHERE name = ?1 COLLATE NOCASE)").bind(name).fetch_one(pool).await.map_err(db_err)?;
+    if other {
+        return Ok(());
+    }
+    require_listed(pool, Party::Vendor, name).await
+}
+
 /// "Acme : Kitchen" → "Acme:Kitchen"; an empty part is refused.
 pub(crate) fn job_name(name: &str) -> Result<String, String> {
     let parts: Vec<&str> = name.split(':').map(str::trim).collect();

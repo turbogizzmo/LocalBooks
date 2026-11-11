@@ -35,6 +35,12 @@ people using LocalBooks.
   open. A file double-clicked while another is still opening waits its turn.
 - **Diagnostics say why starting was slow.** The log in Help › Save Diagnostics now records how
   long LocalBooks took to start and which steps were slow, such as opening the company file.
+- **No more surprise customers and vendors.** A name typed on a form that isn't on your list is no
+  longer added silently when you save. LocalBooks stops and asks "*name* isn't on your customer
+  list." with **Quick add**, **Set up…** (add it and open its record) and **Cancel** (back to the
+  name box, nothing saved), when you leave the name box or save. This covers invoices, sales
+  receipts, estimates, credit memos, sales orders, bills, checks, expenses, purchase orders, vendor
+  credits and payees typed in a register. Imports still add the names they bring in.
 
 ## [0.14.0]
 - **Encrypt the whole company file.** An Admin can now encrypt the whole company file, its

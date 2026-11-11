@@ -1,18 +1,11 @@
-import { useId, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { PartyDialog } from './PartyList.jsx';
-import { api, errorText } from '../lib/api.js';
+import { useId, useMemo, useRef, useState } from 'react';
+import { askNewName, focusNameBox } from './NewNamePrompt.jsx';
 import { useMyPreferences } from '../lib/myPreferences.js';
 
 /** How many matching names the list shows at once. */
 const MAX_SHOWN = 12;
 
 const sameName = (a, b) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
-
-const KINDS = {
-  vendor: { noun: 'vendor', create: (name) => api.createVendor(name, null) },
-  customer: { noun: 'customer', create: (name) => api.createCustomer(name, null) },
-};
 
 /**
  * The name box on forms: Vendor on bills, checks, expenses, purchase orders and vendor credits,
@@ -21,23 +14,34 @@ const KINDS = {
  * as a new vendor" (or customer) adds it straight away, "Add with details…" adds it and opens its
  * record.
  *
- * The value is the name (the forms post a name, and the ledger matches it to a vendor or customer),
- * so a name typed and saved without choosing an entry is still added on save, as before.
+ * A name is never added without asking: leaving the box with a name that is not on the list asks
+ * "<name> isn't on your customer list." with Quick add, Set up… and Cancel (`NewNamePrompt`), and so
+ * does saving the form (the backend refuses a name that is not on the list, and the save asks the
+ * same question). After Cancel, leaving the box again doesn't ask until the name changes; the save
+ * still does.
  */
 export default function NameField({ kind, names, value, onChange, inputRef, className = 'qb-input w-[200px]', placeholder, autoFocus = false, label }) {
-  const { noun, create } = KINDS[kind];
+  const noun = kind;
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
-  const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [details, setDetails] = useState(null);
+  // The name the person last answered Cancel for: leaving the box doesn't ask about it again.
+  const declined = useRef(null);
+  // Names added from this box, until the list it was given catches up.
+  const added = useRef(new Set());
+  const boxRef = useRef(null);
+  const setBox = (el) => {
+    boxRef.current = el;
+    if (typeof inputRef === 'function') inputRef(el);
+    else if (inputRef) inputRef.current = el;
+  };
   // Preferences › General: open the list while typing, or only on ↓.
   const autoOpen = useMyPreferences().autoOpenDropDowns;
 
   const typed = value.trim();
   const known = useMemo(() => names.filter((v) => v.isActive !== false), [names]);
-  const exact = typed !== '' && names.some((v) => sameName(v.name, typed));
+  const exact = typed !== '' && (names.some((v) => sameName(v.name, typed)) || added.current.has(typed.toLocaleLowerCase()));
   const matches = useMemo(() => {
     const needle = typed.toLocaleLowerCase();
     const hits = needle === '' ? known : known.filter((v) => v.name.toLocaleLowerCase().includes(needle));
@@ -56,20 +60,38 @@ export default function NameField({ kind, names, value, onChange, inputRef, clas
   // Never below 0, so ↓ on an empty list can't leave the highlight outside it.
   const activeRow = Math.max(0, Math.min(active, rows.length - 1));
 
+  // `ask`: asks about the typed name. The list's own add rows are the answer already: `quick` adds
+  // it, `details` adds it and opens its record.
   const add = async (mode) => {
     if (busy) return;
     setBusy(true);
-    setError(null);
+    setOpen(false);
+    const asked = typed;
     try {
-      const created = await create(typed);
-      onChange(created.name);
-      setOpen(false);
-      if (mode === 'details') setDetails(created.id);
-    } catch (err) {
-      setError(errorText(err));
+      const answer = await askNewName(kind, asked, { start: mode });
+      if (answer) {
+        added.current.add(answer.name.toLocaleLowerCase());
+        onChange(answer.name);
+      } else {
+        declined.current = asked.toLocaleLowerCase();
+        focusNameBox(asked);
+      }
     } finally {
       setBusy(false);
     }
+  };
+
+  // Leaving the box with a name that is not on the list asks about it.
+  const onBlur = () => {
+    setOpen(false);
+    // Switching to another app isn't leaving the box.
+    // An empty list is one still loading: saving asks if the name really is new.
+    if (!document.hasFocus() || busy || typed === '' || exact || names.length === 0) return;
+    if (declined.current === typed.toLocaleLowerCase()) return;
+    // After this event: a form closing takes the box with it, and then there is nothing to ask.
+    setTimeout(() => {
+      if (boxRef.current?.isConnected) add('ask');
+    }, 0);
   };
 
   const choose = (row) => {
@@ -103,7 +125,8 @@ export default function NameField({ kind, names, value, onChange, inputRef, clas
   return (
     <span className="relative block">
       <input
-        ref={inputRef}
+        ref={setBox}
+        data-name-box={kind}
         className={className}
         value={value}
         placeholder={placeholder ?? (noun[0].toUpperCase() + noun.slice(1))}
@@ -119,10 +142,10 @@ export default function NameField({ kind, names, value, onChange, inputRef, clas
           onChange(e.target.value);
           setActive(0);
           setOpen(autoOpen);
-          setError(null);
+          declined.current = null;
         }}
         onFocus={() => autoOpen && setOpen(true)}
-        onBlur={() => setOpen(false)}
+        onBlur={onBlur}
         onKeyDown={onKeyDown}
       />
       {shown && (
@@ -151,21 +174,6 @@ export default function NameField({ kind, names, value, onChange, inputRef, clas
           ))}
         </ul>
       )}
-      {error && <span className="absolute left-0 top-full z-40 mt-0.5 whitespace-nowrap text-xs text-qb-negative">{error}</span>}
-      {details !== null &&
-        // Rendered outside the field, whose <label> would otherwise take clicks meant for the dialog.
-        createPortal(
-          <PartyDialog
-            kind={kind}
-            id={details}
-            onClose={() => setDetails(null)}
-            onSaved={(_text, saved) => {
-              if (saved) onChange(saved.name);
-              setDetails(null);
-            }}
-          />,
-          document.body,
-        )}
     </span>
   );
 }

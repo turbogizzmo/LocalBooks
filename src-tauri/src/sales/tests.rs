@@ -155,3 +155,33 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
     assert_eq!(customers.len(), 1);
     assert_eq!(customers[0].open_balance_cents, 25_000);
 }
+
+#[tokio::test]
+async fn forms_may_post_only_names_on_the_list() {
+    let pool = test_pool().await;
+    create_customer(&pool, "Acme", None).await.unwrap();
+    create_party(&pool, Party::Customer, "Acme:Kitchen", None).await.unwrap();
+    crate::expenses::create_vendor(&pool, "Paper Supply Co", None).await.unwrap();
+
+    // Names on the list pass, in any case and with spaces around a job's colon; a blank name is
+    // left to the form's own rule.
+    require_listed(&pool, Party::Customer, "acme").await.unwrap();
+    require_listed(&pool, Party::Customer, "Acme : Kitchen").await.unwrap();
+    require_listed(&pool, Party::Vendor, " paper supply co ").await.unwrap();
+    require_listed(&pool, Party::Customer, "  ").await.unwrap();
+    require_listed_opt(&pool, Party::Customer, None).await.unwrap();
+    require_listed_payee(&pool, Some("Paper Supply Co")).await.unwrap();
+
+    // A typo is refused with a message that names the list, and nothing is added.
+    let err = require_listed(&pool, Party::Customer, "Acmee").await.unwrap_err();
+    assert_eq!(err, "NAME_NOT_ON_LIST: Acmee isn't on your customer list. Choose a name from the list, or add it first.");
+    let err = require_listed(&pool, Party::Customer, "Acme:Bathroom").await.unwrap_err();
+    assert!(err.contains("Acme:Bathroom isn't on your customer list"), "{err}");
+    let err = require_listed(&pool, Party::Vendor, "Paper Suply Co").await.unwrap_err();
+    assert!(err.contains("isn't on your vendor list"), "{err}");
+    assert!(require_listed_payee(&pool, Some("Nobody")).await.is_err());
+    // A vendor's name doesn't stand for a customer.
+    assert!(require_listed(&pool, Party::Customer, "Paper Supply Co").await.is_err());
+    let customers: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM customers").fetch_one(&pool).await.unwrap();
+    assert_eq!(customers, 2);
+}
