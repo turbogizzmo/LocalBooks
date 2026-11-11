@@ -27,14 +27,22 @@ export function OpeningScreen({ initial }) {
   useEffect(() => {
     let stop = null;
     let gone = false;
+    // Once only: the end can arrive both as the event and from the check below, and a second
+    // reload cancels the first one's navigation, which WebKit's WebDriver then waits on for good.
+    let reloading = false;
+    const reload = () => {
+      if (reloading) return;
+      reloading = true;
+      window.location.reload();
+    };
     listen(COMPANY_OPENING, (event) => {
       if (event.payload) setState(event.payload);
-      else window.location.reload();
+      else reload();
     }).then(async (unlisten) => {
       if (gone) return unlisten();
       stop = unlisten;
       // The open may have ended before the listener was in place.
-      if (!(await api.getOpeningState().catch(() => null))) window.location.reload();
+      if (!(await api.getOpeningState().catch(() => null))) reload();
     });
     return () => {
       gone = true;
