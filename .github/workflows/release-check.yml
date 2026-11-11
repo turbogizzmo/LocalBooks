@@ -182,6 +182,8 @@ jobs:
           --config "$WORK/tauri.conf.$TAG.json" --previous-config "$WORK/tauri.conf.$PREVIOUS.json"
 
       - name: Install Linux dependencies
+        # A stuck package mirror once held a release build for an hour: fail fast, then re-run.
+        timeout-minutes: 10
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
