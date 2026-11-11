@@ -7,6 +7,14 @@
 //! its database's page size (SQLite can't change the page size of a database in WAL mode), so a
 //! mismatch only comes from a leftover or crafted file, and refusing it costs nothing.
 //!
+//! **Two checks, before and at use.** [`check`] reads both headers by path just before a file is
+//! opened, to refuse it with a clear message. But a log can change between that check and the
+//! moment SQLite reads it (another program, or a connection still closing that checkpoints it), so
+//! every company file also opens through LocalBooks' VFS ([`crate::file_cipher::vfs`]), which
+//! repeats the comparison **when SQLite opens the log**, reading it through the very handle SQLite
+//! will use, and refuses a mismatched one there. The first check is for the message; the second is
+//! what closes the gap.
+//!
 //! Formats, from the SQLite file format documentation (sqlite.org/fileformat2.html): the database
 //! header starts with "SQLite format 3\0" and holds the page size as a big-endian 16-bit number at
 //! offset 16 (1 meaning 65536); the WAL header starts with magic 0x377f0682 or 0x377f0683 and holds
@@ -25,8 +33,30 @@ fn head<const N: usize>(path: &Path) -> Option<[u8; N]> {
 }
 
 /// A page size SQLite accepts: a power of two from 512 to 65536.
-fn valid_page_size(size: u32) -> Option<u32> {
+pub(crate) fn valid_page_size(size: u32) -> Option<u32> {
     ((512..=65_536).contains(&size) && size.is_power_of_two()).then_some(size)
+}
+
+/// The page size in a database header's first 18 bytes, or None when they aren't a SQLite header or
+/// hold a size SQLite would reject anyway.
+pub(crate) fn db_header_page_size(header: &[u8; 18]) -> Option<u32> {
+    if &header[..16] != DB_MAGIC {
+        return None;
+    }
+    valid_page_size(match u16::from_be_bytes([header[16], header[17]]) {
+        1 => 65_536,
+        n => u32::from(n),
+    })
+}
+
+/// The page size in a log header's first 12 bytes, or None when they aren't a valid log header
+/// (SQLite ignores those).
+pub(crate) fn wal_header_page_size(header: &[u8; 12]) -> Option<u32> {
+    let magic = u32::from_be_bytes([header[0], header[1], header[2], header[3]]);
+    if magic != 0x377f_0682 && magic != 0x377f_0683 {
+        return None;
+    }
+    valid_page_size(u32::from_be_bytes([header[8], header[9], header[10], header[11]]))
 }
 
 /// The database's page size, or None when `path` isn't (yet) a SQLite database or its header
@@ -37,24 +67,12 @@ fn db_page_size(path: &Path) -> Option<u32> {
     if crate::file_cipher::header::is_encrypted(path) {
         return crate::file_cipher::header::read(path).ok().and_then(|h| valid_page_size(h.page_size));
     }
-    let header: [u8; 18] = head(path)?;
-    if &header[..16] != DB_MAGIC {
-        return None;
-    }
-    valid_page_size(match u16::from_be_bytes([header[16], header[17]]) {
-        1 => 65_536,
-        n => u32::from(n),
-    })
+    db_header_page_size(&head(path)?)
 }
 
 /// The log's page size, or None when there is no log or it isn't a valid one (SQLite ignores those).
 fn wal_page_size(path: &Path) -> Option<u32> {
-    let header: [u8; 12] = head(path)?;
-    let magic = u32::from_be_bytes([header[0], header[1], header[2], header[3]]);
-    if magic != 0x377f_0682 && magic != 0x377f_0683 {
-        return None;
-    }
-    valid_page_size(u32::from_be_bytes([header[8], header[9], header[10], header[11]]))
+    wal_header_page_size(&head(path)?)
 }
 
 /// `db`'s log file: its name with `-wal` added, built without going through a string.
@@ -148,8 +166,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// A real WAL-mode database and its log agree, so the check never stands in the way of SQLite's
-    /// own files.
+    /// A real WAL-mode database and its log agree, so neither check stands in the way of SQLite's
+    /// own files (every `db::open` in the test suite goes through the VFS's check too).
     #[tokio::test]
     async fn a_real_company_file_and_its_log_pass() {
         let dir = dir();
@@ -160,11 +178,74 @@ mod tests {
         assert!(wal_path(&path).exists(), "the open file has its log");
         assert_eq!(check(&path), Ok(()));
         pool.close().await;
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
-        // The same file with a crafted log beside it: opening it is refused before SQLite reads it.
+    /// A WAL-mode database made on one connection, closed completely: nothing else in this process
+    /// can touch its log afterwards. (A pool's connections close on their own threads, and one that
+    /// finishes late checkpoints and removes the log, which once made the crafted-log test below
+    /// pass a file whose crafted log had already been deleted.)
+    async fn closed_wal_database(path: &Path) {
+        use sqlx::{ConnectOptions, Connection};
+        let mut conn = crate::file_cipher::open_options(path, None)
+            .unwrap()
+            .create_if_missing(true)
+            .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+            .connect()
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE probe (x INTEGER) STRICT").execute(&mut conn).await.unwrap();
+        sqlx::query("INSERT INTO probe VALUES (1)").execute(&mut conn).await.unwrap();
+        conn.close().await.unwrap();
+        assert_eq!(db_page_size(path), Some(4096));
+    }
+
+    /// A company file with a crafted log beside it: refused before SQLite reads it.
+    #[tokio::test]
+    async fn a_company_file_with_a_crafted_log_is_refused() {
+        let dir = dir();
+        let path = dir.join("Real.localbooks");
+        closed_wal_database(&path).await;
         std::fs::write(wal_path(&path), wal_header(1024)).unwrap();
         let err = crate::db::open(&path).await.map(|_| ()).unwrap_err();
         assert!(err.starts_with("FILE_WAL_MISMATCH"), "{err}");
+        assert_eq!(std::fs::read(wal_path(&path)).unwrap(), wal_header(1024), "and the log is left as it was");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The gap the second check closes: the log is fine when [`check`] looks, then is swapped for a
+    /// crafted one before SQLite opens it. The VFS reads the log through SQLite's own handle as SQLite
+    /// opens it, so the swap is caught there, and `db::open` explains it like the first check would.
+    #[tokio::test]
+    async fn a_log_swapped_after_the_check_is_refused_when_sqlite_opens_it() {
+        use sqlx::{ConnectOptions, Connection};
+        let dir = dir();
+        let path = dir.join("Swapped.localbooks");
+        closed_wal_database(&path).await;
+        std::fs::write(wal_path(&path), wal_header(4096)).unwrap();
+        assert_eq!(check(&path), Ok(()), "the log is fine when it is checked");
+        std::fs::write(wal_path(&path), wal_header(1024)).unwrap(); // ...and swapped right after
+
+        // Straight through the VFS, with no check first: SQLite itself can't open it.
+        let opened = async {
+            let mut conn = crate::file_cipher::open_options(&path, None)?.connect().await.map_err(|e| e.to_string())?;
+            let read: Result<i64, _> = sqlx::query_scalar("SELECT COUNT(*) FROM probe").fetch_one(&mut conn).await;
+            let _ = conn.close().await;
+            read.map_err(|e| e.to_string())
+        }
+        .await;
+        assert!(opened.is_err(), "the crafted log is refused at use: {opened:?}");
+
+        // And through the app's own open, the reason is spelled out.
+        let err = crate::db::open(&path).await.map(|_| ()).unwrap_err();
+        assert!(err.starts_with("FILE_WAL_MISMATCH"), "{err}");
+
+        // Its own log again: it opens and reads.
+        std::fs::remove_file(wal_path(&path)).unwrap();
+        let pool = crate::db::open(&path).await.unwrap();
+        let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM probe").fetch_one(&pool).await.unwrap();
+        assert_eq!(n, 1);
+        pool.close().await;
         let _ = std::fs::remove_dir_all(&dir);
     }
 

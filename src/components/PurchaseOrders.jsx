@@ -11,91 +11,37 @@ import RowMenu from './RowMenu.jsx';
 import SplitGrid, { blankSplit, splitRowsFromCopy, summarizeSplits } from './SplitGrid.jsx';
 import PurchaseFormLines, { usePurchaseFormLines } from './PurchaseFormLines.jsx';
 import { purchaseLineMessage } from '../lib/purchaseLines.js';
-import { percentText } from '../lib/itemTypes.js';
 import { useFormClass } from './ClassSelect.jsx';
 import { isCategory } from './Bills.jsx';
-import { DocHeader, PrintPortal, useCompany } from './PrintDocuments.jsx';
-import { accountLabel } from './AccountSelect.jsx';
 import { isHeldForApproval } from '../lib/approvals.js';
-import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
-import { formatCents, formatQuantity } from '../lib/money.js';
+import { askConfirm } from '../lib/dialogs.jsx';
+import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
+import { useFormPrinter } from './FormPages.jsx';
 
 const STATUS = { OPEN: 'Open', CLOSED: 'Closed', BILLED: 'Billed' };
 
-/** Loads what a printed purchase order shows: its lines, and its discounts and charges. */
-export async function purchaseOrderPrintLines(id) {
-  const [lines, formLines] = await Promise.all([api.getPurchaseOrderLines(id), api.getPurchaseFormLines('PURCHASE_ORDER', id)]);
-  return { lines, formLines };
-}
-
-export function PurchaseOrderDocument({ company, order, lines, formLines = [], accounts }) {
-  return (
-    <article className="doc">
-      <DocHeader company={company} title="Purchase Order" subtitle={`PO #${order.poNumber} · ${formatDate(order.poDate)}`} />
-      <div className="doc-bill-to">
-        <div className="doc-label">Vendor</div>
-        <div className="doc-company-name">{order.vendorName}</div>
-        {order.expectedDate && <div>Expected by {formatDate(order.expectedDate)}</div>}
-      </div>
-      <table className="doc-table">
-        <thead>
-          <tr>
-            <th>Item / account</th>
-            <th>Description</th>
-            <th className="doc-num">Qty</th>
-            <th className="doc-num">Rate</th>
-            <th className="doc-num">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.flatMap((l, i) => {
-            // A discount or charge prints under the line it applies to.
-            const extra = formLines.find((f) => f.afterLine === i + 1);
-            return [
-              <tr key={i}>
-                <td>{accountLabel(accounts, l.accountId)}</td>
-                <td>{l.description ?? ''}</td>
-                <td className="doc-num">{l.quantityE4 ? formatQuantity(l.quantityE4) : ''}</td>
-                <td className="doc-num">{l.rateCents ? formatCents(l.rateCents) : ''}</td>
-                <td className="doc-num">{formatCents(l.amountCents)}</td>
-              </tr>,
-              extra && (
-                <tr key={`f${i}`}>
-                  <td>{accountLabel(accounts, extra.accountId)}</td>
-                  <td>{extra.description}</td>
-                  <td className="doc-num" />
-                  <td className="doc-num">{extra.percentPpm ? percentText(extra.percentPpm) : ''}</td>
-                  <td className="doc-num">{formatCents(extra.kind === 'DISCOUNT' ? -extra.amountCents : extra.amountCents)}</td>
-                </tr>
-              ),
-            ];
-          })}
-        </tbody>
-      </table>
-      <table className="doc-totals">
-        <tbody>
-          <tr className="doc-grand">
-            <td>Total</td>
-            <td className="doc-num">{formatCents(order.totalCents)}</td>
-          </tr>
-        </tbody>
-      </table>
-      {order.memo && <p className="doc-note">{order.memo}</p>}
-    </article>
-  );
-}
-
-/** `copyOf` (from Duplicate) starts the order as a copy of a saved one, dated today. */
+/**
+ * `copyOf` (from Duplicate) starts the order as a copy of a saved one, dated today. With
+ * `copyOf.editing` (from Edit…) it is the saved order itself, with its own dates, and saving
+ * changes it in place under its number.
+ */
 function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCancel, savedStep, copyOf = null }) {
+  const editing = copyOf?.editing ?? null; // { id, poNumber, poDate, expectedDate }
   const stockItems = useLedgerQuery(api.listInventoryItems);
   const [vendor, setVendor] = useState(copyOf?.name ?? '');
   const [poDate, setPoDate] = useTransactionDate();
-  const [expected, setExpected] = useState('');
+  useEffect(() => {
+    if (editing) setPoDate(editing.poDate);
+    // Once, for the order being edited.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [expected, setExpected] = useState(editing?.expectedDate ?? '');
   const [memo, setMemo] = useState(copyOf?.memo ?? '');
   const [rows, setRows] = useState(() => (copyOf ? splitRowsFromCopy(copyOf.lines) : [blankSplit(defaultCategory), blankSplit(defaultCategory)]));
   const [error, setError] = useState(null);
@@ -126,6 +72,11 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
     setBusy(true);
     try {
       const input = { vendorName: vendor.trim(), poDate, expectedDate: expected || null, memo: memo.trim() || null, lines: posted, formLines: laid.formLines ?? [] };
+      if (editing) {
+        await api.updatePurchaseOrder(editing.id, input);
+        onSaved(`PO #${editing.poNumber} for ${vendor.trim()} saved: ${formatCents(total)}.`, mode === 'print' ? editing.id : null);
+        return true;
+      }
       let id;
       try {
         id = await api.createPurchaseOrder(input);
@@ -199,31 +150,6 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
   );
 }
 
-/** A saved purchase order drawn as it prints. */
-function PurchaseOrderPreview({ company, order, accounts }) {
-  const [lines, setLines] = useState(null);
-  const [error, setError] = useState(null);
-  useEffect(() => {
-    let live = true;
-    setLines(null);
-    setError(null);
-    purchaseOrderPrintLines(order.id).then(
-      (l) => live && setLines(l),
-      (err) => live && setError(errorText(err)),
-    );
-    return () => {
-      live = false;
-    };
-  }, [order.id]);
-  if (error) return <Notice kind="error" text={error} />;
-  if (!lines) return <div className="px-2 py-1 text-sm text-qb-ink-muted">Loading…</div>;
-  return (
-    <div className="mx-auto max-w-[820px] bg-white p-6 shadow-md">
-      <PurchaseOrderDocument company={company} order={order} lines={lines.lines} formLines={lines.formLines} accounts={accounts} />
-    </div>
-  );
-}
-
 function BillDialog({ order, onClose, onDone }) {
   const [billDate, setBillDate] = useState(todayIso);
   const [dueDate, setDueDate] = useState(() => addDays(todayIso(), 30));
@@ -282,14 +208,12 @@ function BillDialog({ order, onClose, onDone }) {
 
 /** Expenses › Purchase Orders: non-posting orders to vendors, later turned into bills. */
 export default function PurchaseOrders({ accounts, intent }) {
-  const company = useCompany();
   const { data, error, reload } = useLedgerQuery(api.listPurchaseOrders);
   const vendors = useLedgerQuery(api.listVendors);
   const defaultCategory = useMemo(() => accounts.find((a) => a.isActive && isCategory(a) && a.classification === 'EXPENSE')?.id ?? null, [accounts]);
   const [composing, setComposing] = useState(intent?.action === 'purchase-order');
   const [notice, setNotice] = useState(null);
   const [billing, setBilling] = useState(null);
-  const [printing, setPrinting] = useState(null);
   // A purchase order saved with Save and print, printed once the list has it.
   const [printId, setPrintId] = useState(null);
   const [filter, setFilter] = useState('OPEN');
@@ -304,14 +228,9 @@ export default function PurchaseOrders({ accounts, intent }) {
   }, { storageKey: 'purchase-orders' });
   const list = sorter.sorted;
 
-  const print = async (order) => {
-    try {
-      setPrinting({ order, ...(await purchaseOrderPrintLines(order.id)) });
-      setTimeout(() => printDocument(), 120);
-    } catch (err) {
-      setNotice({ kind: 'error', text: errorText(err) });
-    }
-  };
+  // Printed as its Purchase Order form (Settings › Custom Forms), like the other forms.
+  const [printPortal, forms] = useFormPrinter(setNotice);
+  const print = (order) => forms.print('PURCHASE_ORDER', order.id);
   useEffect(() => {
     const order = printId !== null && (data ?? []).find((o) => o.id === printId);
     if (!order) return;
@@ -357,14 +276,34 @@ export default function PurchaseOrders({ accounts, intent }) {
       },
       (err) => setNotice({ kind: 'error', text: errorText(err) }),
     );
+  // Edit…: the saved order on the form, saved in place under its number.
+  const edit = (o) =>
+    api.getCopySource('PURCHASE_ORDER', o.id).then(
+      (copy) => {
+        saved.close();
+        setCopyOf({ ...copy, sourceId: o.id, editing: { id: o.id, poNumber: o.poNumber, poDate: o.poDate, expectedDate: o.expectedDate ?? '' } });
+        setFormKey((k) => k + 1);
+        setComposing(true);
+      },
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
+  const remove = async (o) => {
+    if (!(await askConfirm(`Delete PO #${o.poNumber} for ${o.vendorName}? A purchase order posts nothing, so the books don't change.`, { confirmLabel: 'Delete', danger: true }))) return;
+    try {
+      await api.deletePurchaseOrder(o.id);
+      saved.close();
+      setComposing(false);
+      setNotice({ kind: 'success', text: `PO #${o.poNumber} deleted.` });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
+  // Only an open order can be changed; one billed or with items received (even on a voided receipt) is refused by the books.
+  const editable = (o) => inventoryOn && o.status === 'OPEN';
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       {!inventoryOn && <Notice kind="info" text="Inventory and purchase orders are turned off in Preferences › Items & Inventory. Existing purchase orders stay here; new ones can't be made." />}
-      {printing && (
-        <PrintPortal>
-          <PurchaseOrderDocument company={company} order={printing.order} lines={printing.lines} formLines={printing.formLines} accounts={accounts} />
-        </PrintPortal>
-      )}
+      {printPortal}
       {composing && viewing ? (
         <SavedDocView
           label="Purchase order"
@@ -373,10 +312,15 @@ export default function PurchaseOrders({ accounts, intent }) {
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
           onDuplicate={inventoryOn ? () => duplicate(viewing) : undefined}
-          onPrint={() => print(viewing)}
+          // Drawn, printed and emailed as its Purchase Order form (Settings › Custom Forms).
+          form={{ kind: 'PURCHASE_ORDER', id: viewing.id }}
           record={{ kind: 'PURCHASE_ORDER', id: viewing.id }}
           onNotice={setNotice}
           extra={[
+            [
+              { id: 'edit-po', label: 'Edit', icon: 'NewForm', hint: editable(viewing) ? 'Change this purchase order' : 'Only an open purchase order can be changed', disabled: !editable(viewing), onClick: () => edit(viewing) },
+              { id: 'delete-po', label: 'Delete', icon: 'Void', hint: viewing.status === 'BILLED' ? 'A billed purchase order stays' : 'Delete this purchase order', disabled: viewing.status === 'BILLED', onClick: () => remove(viewing) },
+            ],
             [
               { id: 'bill', label: 'Create Bill', icon: 'HomeBill', hint: viewing.status === 'OPEN' ? 'Turn this purchase order into a bill' : 'Only an open purchase order can be billed', disabled: viewing.status !== 'OPEN', onClick: () => setBilling(viewing) },
               viewing.status === 'CLOSED'
@@ -385,7 +329,6 @@ export default function PurchaseOrders({ accounts, intent }) {
             ],
           ]}
         >
-          <PurchaseOrderPreview company={company} order={viewing} accounts={accounts} />
         </SavedDocView>
       ) : composing ? (
         <NewPurchaseOrder
@@ -469,12 +412,14 @@ export default function PurchaseOrders({ accounts, intent }) {
                       label={`Actions for PO ${o.poNumber}`}
                       items={[
                         { label: 'Open', onSelect: () => openOrder(o) },
+                        { label: 'Edit…', disabled: !editable(o), onSelect: () => edit(o) },
                         ...(inventoryOn ? [{ label: 'Duplicate', hint: 'A new purchase order copied from this one, dated today', onSelect: () => duplicate(o) }] : []),
                         { label: 'Create bill…', disabled: o.status !== 'OPEN', onSelect: () => setBilling(o) },
                         { label: 'Print or save as PDF', onSelect: () => print(o) },
                         o.status === 'CLOSED'
                           ? { label: 'Reopen', onSelect: () => setClosed(o, false) }
                           : { label: 'Close without billing', disabled: o.status !== 'OPEN', onSelect: () => setClosed(o, true) },
+                        { label: 'Delete…', disabled: o.status === 'BILLED', onSelect: () => remove(o) },
                       ]}
                     />
                   </td>

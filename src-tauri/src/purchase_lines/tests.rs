@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 use chrono::NaiveDate;
 use serde_json::json;
 use sqlx::SqlitePool;
@@ -175,7 +176,7 @@ async fn a_purchase_orders_lines_carry_to_its_bill() {
 async fn items_name_their_purchase_account_and_lines_their_item() {
     let pool = test_pool().await;
     let (rent, services, checking) = (account(&pool, "6400").await, account(&pool, "4100").await, account(&pool, "1010").await);
-    let input = |name: &str| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: 0, income_account_id: services, is_taxable: false };
+    let input = |name: &str| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: Cents::ZERO, income_account_id: services, is_taxable: false };
     let kind = |t: &str, acct: Option<i64>| crate::sales::ItemKind { item_type: t.into(), percent_ppm: None, expense_account_id: acct };
     let freight = crate::sales::create_item(&pool, input("Freight"), kind("OTHER_CHARGE", Some(rent))).await.unwrap();
     assert_eq!(freight.expense_account_id, Some(rent));

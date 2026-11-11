@@ -44,8 +44,9 @@ on in **Preferences › Items & Inventory** (see [Turn purchase orders off](#tur
 LocalBooks numbers each order with the next PO number when it is saved; you can't type your own.
 Saving says what the order totals and reminds you that nothing posted.
 
-The purchase order has no ship-to address and no field for the vendor's address: the printed order
-shows your company, the vendor's name, the dates, the lines and the total.
+The printed order shows your company, the vendor's name with its company name and address (from the
+vendor's record), the dates, each line with its Customer:Job and Class, and the total. It has no
+ship-to address.
 
 ### If the order needs approval
 
@@ -64,17 +65,19 @@ heading picks which orders appear: **Open** (the default), **Billed**, **Closed*
 - **Billed**: turned into a bill with **Create Bill**.
 - **Closed**: closed by hand, or closed by LocalBooks once every line has been received.
 
-Double-click an order (or choose **Open** in its **▾** menu) to see it as it prints. A saved order
-can't be changed. The toolbar above it has:
+Double-click an order (or choose **Open** in its **▾** menu) to see it as it prints. The toolbar
+above it has:
 
 - **Previous** and **Next** to step through your orders by date, and **Find** to search all
   transactions. **New** goes back to a blank order.
 - **Duplicate** to start a new order copied from this one (see [Duplicate an
   order](#duplicate-an-order)).
-- **Print** to print it, and **Attach File** to keep the vendor's quote or confirmation with it
+- **Print** (Print… or Save as PDF…) and **Email** to send it to the vendor, and **Attach File**
+  to keep the vendor's quote or confirmation with it
   (see [Attach receipts and documents](attachments.md#what-you-can-attach)).
 - **Create Bill** to turn it into a bill (see [Turn an order into a bill](#turn-an-order-into-a-bill)).
 - **Close PO** to close it without billing, or **Reopen** on a closed order.
+- **Edit** and **Delete** (see [Change or delete an order](#change-or-delete-an-order)).
 
 While a new order has unsaved entries, **Previous** and **Next** are greyed out: save or clear it
 first.
@@ -86,30 +89,40 @@ first.
 - **Several orders:** choose **File › Print Forms › Purchase Orders…** (see [Print other forms in
   a batch](invoices.md#print-other-forms-in-a-batch)).
 
-Each discount or charge prints under the line it applies to, with its percent if it has one.
+Each discount or charge prints under the line it applies to, with its percent if it has one. The
+order prints as the Purchase Order form: choose its layout, title, colors and message in **Settings ›
+Custom Forms › Purchase order**.
 
-LocalBooks doesn't email purchase orders. Save the order as a PDF and attach it to an email in your
-mail program.
+## Email an order to the vendor
+
+Open the order and click **Email**. The message goes to the email on the vendor's record, with the
+order attached as a PDF and any of its files marked **Send with the form**; change the address,
+subject or message before it goes. **Email later** puts it in the queue under **File › Send
+Forms** to send with others. It is sent through your mail app or your email server, as invoices
+are (see [Print or email it](invoices.md#print-or-email-it)).
 
 ## Turn an order into a bill
 
 When the vendor's bill arrives for an order you haven't received items on:
 
 1. Choose **Create bill…** in the order's **▾** menu, or open it and click **Create Bill**.
-2. Enter the **Bill date** (today to start) and the **Due date**. The due date starts 30 days after
-   the bill date and moves when you change the bill date; type another if the vendor's bill says
-   so. It can't be before the bill date.
+2. Enter the **Bill date** (today to start) and the **Due date**. The due date follows the vendor's
+   terms, or **Preferences › Bills › Bills are due** when the vendor has none, and moves when you
+   change the bill date until you type another. It can't be before the bill date.
 3. Enter the **Vendor's bill no.**, if any.
 4. Click **Create bill**.
 
 LocalBooks posts the bill at once, for the order's total: each line keeps its account, item,
 description, quantity, rate, class and **Customer:Job**, and the discounts and charges come over
 too. The bill debits the lines' accounts and credits **Accounts Payable**, like a bill you enter by
-hand. Its memo is the order's message, or *PO #* and the number when there is none. The order
-becomes **Billed** and can't be billed again.
+hand, and takes the vendor's terms, so **Pay Bills** offers any early-payment discount they give.
+Its memo is the order's message, or *PO #* and the number when there is none. The order becomes
+**Billed** and can't be billed again.
 
-A bill made from an order is never held for approval, even if it matches a bill rule: the order was
-already approved (or didn't need to be).
+Creating the bill runs the same checks as **Enter Bills**: if the vendor's bill number was used
+before, or the date is far from today, LocalBooks asks first and **Save anyway** goes ahead. If an
+approval rule for bills covers it, the bill isn't created: enter it in **Expenses › Enter Bills**
+and choose **Submit for approval**, then close the order once the bill is approved.
 
 Only an **Open** order can be billed this way. Once any of its items have been received, enter the
 bill from **Vendors › Enter Bill for Received Items** instead.
@@ -126,9 +139,21 @@ bill](bills.md#receive-items-before-the-bill).
 When you no longer expect the rest of an order (the vendor can't supply it, or you cancelled),
 choose **Close without billing** in its **▾** menu, or open it and click **Close PO**. A closed
 order leaves the open-order reports and can't be received or billed. **Reopen** brings it back as
-an open order.
+an open order. An order closed because everything on it was received can't be reopened; void a
+receipt on it if you need to receive it again.
 
-Purchase orders can't be deleted or voided. Close the ones you don't need.
+## Change or delete an order
+
+**Edit…** in an open order's **▾** menu (or **Edit** on the open order) puts it back on the form:
+change the vendor, dates, lines, discounts and charges, and save. It keeps its PO number, and
+nothing posts, because a purchase order never touches your books. A closed order must be reopened
+first.
+
+**Delete…** removes an order after you confirm. Delete any files attached to it first.
+
+An order that has been billed, or that items were received against (even on a receipt that was
+voided later), can't be changed or deleted: close it, or make a new order. Purchase orders are never
+voided.
 
 ## Duplicate an order
 
@@ -165,6 +190,7 @@ item's quantity on open purchase orders.
 
 Purchase orders belong with inventory. Turning off **Inventory** in **Preferences › Items &
 Inventory** (see [Preferences](preferences.md#items--inventory)) takes **Purchase Orders** and
-**Receive Items** out of the side bar. Orders you already saved are kept, and you can still open,
+**Receive Items** out of the side bar and **+ New**, and greys out **Vendors › Create Purchase
+Orders** in the menu bar. Orders you already saved are kept, and you can still open,
 print, bill and close them on **Expenses › Purchase Orders**, but LocalBooks won't save a new one or
 duplicate an old one until inventory is on again.

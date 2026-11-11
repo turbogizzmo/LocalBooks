@@ -699,7 +699,7 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
         .await
         .map_err(db_err)?,
         "CREDIT_MEMO" => sqlx::query_scalar(
-            "SELECT 'VOID_CREDIT_USED: credit memo #' || m.credit_number || ' has been applied to invoices or refunded; remove those first'
+            "SELECT 'VOID_CREDIT_USED: ' || CASE WHEN m.payment_account_id IS NULL THEN 'credit memo #' || m.credit_number ELSE 'this unapplied payment' END || ' has been applied to invoices or refunded; remove those first'
              FROM credit_memos m WHERE m.id = ?1 AND (
                  EXISTS (SELECT 1 FROM credit_applications a WHERE a.credit_memo_id = m.id AND a.is_voided = 0)
                  OR EXISTS (SELECT 1 FROM credit_refunds r JOIN journal_entries e ON e.id = r.journal_entry_id
@@ -967,6 +967,7 @@ pub const MANUAL_JOURNAL: &str = "(e.source_type = 'JOURNAL' AND e.reverses_entr
     AND NOT EXISTS (SELECT 1 FROM credit_refunds WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM vendor_credit_refunds WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM sales_tax_payments WHERE journal_entry_id = e.id)
+    AND NOT EXISTS (SELECT 1 FROM sales_tax_adjustments WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM bounced_checks WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM bounced_sales_receipts WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM item_receipts WHERE journal_entry_id = e.id)

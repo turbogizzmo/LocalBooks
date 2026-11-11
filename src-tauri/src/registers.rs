@@ -64,7 +64,8 @@ pub(crate) const DOC_NUMBER: &str = "CASE e.source_type
     WHEN 'RECEIVE_PAYMENT' THEN (SELECT reference FROM invoice_payments WHERE id = e.source_id)
     WHEN 'INVOICE' THEN (SELECT CAST(invoice_number AS TEXT) FROM invoices WHERE id = e.source_id)
     WHEN 'SALES_RECEIPT' THEN (SELECT CAST(receipt_number AS TEXT) FROM sales_receipts WHERE id = e.source_id)
-    WHEN 'CREDIT_MEMO' THEN (SELECT CAST(credit_number AS TEXT) FROM credit_memos WHERE id = e.source_id)
+    -- An unapplied payment kept as credit shows its payment reference, not a credit memo number.
+    WHEN 'CREDIT_MEMO' THEN (SELECT CASE WHEN payment_account_id IS NULL THEN CAST(credit_number AS TEXT) ELSE payment_reference END FROM credit_memos WHERE id = e.source_id)
     WHEN 'BILL' THEN (SELECT bill_number FROM bills WHERE id = e.source_id)
     WHEN 'VENDOR_CREDIT' THEN (SELECT reference FROM vendor_credits WHERE id = e.source_id)
     WHEN 'JOURNAL' THEN CAST(e.entry_number AS TEXT)

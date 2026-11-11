@@ -9,6 +9,7 @@ use chrono::NaiveDate;
 use sqlx::SqlitePool;
 
 use super::fixture::{d, harbor_lane};
+use crate::money::Cents;
 use crate::statements::ReportLine;
 
 fn money(cents: i64) -> String {
@@ -295,7 +296,7 @@ async fn inventory_reports() {
     let checking: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(p).await.unwrap();
     let mut items = Vec::new();
     for (name, price) in [("Framed Print", 12_000), ("Sketchbook", 2_400)] {
-        let product = crate::sales::create_product(p, crate::sales::ProductInput { name: name.into(), description: Some(format!("{name}, stocked")), rate_cents: price, income_account_id: sales, is_taxable: false })
+        let product = crate::sales::create_product(p, crate::sales::ProductInput { name: name.into(), description: Some(format!("{name}, stocked")), rate_cents: Cents(price), income_account_id: sales, is_taxable: false })
             .await
             .unwrap()
             .id;

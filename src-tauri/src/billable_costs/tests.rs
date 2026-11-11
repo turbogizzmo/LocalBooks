@@ -208,7 +208,7 @@ async fn billable_time_is_invoiced_once_at_its_hours_and_rate() {
     let pool = test_pool().await;
     let services = account(&pool, "4100").await;
     let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
-    let design = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Design".into(), description: None, rate_cents: 9_500, income_account_id: services, is_taxable: false })
+    let design = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Design".into(), description: None, rate_cents: Cents(9_500), income_account_id: services, is_taxable: false })
         .await
         .unwrap()
         .id;
@@ -316,4 +316,65 @@ async fn an_edited_reimbursement_line_can_move_to_another_expense_account() {
     crate::edits::replace_invoice(&pool, invoice.id, edited(rent)).await.unwrap();
     assert_eq!((balance(&pool, supplies).await - supplies_before, balance(&pool, rent).await - rent_before), (20_000, -20_000), "the reimbursement moved to Rent");
     assert!(list_unbilled(&pool, Some(acme)).await.unwrap().is_empty(), "the cost stays billed");
+}
+
+/// A credit-card charge marked Bill? for a Customer:Job shows among that job's unbilled costs, and
+/// an invoice written on the invoice form with Add billable costs… bills it beside its own lines.
+#[tokio::test]
+async fn a_billable_card_charge_is_invoiced_from_the_invoice_form() {
+    let pool = test_pool().await;
+    let (card, supplies, services) = (account(&pool, "2100").await, account(&pool, "6250").await, account(&pool, "4100").await);
+    crate::sales::create_customer(&pool, "Acme", None).await.unwrap();
+    let job = crate::sales::create_customer(&pool, "Acme:Kitchen", None).await.unwrap().id;
+    let charge: ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "EXPENSE", "payeeName": "Harbor Hardware", "paymentAccountId": card,
+        "expenseDate": "2026-05-03", "checkNumber": null, "paymentMethod": null, "memo": null,
+        "lines": [{ "accountId": supplies, "amountCents": 12_000, "memo": "Cabinet hinges", "customerId": job, "billable": true }] }))
+    .unwrap();
+    crate::expenses::post_expense(&pool, charge).await.unwrap();
+    let unbilled = list_unbilled(&pool, Some(job)).await.unwrap();
+    assert_eq!(unbilled.iter().map(|c| (c.source.as_str(), c.amount_cents, c.customer_name.as_str())).collect::<Vec<_>>(), [("EXPENSE", 12_000, "Acme:Kitchen")]);
+
+    crate::preferences::set(&pool, "billable_markup_account_id", &services.to_string()).await.unwrap();
+    let form = |customer: &str| crate::invoices::InvoiceInput {
+        invoice_number: None,
+        customer_name: customer.into(),
+        issue_date: d(10),
+        due_date: d(31),
+        lines: vec![crate::invoices::InvoiceLineInput { description: "Installation".into(), quantity_e4: QUANTITY_SCALE, rate_cents: Cents(50_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        currency: None,
+        tax_rate_id: None,
+        discount_cents: Cents::ZERO,
+        details: Default::default(),
+    };
+    let chosen = OnInvoice { costs: vec![CostRef { source: "EXPENSE".into(), line_id: unbilled[0].line_id }], time: Vec::new(), markup_percent: Some("10".into()) };
+    // The costs are the job's: an invoice to its parent customer can't bill them.
+    let refused = crate::print_queue::create_invoice(&pool, form("Acme"), &chosen, false, None).await.unwrap_err();
+    assert!(refused.starts_with("COST_OTHER_CUSTOMER"), "{refused}");
+    assert_eq!(list_unbilled(&pool, Some(job)).await.unwrap().len(), 1, "nothing is billed when the invoice isn't saved");
+
+    // Only the reimbursement may credit the expense account, not a line typed on the form.
+    let mut own_line_on_expense = form("Acme:Kitchen");
+    own_line_on_expense.lines[0].income_account_id = supplies;
+    let refused = crate::print_queue::create_invoice(&pool, own_line_on_expense, &chosen, false, None).await.unwrap_err();
+    assert!(refused.starts_with("INV_NOT_INCOME_ACCOUNT"), "{refused}");
+
+    let expense_before = balance(&pool, supplies).await;
+    let invoice = crate::print_queue::create_invoice(&pool, form("acme : kitchen"), &chosen, false, None).await.unwrap();
+    // $500 for the form's own line, $120 back for the charge and 10% markup ($12).
+    assert_eq!(invoice.total_cents, 63_200);
+    assert_eq!(invoice.customer_name, "Acme:Kitchen");
+    let lines = crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap().items;
+    assert_eq!(lines.iter().map(|l| l.rate_cents).collect::<Vec<_>>(), [50_000, 12_000, 1_200], "the form's lines first, then the cost and its markup");
+    assert_eq!(balance(&pool, supplies).await, expense_before - 12_000, "the reimbursement reduces the expense, as Bill Costs does");
+    assert!(list_unbilled(&pool, Some(job)).await.unwrap().is_empty(), "the charge is marked billed by the invoice");
+    let billed: i64 = sqlx::query_scalar("SELECT invoice_id FROM billed_costs WHERE expense_line_id = ?1").bind(unbilled[0].line_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(billed, invoice.id);
+    let twice = crate::print_queue::create_invoice(&pool, form("Acme:Kitchen"), &chosen, false, None).await.unwrap_err();
+    assert!(twice.starts_with("COST_NOT_BILLABLE"), "never billed twice: {twice}");
+
+    // Billable costs go on home-currency invoices only.
+    let mut euro = form("Acme:Kitchen");
+    euro.currency = Some(crate::ledger::ForeignCurrency { code: "EUR".into(), exchange_rate_e6: 1_105_000 });
+    let foreign = crate::print_queue::create_invoice(&pool, euro, &chosen, false, None).await.unwrap_err();
+    assert!(foreign.starts_with("COST_FOREIGN_INVOICE"), "{foreign}");
 }

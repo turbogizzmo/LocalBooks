@@ -77,6 +77,11 @@ pub struct UserView {
     pub must_change_password: bool,
     pub last_signed_in_at: Option<String>,
     pub created_at: String,
+    /// Has an authenticator app set up for two-step sign-in (gap R26, [`crate::mfa`]).
+    pub two_step: bool,
+    /// The company requires two-step sign-in for this user and they haven't set it up yet: they
+    /// can do nothing else until they do.
+    pub must_set_up_two_step: bool,
 }
 
 #[derive(sqlx::FromRow)]
@@ -91,6 +96,8 @@ struct UserRow {
     last_signed_in_at: Option<String>,
     created_at: String,
     password_verifier: String,
+    has_two_step: i64,
+    two_step_policy: Option<String>,
 }
 
 impl UserRow {
@@ -105,12 +112,17 @@ impl UserRow {
             must_change_password: self.must_change_password == 1,
             last_signed_in_at: self.last_signed_in_at.clone(),
             created_at: self.created_at.clone(),
+            two_step: self.has_two_step == 1,
+            must_set_up_two_step: self.has_two_step == 0
+                && self.is_active == 1
+                && crate::mfa::Policy::parse(self.two_step_policy.as_deref().unwrap_or("OFF")).required_for(Role::parse(&self.role)?),
         })
     }
 }
 
-const USER_COLUMNS: &str =
-    "id, username, display_name, role, can_see_sensitive, is_active, must_change_password, last_signed_in_at, created_at, password_verifier";
+const USER_COLUMNS: &str = "id, username, display_name, role, can_see_sensitive, is_active, must_change_password, last_signed_in_at, created_at, password_verifier,
+     EXISTS (SELECT 1 FROM user_factors f WHERE f.user_id = users.id) AS has_two_step,
+     (SELECT policy FROM two_step_policy WHERE id = 1) AS two_step_policy";
 
 /// Who is signed in to the open company file, and the data key when they may see sensitive data.
 #[derive(Debug)]
@@ -178,7 +190,7 @@ fn display_or(display_name: Option<&str>, username: &str) -> Result<String, Stri
 /// Records a change to users in the ledger audit trail, sealed into its hash chain when the write
 /// commits (see `audit_chain.rs`): who did it is the actor, `user_id` the user it concerns (0 for
 /// the file as a whole). Never carries a password or key.
-async fn record(conn: &mut sqlx::SqliteConnection, user_id: i64, event: &str, mut details: serde_json::Value) -> Result<(), String> {
+pub(crate) async fn record(conn: &mut sqlx::SqliteConnection, user_id: i64, event: &str, mut details: serde_json::Value) -> Result<(), String> {
     details["event"] = event.into();
     sqlx::query("INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot) VALUES ('USER_CHANGE', ?1, ?2)")
         .bind(user_id)
@@ -356,6 +368,9 @@ pub async fn update(pool: &SqlitePool, admin: &Session, id: i64, input: UserUpda
     .execute(&mut *tx)
     .await
     .map_err(db_err)?;
+    // The user's authenticator secret is sealed under their old password, which the Admin doesn't
+    // know, so a password reset resets two-step sign-in too; the user sets it up again.
+    let two_step_reset = if input.new_password.is_some() { crate::mfa::remove(&mut tx, id).await? } else { false };
     // Losing sensitive data or being turned off removes the user's slot (a trigger). Keeping or
     // gaining it with a new password writes a slot for that password.
     if sensitive && input.is_active {
@@ -380,6 +395,7 @@ pub async fn update(pool: &SqlitePool, admin: &Session, id: i64, input: UserUpda
             "canSeeSensitive": user.can_see_sensitive,
             "isActive": user.is_active,
             "passwordReset": input.new_password.is_some(),
+            "twoStepReset": two_step_reset,
         }),
     )
     .await?;
@@ -402,6 +418,8 @@ pub async fn change_own_password(pool: &SqlitePool, session: &mut Session, curre
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;
+    // Two-step sign-in's secret follows the password, in the same transaction.
+    crate::mfa::reseal(&mut tx, row.id, current, next).await?;
     if let Some(key) = &session.key {
         crypto::set_password(&mut tx, key, row.id, next).await?;
     }
@@ -429,9 +447,12 @@ pub async fn recover(pool: &SqlitePool, recovery_key: &str, username: &str, new_
         .await
         .map_err(db_err)?;
     crypto::set_password(&mut tx, &key, row.id, new_password).await?;
+    // The recovery key is the way back from a lost phone too: it removes the Admin's two-step
+    // sign-in (sealed under the forgotten password), and they set it up again.
+    let two_step_reset = crate::mfa::remove(&mut tx, row.id).await?;
     mark_signed_in(&mut tx, row.id).await?;
     let user = row_by_id(&mut tx, row.id).await?.view()?;
-    record(&mut tx, row.id, "RECOVERY_KEY_USED", serde_json::json!({ "username": user.username })).await?;
+    record(&mut tx, row.id, "RECOVERY_KEY_USED", serde_json::json!({ "username": user.username, "twoStepReset": two_step_reset })).await?;
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(Session { user, key: Some(key) })
 }

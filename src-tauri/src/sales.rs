@@ -7,6 +7,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::invoices::{line_amount, validate_line, PAYMENT_METHODS};
 use crate::ledger::{db_err, format_cents, post_entry_in_tx, rollback, EntrySource, JournalEntry, JournalLine, MAX_LINE_CENTS};
+use crate::money::Cents;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Party {
@@ -245,7 +246,7 @@ impl ItemKind {
 pub struct ProductInput {
     pub name: String,
     pub description: Option<String>,
-    pub rate_cents: i64,
+    pub rate_cents: Cents,
     pub income_account_id: i64,
     /// Charged sales tax when sold (on by default).
     #[serde(default = "taxable_by_default")]
@@ -263,7 +264,7 @@ pub struct SalesLineInput {
     pub description: String,
     /// Quantity scaled by 10,000 (1.5 → 15_000).
     pub quantity_e4: i64,
-    pub rate_cents: i64,
+    pub rate_cents: Cents,
     pub income_account_id: i64,
     #[serde(default)]
     pub class_id: Option<i64>,
@@ -295,7 +296,7 @@ pub struct SalesReceiptInput {
     #[serde(default)]
     pub tax_rate_id: Option<i64>,
     #[serde(default)]
-    pub discount_cents: i64,
+    pub discount_cents: Cents,
     #[serde(flatten)]
     pub details: crate::sales_lists::SalesDetails,
 }
@@ -428,7 +429,7 @@ pub async fn create_item(pool: &SqlitePool, input: ProductInput, kind: ItemKind)
     if name.is_empty() {
         return Err("PRODUCT_NO_NAME: enter a product or service name".into());
     }
-    if !(0..=MAX_LINE_CENTS).contains(&input.rate_cents) {
+    if !(0..=MAX_LINE_CENTS).contains(&input.rate_cents.get()) {
         return Err("PRODUCT_BAD_RATE: rate must be zero or more".into());
     }
     sqlx::query_as::<_, ProductView>(
@@ -465,7 +466,7 @@ pub fn validate_sales_receipt(input: &SalesReceiptInput) -> Result<i64, String> 
     }
     let mut total: i64 = 0;
     for (idx, line) in input.lines.iter().enumerate() {
-        let amount = validate_line(line.quantity_e4, line.rate_cents, idx + 1, "SR")?;
+        let amount = validate_line(line.quantity_e4, line.rate_cents.get(), idx + 1, "SR")?;
         total = total
             .checked_add(amount)
             .filter(|t| *t <= MAX_LINE_CENTS)
@@ -497,7 +498,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     let amounts = input
         .lines
         .iter()
-        .map(|l| Ok(crate::item_types::ItemAmount { amount_cents: line_amount(l.quantity_e4, l.rate_cents)?, is_taxable: l.is_taxable }))
+        .map(|l| Ok(crate::item_types::ItemAmount { amount_cents: line_amount(l.quantity_e4, l.rate_cents.get())?, is_taxable: l.is_taxable }))
         .collect::<Result<Vec<_>, String>>()?;
     let form = &input.details.form_lines;
     let layout = crate::item_types::lay_out(&amounts, form, "SR")?;
@@ -505,11 +506,16 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     let charges = crate::item_types::charge_rows(form, &layout);
     let numbers = layout.item_numbers();
     let (subtotal, taxable) = (layout.lines_cents, layout.taxable_cents);
-    let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "SR").await?;
-    let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, subtotal);
+    let discount = crate::sales_tax::document_discount(tx, input.discount_cents.get(), subtotal, input.lines.iter().map(|l| l.class_id), "SR").await?;
+    let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents.get(), subtotal);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "SR").await?;
     let tax_cents = tax.as_ref().map_or(0, |t| t.cents);
-    let total = (subtotal - input.discount_cents).checked_add(tax_cents).filter(|t| *t > 0 && *t <= crate::ledger::MAX_LINE_CENTS).ok_or("SR_TOO_LARGE: the receipt total must be above zero and in range")?;
+    let total = Cents(subtotal)
+        .checked_sub(input.discount_cents)
+        .and_then(|t| t.checked_add(Cents(tax_cents)))
+        .map(Cents::get)
+        .filter(|t| *t > 0 && *t <= crate::ledger::MAX_LINE_CENTS)
+        .ok_or("SR_TOO_LARGE: the receipt total must be above zero and in range")?;
     let customer_id = match clean(input.customer_name.as_deref()) {
         Some(name) => Some(find_or_create_named(tx, Party::Customer, name).await?),
         None => None,
@@ -554,7 +560,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         if let Some(class) = line.class_id {
             crate::classes::check_usable(tx, class, &format!("SR: line {n}")).await?;
         }
-        let amount = line_amount(line.quantity_e4, line.rate_cents)?;
+        let amount = line_amount(line.quantity_e4, line.rate_cents.get())?;
         sqlx::query(
             "INSERT INTO sales_receipt_lines
                 (sales_receipt_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id, class_id, is_taxable, service_date)

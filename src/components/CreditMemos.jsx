@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { rowKeys } from '../lib/rowKeys.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import { layoutMessage } from '../lib/itemTypes.js';
@@ -14,7 +14,7 @@ import RowMenu, { voidItem } from './RowMenu.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { documentTotals, useFormTax } from './SalesTax.jsx';
-import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
@@ -24,6 +24,7 @@ import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
+import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 
 const isMoneyAccount = (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
 const isIncomeAccount = (a) => a.isActive && (a.accountType === 'INCOME' || a.accountType === 'OTHER_INCOME');
@@ -314,15 +315,71 @@ function ApplyDialog({ memo, onClose, onDone }) {
 }
 
 /**
+ * The refunds and write-offs taken from a credit memo's credit (gaps row T73): each with Print
+ * check (a refund paid from a bank account) and Void, which gives the credit back.
+ */
+function CreditRefunds({ memo, onPrint, onNotice }) {
+  const { data } = useLedgerQuery(useCallback(() => api.listCustomerCreditRefunds(memo.id), [memo.id]));
+  const rows = data ?? [];
+  if (rows.length === 0) return null;
+  return (
+    <section className="qb-panel flex-none" aria-label="Refunds and write-offs">
+      <div className="border-b border-qb-border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Refunds and write-offs</div>
+      <table className="qb-grid">
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint line-through' : ''}`}>
+              <td className="qb-grid-cell">{formatDate(r.refundDate)}</td>
+              <td className="qb-grid-cell">{r.isWriteOff ? 'Write-off' : 'Refund'}</td>
+              <td className="qb-grid-cell">{r.accountName}{r.reference ? ` · ${r.isWriteOff ? '' : 'Check '}${r.reference}` : ''}</td>
+              <td className="qb-grid-cell num">{formatCents(r.amountCents)}</td>
+              <td className="qb-grid-cell cell-tight w-[30px] text-center">
+                <RowMenu
+                  label={`Actions for the ${r.isWriteOff ? 'write-off' : 'refund'} of ${formatCents(r.amountCents)}`}
+                  items={[
+                    ...(!r.isWriteOff && r.accountType === 'BANK' && !r.isVoided
+                      ? [{ label: 'Print check', onSelect: () => onPrint(memo, { refundDate: r.refundDate, amountCents: r.amountCents, reference: r.reference, accountId: r.accountId }) }]
+                      : []),
+                    voidItem({
+                      journalEntryId: r.journalEntryId,
+                      voided: r.isVoided,
+                      description: `${r.isWriteOff ? 'Write-off' : 'Refund'} of ${formatCents(r.amountCents)} from #${memo.creditNumber}; the credit comes back to ${memo.customerName}.`,
+                      onVoid: (id) => api.voidTransaction(id).then(() => onNotice({ kind: 'success', text: `Voided the ${r.isWriteOff ? 'write-off' : 'refund'}; ${formatCents(r.amountCents)} of credit is back.` })),
+                    }),
+                  ]}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+/**
  * Pays credit left over back to the customer (or, for a vendor credit, records the vendor's refund).
  * With `writeOff` it writes the credit off to an income account instead.
  */
-export function RefundDialog({ title, remainingCents, accounts, direction, onRefund, onClose, writeOff = false }) {
+export function RefundDialog({ title, remainingCents, accounts, direction, onRefund, onClose, writeOff = false, canPrintCheck = false }) {
   // The first account the box offers: a bank or card account for a refund, income for a write-off.
   const [accountId, setAccountId] = useState(() => accounts.find((a) => a.isActive && (writeOff ? isIncomeAccount(a) : isMoneyAccount(a)))?.id ?? null);
   const [date, setDate] = useState(todayIso());
   const [amount, setAmount] = useState(centsToInput(remainingCents));
   const [reference, setReference] = useState('');
+  // A customer refund paid from a bank account can print a check: the next check number fills
+  // Reference until it is typed over.
+  const fromBank = accounts.find((a) => a.id === accountId)?.accountType === 'BANK';
+  const [printCheck, setPrintCheck] = useState(canPrintCheck);
+  const [referenceTyped, setReferenceTyped] = useState(false);
+  useEffect(() => {
+    if (!canPrintCheck || !printCheck || !fromBank || referenceTyped || accountId === null) return undefined;
+    let live = true;
+    api.nextCheckNumber(accountId).then((n) => live && setReference(n == null ? '' : String(n))).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [canPrintCheck, printCheck, fromBank, referenceTyped, accountId]);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const cents = parseMoneyToCents(amount);
@@ -333,7 +390,7 @@ export function RefundDialog({ title, remainingCents, accounts, direction, onRef
     if (cents === null || cents <= 0) return setError('Enter the amount.');
     setBusy(true);
     try {
-      await onRefund({ accountId, refundDate: date, amountCents: cents, reference: reference.trim() || null });
+      await onRefund({ accountId, refundDate: date, amountCents: cents, reference: reference.trim() || null }, canPrintCheck && printCheck && fromBank);
     } catch (err) {
       setError(errorText(err));
       setBusy(false);
@@ -359,8 +416,21 @@ export function RefundDialog({ title, remainingCents, accounts, direction, onRef
           </label>
           <label className="col-span-2 flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">{writeOff ? 'Reference' : 'Reference (check no.)'}</span>
-            <input className="qb-input" value={reference} onChange={(e) => setReference(e.target.value)} />
+            <input
+              className="qb-input"
+              value={reference}
+              onChange={(e) => {
+                setReferenceTyped(true);
+                setReference(e.target.value);
+              }}
+            />
           </label>
+          {canPrintCheck && (
+            <label className="col-span-2 flex items-center gap-1.5">
+              <input type="checkbox" className="accent-qb-green" checked={printCheck && fromBank} disabled={!fromBank} onChange={(e) => setPrintCheck(e.target.checked)} />
+              Print a check{fromBank ? '' : ' (from a bank account)'}
+            </label>
+          )}
         </div>
         {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
         <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
@@ -425,8 +495,29 @@ export default function CreditMemos({ accounts, intent }) {
   const viewingRefund = viewing?.refundAccountId !== null;
   const viewingLabel = viewingRefund ? 'Refund receipt' : 'Credit memo';
 
+  // A refund check: the customer is the payee, printed on the same voucher check as Write Checks.
+  const company = useCompany();
+  const [refundCheck, setRefundCheck] = useState(null);
+  const printRefundCheck = (memo, refund) => {
+    setRefundCheck({
+      payeeName: memo.customerName,
+      expenseDate: refund.refundDate,
+      totalCents: refund.amountCents,
+      checkNumber: refund.reference,
+      memo: `Refund of ${nameOf(memo)}`,
+      paymentAccountId: refund.accountId,
+    });
+    setTimeout(() => printDocument(), 80);
+  };
+
   return (
     <div className="flex h-full flex-col gap-2 p-2">
+      {refundCheck && (
+        <PrintPortal>
+          <CheckDocument company={company} check={refundCheck} bankName={accountLabel(accounts, refundCheck.paymentAccountId)} />
+        </PrintPortal>
+      )}
+      {composing && viewing && !viewingRefund && <CreditRefunds memo={viewing} onPrint={printRefundCheck} onNotice={setNotice} />}
       {composing && viewing && (
         <SavedDocView
           label={viewingLabel}
@@ -490,9 +581,11 @@ export default function CreditMemos({ accounts, intent }) {
           accounts={accounts}
           direction="out"
           onClose={() => setDialog(null)}
-          onRefund={async (refund) => {
+          canPrintCheck
+          onRefund={async (refund, printCheck) => {
             await api.refundCustomerCredit({ creditId: dialog.memo.id, ...refund });
             done(`Refunded ${formatCents(refund.amountCents)} to ${dialog.memo.customerName}: Dr Accounts Receivable / Cr ${accountLabel(accounts, refund.accountId)}.`);
+            if (printCheck) printRefundCheck(dialog.memo, refund);
           }}
         />
       )}

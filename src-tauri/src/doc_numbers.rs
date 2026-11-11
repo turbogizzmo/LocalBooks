@@ -8,8 +8,9 @@
 //! [`DOC_NUMBER_TAKEN`], naming what uses it and the next free number, and the form offers to take
 //! that one instead.
 //!
-//! Credit memos and refunds of unapplied payments share one sequence (both are rows of
-//! `credit_memos`).
+//! Credit memos number below [`crate::credits::PAYMENT_CREDIT_NUMBERS`]: unapplied payments kept as
+//! credit are rows of `credit_memos` too, but take their numbers from that range up, so credit memo
+//! numbers never skip.
 
 use serde::{Deserialize, Serialize};
 use sqlx::SqliteConnection;
@@ -54,6 +55,15 @@ impl DocKind {
         }
     }
 
+    /// The highest number of this kind's own sequence: below the unapplied-payment range for credit
+    /// memos; for the others, any (a file whose imported numbers are higher still numbers new forms).
+    fn highest(self) -> i64 {
+        match self {
+            DocKind::CreditMemo => crate::credits::PAYMENT_CREDIT_NUMBERS - 1,
+            _ => i64::MAX,
+        }
+    }
+
     /// The number before the first one: invoices and estimates start at 1001, the rest at 1.
     fn before_first(self) -> i64 {
         match self {
@@ -86,11 +96,15 @@ impl DocKind {
 
 /// The number the next form of `kind` gets: one more than the highest used.
 pub async fn next_number(conn: &mut SqliteConnection, kind: DocKind) -> Result<i64, String> {
-    let next: i64 = sqlx::query_scalar(&format!("SELECT COALESCE(MAX({}), ?1) + 1 FROM {}", kind.column(), kind.table()))
+    let next: i64 = sqlx::query_scalar(&format!("SELECT COALESCE(MAX({}), ?1) + 1 FROM {} WHERE {} <= ?2", kind.column(), kind.table(), kind.column()))
         .bind(kind.before_first())
+        .bind(kind.highest())
         .fetch_one(conn)
         .await
         .map_err(db_err)?;
+    if next > kind.highest() && kind == DocKind::CreditMemo {
+        return Err("CM_NUMBERS_FULL: credit memo numbers have reached 999,999,999".into());
+    }
     Ok(next)
 }
 
@@ -107,8 +121,9 @@ pub async fn take_number(conn: &mut SqliteConnection, kind: DocKind, wanted: Opt
 /// what uses it and the next free number). The form asks this before saving, so the question comes
 /// before the save's other warnings; saving checks again.
 pub async fn check_number(conn: &mut SqliteConnection, kind: DocKind, wanted: i64) -> Result<(), String> {
-    if !(1..=MAX_DOC_NUMBER).contains(&wanted) {
-        return Err(format!("DOC_NUMBER_RANGE: {} # is a whole number from 1 to {MAX_DOC_NUMBER}", kind.noun()));
+    let highest = kind.highest().min(MAX_DOC_NUMBER);
+    if !(1..=highest).contains(&wanted) {
+        return Err(format!("DOC_NUMBER_RANGE: {} # is a whole number from 1 to {highest}", kind.noun()));
     }
     let owner: Option<(Option<String>, String)> = sqlx::query_as(kind.owner_sql()).bind(wanted).fetch_optional(&mut *conn).await.map_err(db_err)?;
     let Some((customer, date)) = owner else { return Ok(()) };

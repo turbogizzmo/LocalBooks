@@ -172,9 +172,9 @@ async fn an_invoice_and_a_bill_keep_their_term_and_early_payment_discount() {
         payment_method_id: None,
         reference: None,
         memo: None,
-        lines: vec![SalesLineInput { product_service_id: None, description: "Sale".into(), quantity_e4: 10_000, rate_cents: 500, income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![SalesLineInput { product_service_id: None, description: "Sale".into(), quantity_e4: 10_000, rate_cents: Cents(500), income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: SalesDetails { terms_id: Some(two_ten.id), ..Default::default() },
     };
     assert!(post_sales_receipt(&pool, receipt).await.unwrap_err().starts_with("SR_NO_TERMS"));
@@ -218,9 +218,9 @@ async fn payment_methods_name_a_kind_of_payment() {
         payment_method_id: method,
         reference: None,
         memo: None,
-        lines: vec![SalesLineInput { product_service_id: None, description: "Sale".into(), quantity_e4: 10_000, rate_cents: 500, income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![SalesLineInput { product_service_id: None, description: "Sale".into(), quantity_e4: 10_000, rate_cents: Cents(500), income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: SalesDetails::default(),
     };
     // The chosen method decides the kind recorded.

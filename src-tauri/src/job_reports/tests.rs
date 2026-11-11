@@ -4,6 +4,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::expenses::{BillInput, BillLineInput, ExpenseInput, SplitLineInput};
+use crate::money::Cents;
 
 fn d(day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, 10, day).unwrap()
@@ -92,7 +93,7 @@ async fn a_bill_line_is_shared_among_its_jobs() {
 async fn estimates_without_invoices() {
     let pool = test_pool().await;
     let services = account_id(&pool, "4100").await;
-    let line = crate::sales::SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: 10_000, rate_cents: 50_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
+    let line = crate::sales::SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: 10_000, rate_cents: Cents(50_000), income_account_id: services, class_id: None, is_taxable: false, service_date: None };
     let input = crate::estimates::EstimateInput {
         estimate_number: None,
         customer_name: "Acme:Kitchen".into(),
@@ -101,7 +102,7 @@ async fn estimates_without_invoices() {
         memo: None,
         lines: vec![line],
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     let estimate = crate::estimates::create_estimate(&pool, input).await.unwrap();

@@ -1,4 +1,5 @@
 use super::*;
+use crate::money::Cents;
 
 async fn first(pool: &SqlitePool, sql: &str) -> i64 {
     sqlx::query_scalar(sql).fetch_one(pool).await.unwrap_or_else(|e| panic!("{sql}: {e}"))
@@ -10,7 +11,7 @@ async fn files_attach_to_every_kind_of_record_and_show_in_the_library() {
     let customer = first(&pool, "SELECT id FROM customers ORDER BY id LIMIT 1").await;
     let vendor = first(&pool, "SELECT id FROM vendors ORDER BY id LIMIT 1").await;
     let income = first(&pool, "SELECT id FROM chart_of_accounts WHERE account_type = 'INCOME' ORDER BY id LIMIT 1").await;
-    let item = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Logo design".into(), description: None, rate_cents: 50_000, income_account_id: income, is_taxable: false })
+    let item = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Logo design".into(), description: None, rate_cents: Cents(50_000), income_account_id: income, is_taxable: false })
         .await
         .unwrap()
         .id;

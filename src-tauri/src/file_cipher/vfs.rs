@@ -16,6 +16,11 @@
 //! `+HEADER_LEN + LOCK_SPAN`. Both lengths are multiples of the largest page size, so no page read
 //! or write crosses the boundary.
 //!
+//! **The log check (gap R24).** Every company file opens through this VFS, plain or encrypted, so
+//! that when SQLite opens a database's `-wal` its header is compared, through SQLite's own handle,
+//! with the page size the database was opened with; a mismatched log is refused there (see
+//! [`crate::wal_guard`]).
+//!
 //! The VFS registers once, as [`VFS_NAME`], and connections pick it with
 //! `SqliteConnectOptions::vfs`.
 
@@ -84,6 +89,75 @@ struct File {
     real: *mut ffi::sqlite3_file,
     /// Whether this is a main database with a key header (else every call passes through).
     shifted: bool,
+    /// For a main database whose page size is known: its name in [`PAGE_SIZES`], released on close.
+    /// (A raw pointer: SQLite allocates this struct and never runs Rust destructors.)
+    registered: *mut String,
+}
+
+/// The page size of each main database open through this VFS, by its full path, with how many
+/// handles have it open. (LocalBooks never changes a database's page size while it is open; a
+/// feature that does must reopen the file, or its own new log would be refused.) Recorded from the header SQLite is about to use, read through SQLite's
+/// own handle, so that opening its `-wal` can be checked against it (see [`check_wal`]).
+static PAGE_SIZES: std::sync::Mutex<Option<std::collections::HashMap<String, (u32, usize)>>> = std::sync::Mutex::new(None);
+
+/// The page-size table, even if a panic elsewhere poisoned its lock: these run inside SQLite's C
+/// callbacks, where a panic would abort the app.
+fn page_sizes() -> std::sync::MutexGuard<'static, Option<std::collections::HashMap<String, (u32, usize)>>> {
+    PAGE_SIZES.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// The main database's page size, read through its just-opened handle: from LocalBooks' key header
+/// for an encrypted file, else from SQLite's own header. None for a file SQLite will create.
+unsafe fn page_size_of(real: *mut ffi::sqlite3_file, shifted: bool) -> Option<u32> {
+    if shifted {
+        let header = crate::file_cipher::header::read_from(&mut RealStore(real)).ok()?;
+        return crate::wal_guard::valid_page_size(header.page_size);
+    }
+    let mut head = [0u8; 18];
+    let read = (*(*real).pMethods).xRead?;
+    if read(real, head.as_mut_ptr().cast::<c_void>(), 18, 0) != ffi::SQLITE_OK {
+        return None;
+    }
+    crate::wal_guard::db_header_page_size(&head)
+}
+
+/// Gap R24 at use: when SQLite opens `name` as a write-ahead log, its header is read through the
+/// handle SQLite will use and compared with the page size its database was opened with. A log
+/// written for another page size is refused here, whatever happened to it after
+/// [`crate::wal_guard::check`] looked at it by path. A log that isn't valid (empty, or not a log)
+/// is SQLite's to ignore, as before.
+unsafe fn check_wal(name: &str, real: *mut ffi::sqlite3_file) -> bool {
+    let Some(db) = name.strip_suffix("-wal") else { return true };
+    let expected = page_sizes().as_ref().and_then(|m| m.get(db).map(|(size, _)| *size));
+    let Some(expected) = expected else { return true };
+    let mut head = [0u8; 12];
+    let Some(read) = (*(*real).pMethods).xRead else { return true };
+    if read(real, head.as_mut_ptr().cast::<c_void>(), 12, 0) != ffi::SQLITE_OK {
+        return true; // empty or short: not a log SQLite would use
+    }
+    crate::wal_guard::wal_header_page_size(&head).is_none_or(|size| size == expected)
+}
+
+/// The key header read through a raw SQLite file handle (for [`page_size_of`]).
+struct RealStore(*mut ffi::sqlite3_file);
+
+impl crate::file_cipher::header::Store for RealStore {
+    fn read_at(&mut self, at: u64, buf: &mut [u8]) -> Result<(), String> {
+        let len = c_int::try_from(buf.len()).map_err(|e| e.to_string())?;
+        let at = ffi::sqlite3_int64::try_from(at).map_err(|e| e.to_string())?;
+        // SAFETY: a file SQLite just opened through the default VFS, read into a buffer of `len` bytes.
+        let rc = unsafe {
+            match (*(*self.0).pMethods).xRead {
+                Some(read) => read(self.0, buf.as_mut_ptr().cast::<c_void>(), len, at),
+                None => ffi::SQLITE_IOERR,
+            }
+        };
+        if rc == ffi::SQLITE_OK { Ok(()) } else { Err(format!("FILE_HEADER: cannot read the key header ({rc})")) }
+    }
+
+    fn write_at(&mut self, _: u64, _: &[u8]) -> Result<(), String> {
+        Err("FILE_HEADER: read only here".into())
+    }
 }
 
 /// The platform's default VFS, which does the real work; set once, before registering.
@@ -203,6 +277,7 @@ unsafe extern "C" fn x_open(_: *mut ffi::sqlite3_vfs, name: ffi::sqlite3_filenam
     (*ours).base.pMethods = std::ptr::null();
     (*ours).real = real;
     (*ours).shifted = false;
+    (*ours).registered = std::ptr::null_mut();
     let Some(open) = (*inner).xOpen else { return ffi::SQLITE_CANTOPEN };
     let rc = open(inner, name, real, flags, out_flags);
     if rc != ffi::SQLITE_OK {
@@ -214,6 +289,8 @@ unsafe extern "C" fn x_open(_: *mut ffi::sqlite3_vfs, name: ffi::sqlite3_filenam
         }
         return rc;
     }
+    // Only a main database and its log need the name.
+    let path = if name.is_null() || flags & (ffi::SQLITE_OPEN_MAIN_DB | ffi::SQLITE_OPEN_WAL) == 0 { None } else { CStr::from_ptr(name).to_str().ok().map(str::to_string) };
     if flags & ffi::SQLITE_OPEN_MAIN_DB != 0 {
         let mut head = [0u8; 16];
         let read = match (*(*real).pMethods).xRead {
@@ -221,12 +298,43 @@ unsafe extern "C" fn x_open(_: *mut ffi::sqlite3_vfs, name: ffi::sqlite3_filenam
             None => ffi::SQLITE_IOERR,
         };
         (*ours).shifted = read == ffi::SQLITE_OK && &head == SIGNATURE;
+        if let (Some(path), Some(size)) = (path.clone(), page_size_of(real, (*ours).shifted)) {
+            let mut sizes = page_sizes();
+            let entry = sizes.get_or_insert_with(Default::default).entry(path.clone()).or_insert((size, 0));
+            // The newest open's header wins (a file replaced on disk since); every open is counted.
+            *entry = (size, entry.1 + 1);
+            (*ours).registered = Box::into_raw(Box::new(path));
+        }
+    }
+    if flags & ffi::SQLITE_OPEN_WAL != 0 {
+        if let Some(path) = path.as_deref() {
+            if !check_wal(path, real) {
+                if let Some(close) = (*(*real).pMethods).xClose {
+                    close(real);
+                }
+                return ffi::SQLITE_CANTOPEN;
+            }
+        }
     }
     (*ours).base.pMethods = &IO_METHODS;
     ffi::SQLITE_OK
 }
 
 unsafe extern "C" fn io_close(file: *mut ffi::sqlite3_file) -> c_int {
+    let ours = file.cast::<File>();
+    if !(*ours).registered.is_null() {
+        let path = Box::from_raw((*ours).registered);
+        (*ours).registered = std::ptr::null_mut();
+        let mut sizes = page_sizes();
+        if let Some(map) = sizes.as_mut() {
+            if let Some(entry) = map.get_mut(path.as_str()) {
+                entry.1 = entry.1.saturating_sub(1);
+                if entry.1 == 0 {
+                    map.remove(path.as_str());
+                }
+            }
+        }
+    }
     call!(file, xClose)
 }
 

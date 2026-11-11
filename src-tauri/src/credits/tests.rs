@@ -15,7 +15,7 @@ fn d(day: u32) -> NaiveDate {
 }
 
 fn line(account: i64, cents: i64) -> SalesLineInput {
-    SalesLineInput { product_service_id: None, description: "Returned work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: account, class_id: None, is_taxable: false, service_date: None }
+    SalesLineInput { product_service_id: None, description: "Returned work".into(), quantity_e4: 10_000, rate_cents: Cents(cents), income_account_id: account, class_id: None, is_taxable: false, service_date: None }
 }
 
 async fn invoice(pool: &SqlitePool, customer: &str, services: i64, cents: i64) -> i64 {

@@ -2,6 +2,7 @@ use super::*;
 use crate::db::test_pool;
 use crate::expenses::{post_expense, post_vendor_bill, BillInput, BillLineInput, ExpenseInput, SplitLineInput};
 use crate::ledger::{JournalEntry, JournalLine};
+use crate::money::Cents;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.expect("seeded account")
@@ -173,7 +174,7 @@ async fn selling_below_zero_warns_stops_or_is_allowed() {
     use serde_json::json;
     let pool = test_pool().await;
     let sales = account(&pool, "4000").await;
-    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: 2_500, income_account_id: sales, is_taxable: false })
+    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false })
         .await
         .unwrap()
         .id;
@@ -227,7 +228,7 @@ fn sale_posting(product: i64, qty_e4: i64) -> Posting<'static> {
 async fn inventory_can_be_turned_off() {
     let pool = test_pool().await;
     let sales = account(&pool, "4000").await;
-    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Bolt".into(), description: None, rate_cents: 100, income_account_id: sales, is_taxable: false }).await.unwrap().id;
+    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Bolt".into(), description: None, rate_cents: Cents(100), income_account_id: sales, is_taxable: false }).await.unwrap().id;
     crate::preferences::set(&pool, "inventory_enabled", "false").await.unwrap();
     let track = crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None };
     assert!(crate::inventory::track_product(&pool, &track).await.unwrap_err().starts_with("INV_OFF"));

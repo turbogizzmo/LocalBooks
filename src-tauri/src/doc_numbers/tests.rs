@@ -92,11 +92,11 @@ async fn each_sales_form_takes_a_typed_number() {
     let pool = test_pool().await;
     let income = services(&pool).await;
     let checking: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(&pool).await.unwrap();
-    let line = crate::sales::SalesLineInput { product_service_id: None, description: "Work".into(), quantity_e4: 10_000, rate_cents: 2_000, income_account_id: income, class_id: None, is_taxable: false, service_date: None };
+    let line = crate::sales::SalesLineInput { product_service_id: None, description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(2_000), income_account_id: income, class_id: None, is_taxable: false, service_date: None };
 
     let estimate = crate::estimates::create_estimate(
         &pool,
-        crate::estimates::EstimateInput { estimate_number: Some(77), customer_name: "Acme".into(), estimate_date: d(4), expiration_date: None, memo: None, lines: vec![line.clone()], tax_rate_id: None, discount_cents: 0, details: Default::default() },
+        crate::estimates::EstimateInput { estimate_number: Some(77), customer_name: "Acme".into(), estimate_date: d(4), expiration_date: None, memo: None, lines: vec![line.clone()], tax_rate_id: None, discount_cents: Cents::ZERO, details: Default::default() },
     )
     .await
     .unwrap();
@@ -115,7 +115,7 @@ async fn each_sales_form_takes_a_typed_number() {
             memo: None,
             lines: vec![line.clone()],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -216,7 +216,7 @@ async fn a_changed_sales_order_keeps_its_number() {
     let income = services(&pool).await;
     let line = crate::sales_orders::SalesOrderLineInput {
         id: None,
-        line: crate::sales::SalesLineInput { product_service_id: None, description: "Work".into(), quantity_e4: 10_000, rate_cents: 2_000, income_account_id: income, class_id: None, is_taxable: false, service_date: None },
+        line: crate::sales::SalesLineInput { product_service_id: None, description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(2_000), income_account_id: income, class_id: None, is_taxable: false, service_date: None },
     };
     let order = |number: Option<i64>, lines: Vec<crate::sales_orders::SalesOrderLineInput>| crate::sales_orders::SalesOrderInput {
         customer_name: "Acme".into(),

@@ -350,6 +350,7 @@ Thresholds follow the payment year. See
 | **Reimbursement income** | None | The income account reimbursements go to when they count as income. |
 | **Default markup** | 0% | Percent added to billed costs. Bill Costs can change it each time. |
 | **Markup account** | None | The income account the markup is credited to. |
+| **On invoices** | On | **Ask about billable costs and time when I choose a customer**: a new invoice offers the customer's or job's unbilled costs and time. Off: no question; **Add billable costs…** on the invoice still adds them. |
 
 See [Bill billable expenses to a customer](getting-started.md#bill-billable-expenses-to-a-customer)
 and [Track time](time-tracking.md).

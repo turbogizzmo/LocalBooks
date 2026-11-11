@@ -6,6 +6,9 @@ import { formatCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import DateBox from './DateBox.jsx';
+import { enteredText, skippedLines } from '../lib/recurringReport.js';
+import { MEMORIZED_VIEW, templateInput } from '../lib/memorizedEdit.js';
+import { useOpenFromList } from '../lib/windows.js';
 
 const KIND_LABEL = { JOURNAL: 'Journal entry', EXPENSE: 'Expense / check', BILL: 'Bill', INVOICE: 'Invoice' };
 const FREQUENCIES = [
@@ -121,6 +124,77 @@ export function MemorizeDialog({ kind, payload, date, defaultName, onClose, onSa
   );
 }
 
+/**
+ * Edit… on Recurring Transactions: a memorized transaction's name and schedule. The transaction it
+ * enters stays as memorized (to change that, enter a new one and memorize it).
+ */
+function ScheduleDialog({ template, onClose, onSaved }) {
+  const [name, setName] = useState(template.name);
+  const [frequency, setFrequency] = useState(template.frequency);
+  const [every, setEvery] = useState(String(template.every));
+  const [nextDate, setNextDate] = useState(template.nextDate);
+  const [endDate, setEndDate] = useState(template.endDate ?? '');
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.editRecurringSchedule(template.id, { name: name.trim(), frequency, every: Number(every), nextDate, endDate: endDate || null });
+      onSaved(`“${name.trim()}” saved: ${scheduleText(frequency, Number(every)).toLowerCase()}, next on ${formatDate(nextDate)}.`);
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-40 grid place-items-center bg-black/30" role="dialog" aria-modal="true" aria-label="Edit memorized transaction">
+      <div className="qb-panel w-[440px] p-3 shadow-panel">
+        <h2 className="mb-2 text-md font-semibold">Edit {KIND_LABEL[template.kind]?.toLowerCase() ?? 'memorized transaction'}</h2>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="col-span-2">
+            <span className="qb-label">Name</span>
+            <input className="qb-input w-full" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </label>
+          <label>
+            <span className="qb-label">Repeat every</span>
+            <div className="flex gap-1">
+              <input className="qb-input num w-[52px]" value={every} onChange={(e) => setEvery(e.target.value.replace(/\D/g, ''))} aria-label="Number of periods" />
+              <select className="qb-input flex-1" value={frequency} onChange={(e) => setFrequency(e.target.value)}>
+                {FREQUENCIES.map(([f, label]) => (
+                  <option key={f} value={f}>{label}{Number(every) > 1 ? 's' : ''}</option>
+                ))}
+              </select>
+            </div>
+          </label>
+          <label>
+            <span className="qb-label">Next date</span>
+            <DateBox className="qb-input w-full" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+          </label>
+          <label>
+            <span className="qb-label">End date (optional)</span>
+            <DateBox className="qb-input w-full" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </label>
+        </div>
+        <p className="mt-2 text-xs text-qb-ink-muted">The transaction it enters stays as it was memorized.</p>
+        {error && <div className="mt-2 text-sm text-qb-negative">{error}</div>}
+        <div className="mt-3 flex justify-end gap-2">
+          <button type="button" className="qb-btn qb-btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy || !name.trim() || !(Number(every) >= 1)}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Saves a memorized transaction's changed transaction (from its form, opened by Edit transaction…)
+ * back to the template; its name and schedule stay. Returns the message the form shows.
+ */
+export async function saveMemorizedTransaction(template, payload) {
+  await api.saveRecurring(template.id, templateInput(template, payload));
+  return `“${template.name}” saved: copies entered from now on use the changed transaction; those already entered stay as they are.`;
+}
+
 /** How many active templates are due on or before today (for the reminder in the header). */
 export function useDueRecurring() {
   const { data } = useLedgerQuery(api.listRecurring);
@@ -155,7 +229,14 @@ export default function Recurring() {
       setNotice({ kind: 'error', text: errorText(err) });
     }
   };
-  const entered = (n) => (n === 0 ? 'Nothing was due.' : `Entered ${n} transaction${n === 1 ? '' : 's'}; each is posted and in the journal.`);
+  // Copies Enter all due couldn't enter (a closed period, say): listed until dismissed.
+  const [skipped, setSkipped] = useState([]);
+  const entered = (report) => {
+    setSkipped(skippedLines(report, formatDate));
+    return enteredText(report);
+  };
+  const [editing, setEditing] = useState(null);
+  const openFromList = useOpenFromList();
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -172,6 +253,30 @@ export default function Recurring() {
         </span>
       </div>
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
+      {skipped.length > 0 && (
+        <div className="qb-panel flex-none border-qb-negative/40 px-2 py-1 text-sm" role="alert">
+          <div className="flex items-center">
+            <span className="flex-1 font-semibold text-qb-negative">Not entered (each stays due until it can be):</span>
+            <button type="button" className="px-1 font-semibold opacity-70 hover:opacity-100" aria-label="Dismiss" onClick={() => setSkipped([])}>×</button>
+          </div>
+          <ul className="list-disc pl-5">
+            {skipped.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {editing && (
+        <ScheduleDialog
+          template={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(text) => {
+            setEditing(null);
+            setNotice({ kind: 'success', text });
+            reload();
+          }}
+        />
+      )}
       {error && <Notice kind="error" text={error} />}
       <section className="qb-panel min-h-0 flex-1 overflow-auto scrollbar-thin">
         <table className="qb-grid">
@@ -215,6 +320,16 @@ export default function Recurring() {
                       label={`Actions for ${t.name}`}
                       items={[
                         { label: 'Enter now (through date above)', disabled: !isDue, onSelect: () => act(() => api.enterRecurring(asOf, t.id), entered) },
+                        { label: 'Edit schedule…', onSelect: () => setEditing(t) },
+                        {
+                          label: 'Edit transaction…',
+                          hint: 'Change its lines, amounts and accounts; copies already entered stay as they are',
+                          onSelect: () =>
+                            api.getRecurring(t.id).then(
+                              (template) => openFromList(MEMORIZED_VIEW[template.kind], 'edit-memorized', { template }),
+                              (err) => setNotice({ kind: 'error', text: errorText(err) }),
+                            ),
+                        },
                         t.isActive
                           ? { label: 'Pause', onSelect: () => act(() => api.setRecurringActive(t.id, false), `“${t.name}” paused.`) }
                           : { label: 'Resume', onSelect: () => act(() => api.setRecurringActive(t.id, true), `“${t.name}” resumed.`) },

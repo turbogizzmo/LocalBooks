@@ -26,6 +26,7 @@ use sqlx::{Sqlite, Transaction};
 use crate::invoices::line_amount;
 use crate::item_types::{FormLineInput, ItemAmount, Layout};
 use crate::ledger::{self, db_err, EntrySource, JournalEntry, JournalLine};
+use crate::money::Cents;
 use crate::qbw_documents::{DocumentLine, SourceDocument, SourceSales};
 use crate::sales_lists::SalesDoc;
 
@@ -279,7 +280,7 @@ fn form(lines: &[DocumentLine], map: &HashMap<i64, i64>, books: &Books, sign: i6
             Ok(layout) => out.layout = Some(layout),
             // Not a form LocalBooks can show: the discounts come off the whole document instead.
             Err(_) => {
-                out.discount += out.form_lines.iter().filter_map(|f| f.amount_cents).sum::<i64>();
+                out.discount += out.form_lines.iter().filter_map(|f| f.amount_cents.map(Cents::get)).sum::<i64>();
                 out.form_lines.clear();
             }
         }
@@ -302,6 +303,16 @@ fn form(lines: &[DocumentLine], map: &HashMap<i64, i64>, books: &Books, sign: i6
 
 /// The document number the file used when it is a free positive number, otherwise the next one.
 async fn number(tx: &mut Transaction<'_, Sqlite>, table: &str, column: &str, base: i64, doc_num: Option<&str>) -> Result<i64, String> {
+    // Credit memo numbers stay below the range unapplied payments kept as credit use.
+    if table == "credit_memos" {
+        if let Some(n) = doc_num.and_then(|d| d.trim().parse::<i64>().ok()).filter(|n| (1..crate::credits::PAYMENT_CREDIT_NUMBERS).contains(n)) {
+            let taken: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM credit_memos WHERE credit_number = ?1)").bind(n).fetch_one(&mut **tx).await.map_err(db_err)?;
+            if !taken {
+                return Ok(n);
+            }
+        }
+        return crate::credits::next_credit_number(tx, false).await;
+    }
     if let Some(n) = doc_num.and_then(|d| d.trim().parse::<i64>().ok()).filter(|n| (1..1_000_000_000_000).contains(n)) {
         let taken: bool = sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM {table} WHERE {column} = ?1)"))
             .bind(n)

@@ -126,7 +126,10 @@ function AgencyRows({ agency }) {
         <tr key={l.taxRateId} className="qb-grid-row">
           <td className="qb-grid-cell pl-6">{l.name} ({ratePercent(l.ratePpm)})</td>
           <td className="qb-grid-cell num">{formatCents(l.taxableSalesCents)}</td>
-          <td className="qb-grid-cell num">{formatCents(l.taxCents)}</td>
+          <td className="qb-grid-cell num" title={l.adjustmentCents ? `Includes a sales tax adjustment of ${formatCents(l.adjustmentCents)}` : undefined}>
+            {formatCents(l.taxCents)}
+            {l.adjustmentCents ? <span className="ml-1 text-2xs text-qb-ink-muted">(adj. {formatCents(l.adjustmentCents)})</span> : null}
+          </td>
           <td className="qb-grid-cell" />
         </tr>
       ))}

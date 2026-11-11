@@ -1,5 +1,6 @@
 use super::*;
 use serde_json::json;
+use crate::money::Cents;
 
 async fn count(pool: &SqlitePool, sql: &str, id: i64) -> usize {
     sqlx::query_scalar::<_, i64>(sql).bind(id).fetch_one(pool).await.unwrap() as usize
@@ -110,7 +111,7 @@ async fn a_credit_memo_copy_keeps_its_discounts_and_charges_so_it_totals_the_sam
     use crate::item_types::{charge_input, FormLineInput};
     let pool = crate::harness::fixture::harbor_lane().await;
     let income: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4000'").fetch_one(&pool).await.unwrap();
-    let item = |description: &str, rate_cents: i64| crate::sales::SalesLineInput { product_service_id: None, description: description.into(), quantity_e4: 10_000, rate_cents, income_account_id: income, class_id: None, is_taxable: false, service_date: None };
+    let item = |description: &str, rate_cents: i64| crate::sales::SalesLineInput { product_service_id: None, description: description.into(), quantity_e4: 10_000, rate_cents: Cents(rate_cents), income_account_id: income, class_id: None, is_taxable: false, service_date: None };
     // $100.00 with a 5% restocking charge after it, $20.00, then a subtotal and 10% off it.
     let original = crate::credits::create_credit_memo(
         &pool,

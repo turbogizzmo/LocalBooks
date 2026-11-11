@@ -82,14 +82,28 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
                      WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM finance_charge_invoices WHERE invoice_id = l.source_id)
                      THEN 'FINANCE_CHARGE'
                      WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM statement_charge_invoices WHERE invoice_id = l.source_id)
-                     THEN 'STATEMENT_CHARGE' ELSE l.source_type END AS source_type,
+                     THEN 'STATEMENT_CHARGE'
+                     -- An unapplied payment kept as credit is a payment, not a credit memo.
+                     WHEN l.source_type = 'CREDIT_MEMO' AND EXISTS (SELECT 1 FROM credit_memos WHERE id = l.source_id AND payment_account_id IS NOT NULL)
+                     THEN 'UNAPPLIED_PAYMENT'
+                     -- A/R journal entries made by another screen, by what they are.
+                     WHEN l.source_type = 'JOURNAL' AND EXISTS (SELECT 1 FROM credit_refunds WHERE journal_entry_id = l.journal_entry_id AND is_write_off = 1)
+                     THEN 'CREDIT_WRITE_OFF'
+                     WHEN l.source_type = 'JOURNAL' AND EXISTS (SELECT 1 FROM credit_refunds WHERE journal_entry_id = l.journal_entry_id)
+                     THEN 'CREDIT_REFUND'
+                     WHEN l.source_type = 'JOURNAL' AND (EXISTS (SELECT 1 FROM bounced_checks WHERE journal_entry_id = l.journal_entry_id)
+                                                        OR EXISTS (SELECT 1 FROM bounced_sales_receipts WHERE journal_entry_id = l.journal_entry_id))
+                     THEN 'BOUNCED_CHECK'
+                     ELSE l.source_type END AS source_type,
                 p.party_name,
                 CASE l.source_type
                     -- A statement charge has no invoice number of its own to show.
                     WHEN 'INVOICE' THEN (SELECT CAST(invoice_number AS TEXT) FROM invoices WHERE id = l.source_id
                                          AND NOT EXISTS (SELECT 1 FROM statement_charge_invoices WHERE invoice_id = l.source_id))
-                    WHEN 'CREDIT_MEMO' THEN (SELECT CAST(credit_number AS TEXT) FROM credit_memos WHERE id = l.source_id)
+                    WHEN 'CREDIT_MEMO' THEN (SELECT CASE WHEN payment_account_id IS NULL THEN CAST(credit_number AS TEXT) ELSE payment_reference END
+                                             FROM credit_memos WHERE id = l.source_id)
                     WHEN 'RECEIVE_PAYMENT' THEN (SELECT reference FROM invoice_payments WHERE id = l.source_id)
+                    WHEN 'JOURNAL' THEN (SELECT reference FROM credit_refunds WHERE journal_entry_id = l.journal_entry_id AND is_write_off = 0)
                 END AS number,
                 CASE l.source_type
                     WHEN 'INVOICE' THEN (SELECT po_number FROM invoices WHERE id = l.source_id)
@@ -447,6 +461,34 @@ fn summary(kind: &str, payload: &str) -> (i64, Option<String>) {
     }
 }
 
+/// A memorized transaction with the transaction itself, as its form posts it: Edit transaction…
+/// reopens the form with it and saves the changed transaction back with [`save_recurring`].
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecurringTemplate {
+    pub id: i64,
+    pub name: String,
+    pub kind: String,
+    pub frequency: String,
+    pub every: i64,
+    pub next_date: NaiveDate,
+    pub end_date: Option<NaiveDate>,
+    pub anchor_day: Option<i64>,
+    pub payload: serde_json::Value,
+}
+
+pub async fn get_recurring(pool: &SqlitePool, id: i64) -> Result<RecurringTemplate, String> {
+    type Row = (i64, String, String, String, i64, NaiveDate, Option<NaiveDate>, Option<i64>, String);
+    let row: Option<Row> = sqlx::query_as("SELECT id, name, kind, frequency, every, next_date, end_date, anchor_day, payload FROM recurring_templates WHERE id = ?1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
+    let (id, name, kind, frequency, every, next_date, end_date, anchor_day, payload) = row.ok_or("REC_NOT_FOUND: that recurring transaction no longer exists")?;
+    let payload = serde_json::from_str(&payload).map_err(|e| format!("REC_BAD_PAYLOAD: {e}"))?;
+    Ok(RecurringTemplate { id, name, kind, frequency, every, next_date, end_date, anchor_day, payload })
+}
+
 pub async fn list_recurring(pool: &SqlitePool) -> Result<Vec<RecurringView>, String> {
     let mut rows: Vec<RecurringView> = sqlx::query_as(
         "SELECT t.id, t.name, t.kind, t.frequency, t.every, t.next_date, t.end_date, t.is_active, t.payload,
@@ -550,26 +592,66 @@ fn anchor_day(next: NaiveDate, chosen: Option<u32>) -> u32 {
 /// A template that may be due: id, kind, payload, frequency, every, next date, end date, anchor day.
 type DueTemplate = (i64, String, String, String, i64, NaiveDate, Option<NaiveDate>, Option<i64>);
 
+/// A memorized transaction Enter all due couldn't enter: the date and why (a closed period, an
+/// inactive account and the like). Its schedule stays on that date.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SkippedOccurrence {
+    pub template_id: i64,
+    pub name: String,
+    pub date: NaiveDate,
+    pub reason: String,
+}
+
+/// What Enter all due did.
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct EnteredDue {
+    pub entered: usize,
+    pub skipped: Vec<SkippedOccurrence>,
+}
+
 /// Enters every occurrence that is due on or before `as_of` for active templates (at most 120 in
 /// one go), moving each template's next date along its schedule. Returns how many were entered.
+#[cfg(test)]
 pub async fn enter_due(pool: &SqlitePool, as_of: NaiveDate, only: Option<i64>) -> Result<usize, String> {
+    enter_due_report(pool, as_of, only).await.map(|r| r.entered)
+}
+
+/// [`enter_due`], reporting the copies it couldn't enter. A copy that fails (dated in a closed
+/// period, say) is undone on its own and its schedule stops there, so the others are still entered
+/// and nothing is entered twice when the person fixes the cause and enters again.
+pub async fn enter_due_report(pool: &SqlitePool, as_of: NaiveDate, only: Option<i64>) -> Result<EnteredDue, String> {
     run(pool, async |tx| {
         let templates: Vec<DueTemplate> = sqlx::query_as(
             "SELECT id, kind, payload, frequency, every, next_date, end_date, anchor_day FROM recurring_templates
-             WHERE is_active = 1 AND next_date <= ?1 AND (?2 IS NULL OR id = ?2)",
+             WHERE is_active = 1 AND next_date <= ?1 AND (?2 IS NULL OR id = ?2) ORDER BY next_date, id",
         )
         .bind(as_of)
         .bind(only)
         .fetch_all(&mut **tx)
         .await
         .map_err(db_err)?;
-        let mut entered = 0;
+        let mut report = EnteredDue::default();
         for (id, kind, payload, frequency, every, mut next, end, anchor) in templates {
             let anchor = anchor.and_then(|d| u32::try_from(d).ok());
-            while next <= as_of && end.is_none_or(|e| next <= e) && entered < 120 {
-                let entry = post_occurrence(tx, &kind, &payload, next).await?;
-                sqlx::query("INSERT INTO recurring_runs (template_id, run_date, journal_entry_id) VALUES (?1, ?2, ?3)").bind(id).bind(next).bind(entry).execute(&mut **tx).await.map_err(db_err)?;
-                entered += 1;
+            while next <= as_of && end.is_none_or(|e| next <= e) && report.entered < 120 {
+                sqlx::query("SAVEPOINT recurring_copy").execute(&mut **tx).await.map_err(db_err)?;
+                let posted = async {
+                    let entry = post_occurrence(tx, &kind, &payload, next).await?;
+                    sqlx::query("INSERT INTO recurring_runs (template_id, run_date, journal_entry_id) VALUES (?1, ?2, ?3)").bind(id).bind(next).bind(entry).execute(&mut **tx).await.map_err(db_err)?;
+                    Ok::<(), String>(())
+                }
+                .await;
+                if let Err(reason) = posted {
+                    sqlx::query("ROLLBACK TO recurring_copy").execute(&mut **tx).await.map_err(db_err)?;
+                    sqlx::query("RELEASE recurring_copy").execute(&mut **tx).await.map_err(db_err)?;
+                    let name: String = sqlx::query_scalar("SELECT name FROM recurring_templates WHERE id = ?1").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
+                    report.skipped.push(SkippedOccurrence { template_id: id, name, date: next, reason });
+                    break;
+                }
+                sqlx::query("RELEASE recurring_copy").execute(&mut **tx).await.map_err(db_err)?;
+                report.entered += 1;
                 next = advance(next, &frequency, every, anchor).ok_or("REC_BAD_SCHEDULE: the schedule cannot advance")?;
             }
             let finished = end.is_some_and(|e| next > e);
@@ -581,9 +663,61 @@ pub async fn enter_due(pool: &SqlitePool, as_of: NaiveDate, only: Option<i64>) -
                 .await
                 .map_err(db_err)?;
         }
-        Ok(entered)
+        Ok(report)
     })
     .await
+}
+
+/// Changes a memorized transaction's name and schedule; the transaction it enters stays as it was
+/// memorized. Moving the next date makes its day the one later dates fall on.
+pub async fn edit_recurring_schedule(pool: &SqlitePool, id: i64, input: &ScheduleInput) -> Result<(), String> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err("REC_NAME_REQUIRED: name the recurring transaction".into());
+    }
+    if advance(input.next_date, &input.frequency, input.every, None).is_none() || !(1..=52).contains(&input.every) {
+        return Err("REC_BAD_SCHEDULE: choose weekly, monthly, quarterly or yearly, every 1 to 52".into());
+    }
+    if input.end_date.is_some_and(|e| e < input.next_date) {
+        return Err("REC_BAD_END: the end date is before the next date".into());
+    }
+    let anchor = i64::from(anchor_day(input.next_date, input.anchor_day));
+    let done = sqlx::query(
+        "UPDATE recurring_templates SET name = ?1, frequency = ?2, every = ?3, next_date = ?4, end_date = ?5,
+                anchor_day = CASE WHEN next_date = ?4 AND anchor_day IS NOT NULL THEN anchor_day ELSE ?6 END
+         WHERE id = ?7",
+    )
+    .bind(name)
+    .bind(&input.frequency)
+    .bind(input.every)
+    .bind(input.next_date)
+    .bind(input.end_date)
+    .bind(anchor)
+    .bind(id)
+    .execute(pool)
+    .await
+    .map_err(|e| {
+        let msg = db_err(e);
+        if msg.contains("UNIQUE") { format!("REC_DUPLICATE: there is already a recurring transaction named '{name}'") } else { msg }
+    })?;
+    if done.rows_affected() == 0 {
+        return Err("REC_NOT_FOUND: that recurring transaction no longer exists".into());
+    }
+    Ok(())
+}
+
+/// A memorized transaction's name and schedule, as Edit… changes them.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleInput {
+    pub name: String,
+    pub frequency: String,
+    pub every: i64,
+    pub next_date: NaiveDate,
+    #[serde(default)]
+    pub end_date: Option<NaiveDate>,
+    #[serde(default)]
+    pub anchor_day: Option<u32>,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -714,6 +848,14 @@ pub(crate) async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, input
         .fetch_one(&mut **tx)
         .await
         .map_err(db_err)?;
+        write_purchase_order_lines(tx, id, input, &form_amounts).await?;
+        Ok(id)
+    }
+}
+
+/// Writes an order's lines and its discount and charge lines.
+async fn write_purchase_order_lines(tx: &mut Transaction<'_, Sqlite>, id: i64, input: &PurchaseOrderInput, form_amounts: &[i64]) -> Result<(), String> {
+    {
         for (idx, line) in input.lines.iter().enumerate() {
             sqlx::query(
                 "INSERT INTO purchase_order_lines (purchase_order_id, line_number, account_id, product_service_id, description, quantity_e4, rate_cents, amount_cents, class_id, customer_id)
@@ -733,9 +875,76 @@ pub(crate) async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, input
             .await
             .map_err(db_err)?;
         }
-        crate::purchase_lines::write(tx, crate::purchase_lines::PurchaseDoc::PurchaseOrder, id, &input.form_lines, &form_amounts).await?;
-        Ok(id)
+        crate::purchase_lines::write(tx, crate::purchase_lines::PurchaseDoc::PurchaseOrder, id, &input.form_lines, form_amounts).await?;
+        Ok(())
     }
+}
+
+/// Whether an order can still be changed or deleted: open (or closed by hand), with nothing
+/// received against it and not billed. Its number comes back for the messages.
+async fn changeable_order(tx: &mut Transaction<'_, Sqlite>, id: i64, verb: &str) -> Result<i64, String> {
+    let head: Option<(i64, String)> = sqlx::query_as("SELECT po_number, status FROM purchase_orders WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let (number, status) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
+    if status == "BILLED" {
+        return Err(format!("PO_BILLED: purchase order #{number} has been billed and can't be {verb}; void the bill first"));
+    }
+    // Any receipt against it, even a voided one, still points at the order and its lines.
+    let received: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM item_receipts WHERE purchase_order_id = ?1)").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
+    if received {
+        return Err(format!("PO_HAS_RECEIPTS: items have been received against purchase order #{number} (a voided receipt counts), so it can't be {verb}; close it, or make a new order"));
+    }
+    Ok(number)
+}
+
+/// Saves changes to an open purchase order: vendor, dates, memo and lines. A purchase order posts
+/// nothing, so it is changed in place and keeps its number.
+pub async fn update_purchase_order(pool: &SqlitePool, id: i64, input: PurchaseOrderInput) -> Result<(), String> {
+    crate::inventory::require_enabled(pool).await?;
+    let total = validate_purchase_order(&input)?;
+    run(pool, async |tx| {
+        let number = changeable_order(tx, id, "changed").await?;
+        let status: String = sqlx::query_scalar("SELECT status FROM purchase_orders WHERE id = ?1").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
+        if status != "OPEN" {
+            return Err(format!("PO_NOT_OPEN: purchase order #{number} is closed; reopen it to change it"));
+        }
+        let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+        let (form_amounts, _) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "PO")?;
+        crate::purchase_lines::check(tx, &input.form_lines, "PO").await?;
+        let vendor = crate::sales::find_or_create_named(tx, crate::sales::Party::Vendor, &input.vendor_name).await?;
+        sqlx::query("UPDATE purchase_orders SET vendor_id = ?1, po_date = ?2, expected_date = ?3, memo = ?4, total_cents = ?5 WHERE id = ?6")
+            .bind(vendor)
+            .bind(input.po_date)
+            .bind(input.expected_date)
+            .bind(clean(input.memo.as_deref()))
+            .bind(total)
+            .bind(id)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("DELETE FROM purchase_form_lines WHERE purchase_order_id = ?1").bind(id).execute(&mut **tx).await.map_err(db_err)?;
+        sqlx::query("DELETE FROM purchase_order_lines WHERE purchase_order_id = ?1").bind(id).execute(&mut **tx).await.map_err(db_err)?;
+        write_purchase_order_lines(tx, id, &input, &form_amounts).await
+    })
+    .await
+}
+
+/// Deletes a purchase order that nothing was received or billed against. Files attached to it
+/// must be deleted first, so none is lost with it.
+pub async fn delete_purchase_order(pool: &SqlitePool, id: i64) -> Result<(), String> {
+    run(pool, async |tx| {
+        let number = changeable_order(tx, id, "deleted").await?;
+        let files: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM record_attachments WHERE record_kind = 'PURCHASE_ORDER' AND record_id = ?1 AND deleted_at IS NULL)")
+            .bind(id)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(db_err)?;
+        if files {
+            return Err(format!("PO_HAS_FILES: purchase order #{number} has attached files; delete them first"));
+        }
+        sqlx::query("DELETE FROM purchase_orders WHERE id = ?1").bind(id).execute(&mut **tx).await.map_err(db_err)?;
+        Ok(())
+    })
+    .await
 }
 
 /// Closes an open order without billing it, or reopens a closed one.

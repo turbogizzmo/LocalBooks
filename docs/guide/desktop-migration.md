@@ -85,9 +85,9 @@ LocalBooks reads the file like this:
   Customers and vendors keep their company name, address, phone, email, notes and payment terms;
   vendors keep their tax ID and 1099 flag. Service, inventory, non-inventory and other charge
   items come in with their price and income account, and discount items as discount items (a
-  percent discount keeps its percent). Subtotal, group, payment and sales tax items aren't added
-  to the item list; in a full import an invoice's or sales receipt's subtotal and discount lines
-  stay where they were on the form. Employees and other names appear on their
+  percent discount keeps its percent). Groups come in as LocalBooks groups (see step 4).
+  Subtotal, payment and sales tax items aren't added to the item list; in a full import an
+  invoice's or sales receipt's subtotal and discount lines stay where they were on the form. Employees and other names appear on their
   transactions but aren't added to a list, and classes aren't imported.
 - **Transactions** come in by type: invoices, sales receipts, credit memos, payments, deposits,
   bills, vendor credits, bill payments, checks, card charges, transfers, journal entries,
@@ -474,7 +474,14 @@ installed? Export from my installed QuickBooks** below the file box instead: see
    (**…, items and classes** when it has classes). It matches existing records by name and adds
    the rest; classes are added as described under [Classes](#classes). Price levels come in with them (a
    level with the same name as one you already have is left as it is), and the customers it adds
-   get their default price level. Each level it creates is recorded in the audit trail.
+   get their default price level. Each level it creates is recorded in the audit trail. Item
+   groups from a company file come in too, with their items in order, their quantities, and
+   whether printed forms list the items. An item the group lists without a quantity (one you type
+   on the form) comes in at quantity 1, since a LocalBooks group needs one; check those groups
+   after the import. A group with the same name as one you already have is
+   left as it is. A discount or percent charge in a group is left out of it, since a LocalBooks
+   group can't hold one; the summary says how many items were left out of groups. A group whose name an item already has, or none of whose items came in,
+   is not added; the summary counts them.
 
 ## 3. Post to your books
 

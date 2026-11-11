@@ -1,6 +1,6 @@
 use super::*;
 use crate::db::test_pool;
-use crate::qbw_company::{LedgerQuality, LineOutcome, SourceAccount, SourceItem, SourceLine, SourceParty, SourceTransaction, UnreadableLine};
+use crate::qbw_company::{LedgerQuality, LineOutcome, SourceAccount, SourceItem, SourceItemGroup, SourceLine, SourceParty, SourceTransaction, UnreadableLine};
 
 fn account(id: i64, name: &str, kind: &'static str, parent: Option<i64>) -> SourceAccount {
     SourceAccount {
@@ -1338,4 +1338,86 @@ async fn older_desktop_batches_get_their_fixed_assets_back() {
         (kind(desktop).await.as_str(), kind(iif).await.as_str(), kind(newer).await.as_str()),
         ("Fixed asset", "Other charge", "Other charge")
     );
+}
+
+/// A company file's item groups come in as LocalBooks groups, with their items in order and their
+/// quantities. Items a LocalBooks group can't hold (a discount) are left out of the group; a group
+/// none of whose items came in, or whose name an item has, is left out; one already in LocalBooks
+/// is matched by name. Reversing the import deactivates the groups it created, and adding the
+/// lists again puts them back.
+#[tokio::test]
+async fn item_groups_come_in_as_groups() {
+    let pool = test_pool().await;
+    let product: i64 = sqlx::query_scalar("INSERT INTO products_services (name, rate_cents, income_account_id)
+         SELECT 'Paint', 1000, a.id FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE t.classification = 'INCOME' LIMIT 1
+         RETURNING id").fetch_one(&pool).await.unwrap();
+    sqlx::query("INSERT INTO item_groups (name) VALUES ('Starter set')").execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO item_group_members (group_id, position, product_id, quantity_e4) VALUES (1, 1, ?1, 10000)").bind(product).execute(&pool).await.unwrap();
+    // A file with lists only, so adding its lists again after a reversal puts them back.
+    let mut books = ledger();
+    (books.transactions, books.unbalanced, books.unreadable) = (Vec::new(), Vec::new(), Vec::new());
+    books.accounts.push(account(6, "Sales", "INCOME", None));
+    let item = |id: i64, name: &str, kind: &'static str| SourceItem {
+        id,
+        name: name.into(),
+        description: None,
+        rate_cents: 2_500,
+        income_account_id: Some(6),
+        kind,
+        taxable: false,
+        active: true,
+        custom_fields: Vec::new(),
+        purchase_description: None,
+        purchase_cost_cents: None,
+        percent_ppm: None,
+    };
+    books.items = vec![item(20, "Door frame", "Inventory part"), item(21, "Hinge", "Inventory part"), item(22, "Install", "Service"), item(23, "Promo", "Discount")];
+    let group = |id: i64, name: &str, print_items: bool, members: Vec<(i64, i64)>| SourceItemGroup {
+        id,
+        name: name.into(),
+        description: Some(format!("{name} description")),
+        print_items,
+        active: true,
+        members,
+    };
+    books.sales_lists.item_groups = vec![
+        // Install first, then a frame and three hinges; the discount can't be in a LocalBooks group.
+        group(60, "Door kit", false, vec![(22, 10_000), (20, 10_000), (21, 30_000), (23, 10_000)]),
+        group(61, "Only promos", true, vec![(23, 10_000), (99, 10_000)]),
+        group(62, "Hinge", true, vec![(21, 10_000)]),
+        group(63, "Starter set", true, vec![(20, 20_000)]),
+    ];
+    let batch = stage(&pool, Path::new("/books/Kits.qbw"), 1, &books).await.unwrap();
+    let r = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().lists.unwrap();
+    assert_eq!((r.groups_created, r.groups_matched, r.groups_left_out, r.group_items_left_out), (1, 1, 2, 1), "the discount is left out of Door kit");
+    let (id, description, print_items, active): (i64, Option<String>, i64, i64) =
+        sqlx::query_as("SELECT id, description, print_items, is_active FROM item_groups WHERE name = 'Door kit'").fetch_one(&pool).await.unwrap();
+    assert_eq!((description.as_deref(), print_items, active), (Some("Door kit description"), 0, 1));
+    let members: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT p.name, m.quantity_e4 FROM item_group_members m JOIN products_services p ON p.id = m.product_id WHERE m.group_id = ?1 ORDER BY m.position",
+    )
+    .bind(id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(members, [("Install".to_string(), 10_000), ("Door frame".to_string(), 10_000), ("Hinge".to_string(), 30_000)]);
+    let starter: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM item_group_members WHERE group_id = 1").fetch_one(&pool).await.unwrap();
+    assert_eq!(starter, 1, "a group already in LocalBooks is left as it is");
+    // Again: nothing new. The groups left out are tried again (an item may have been renamed since).
+    let left_out = ImportListsResult { groups_left_out: 2, ..Default::default() };
+    assert_eq!(import_lists(&pool, batch).await.unwrap(), left_out);
+
+    reverse_batch(&pool, batch).await.unwrap();
+    let active = |name: &'static str| {
+        let pool = pool.clone();
+        async move { sqlx::query_scalar::<_, i64>("SELECT is_active FROM item_groups WHERE name = ?1").bind(name).fetch_one(&pool).await.unwrap() }
+    };
+    assert_eq!((active("Door kit").await, active("Starter set").await), (0, 1), "only the group the import created goes inactive");
+    let readded = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Journal }).await.unwrap();
+    assert_eq!(readded.lists.unwrap(), left_out, "nothing duplicated");
+    assert_eq!(active("Door kit").await, 1);
+    reverse_batch(&pool, batch).await.unwrap();
+    discard_batch(&pool, batch).await.unwrap();
+    let staged: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_import_item_groups").fetch_one(&pool).await.unwrap();
+    assert_eq!(staged, 0);
 }

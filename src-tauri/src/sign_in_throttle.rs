@@ -42,6 +42,9 @@ const MAX_ENTRIES: usize = 500;
 pub enum Who<'a> {
     User(&'a str),
     RecoveryKey,
+    /// A user name's two-step sign-in codes (gap R26), counted apart from its passwords, so a
+    /// right password doesn't clear the count of wrong codes.
+    Code(&'a str),
 }
 pub const FILE_NAME: &str = "sign-in-waits.json";
 
@@ -86,6 +89,7 @@ impl Throttle {
         let what = match who {
             Who::User(name) => format!("user\n{file}\n{}", name.trim().to_lowercase()),
             Who::RecoveryKey => format!("recovery\n{file}"),
+            Who::Code(name) => format!("code\n{file}\n{}", name.trim().to_lowercase()),
         };
         Sha256::digest(what.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
     }
@@ -115,6 +119,12 @@ impl Throttle {
         let seconds = remaining.as_secs().max(1);
         let when = if seconds < 90 { format!("{seconds} seconds") } else { format!("{} minutes", seconds.div_ceil(60)) };
         Err(format!("SIGN_IN_WAIT: too many wrong tries; try again in {when}"))
+    }
+
+    /// How many wrong tries `who` has made that still count.
+    pub fn failures(&self, file: &str, who: Who) -> u32 {
+        let counts = self.counts.lock().expect("sign-in waits");
+        counts.get(&Self::key(file, who)).map(|c| c.failures).unwrap_or(0)
     }
 
     /// Records a wrong try.

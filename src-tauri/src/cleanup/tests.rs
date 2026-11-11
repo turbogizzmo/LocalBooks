@@ -26,7 +26,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: &str, due: &str, cent
 
 async fn credit_memo(pool: &SqlitePool, customer: &str, date: &str, cents: i64) -> i64 {
     let services = account(pool, "4100").await;
-    let line = SalesLineInput { product_service_id: None, description: "Credit".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
+    let line = SalesLineInput { product_service_id: None, description: "Credit".into(), quantity_e4: 10_000, rate_cents: Cents(cents), income_account_id: services, class_id: None, is_taxable: false, service_date: None };
     crate::credits::create_credit_memo(pool, CreditMemoInput { credit_number: None, form_lines: Vec::new(), customer_name: customer.into(), credit_date: d(date), memo: None, refund_account_id: None, lines: vec![line], tax_rate_id: None, header: Default::default() })
         .await
         .unwrap()
@@ -312,7 +312,7 @@ async fn list_changes_come_from_creation_dates_and_the_audit_trail() {
     let customer = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
     let vendor = crate::expenses::create_vendor(&pool, "Paper Co", None).await.unwrap().id;
     let services = account(&pool, "4100").await;
-    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Consulting".into(), description: None, rate_cents: 10_000, income_account_id: services, is_taxable: false })
+    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Consulting".into(), description: None, rate_cents: Cents(10_000), income_account_id: services, is_taxable: false })
         .await
         .unwrap()
         .id;
@@ -347,7 +347,7 @@ async fn list_changes_come_from_creation_dates_and_the_audit_trail() {
 async fn inventory_comparison_finds_entries_that_post_to_inventory_without_stock() {
     let pool = test_pool().await;
     let (sales, obe, checking) = (account(&pool, "4000").await, account(&pool, "3000").await, account(&pool, "1010").await);
-    let widget = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: 2_500, income_account_id: sales, is_taxable: false })
+    let widget = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false })
         .await
         .unwrap()
         .id;

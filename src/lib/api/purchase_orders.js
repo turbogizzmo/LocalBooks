@@ -6,6 +6,9 @@ export default {
   listPurchaseOrders: () => invoke('list_purchase_orders'),
   getPurchaseOrderLines: (id) => invoke('get_purchase_order_lines', { id }),
   createPurchaseOrder: (input) => recordTransaction('create_purchase_order', { input }),
+  // An open order with nothing received or billed; it keeps its number.
+  updatePurchaseOrder: (id, input) => recordTransaction('update_purchase_order', { id, input }),
+  deletePurchaseOrder: (id) => invoke('delete_purchase_order', { id }),
   setPurchaseOrderClosed: (id, closed) => invoke('set_purchase_order_closed', { id, closed }),
   // Checked like Enter Bills: approval rules, and the duplicate number and date warnings to confirm.
   billPurchaseOrder: (id, billDate, dueDate, billNumber) => recordTransaction('bill_purchase_order', { id, billDate, dueDate, billNumber }),

@@ -11,6 +11,21 @@ open it normally:
 
 `xattr -cr /Applications/LocalBooks.app`
 
+## "Opening <company>…"
+
+While LocalBooks opens a company file, the window says which one and what it's doing. This happens
+when it starts, and when you use File › Open, the recent list, Restore, New Company or Change Company
+File Location. Usually it's gone in a moment. It stays longer when:
+
+- **Saving a copy before updating the company file.** A new version of LocalBooks updates the
+  file's layout the first time it opens it, and keeps a copy of the file as it was before (in the
+  backups folder) in case anything goes wrong.
+- **Updating the company file for this version.** The update itself.
+- The file is in a network or synced folder, or an antivirus program is checking it.
+
+Let it finish. Then LocalBooks shows the company, the sign-in screen, or, if the file couldn't be
+opened, the screen below. Help › Save Diagnostics records how long each opening took.
+
 ## "LocalBooks couldn't open your company file"
 
 LocalBooks shows this instead of starting when the company file can't be opened. Nothing in the

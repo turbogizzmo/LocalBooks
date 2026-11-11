@@ -185,6 +185,145 @@ async fn the_1099_report_follows_the_account_mapping_and_the_threshold_by_year()
 }
 
 #[tokio::test]
+async fn an_open_purchase_order_can_be_changed_or_deleted_until_something_is_received_or_billed() {
+    let pool = test_pool().await;
+    let supplies = account(&pool, "6250").await;
+    let line = |cents: i64| PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: Some("Paper".into()), quantity_e4: None, rate_cents: None, amount_cents: cents, class_id: None, customer_id: None };
+    let input = |vendor: &str, lines: Vec<PurchaseOrderLineInput>| PurchaseOrderInput { form_lines: Vec::new(), vendor_name: vendor.into(), po_date: d(5, 1), expected_date: None, memo: None, lines };
+    let po = create_purchase_order(&pool, input("Staples", vec![line(5_000)])).await.unwrap();
+    let number = |pool: SqlitePool| async move { list_purchase_orders(&pool).await.unwrap()[0].po_number };
+    let before = number(pool.clone()).await;
+
+    // Changed in place: another vendor and two lines, the same number, nothing posted.
+    update_purchase_order(&pool, po, input("Office Depot", vec![line(2_000), line(3_500)])).await.unwrap();
+    let order = &list_purchase_orders(&pool).await.unwrap()[0];
+    assert_eq!((order.po_number, order.vendor_name.as_str(), order.total_cents), (before, "Office Depot", 5_500));
+    assert_eq!(purchase_order_lines(&pool, po).await.unwrap().len(), 2);
+    assert_eq!(balance(&pool, supplies).await, 0);
+
+    // Billed, it can be neither changed nor deleted.
+    bill_purchase_order(&pool, po, d(5, 9), d(6, 8), None).await.unwrap();
+    assert!(update_purchase_order(&pool, po, input("Staples", vec![line(1_000)])).await.unwrap_err().starts_with("PO_BILLED"));
+    assert!(delete_purchase_order(&pool, po).await.unwrap_err().starts_with("PO_BILLED"));
+
+    // Another, deleted with its lines.
+    let other = create_purchase_order(&pool, input("Staples", vec![line(1_000)])).await.unwrap();
+    delete_purchase_order(&pool, other).await.unwrap();
+    assert_eq!(list_purchase_orders(&pool).await.unwrap().len(), 1);
+    let lines: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM purchase_order_lines WHERE purchase_order_id = ?1").bind(other).fetch_one(&pool).await.unwrap();
+    assert_eq!(lines, 0);
+}
+
+#[tokio::test]
+async fn statements_label_payments_refunds_and_write_offs_and_credit_memo_numbers_dont_skip() {
+    use crate::credits::{create_credit_memo, refund_customer_credit, write_off_customer_credit, CreditMemoInput, RefundCreditInput, UnappliedPaymentInput};
+    let pool = test_pool().await;
+    let (checking, services) = (account(&pool, "1010").await, account(&pool, "4100").await);
+    let memo = |pool: SqlitePool, day: u32| async move {
+        create_credit_memo(
+            &pool,
+            CreditMemoInput {
+                customer_name: "Acme".into(),
+                credit_number: None,
+                credit_date: d(3, day),
+                memo: None,
+                refund_account_id: None,
+                tax_rate_id: None,
+                lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: crate::money::Cents::from(5_000), income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
+                header: Default::default(),
+                form_lines: Vec::new(),
+            },
+        )
+        .await
+        .unwrap()
+    };
+    let first = memo(pool.clone(), 2).await;
+    // An overpayment kept as credit takes no credit memo number.
+    let mut tx = crate::ledger::begin_write(&pool).await.unwrap();
+    crate::credits::write_unapplied_payment(
+        &mut tx,
+        &UnappliedPaymentInput { customer_name: "Acme".into(), deposit_account_id: checking, payment_date: d(3, 3), amount_cents: 2_500, payment_method: "CHECK".into(), payment_method_id: None, reference: Some("8812".into()), keep_as: None, account_id: None },
+    )
+    .await
+    .unwrap();
+    crate::ledger::commit_write(tx).await.unwrap();
+    let second = memo(pool.clone(), 4).await;
+    assert_eq!((first.credit_number, second.credit_number), (1, 2), "no number taken by the overpayment");
+
+    write_off_customer_credit(&pool, RefundCreditInput { credit_id: first.id, account_id: services, refund_date: d(3, 5), amount_cents: 1_000, reference: None }).await.unwrap();
+    refund_customer_credit(&pool, RefundCreditInput { credit_id: second.id, account_id: checking, refund_date: d(3, 6), amount_cents: 2_000, reference: Some("1042".into()) }).await.unwrap();
+
+    let acme: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
+    let period = crate::forms::Period { start_date: d(3, 1), end_date: d(3, 31) };
+    let doc = crate::forms::statement_doc(&pool, acme, period, "$").await.unwrap();
+    let labels: Vec<&str> = doc.statement.as_ref().unwrap().rows.iter().skip(1).map(|r| r[1].as_str()).collect();
+    assert_eq!(labels, ["Credit Memo #1", "Payment #8812", "Credit Memo #2", "Write-off", "Refund #1042"]);
+}
+
+#[tokio::test]
+async fn an_old_low_numbered_overpayment_is_skipped_once_and_payment_credits_stay_out_of_credit_memo_lists() {
+    use crate::credits::{create_credit_memo, CreditMemoInput, UnappliedPaymentInput, PAYMENT_CREDIT_NUMBERS};
+    let pool = test_pool().await;
+    let (checking, services) = (account(&pool, "1010").await, account(&pool, "4100").await);
+    let memo = |pool: SqlitePool| async move {
+        create_credit_memo(
+            &pool,
+            CreditMemoInput {
+                customer_name: "Acme".into(),
+                credit_number: None,
+                credit_date: d(3, 2),
+                memo: None,
+                refund_account_id: None,
+                tax_rate_id: None,
+                lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: crate::money::Cents::from(5_000), income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
+                header: Default::default(),
+                form_lines: Vec::new(),
+            },
+        )
+        .await
+        .unwrap()
+    };
+    assert_eq!(memo(pool.clone()).await.credit_number, 1);
+    // A file from before: an overpayment kept as credit took #2.
+    let acme: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
+    sqlx::query("INSERT INTO credit_memos (credit_number, customer_id, credit_date, total_cents, payment_account_id, payment_method, payment_reference) VALUES (2, ?1, '2026-03-03', 100, ?2, 'CHECK', 'OLD-1')")
+        .bind(acme)
+        .bind(checking)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(memo(pool.clone()).await.credit_number, 3, "the old number is skipped, never reused");
+    let mut tx = crate::ledger::begin_write(&pool).await.unwrap();
+    let paid = crate::credits::write_unapplied_payment(
+        &mut tx,
+        &UnappliedPaymentInput { customer_name: "Acme".into(), deposit_account_id: checking, payment_date: d(3, 4), amount_cents: 2_500, payment_method: "CHECK".into(), payment_method_id: None, reference: Some("8812".into()), keep_as: None, account_id: None },
+    )
+    .await
+    .unwrap();
+    crate::ledger::commit_write(tx).await.unwrap();
+    let paid_number: i64 = sqlx::query_scalar("SELECT credit_number FROM credit_memos WHERE id = ?1").bind(paid).fetch_one(&pool).await.unwrap();
+    assert_eq!(paid_number, PAYMENT_CREDIT_NUMBERS + 1);
+    assert_eq!(memo(pool.clone()).await.credit_number, 4);
+
+    // The payment isn't a credit memo: not in the credit memo print batch, and it can't be queued for email.
+    let batch = crate::print_batches::list(&pool, crate::print_batches::BatchKind::CreditMemo, d(3, 1), d(3, 31)).await.unwrap();
+    assert_eq!(batch.iter().map(|r| r.number.as_deref().unwrap_or("")).collect::<Vec<_>>(), ["1", "3", "4"]);
+    assert!(crate::email_log::set_queued(&pool, crate::forms::FormKind::CreditMemo, paid, true).await.unwrap_err().starts_with("EMAIL_NOT_FOUND"));
+
+    // Once used on an invoice, voiding the payment names it as a payment, not by its number.
+    let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
+        "customerName": "Acme", "issueDate": "2026-03-05", "dueDate": "2026-04-05",
+        "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": 5_000, "incomeAccountId": services, "isTaxable": false }]
+    }))
+    .unwrap();
+    let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
+    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: paid, document_id: inv.id, amount_cents: 1_000, applied_date: d(3, 6) }).await.unwrap();
+    let entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM credit_memos WHERE id = ?1").bind(paid).fetch_one(&pool).await.unwrap();
+    let err = crate::ledger::void_transaction(&pool, entry).await.unwrap_err();
+    assert!(err.contains("this unapplied payment") && !err.contains("1000000001"), "{err}");
+}
+
+#[tokio::test]
 async fn a_monthly_schedule_from_the_31st_keeps_to_month_end_after_a_short_month() {
     use chrono::Datelike;
     let pool = test_pool().await;
@@ -232,6 +371,69 @@ async fn memorizing_a_transaction_from_the_31st_keeps_its_day_though_it_first_re
 }
 
 #[tokio::test]
+async fn enter_all_due_skips_a_copy_in_a_closed_period_lists_it_and_enters_the_rest() {
+    let pool = test_pool().await;
+    let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
+    let check = |date: &str| serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": date,
+        "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 1_000, "memo": null }] });
+    let schedule = |name: &str, next: NaiveDate| RecurringInput { anchor_day: None, name: name.into(), kind: "EXPENSE".into(), payload: check("2026-01-01"), frequency: "MONTHLY".into(), every: 1, next_date: next, end_date: None };
+    let late = save_recurring(&pool, None, schedule("Old rent", d(2, 15))).await.unwrap();
+    let ok = save_recurring(&pool, None, schedule("New rent", d(4, 1))).await.unwrap();
+    // The books are closed through March 31: February and March's copies of Old rent can't post.
+    crate::closing::set_closing_date(&pool, &crate::closing::ClosingInput { lock_date: Some(d(3, 31)), current_passcode: None, new_passcode: None }).await.unwrap();
+
+    let report = enter_due_report(&pool, d(4, 20), None).await.unwrap();
+    assert_eq!(report.entered, 1, "New rent's April copy");
+    assert_eq!(report.skipped.len(), 1);
+    assert_eq!((report.skipped[0].template_id, report.skipped[0].name.as_str(), report.skipped[0].date), (late, "Old rent", d(2, 15)));
+    assert!(!report.skipped[0].reason.is_empty());
+    let next = |id: i64| {
+        let pool = pool.clone();
+        async move { sqlx::query_scalar::<_, NaiveDate>("SELECT next_date FROM recurring_templates WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap() }
+    };
+    assert_eq!((next(late).await, next(ok).await), (d(2, 15), d(5, 1)), "the skipped schedule waits on the copy it couldn't enter");
+    assert_eq!(balance(&pool, rent).await, 1_000, "nothing half-entered");
+
+    // Edit…: rename Old rent and move it past the closed period; Enter all due then enters it.
+    edit_recurring_schedule(&pool, late, &ScheduleInput { name: "Storage rent".into(), frequency: "MONTHLY".into(), every: 1, next_date: d(4, 15), end_date: None, anchor_day: None }).await.unwrap();
+    let again = enter_due_report(&pool, d(4, 20), None).await.unwrap();
+    assert_eq!((again.entered, again.skipped.len()), (1, 0));
+    assert_eq!(list_recurring(&pool).await.unwrap().iter().find(|t| t.id == late).unwrap().name, "Storage rent");
+    assert!(edit_recurring_schedule(&pool, late, &ScheduleInput { name: " ".into(), frequency: "MONTHLY".into(), every: 1, next_date: d(5, 15), end_date: None, anchor_day: None }).await.unwrap_err().starts_with("REC_NAME_REQUIRED"));
+}
+
+#[tokio::test]
+async fn a_memorized_transactions_lines_can_be_changed_and_only_later_copies_follow() {
+    let pool = test_pool().await;
+    let (checking, rent, supplies) = (account(&pool, "1010").await, account(&pool, "6300").await, account(&pool, "6250").await);
+    let check = |account: i64, cents: i64| serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-31",
+        "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": account, "amountCents": cents, "memo": null }] });
+    let id = save_recurring(&pool, None, RecurringInput { anchor_day: Some(31), name: "Rent".into(), kind: "EXPENSE".into(), payload: check(rent, 100_000), frequency: "MONTHLY".into(), every: 1, next_date: d(1, 31), end_date: None }).await.unwrap();
+    enter_due(&pool, d(2, 28), None).await.unwrap();
+    assert_eq!(balance(&pool, rent).await, 200_000, "January and February at $1,000");
+
+    // Edit transaction…: the form gets the memorized transaction back and saves a changed one.
+    let template = get_recurring(&pool, id).await.unwrap();
+    assert_eq!((template.kind.as_str(), template.next_date, template.payload["lines"][0]["amountCents"].as_i64()), ("EXPENSE", d(3, 31), Some(100_000)));
+    save_recurring(&pool, Some(id), RecurringInput {
+        anchor_day: None,
+        name: template.name.clone(),
+        kind: template.kind.clone(),
+        payload: check(supplies, 120_000),
+        frequency: template.frequency.clone(),
+        every: template.every,
+        next_date: template.next_date,
+        end_date: template.end_date,
+    })
+    .await
+    .unwrap();
+    enter_due(&pool, d(4, 30), None).await.unwrap();
+    assert_eq!(balance(&pool, rent).await, 200_000, "the copies already entered are untouched");
+    assert_eq!(balance(&pool, supplies).await, 240_000, "March 31 and April 30 use the changed lines");
+    assert!(get_recurring(&pool, 99_999).await.unwrap_err().starts_with("REC_NOT_FOUND"));
+}
+
+#[tokio::test]
 async fn a_bill_from_a_purchase_order_takes_the_vendors_terms_and_the_bill_checks() {
     let pool = test_pool().await;
     let supplies = account(&pool, "6250").await;
@@ -253,4 +455,14 @@ async fn a_bill_from_a_purchase_order_takes_the_vendors_terms_and_the_bill_check
     assert_eq!(input.terms_id, Some(terms));
     let warned = crate::guards::check(&pool, crate::guards::bill(&input, None), None).await.unwrap_err();
     assert!(warned.starts_with("NEEDS_CONFIRMATION"), "{warned}");
+}
+
+#[tokio::test]
+async fn a_typed_credit_memo_number_stays_below_the_unapplied_payment_range() {
+    let pool = test_pool().await;
+    let mut conn = pool.acquire().await.unwrap();
+    let err = crate::doc_numbers::check_number(&mut conn, crate::doc_numbers::DocKind::CreditMemo, crate::credits::PAYMENT_CREDIT_NUMBERS).await.unwrap_err();
+    assert!(err.starts_with("DOC_NUMBER_RANGE") && err.contains("999999999"), "{err}");
+    assert!(crate::doc_numbers::check_number(&mut conn, crate::doc_numbers::DocKind::CreditMemo, 42).await.is_ok());
+    assert!(crate::doc_numbers::check_number(&mut conn, crate::doc_numbers::DocKind::Invoice, crate::credits::PAYMENT_CREDIT_NUMBERS).await.is_ok(), "other forms keep their range");
 }

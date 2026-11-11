@@ -154,9 +154,11 @@ pub async fn set_queued(pool: &SqlitePool, kind: FormKind, document_id: i64, que
         FormKind::Invoice => sqlx::query_scalar("SELECT is_voided FROM invoices WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
         FormKind::Estimate => sqlx::query_scalar("SELECT 0 FROM estimates WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
         FormKind::SalesReceipt => sqlx::query_scalar("SELECT is_voided FROM sales_receipts WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
-        FormKind::CreditMemo => sqlx::query_scalar("SELECT is_voided FROM credit_memos WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
+        // An unapplied payment kept as credit has no form to send.
+        FormKind::CreditMemo => sqlx::query_scalar("SELECT is_voided FROM credit_memos WHERE id = ?1 AND payment_account_id IS NULL").bind(document_id).fetch_optional(pool).await,
         FormKind::BillPayment => sqlx::query_scalar("SELECT is_voided FROM bill_payments WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
         FormKind::SalesOrder => sqlx::query_scalar("SELECT 0 FROM sales_orders WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
+        FormKind::PurchaseOrder => sqlx::query_scalar("SELECT 0 FROM purchase_orders WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
         // A statement covers a period chosen when it is sent; it is emailed from Customer Statements.
         FormKind::Statement => return Err("EMAIL_STATEMENT_QUEUE: email statements from Sales › Customer Statements".into()),
     }
@@ -206,7 +208,7 @@ pub async fn queue(pool: &SqlitePool) -> Result<Vec<QueuedForm>, String> {
          FROM form_email_queue q JOIN sales_receipts r ON q.form_type = 'SALES_RECEIPT' AND r.id = q.document_id LEFT JOIN customers c ON c.id = r.customer_id
          UNION ALL
          SELECT q.form_type, q.document_id, m.credit_number, c.name, {to}, m.credit_date, m.total_cents, NULL, q.queued_at
-         FROM form_email_queue q JOIN credit_memos m ON q.form_type = 'CREDIT_MEMO' AND m.id = q.document_id JOIN customers c ON c.id = m.customer_id
+         FROM form_email_queue q JOIN credit_memos m ON q.form_type = 'CREDIT_MEMO' AND m.id = q.document_id AND m.payment_account_id IS NULL JOIN customers c ON c.id = m.customer_id
          UNION ALL
          SELECT q.form_type, q.document_id, o.order_number, c.name, {to}, o.order_date,
                 -- As the form shows it: the lines plus sales tax at the order's rate on the taxable ones.
@@ -214,6 +216,9 @@ pub async fn queue(pool: &SqlitePool) -> Result<Vec<QueuedForm>, String> {
                   + COALESCE((SELECT (SUM(l.amount_cents) * t.rate_ppm + 500000) / 1000000 FROM sales_order_lines l JOIN tax_rates t ON t.id = o.tax_rate_id
                               WHERE l.sales_order_id = o.id AND l.is_taxable = 1), 0), NULL, q.queued_at
          FROM form_email_queue q JOIN sales_orders o ON q.form_type = 'SALES_ORDER' AND o.id = q.document_id JOIN customers c ON c.id = o.customer_id
+         UNION ALL
+         SELECT q.form_type, q.document_id, o.po_number, v.name, v.email, o.po_date, o.total_cents, NULL, q.queued_at
+         FROM form_email_queue q JOIN purchase_orders o ON q.form_type = 'PURCHASE_ORDER' AND o.id = q.document_id JOIN vendors v ON v.id = o.vendor_id
          ORDER BY 9, 1, 3"
     ))
     .fetch_all(pool)
@@ -228,6 +233,7 @@ pub async fn queue(pool: &SqlitePool) -> Result<Vec<QueuedForm>, String> {
                 "CREDIT_MEMO" => FormKind::CreditMemo,
                 "BILL_PAYMENT" => FormKind::BillPayment,
                 "SALES_ORDER" => FormKind::SalesOrder,
+                "PURCHASE_ORDER" => FormKind::PurchaseOrder,
                 _ => FormKind::Invoice,
             },
             document_id,

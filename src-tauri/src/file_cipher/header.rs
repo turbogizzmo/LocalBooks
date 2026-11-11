@@ -75,7 +75,7 @@ pub struct Header {
 }
 
 /// Where the header bytes are read and written.
-trait Store {
+pub(crate) trait Store {
     fn read_at(&mut self, at: u64, buf: &mut [u8]) -> Result<(), String>;
     /// Writes and syncs.
     fn write_at(&mut self, at: u64, buf: &[u8]) -> Result<(), String>;
@@ -165,7 +165,7 @@ fn read_both(store: &mut impl Store) -> [Option<(u64, Header)>; 2] {
 const DAMAGED: &str = "FILE_HEADER_DAMAGED: the key header of this company file is damaged; restore a backup";
 const NOT_ENCRYPTED: &str = "FILE_NOT_ENCRYPTED: this company file is not encrypted";
 
-fn read_from(store: &mut impl Store) -> Result<Header, String> {
+pub(crate) fn read_from(store: &mut impl Store) -> Result<Header, String> {
     if !has_signature(store) {
         return Err(NOT_ENCRYPTED.into());
     }

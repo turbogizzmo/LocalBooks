@@ -64,10 +64,11 @@ the same path as the form it came from, so it shows on its own screen (Journal E
 & Checks, Bills or Invoices) and in your reports like any other. The next date then moves along
 the schedule.
 
-All the copies are entered together, or none are. If one can't post, for example because its date
-is on or before the [closing date](closing-the-books.md#close-the-books), nothing is entered and
-the message says why. Move the next date past the closing date by memorizing it again, or delete
-it.
+If a copy can't post, for example because its date is on or before the [closing
+date](closing-the-books.md#close-the-books), that copy is left out and listed under **Not entered**
+with the reason, and the others are still entered. Its memorized transaction stays due on that
+date, so nothing is entered twice: fix the cause, or move its next date with **Edit schedule…**
+(see below), and enter again.
 
 Monthly, quarterly and yearly schedules keep their day of the month. When that day falls past the
 end of a shorter month, the copy is dated the last day of that month, and the next one goes back
@@ -87,9 +88,15 @@ for reference.
   number of days ahead, which you set with **Customize** (see [Choose your
   reminders](reminders-and-todos.md#choose-your-reminders)).
 
-## Pause, resume or delete
+## Change, pause, resume or delete
 
 From a row's **▾** menu:
+
+- **Edit schedule…** changes its name, how often it repeats, its next date and its end date.
+  Moving the next date makes its day of the month the one later copies fall on.
+- **Edit transaction…** opens the memorized check, expense, bill, invoice or journal entry in its
+  form. Change its lines, amounts, accounts or anything else and save: the copies entered from then
+  on use the changes, and copies already entered stay as they were.
 
 - **Pause** stops it from coming due or showing in reminders. **Resume** brings it back with the
   next date it had; if that date has passed, the missed copies are due at once.
@@ -97,9 +104,7 @@ From a row's **▾** menu:
   posted; void them on their own screens if you need to (see [Undo a transaction
   (void)](journal-entries-and-voids.md#undo-a-transaction-void)).
 
-A memorized transaction can't be edited yet, and there are no groups. To change one, delete it,
-then fill in a form the way you want it and memorize that (or memorize the new one under another
-name first).
+There are no groups of memorized transactions.
 
 ## Memorized Transaction Listing
 

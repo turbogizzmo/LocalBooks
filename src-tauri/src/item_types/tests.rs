@@ -131,9 +131,9 @@ async fn a_sales_receipt_with_a_subtotal_posts_balanced() {
             payment_method_id: None,
             reference: None,
             memo: None,
-            lines: vec![sale(4_000), sale(1_000)],
+            lines: vec![sale(Cents(4_000)), sale(Cents(1_000))],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: with_form(vec![FormLineInput::subtotal(2)]),
         },
     )
@@ -162,9 +162,9 @@ async fn an_estimate_carries_its_subtotals_to_its_invoice() {
             estimate_date: d(1),
             expiration_date: None,
             memo: None,
-            lines: vec![est_line(30_000), est_line(20_000)],
+            lines: vec![est_line(Cents(30_000)), est_line(Cents(20_000))],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: with_form(vec![FormLineInput::subtotal(1), FormLineInput::subtotal(2)]),
         },
     )
@@ -301,7 +301,7 @@ async fn an_invoice_with_discounts_and_tax_posts_balanced_and_taxes_the_discount
     .unwrap();
     let item = crate::sales::create_item(
         &pool,
-        crate::sales::ProductInput { name: "Loyalty 10%".into(), description: None, rate_cents: 0, income_account_id: discounts, is_taxable: true },
+        crate::sales::ProductInput { name: "Loyalty 10%".into(), description: None, rate_cents: Cents::ZERO, income_account_id: discounts, is_taxable: true },
         crate::sales::ItemKind::discount(Some(100_000)),
     )
     .await
@@ -349,7 +349,7 @@ async fn a_sales_receipt_with_a_discount_posts_balanced() {
     let pool = test_pool().await;
     let (checking, services) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await);
     let discounts = discounts_given(&pool).await;
-    let sale = SalesLineInput { product_service_id: None, description: "Visit".into(), quantity_e4: 10_000, rate_cents: 8_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
+    let sale = SalesLineInput { product_service_id: None, description: "Visit".into(), quantity_e4: 10_000, rate_cents: Cents(8_000), income_account_id: services, class_id: None, is_taxable: false, service_date: None };
     let receipt = post_sales_receipt(
         &pool,
         SalesReceiptInput {
@@ -363,7 +363,7 @@ async fn a_sales_receipt_with_a_discount_posts_balanced() {
             memo: None,
             lines: vec![sale],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: with_form(vec![FormLineInput::discount(1, discounts, Some(250_000), None, false)]),
         },
     )
@@ -383,7 +383,7 @@ async fn a_discount_must_post_to_an_active_income_account_from_a_discount_item()
     assert!(err.starts_with("INV_NOT_INCOME_ACCOUNT"), "{err}");
     let plain = crate::sales::create_product(
         &pool,
-        crate::sales::ProductInput { name: "Hour".into(), description: None, rate_cents: 100, income_account_id: services, is_taxable: false },
+        crate::sales::ProductInput { name: "Hour".into(), description: None, rate_cents: Cents(100), income_account_id: services, is_taxable: false },
     )
     .await
     .unwrap();
@@ -403,7 +403,7 @@ async fn discount_items_cannot_be_stocked_or_price_levelled() {
     let discounts = discounts_given(&pool).await;
     let item = crate::sales::create_item(
         &pool,
-        crate::sales::ProductInput { name: "Promo".into(), description: None, rate_cents: 500, income_account_id: discounts, is_taxable: false },
+        crate::sales::ProductInput { name: "Promo".into(), description: None, rate_cents: Cents(500), income_account_id: discounts, is_taxable: false },
         crate::sales::ItemKind::discount(None),
     )
     .await
@@ -417,7 +417,7 @@ async fn discount_items_cannot_be_stocked_or_price_levelled() {
     assert!(err.unwrap_err().to_string().contains("PRICE_LEVEL_DISCOUNT"));
     let bad = crate::sales::create_item(
         &pool,
-        crate::sales::ProductInput { name: "Odd".into(), description: None, rate_cents: 0, income_account_id: discounts, is_taxable: false },
+        crate::sales::ProductInput { name: "Odd".into(), description: None, rate_cents: Cents::ZERO, income_account_id: discounts, is_taxable: false },
         crate::sales::ItemKind { item_type: "ITEM".into(), percent_ppm: Some(5), expense_account_id: None },
     )
     .await
@@ -443,14 +443,14 @@ async fn fixed_and_percent_charges_post_balanced_and_carry_from_an_estimate() {
     let (ar, services) = (account_id(&pool, "1200").await, account_id(&pool, "4100").await);
     let shipping = crate::sales::create_item(
         &pool,
-        crate::sales::ProductInput { name: "Shipping".into(), description: None, rate_cents: 1_500, income_account_id: services, is_taxable: false },
+        crate::sales::ProductInput { name: "Shipping".into(), description: None, rate_cents: Cents(1_500), income_account_id: services, is_taxable: false },
         crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: None, expense_account_id: None },
     )
     .await
     .unwrap();
     let handling = crate::sales::create_item(
         &pool,
-        crate::sales::ProductInput { name: "Handling 3%".into(), description: None, rate_cents: 0, income_account_id: services, is_taxable: false },
+        crate::sales::ProductInput { name: "Handling 3%".into(), description: None, rate_cents: Cents::ZERO, income_account_id: services, is_taxable: false },
         crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: Some(30_000), expense_account_id: None },
     )
     .await
@@ -465,9 +465,9 @@ async fn fixed_and_percent_charges_post_balanced_and_carry_from_an_estimate() {
             estimate_date: d(1),
             expiration_date: None,
             memo: None,
-            lines: vec![est_line(12_345, None), est_line(1_500, Some(shipping.id))],
+            lines: vec![est_line(Cents(12_345), None), est_line(Cents(1_500), Some(shipping.id))],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: with_form(vec![
                 FormLineInput { product_service_id: Some(handling.id), description: "Handling".into(), ..FormLineInput::charge(1, services, 30_000, false) },
                 FormLineInput::subtotal(2),
@@ -496,7 +496,7 @@ async fn a_percent_charge_must_use_a_charge_item() {
     let discounts = discounts_given(&pool).await;
     let promo = crate::sales::create_item(
         &pool,
-        crate::sales::ProductInput { name: "Promo".into(), description: None, rate_cents: 0, income_account_id: discounts, is_taxable: false },
+        crate::sales::ProductInput { name: "Promo".into(), description: None, rate_cents: Cents::ZERO, income_account_id: discounts, is_taxable: false },
         crate::sales::ItemKind::discount(Some(10_000)),
     )
     .await
@@ -519,8 +519,8 @@ async fn a_group_posts_its_items_and_can_print_as_one_line() {
     let pool = test_pool().await;
     let (ar, services) = (account_id(&pool, "1200").await, account_id(&pool, "4100").await);
     let product = |name: &str, rate_cents| crate::sales::ProductInput { name: name.into(), description: None, rate_cents, income_account_id: services, is_taxable: false };
-    let install = crate::sales::create_product(&pool, product("Install", 8_000)).await.unwrap();
-    let cable = crate::sales::create_product(&pool, product("Cable", 1_250)).await.unwrap();
+    let install = crate::sales::create_product(&pool, product("Install", Cents(8_000))).await.unwrap();
+    let cable = crate::sales::create_product(&pool, product("Cable", Cents(1_250))).await.unwrap();
     let kit = save_group(
         &pool,
         None,
@@ -539,7 +539,7 @@ async fn a_group_posts_its_items_and_can_print_as_one_line() {
         .await
         .unwrap_err()
         .contains("ITEM_GROUP_NAME"));
-    assert!(crate::sales::create_product(&pool, product("Install Kit", 1)).await.unwrap_err().contains("ITEM_GROUP_NAME"));
+    assert!(crate::sales::create_product(&pool, product("Install Kit", Cents(1))).await.unwrap_err().contains("ITEM_GROUP_NAME"));
 
     let member = |p: &crate::sales::ProductView, quantity_e4| InvoiceLineInput {
         description: p.name.clone(),
@@ -577,7 +577,7 @@ async fn a_group_holds_items_and_fixed_charges_only() {
     let discounts = discounts_given(&pool).await;
     let promo = crate::sales::create_item(
         &pool,
-        crate::sales::ProductInput { name: "Promo".into(), description: None, rate_cents: 100, income_account_id: discounts, is_taxable: false },
+        crate::sales::ProductInput { name: "Promo".into(), description: None, rate_cents: Cents(100), income_account_id: discounts, is_taxable: false },
         crate::sales::ItemKind::discount(None),
     )
     .await
@@ -685,7 +685,7 @@ async fn taxable_lines_and_taxable_discounts_print_their_t_and_subtotals_do_not(
 async fn a_group_s_tracked_items_go_through_the_stock_guard_each() {
     let pool = test_pool().await;
     let (services, equity) = (account_id(&pool, "4100").await, account_id(&pool, "3000").await);
-    let widget = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: 2_500, income_account_id: services, is_taxable: false })
+    let widget = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: services, is_taxable: false })
         .await
         .unwrap();
     let item = crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: widget.id, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap();
@@ -726,12 +726,12 @@ async fn a_credit_memo_with_a_discount_a_charge_and_a_subtotal_posts_balanced_an
     .unwrap();
     let handling = crate::sales::create_item(
         &pool,
-        crate::sales::ProductInput { name: "Handling 5%".into(), description: None, rate_cents: 0, income_account_id: services, is_taxable: true },
+        crate::sales::ProductInput { name: "Handling 5%".into(), description: None, rate_cents: Cents::ZERO, income_account_id: services, is_taxable: true },
         crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: Some(50_000), expense_account_id: None },
     )
     .await
     .unwrap();
-    let returned = SalesLineInput { product_service_id: None, description: "Returned work".into(), quantity_e4: 10_000, rate_cents: 10_000, income_account_id: services, class_id: None, is_taxable: true, service_date: None };
+    let returned = SalesLineInput { product_service_id: None, description: "Returned work".into(), quantity_e4: 10_000, rate_cents: Cents(10_000), income_account_id: services, class_id: None, is_taxable: true, service_date: None };
     // 100.00 taxable, 5% handling on it (5.00, taxable), a subtotal, then 10% off (taxable).
     let form_lines = vec![
         FormLineInput { product_service_id: Some(handling.id), description: "Handling".into(), ..FormLineInput::charge(1, services, 50_000, true) },
@@ -779,4 +779,16 @@ async fn a_credit_memo_with_a_discount_a_charge_and_a_subtotal_posts_balanced_an
     // Posted form lines are as locked as the credit memo's own lines.
     let err = sqlx::query("UPDATE credit_memo_form_lines SET amount_cents = 0 WHERE credit_memo_id = ?1").bind(memo.id).execute(&pool).await.unwrap_err();
     assert!(err.to_string().contains("CM_IMMUTABLE"), "{err}");
+}
+
+#[test]
+fn product_rates_and_form_line_amounts_are_bare_integers_in_json() {
+    let discount: FormLineInput = serde_json::from_str(r#"{"afterLines":1,"kind":"DISCOUNT","amountCents":500,"accountId":7}"#).unwrap();
+    assert_eq!(discount.amount_cents, Some(Cents(500)));
+    let json = serde_json::to_value(&discount).unwrap();
+    assert_eq!((json["amountCents"].clone(), json["percentPpm"].clone()), (serde_json::json!(500), serde_json::Value::Null), "written back the same way");
+    assert!(serde_json::from_str::<FormLineInput>(r#"{"afterLines":1,"kind":"DISCOUNT","amountCents":5.5}"#).is_err(), "a fractional amount is refused");
+
+    let product: crate::sales::ProductInput = serde_json::from_str(r#"{"name":"Widget","description":null,"rateCents":2500,"incomeAccountId":4}"#).unwrap();
+    assert_eq!(product.rate_cents, Cents(2_500));
 }

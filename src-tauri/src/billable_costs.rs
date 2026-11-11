@@ -17,6 +17,10 @@
 //! may name its own income account (`chart_of_accounts.reimbursement_income_account_id`); the rest
 //! use the one in Preferences.
 //!
+//! The same costs and time can be added from the invoice form (**Add billable costs…**): the form
+//! posts its own lines plus the chosen costs ([`OnInvoice`]), and [`write_invoice_with_costs`]
+//! appends the billing lines worked out here, so both paths bill alike.
+//!
 //! `billed_costs` records which invoice billed each cost; rows are only ever inserted. A cost
 //! whose invoice is voided can be billed again, and an edited invoice or expense carries its
 //! links to the replacement.
@@ -102,11 +106,14 @@ pub struct UnbilledTime {
     pub amount_cents: i64,
     pub customer_id: i64,
     pub customer_name: String,
+    /// The service item is taxable, so the invoice line is (the invoice form's total counts it).
+    pub is_taxable: bool,
 }
 
 const UNBILLED_TIME: &str = "
     SELECT t.id, t.activity_date AS date, m.name AS employee_name, t.product_service_id, p.name AS service_name, NULLIF(t.description, '') AS description,
-           t.minutes, 0 AS hours_e4, t.hourly_rate_cents, 0 AS amount_cents, t.customer_id, c.name AS customer_name
+           t.minutes, 0 AS hours_e4, t.hourly_rate_cents, 0 AS amount_cents, t.customer_id, c.name AS customer_name,
+           COALESCE(p.is_taxable, 0) AS is_taxable
     FROM time_activities t JOIN employees m ON m.id = t.employee_id JOIN customers c ON c.id = t.customer_id
     LEFT JOIN products_services p ON p.id = t.product_service_id
     WHERE t.billable = 1 AND t.hourly_rate_cents IS NOT NULL
@@ -222,17 +229,23 @@ pub fn markup_cents(amount_cents: i64, milli_percent: i64) -> Option<i64> {
     mul_div_round(amount_cents, milli_percent, 100_000)
 }
 
+/// The billing defaults and the markup to use: `markup_text` as typed, or the default when blank.
+pub async fn billing_settings(pool: &SqlitePool, markup_text: Option<&str>) -> Result<(Defaults, i64), String> {
+    let settings = defaults(pool).await?;
+    let markup = match markup_text.map(str::trim).filter(|m| !m.is_empty()) {
+        Some(text) => tax_time::parse_markup(text)?,
+        None => settings.markup_milli_percent,
+    };
+    Ok((settings, markup))
+}
+
 /// Bills costs on a new invoice to their customer or job; the invoice posts and the costs are
 /// marked billed, together or not at all.
 pub async fn bill_costs(pool: &SqlitePool, input: BillCostsInput) -> Result<InvoiceSummary, String> {
     if input.costs.is_empty() && input.time.is_empty() {
         return Err("COST_NOTHING_TO_BILL: choose at least one cost or time entry to bill".into());
     }
-    let settings = defaults(pool).await?;
-    let markup = match input.markup_percent.as_deref().map(str::trim).filter(|m| !m.is_empty()) {
-        Some(text) => tax_time::parse_markup(text)?,
-        None => settings.markup_milli_percent,
-    };
+    let (settings, markup) = billing_settings(pool, input.markup_percent.as_deref()).await?;
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let invoice_id = match write_billing(&mut tx, &input, &settings, markup).await {
         Ok(id) => id,
@@ -249,9 +262,66 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
         .await
         .map_err(db_err)?
         .ok_or("COST_UNKNOWN_CUSTOMER: that customer or job does not exist")?;
+    let invoice = InvoiceInput {
+        invoice_number: None,
+        customer_name: customer,
+        issue_date: input.issue_date,
+        due_date: input.due_date,
+        lines: Vec::new(),
+        currency: None,
+        tax_rate_id: input.tax_rate_id,
+        discount_cents: Cents::ZERO,
+        details: Default::default(),
+    };
+    let chosen = OnInvoice { costs: input.costs.clone(), time: input.time.clone(), markup_percent: None };
+    write_with_billing(tx, &invoice, input.customer_id, &chosen, settings, markup).await
+}
 
-    let mut lines = Vec::with_capacity(input.costs.len() + 1);
-    let mut links = Vec::with_capacity(input.costs.len());
+/// Billable costs and time chosen on the invoice form, added as lines when the invoice saves.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OnInvoice {
+    #[serde(default)]
+    pub costs: Vec<CostRef>,
+    #[serde(default)]
+    pub time: Vec<i64>,
+    /// Percent; left out or blank, the default in Preferences › Time & Expenses.
+    #[serde(default)]
+    pub markup_percent: Option<String>,
+}
+
+impl OnInvoice {
+    pub fn is_empty(&self) -> bool {
+        self.costs.is_empty() && self.time.is_empty()
+    }
+}
+
+/// Writes the invoice on the form with the chosen costs and time added after its own lines, and
+/// marks them billed by it, in the caller's transaction. `settings` and `markup` come from
+/// [`billing_settings`], read before the transaction. Nothing chosen: an ordinary invoice.
+pub(crate) async fn write_invoice_with_costs(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput, chosen: &OnInvoice, settings: &Defaults, markup: i64) -> Result<i64, String> {
+    if chosen.is_empty() {
+        return crate::invoices::write_invoice(tx, input).await;
+    }
+    if input.currency.is_some() {
+        return Err("COST_FOREIGN_INVOICE: billable costs go on invoices in the home currency".into());
+    }
+    let name = crate::sales::job_name(input.customer_name.trim())?;
+    let customer_id: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = ?1 COLLATE NOCASE")
+        .bind(&name)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)?
+        .ok_or("COST_UNKNOWN_CUSTOMER: billable costs belong to a customer or job on your list; choose it on the invoice")?;
+    write_with_billing(tx, input, customer_id, chosen, settings, markup).await
+}
+
+/// The one billing path, for Bill Costs and the invoice form alike: works out a line per cost and
+/// time entry (and the markup line), writes the invoice with them after `input`'s own lines, and
+/// records what it billed.
+async fn write_with_billing(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput, customer_id: i64, chosen: &OnInvoice, settings: &Defaults, markup: i64) -> Result<i64, String> {
+    let mut lines = Vec::with_capacity(chosen.costs.len() + chosen.time.len() + 1);
+    let mut links = Vec::with_capacity(chosen.costs.len());
     let mut reimbursed = Vec::new();
     let mut markup_total = 0i64;
     // Each expense account's own income account for reimbursements, read once for the whole billing.
@@ -262,7 +332,7 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
             .map_err(db_err)?
             .into_iter()
             .collect();
-    for (n, cost) in input.costs.iter().enumerate() {
+    for (n, cost) in chosen.costs.iter().enumerate() {
         let column = match cost.source.as_str() {
             "EXPENSE" => "expense_line_id",
             "BILL" => "bill_line_id",
@@ -283,7 +353,7 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
             (Some(code), Some(amount)) => format!(", {code} {}", crate::export_engine::plain_amount(amount)),
             _ => String::new(),
         };
-        if found.customer_id != input.customer_id {
+        if found.customer_id != customer_id {
             return Err(format!("COST_OTHER_CUSTOMER: the cost dated {} is for a different customer or job", found.date));
         }
         let what = found.memo.clone().unwrap_or_else(|| found.account_name.clone());
@@ -309,13 +379,13 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
         markup_total = markup_total.checked_add(this_markup).ok_or("COST_MARKUP_TOO_LARGE: the markup is out of range")?;
         links.push((column, cost.line_id, found.amount_cents, this_markup));
     }
-    let mut time_links = Vec::with_capacity(input.time.len());
-    for &activity in &input.time {
+    let mut time_links = Vec::with_capacity(chosen.time.len());
+    for &activity in &chosen.time {
         let found: Option<UnbilledTime> = sqlx::query_as(&format!("SELECT * FROM ({UNBILLED_TIME}) WHERE id = ?1")).bind(activity).fetch_optional(&mut **tx).await.map_err(db_err)?;
         let Some(found) = found else {
             return Err("TIME_NOT_BILLABLE: a time entry is not billable, or is already on an invoice".into());
         };
-        if found.customer_id != input.customer_id {
+        if found.customer_id != customer_id {
             return Err(format!("TIME_OTHER_CUSTOMER: the time dated {} is for a different customer or job", found.date));
         }
         let item = found.product_service_id.ok_or_else(|| format!("TIME_NO_ITEM: the time dated {} has no service item; choose one on the timesheet so the invoice knows its income account", found.date))?;
@@ -349,17 +419,13 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
         });
     }
 
-    let invoice = InvoiceInput {
-        invoice_number: None,
-        customer_name: customer,
-        issue_date: input.issue_date,
-        due_date: input.due_date,
-        lines,
-        currency: None,
-        tax_rate_id: input.tax_rate_id,
-        discount_cents: Cents::ZERO,
-        details: Default::default(),
-    };
+    // Only the reimbursement lines may credit an expense account; the form's own lines are refused
+    // there as on any invoice.
+    if let Some(n) = input.lines.iter().position(|l| reimbursed.contains(&l.income_account_id)) {
+        return Err(format!("INV_NOT_INCOME_ACCOUNT: line {} must use an Income account", n + 1));
+    }
+    let mut invoice = input.clone();
+    invoice.lines.extend(lines);
     let invoice_id = crate::invoices::write_invoice_reimbursing(tx, &invoice, &Default::default(), &reimbursed).await?;
     for (activity, amount) in time_links {
         sqlx::query("INSERT INTO billed_time (time_activity_id, invoice_id, amount_cents) VALUES (?1, ?2, ?3)")

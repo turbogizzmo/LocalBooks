@@ -24,7 +24,7 @@ export const screens = {
     guide: 'sales-tax',
   },
   'sales/credits': {
-    help: 'Credit memos give a customer credit to apply to their open invoices or refund later; refund receipts pay money back straight away.',
+    help: 'Credit memos give a customer credit to apply to their open invoices or refund later; refund receipts pay money back straight away. Refunding credit from a bank account can print a check, and a credit memo lists its refunds and write-offs with Print check and Void.',
     guide: 'credit-memos-and-refunds',
   },
   'sales/customers': {
@@ -334,6 +334,14 @@ export const topics = [
     guide: 'getting-started',
   },
   {
+    id: 'invoice-billable-costs', area: 'sales', views: ['sales/invoices', 'sales/bill-costs', 'settings/preferences'],
+    title: 'Add billable costs and time to an invoice',
+    body: 'On a new invoice, choose the customer or job, then click Add billable costs… under the lines. The window lists their unbilled time and costs (checks, expenses, credit-card charges and bills with Bill? ticked), with the markup from Preferences › Time & Expenses: untick what to leave for later and click Add to invoice. They show under the lines in Billable costs and time and count in the balance due; Change… and Remove adjust them. They are marked billed only when the invoice is saved, exactly as Sales › Bill Costs bills them, and voiding the invoice frees them again. Choosing a customer with unbilled costs or time asks whether to add them; turn the question off with "Ask about billable costs and time when I choose a customer" in Preferences › Time & Expenses. Billable costs go on new invoices in the home currency.',
+    keywords: 'add billable costs invoice unbilled expenses time reimbursable credit card charge markup prompt choose billable time costs to add',
+    go: { label: 'Go to Invoices', view: 'sales/invoices' },
+    guide: 'invoices',
+  },
+  {
     id: 'change-prices', area: 'sales', views: ['sales/products'],
     title: 'Change many prices at once',
     body: 'On Sales › Products & Services, click Change prices… and tick the items. Raise or lower them by a percentage or a fixed amount, based on the current price or the unit cost, and round the result; check the new prices, then apply. Documents already written keep their prices, and each change is recorded in the audit trail.',
@@ -361,8 +369,8 @@ export const topics = [
   {
     id: 'sales-tax', area: 'sales', views: ['sales/tax', 'sales/invoices', 'sales/all', 'sales/products', 'sales/customers'],
     title: 'Charge and pay sales tax',
-    body: 'Turn on Charge sales tax under Sales › Sales Tax and add your rates. Sales forms then show a Tax column (filled from each product’s Taxable setting) and a tax rate (the customer’s own, none if they are exempt, or for a customer on Company default the Default rate chosen at the top of Sales › Sales Tax); the tax goes to Sales Tax Payable. Pay sales tax records what you send the agency, and Reports › Sales Tax Liability shows taxable sales and tax owed. Where several agencies tax one sale, add each rate with its agency, then New combined rate… to add them up; a sale at it posts each agency’s share to its own account, and the sales tax return by agency lists each agency’s taxable sales, tax and payments for the period, on accrual or cash. Paying a combined rate splits the payment among its rates by their percentages and pays down each one’s account, so each agency shows its share as paid.',
-    keywords: 'sales tax vat gst tax rate default rate company default taxable exempt pay sales tax liability agency combined rate state county city jurisdiction return filing',
+    body: 'Turn on Charge sales tax under Sales › Sales Tax and add your rates. Sales forms then show a Tax column (filled from each product’s Taxable setting) and a tax rate (the customer’s own, none if they are exempt, or for a customer on Company default the Default rate chosen at the top of Sales › Sales Tax); the tax goes to Sales Tax Payable. Pay sales tax records what you send the agency, and Reports › Sales Tax Liability shows taxable sales and tax owed. Where several agencies tax one sale, add each rate with its agency, then New combined rate… to add them up; a sale at it posts each agency’s share to its own account, and the sales tax return by agency lists each agency’s taxable sales, tax and payments for the period, on accrual or cash. Paying a combined rate splits the payment among its rates by their percentages and pays down each one’s account, so each agency shows its share as paid. Adjust… raises or lowers what is owed on one rate (a timely-filing discount, a penalty, rounding) against an income or expense account; the return shows it under the rate’s agency.',
+    keywords: 'sales tax vat gst tax rate default rate company default taxable exempt pay sales tax adjust sales tax adjustment penalty discount liability agency combined rate state county city jurisdiction return filing',
     go: { label: 'Go to Sales Tax', view: 'sales/tax' },
     guide: 'getting-started',
   },
@@ -385,7 +393,7 @@ export const topics = [
   {
     id: 'statements', area: 'sales', views: ['sales/statements', 'sales/customers', 'sales/invoices'],
     title: 'Send customer statements',
-    body: 'Sales › Customer Statements lists customers with a balance or activity in the period. Click one to preview their statement (balance forward, each invoice, payment and credit, the amount due and its aging), tick several to print them together, or use Print…, Save as PDF… or Email… above the preview to send one. ✉ beside a customer means their statement for this period was emailed; choosing All customers after a group clears the group’s ticks.',
+    body: 'Sales › Customer Statements lists customers with a balance or activity in the period. Click one to preview their statement (balance forward, each invoice, payment, credit, refund, write-off and bounced check, labelled as what it is, the amount due and its aging), tick several to print them together, or use Print…, Save as PDF… or Email… above the preview to send one. ✉ beside a customer means their statement for this period was emailed; choosing All customers after a group clears the group’s ticks.',
     keywords: 'statement customer statement balance forward account summary aging dunning email',
     go: { label: 'Go to Customer Statements', view: 'sales/statements' },
     guide: 'customer-statements',
@@ -408,7 +416,7 @@ export const topics = [
   {
     id: 'recurring', area: 'accounting', views: ['accounting/recurring', 'expenses/expenses', 'expenses/bills', 'sales/invoices', 'accounting/journal'],
     title: 'Memorize a recurring transaction',
-    body: 'Fill in an expense, check, bill, invoice or journal entry and choose Memorize… to save it with a schedule. Accounting › Recurring Transactions enters everything that is due in one step; a reminder appears at the top of the window when something is due. A monthly, quarterly or yearly schedule keeps to the day of the month it started on: from the 31st it falls on the last day of shorter months (February 28) and goes back to the 31st after them.',
+    body: 'Fill in an expense, check, bill, invoice or journal entry and choose Memorize… to save it with a schedule. Accounting › Recurring Transactions enters everything that is due in one step; a reminder appears at the top of the window when something is due. A copy that can’t be entered (dated in a closed period, say) is listed and stays due while the others are entered. Edit schedule… changes a memorized transaction’s name and schedule, and Edit transaction… reopens its form to change its lines, amounts and accounts; copies already entered stay as they are. A monthly, quarterly or yearly schedule keeps to the day of the month it started on: from the 31st it falls on the last day of shorter months (February 28) and goes back to the 31st after them.',
     keywords: 'recurring memorize memorized repeat schedule subscription rent monthly automatic',
     go: { label: 'Go to Recurring Transactions', view: 'accounting/recurring' },
     guide: 'memorized-transactions',

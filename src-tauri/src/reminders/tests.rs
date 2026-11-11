@@ -252,7 +252,7 @@ async fn items_at_or_below_their_reorder_point_are_listed_to_reorder() {
     let equity: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'EQUITY' ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
     let mut items = Vec::new();
     for (name, on_hand, reorder) in [("Bolts", 4, Some(5)), ("Nuts", 5, Some(5)), ("Washers", 9, Some(5)), ("Rivets", 1, None)] {
-        let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: name.into(), description: None, rate_cents: 100, income_account_id: sales, is_taxable: false })
+        let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: name.into(), description: None, rate_cents: Cents(100), income_account_id: sales, is_taxable: false })
             .await
             .unwrap()
             .id;

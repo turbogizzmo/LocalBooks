@@ -34,7 +34,10 @@ pub async fn inspect_company_file(source_path: String) -> Result<CompanyFileInfo
 #[tauri::command]
 pub async fn import_company_file(app_handle: AppHandle, source_path: String) -> Result<RestoreResult, String> {
     let db = app_handle.state::<Db>();
-    let result = backup::restore(&db, &PathBuf::from(source_path)).await?;
+    let source = PathBuf::from(source_path);
+    // The window shows Opening <the backup>… meanwhile, and no other open runs (gap R28).
+    let _turn = crate::opening::begin(&app_handle, &source, None).await?;
+    let result = backup::restore(&db, &source).await?;
     company_changed(&app_handle).await;
     notify(&app_handle);
     Ok(result)

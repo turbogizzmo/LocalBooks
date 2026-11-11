@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 use serde_json::json;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
@@ -29,7 +30,7 @@ async fn shop() -> Shop {
     let sales = account(&pool, "4000").await;
     let product = crate::sales::create_product(
         &pool,
-        crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: 2_500, income_account_id: sales, is_taxable: true },
+        crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: true },
     )
     .await
     .unwrap()

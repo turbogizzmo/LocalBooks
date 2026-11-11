@@ -110,6 +110,12 @@ export function TimeExpensesCompany({ field, accounts }) {
         {field({ label: 'Reimbursement income', prefKey: 'reimbursed_income_account_id', hint: 'Used when reimbursed expenses count as income', children: incomeAccount(accounts, 'Choose an income account') })}
         {field({ label: 'Default markup', prefKey: 'billable_markup_percent', hint: 'Percent added to billed costs; Bill Costs can change it each time', children: percent })}
         {field({ label: 'Markup account', prefKey: 'billable_markup_account_id', hint: 'The income account the markup is credited to', children: incomeAccount(accounts, 'Choose an income account') })}
+        {field({
+          label: 'On invoices',
+          prefKey: 'billable_prompt_on_invoice',
+          hint: 'A new invoice offers the chosen customer’s or job’s unbilled costs and time. Add billable costs… on the invoice works either way.',
+          children: flag('Ask about billable costs and time when I choose a customer'),
+        })}
       </Group>
     </>
   );

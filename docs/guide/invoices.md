@@ -79,6 +79,34 @@ payment is an ordinary one: it shows in **Receive Payments** and on the customer
 **Payment received** is offered on new home-currency invoices; to take a payment on an invoice in
 another currency, from an estimate or after saving, use **Receive Payments**.
 
+### Add billable costs and time
+
+Costs you paid for a customer and mean to charge back to them (a check, expense, credit-card
+charge or bill line with a **Customer:Job** and **Bill?** ticked), and billable hours from the
+timesheet, can go on the invoice you are writing:
+
+1. Choose the customer or job in **Customer**. If they have costs or time not yet invoiced,
+   LocalBooks asks whether to add them; click **Add billable costs…**, or **Not now** to carry on
+   without them.
+2. At any time, click **Add billable costs…** under the lines. The window lists the customer's or
+   job's unbilled time and costs, all ticked, with the markup from **Preferences › Time &
+   Expenses**. Untick what you don't want to bill yet, change **Markup %** if you need to, and
+   click **Add to invoice**.
+3. The chosen costs and time appear under the lines in **Billable costs and time**, and **Balance
+   due** includes them: one line per cost, one per time entry (at its hours and rate, taxable as its
+   service item is), and one **Markup** line. **Change…** opens the window again; **Remove** takes
+   them all off.
+4. Save the invoice. The costs and time are marked billed only then, together with the invoice, so
+   they leave **Sales › Bill Costs** and can't be billed twice. Voiding the invoice makes them
+   billable again.
+
+They are billed exactly as **Sales › Bill Costs** bills them: each cost credits its expense account
+back (or an income account, when reimbursed expenses count as income) and the markup goes to the
+markup account. Billable costs go on a new invoice in your home currency, for the customer or job
+they were for; choosing another customer takes them off. To stop the question in step 1, untick
+**Ask about billable costs and time when I choose a customer** in **Preferences › Time & Expenses ›
+Company Preferences**; the button stays.
+
 ### Service dates and the template
 
 - **Service Date**: click **Service dates** beside the Description heading of an invoice or sales

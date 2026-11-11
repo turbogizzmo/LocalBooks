@@ -54,8 +54,8 @@ pub mod keyring {
 /// What opening an encrypted file needs and its key couldn't be found: the file isn't unlocked here.
 pub const LOCKED: &str = "FILE_ENCRYPTED_LOCKED: this file is encrypted; open it with File › Open Company File and sign in to it";
 
-/// Connection options for the company file (or copy) at `path`: plain SQLite as always for a plain
-/// file; for an encrypted one, through the VFS with its key from the [`keyring`] (an error if it
+/// Connection options for the company file (or copy) at `path`: for a plain file, plain SQLite
+/// through the VFS (which passes it through and checks its log as SQLite opens it, gap R24); for an encrypted one, through the VFS with its key from the [`keyring`] (an error if it
 /// isn't unlocked in this process), together with its file id and key.
 ///
 /// Reads the key header by path, so only for a file no connection in this process has open (a
@@ -63,7 +63,8 @@ pub const LOCKED: &str = "FILE_ENCRYPTED_LOCKED: this file is encrypted; open it
 #[allow(clippy::type_complexity)]
 pub fn options_for(path: &Path) -> Result<(SqliteConnectOptions, Option<(String, std::sync::Arc<keys::PageKey>)>), String> {
     if !header::is_encrypted(path) {
-        return Ok((SqliteConnectOptions::new().filename(path), None));
+        // Through the VFS too, which checks the file's log as SQLite opens it (gap R24).
+        return Ok((open_options(path, None)?, None));
     }
     let file_id = header::read(path)?.file_id;
     let key = keyring::get(&file_id).ok_or_else(|| LOCKED.to_string())?;

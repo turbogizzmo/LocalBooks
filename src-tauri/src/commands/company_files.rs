@@ -2,6 +2,7 @@
 
 use super::prelude::*;
 use crate::company_setup::{self, CompanySetup, SetupOptions, StarterAccount};
+use crate::opening;
 
 handlers![
     get_storage_status,
@@ -74,6 +75,8 @@ pub async fn inspect_database_directory(new_path: String) -> Result<DirectoryIns
 pub async fn update_database_directory(app: AppHandle, db: State<'_, Db>, new_path: String, mode: Option<String>) -> Result<StorageStatus, String> {
     let dir = storage::resolve_network_path(&PathBuf::from(new_path));
     let mode = RelocateMode::parse(mode.as_deref(), dir.join(storage::DB_FILE_NAME).is_file())?;
+    let target = dir.join(storage::DB_FILE_NAME);
+    let _turn = opening::begin(&app, &target, opening::recent_name(db.config_dir(), &target)).await?;
     let status = db.relocate(&dir, mode).await?;
     company_changed(&app).await;
     notify(&app);
@@ -126,6 +129,8 @@ pub async fn open_window(app: AppHandle, view: Option<String>, action: Option<St
 /// Alt is held, so a page that fails to load does not come back (the page that asked lands on a
 /// plain home page; see `CompanyFiles.jsx`).
 pub async fn mount_company_file(app: &AppHandle, path: &Path, windowless: bool) -> Result<StorageStatus, String> {
+    // One open at a time (gap R28): a file handed over during a slow launch waits for it.
+    let _turn = opening::begin(app, path, opening::recent_name(app.state::<Db>().config_dir(), path)).await?;
     windows::save_on_close(app).await;
     let status = app.state::<Db>().mount(path).await?;
     windows::close_extra(app);
@@ -215,6 +220,7 @@ fn with_company_extension(path: PathBuf) -> PathBuf {
 #[tauri::command]
 pub async fn create_company_file(app: AppHandle, path: String, company_name: String, setup: Option<CompanySetup>) -> Result<StorageStatus, String> {
     let path = with_company_extension(PathBuf::from(path));
+    let _turn = opening::begin(&app, &path, Some(company_name.clone())).await?;
     let status = app.state::<Db>().create(&path, &company_name, setup.as_ref()).await?;
     company_changed(&app).await;
     let _ = app.emit(COMPANY_FILE_CHANGED, ());
@@ -260,6 +266,8 @@ pub async fn restore_backup_as(app: AppHandle, source_path: String, destination_
 /// screen.
 pub async fn close_company(app: &AppHandle) -> Result<(), String> {
     let db = app.try_state::<Db>().ok_or_else(|| NO_COMPANY_OPEN.to_string())?;
+    // Never halfway through an open (gap R28). Closing says nothing on screen: no name is opening.
+    let _turn = app.state::<crate::opening::Opening>().wait_turn().await;
     windows::save_on_close(app).await;
     windows::close_extra(app);
     db.close().await;

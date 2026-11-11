@@ -6,6 +6,61 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Safer opening of company files from others.** The check that refuses a company file with a
+  mismatched log file next to it now also runs at the moment the file is opened, so the log can't
+  be swapped in between.
+- **Two-step sign-in (optional).** An Admin can turn on two-step sign-in in Settings › Users &
+  Passwords, for anyone who wants it or required for Admins and External Accountants or for
+  everyone. It's off unless you turn it on. Users with it sign in with their password and a 6-digit
+  code from an authenticator app on their phone, and get ten one-time backup codes for a lost phone.
+  An Admin can reset it for a user, and the recovery key still gets the only Admin back in.
+- **Closing Date Exceptions no longer misses an entry made at almost the same moment as a close.**
+  The report now orders entries and changes to the closing date by when they were recorded in the
+  books, not by clock time, which on Windows only advances every few milliseconds.
+- **Sales tax adjustments.** Adjust… on Sales › Sales Tax raises or lowers what is owed on a rate,
+  for example a discount for filing on time, a penalty or a rounding difference, against an income
+  or expense account. The sales tax return shows it under the rate's agency. Before, this took a
+  journal entry, which changed what was owed but not the return.
+- **Email and design purchase orders.** A saved purchase order now prints, saves as PDF and emails
+  to the vendor like the other forms, with Email later too. It shows the vendor's address and
+  each line's Customer:Job and Class, and its look is set in Settings › Custom Forms › Purchase
+  order. File › Print Forms › Purchase Orders uses the same design.
+- **Edit and delete purchase orders.** An open purchase order can be changed with Edit… (from its
+  row or the saved order) and keeps its number. Delete removes one nothing was received or billed
+  against. Neither changes the books, as a purchase order posts nothing.
+- **Change what a memorized transaction enters.** Edit transaction… on Recurring Transactions
+  reopens the memorized check, expense, bill, invoice or journal entry in its form. Change its
+  lines, amounts or accounts and save, and the copies entered from then on use the changes.
+  Copies already entered stay as they were. Edit schedule… still changes the name and timing.
+- **Edit memorized transactions.** Recurring Transactions has Edit… to change a memorized
+  transaction's name, how often it repeats, its next date and its end date.
+- **Enter all due enters what it can.** A copy that can't be entered, such as one dated in a
+  closed period, is listed with the reason and stays due, and the others are entered. Before,
+  one such copy stopped all of them.
+- **Refund checks and a credit's refunds.** Refunding a customer's credit from a bank account can
+  print a check, with the next check number filled in. A credit memo now lists the refunds and
+  write-offs taken from it, each with Print check (for a refund paid by check) and Void, which
+  gives the credit back.
+- **Statements say what each line is.** Customer statements now label credit write-offs,
+  bounced checks and other journal entries as what they are, show a refund with its check
+  number, and show an overpayment kept as credit as a Payment with its reference. Before, every
+  such line read "Refund", and an overpayment showed as "Credit Memo #N".
+- **Credit memo numbers don't skip.** An overpayment kept as credit no longer takes the next credit
+  memo number, so credit memos number 1, 2, 3 in a row. Registers and custom reports show such a
+  payment by its reference.
+- **Item groups come in from company files.** Bringing in a company file's lists now adds its item
+  groups as LocalBooks groups, with their items in order, their quantities, and whether printed
+  forms list the items.
+- **Inventory adjustments come in from company files.** Some files had lost part of the
+  description of their inventory adjustment lines, so none of the adjustments were read and
+  Inventory Asset and Cost of Goods Sold came out wrong. LocalBooks now reads those lines, and the
+  cost of inventory recorded on bills comes in too.
+- **No more blank window while a company opens.** When LocalBooks starts, or opens a company from
+  the File menu, the recent list or a backup, the window now says *Opening <company>…* and what it's
+  doing, such as saving a copy before updating the file. Before, it stayed blank until the file was
+  open. A file double-clicked while another is still opening waits its turn.
+- **Diagnostics say why starting was slow.** The log in Help › Save Diagnostics now records how
+  long LocalBooks took to start and which steps were slow, such as opening the company file.
 - **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
   "Company default" start at it on new sales forms. Before, once a company had two or more rates,
   those customers got no tax unless someone picked a rate on each form.
@@ -41,7 +96,6 @@ people using LocalBooks.
   marked every period as sent. Statements emailed before this update show no mark.
 - Choosing **All customers** after a customer group clears the group's ticks, so Print no longer
   prints only that group.
-## [0.14.1]
 - **Help for every screen, setting and menu command.** F1 now explains every page in the sidebar,
   including Approvals, Payout Feeds, the Attachments Library, Reps, Ship Via & Fields and each
   Settings tab. New step-by-step guides cover credit memos and refunds, customer statements,
@@ -56,21 +110,11 @@ people using LocalBooks.
 - **Clearer fiscal years for new budgets.** New budget… lists each fiscal year by its months (for
   example "Jul 2026 – Jun 2027") and marks the current one. Before, a bare year could create the
   budget for the wrong fiscal year when it doesn't start in January.
-
-## [0.14.0]
-
-- **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a
-  state rate plus a city rate, say) now splits the payment among its rates, in proportion to their
-  percentages, and pays down each rate's own liability account in one entry. The sales tax return
-  lists the payment under each agency instead of "No agency". A payment for a combined rate
-  recorded in 0.14.0 went entirely to its first rate's account; the return now lists it under that
-  rate's agency. To spread it across the agencies, void it and record it again.
-- **Duplicating a credit memo keeps its discounts.** Duplicate on a credit memo or refund receipt
-  now copies its subtotals, discount lines, percentage charges and groups, so the copy credits the
-  same amount as the original. Before, the copy left them out and credited the full amount of the
-  item lines.
-- **Diagnostics say why starting was slow.** The log in Help › Save Diagnostics now records how
-  long LocalBooks took to start and which steps were slow, such as opening the company file.
+- **Billable costs from the invoice.** The invoice form has **Add billable costs…**: it lists the
+  customer's or job's unbilled time and costs, including credit-card charges marked Bill?, with the
+  same markup and rules as Sales › Bill Costs, and adds the ones you pick as lines. They are marked
+  billed when the invoice is saved. Choosing a customer with unbilled costs or time on a new
+  invoice asks whether to add them; Preferences › Time & Expenses can turn the question off.
 - **No more surprise customers and vendors.** A name typed on a form that isn't on your list is no
   longer added silently when you save. LocalBooks stops and asks "*name* isn't on your customer
   list." with **Quick add**, **Set up…** (add it and open its record) and **Cancel** (back to the
@@ -85,14 +129,28 @@ people using LocalBooks.
 - **An edited invoice keeps its number.** Saving changes to a posted invoice used to post the
   corrected invoice under a new number; it now keeps the original's number, so customers,
   statements, payments and reports go on showing the same one.
-
-## [0.14.0]
 - **Encrypt the whole company file.** An Admin can now encrypt the whole company file, its
   attachments and every backup made from it (Settings › Users & Passwords). It is off unless you turn
   it on. With it on, a copy that leaves your computer shows nothing readable without a password or
   the recovery key, the file opens on the sign-in screen, and signing out closes it again. **Read the
   warning first:** if every Admin forgets their password and the recovery key is lost, nobody can
   open those books or their backups.
+
+## [0.14.1]
+
+- **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a
+  state rate plus a city rate, say) now splits the payment among its rates, in proportion to their
+  percentages, and pays down each rate's own liability account in one entry. The sales tax return
+  lists the payment under each agency instead of "No agency". A payment for a combined rate
+  recorded in 0.14.0 went entirely to its first rate's account; the return now lists it under that
+  rate's agency. To spread it across the agencies, void it and record it again.
+- **Duplicating a credit memo keeps its discounts.** Duplicate on a credit memo or refund receipt
+  now copies its subtotals, discount lines, percentage charges and groups, so the copy credits the
+  same amount as the original. Before, the copy left them out and credited the full amount of the
+  item lines.
+
+## [0.14.0]
+
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
   job carries over to the bill, and Open Purchase Orders by Job lists what is still on order for
   each job.

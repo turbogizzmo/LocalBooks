@@ -193,7 +193,10 @@ pub struct ReturnLine {
     pub name: String,
     pub rate_ppm: i64,
     pub taxable_sales_cents: i64,
+    /// Tax collected on the rate's sales, plus its adjustments.
     pub tax_cents: i64,
+    /// The period's sales tax adjustments on this rate (positive raises what is owed).
+    pub adjustment_cents: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -203,6 +206,7 @@ pub struct AgencyReturn {
     /// The agency's name, or "No agency" for rates without one.
     pub agency_name: String,
     pub lines: Vec<ReturnLine>,
+    /// Tax collected, plus the period's sales tax adjustments (`adjustments.rs`).
     pub tax_cents: i64,
     /// Sales tax paid to this agency in the period.
     pub paid_cents: i64,
@@ -292,8 +296,12 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
         mul_div_round(amount, counted, total).ok_or_else(overflow)
     };
 
-    // Per rate (component): taxable sales and tax.
+    // Per rate (component): taxable sales, tax and adjustments.
     let mut sums: std::collections::BTreeMap<i64, (i64, i64)> = std::collections::BTreeMap::new();
+    let adjustments: std::collections::BTreeMap<i64, i64> = super::adjustments::adjustments_by_rate(pool, start, end).await?.into_iter().collect();
+    for rate_id in adjustments.keys() {
+        sums.entry(*rate_id).or_default();
+    }
     for (entry, rate_id, sign, tax, taxable, total, counted, other, discount) in docs {
         if counted == 0 {
             continue;
@@ -320,9 +328,11 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
                 agencies.len() - 1
             }
         };
+        let adjusted = adjustments.get(&rate_id).copied().unwrap_or(0);
+        let tax = tax.checked_add(adjusted).ok_or_else(overflow)?;
         let a = &mut agencies[at];
         a.tax_cents = a.tax_cents.checked_add(tax).ok_or_else(overflow)?;
-        a.lines.push(ReturnLine { tax_rate_id: rate_id, name, rate_ppm: ppm, taxable_sales_cents: taxable, tax_cents: tax });
+        a.lines.push(ReturnLine { tax_rate_id: rate_id, name, rate_ppm: ppm, taxable_sales_cents: taxable, tax_cents: tax, adjustment_cents: adjusted });
     }
 
     // Payments in the period, by agency: a combined rate's payment by each part's rate. One made

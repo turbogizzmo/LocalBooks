@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::inventory::{list_items, track_product, TrackInput};
+use crate::money::Cents;
 use serde_json::json;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
@@ -30,7 +31,7 @@ struct Shop {
 async fn shop() -> Shop {
     let pool = test_pool().await;
     let sales = account(&pool, "4000").await;
-    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: 2_500, income_account_id: sales, is_taxable: false })
+    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false })
         .await
         .unwrap()
         .id;
@@ -338,4 +339,26 @@ async fn a_fixed_discount_goes_after_the_receipt_line_that_can_take_it() {
     assert_eq!(carried.iter().map(|f| (f.after_line, f.amount_cents)).collect::<Vec<_>>(), [(2, 2_500)]);
     let total: i64 = sqlx::query_scalar("SELECT total_cents FROM bills WHERE id = ?1").bind(bill).fetch_one(&s.pool).await.unwrap();
     assert_eq!(total, 10_000 - 2_500);
+}
+
+#[tokio::test]
+async fn an_order_received_against_cant_be_edited_or_deleted_even_once_the_receipt_is_voided() {
+    let s = shop().await;
+    let (po, lines) = order(&s).await;
+    let r = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 4)])).await.unwrap();
+    let edit = |pool: SqlitePool| async move {
+        let input: crate::workflows::PurchaseOrderInput = serde_json::from_value(json!({
+            "vendorName": "Supplier", "poDate": "2026-04-01", "memo": null,
+            "lines": [{ "accountId": 1, "description": "Changed", "amountCents": 500 }]
+        }))
+        .unwrap();
+        crate::workflows::update_purchase_order(&pool, po, input).await
+    };
+    assert!(edit(s.pool.clone()).await.unwrap_err().starts_with("PO_HAS_RECEIPTS"));
+    // Voided, the receipt still points at the order's lines: a clear refusal, not a database error.
+    crate::ledger::void_transaction(&s.pool, r.journal_entry_id).await.unwrap();
+    let err = edit(s.pool.clone()).await.unwrap_err();
+    assert!(err.starts_with("PO_HAS_RECEIPTS"), "{err}");
+    let err = crate::workflows::delete_purchase_order(&s.pool, po).await.unwrap_err();
+    assert!(err.starts_with("PO_HAS_RECEIPTS"), "{err}");
 }

@@ -133,3 +133,60 @@ fn percentages_read_as_parts_per_million() {
     assert_eq!(Value::Float(10.0).as_percent_ppm(), None);
     assert_eq!(Value::Null.as_percent_ppm(), None);
 }
+
+fn column(id: u32, name: &str, domain: u16, nullable: bool, width: u32) -> Column {
+    Column { id, name: name.into(), domain, nullable, width }
+}
+
+/// A row in synthetic form: 3 header bytes, the null bitmap, then the stored values.
+fn synthetic_row(bitmap: u8, values: &[&[u8]]) -> Vec<u8> {
+    let mut row = vec![0, 0, 0, bitmap];
+    for v in values {
+        row.extend_from_slice(v);
+    }
+    row
+}
+
+/// A catalog that lost a column's definition gets a placeholder in its place, and rows that store
+/// the column still read: the walk tries the column as not stored, then as each likely type.
+#[test]
+fn rows_read_when_the_catalog_lost_a_column() {
+    let mut cols = vec![
+        column(4, "amount_amt", 3, true, 20),
+        column(1, "target_id", 2, false, 4),
+        column(3, "account_id", 2, true, 4),
+    ];
+    fill_missing_columns(&mut cols);
+    assert_eq!(cols.iter().map(|c| (c.id, c.domain)).collect::<Vec<_>>(), [(1, 2), (2, MISSING_DOMAIN), (3, 2), (4, 3)]);
+    assert_eq!(cols[1].name, "column_2");
+    // A damaged definition with a wild id is not a run of lost columns: nothing is filled in.
+    let mut wild = vec![column(1, "target_id", 2, false, 4), column(4_000_000_000, "garbled", 2, true, 4)];
+    fill_missing_columns(&mut wild);
+    assert_eq!(wild.len(), 2);
+
+    // $720.00: two base-100 digits (20, 7), exponent 0, positive.
+    let amount: &[u8] = &[2, 0x40, 20, 7];
+    // The row stores column 2 (a nullable id, 41998): three nullable columns, all present.
+    let stored = synthetic_row(0b1110_0000, &[&41_997u32.to_le_bytes(), &41_998u32.to_le_bytes(), &30u32.to_le_bytes(), amount]);
+    let row = Row { values: walk_row(&stored, &cols).expect("reads with the missing column guessed") };
+    assert_eq!(row.get("target_id"), &Value::Int(41_997));
+    assert_eq!(row.get("column_2"), &Value::Int(41_998));
+    assert_eq!(row.get("account_id"), &Value::Int(30));
+    assert_eq!(row.get("amount_amt").as_cents(), Some(72_000));
+
+    // A row that does not store column 2 (it was dropped) reads as it always did.
+    let without = synthetic_row(0b1100_0000, &[&41_997u32.to_le_bytes(), &30u32.to_le_bytes(), amount]);
+    let row = Row { values: walk_row(&without, &cols).expect("reads without the column") };
+    assert_eq!((row.get("account_id"), row.get("column_2")), (&Value::Int(30), &Value::Null));
+    assert_eq!(row.get("amount_amt").as_cents(), Some(72_000));
+
+    // The leading columns of a damaged row read as if the lost column were not stored, as they
+    // always did, so a row that never had it still gives its account.
+    let (prefix, _) = walk_prefix(&without[..without.len() - 1], &cols);
+    assert_eq!(prefix.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["target_id", "account_id"]);
+
+    // A garbled id 0 is not one of the ids from 1 up: the gap at 2 is still filled.
+    let mut zero = vec![column(0, "garbled", 2, true, 4), column(1, "target_id", 2, false, 4), column(3, "account_id", 2, true, 4)];
+    fill_missing_columns(&mut zero);
+    assert!(zero.iter().any(|c| c.id == 2 && c.domain == MISSING_DOMAIN));
+}

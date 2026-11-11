@@ -49,7 +49,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     let materials = new_account(p, "5100", "Job Materials", "COST_OF_GOODS_SOLD").await;
     let rental = new_account(p, "5200", "Equipment Rental", "COST_OF_GOODS_SOLD").await;
 
-    let product = |name: &str, rate: i64, income: i64| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: rate, income_account_id: income, is_taxable: false };
+    let product = |name: &str, rate: i64, income: i64| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: Cents(rate), income_account_id: income, is_taxable: false };
     let labor = crate::sales::create_product(p, product("Framing Labor", 8_500, services)).await.expect("product").id;
     let survey = crate::sales::create_product(p, product("Site Survey", 60_000, services)).await.expect("product").id;
     let oak = crate::sales::create_product(p, product("Oak Panels", 30_000, sales)).await.expect("product").id;
@@ -63,7 +63,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
         product_service_id: Some(item),
         description: description.into(),
         quantity_e4: qty * 10_000,
-        rate_cents: rate,
+        rate_cents: Cents(rate),
         income_account_id: income,
         class_id: None,
         is_taxable: false, service_date: None,
@@ -71,7 +71,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     let invoice_line = |l: SalesLineInput| InvoiceLineInput {
         description: l.description,
         quantity_e4: l.quantity_e4,
-        rate_cents: Cents(l.rate_cents),
+        rate_cents: l.rate_cents,
         income_account_id: l.income_account_id,
         product_service_id: l.product_service_id,
         class_id: None,
@@ -118,7 +118,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     };
     let lakeview_estimate = crate::estimates::create_estimate(
         p,
-        estimate(LAKEVIEW, d(2025, 10, 5), vec![sale(labor, "Framing", 40, 8_500, services), sale(oak, "Oak panels", 10, 30_000, sales), sale(survey, "Survey", 1, 60_000, services)], 0),
+        estimate(LAKEVIEW, d(2025, 10, 5), vec![sale(labor, "Framing", 40, 8_500, services), sale(oak, "Oak panels", 10, 30_000, sales), sale(survey, "Survey", 1, 60_000, services)], Cents::ZERO),
     )
     .await
     .expect("estimate")
@@ -126,7 +126,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     crate::estimates::convert_to_invoice(p, lakeview_estimate, d(2025, 10, 20), d(2025, 11, 19)).await.expect("convert");
 
     // Maple St: estimate $5,700 less a $200 discount, still pending; billed for 30 hours so far.
-    crate::estimates::create_estimate(p, estimate(MAPLE, d(2025, 11, 1), vec![sale(labor, "Framing", 60, 8_500, services), sale(survey, "Survey", 1, 60_000, services)], 20_000))
+    crate::estimates::create_estimate(p, estimate(MAPLE, d(2025, 11, 1), vec![sale(labor, "Framing", 60, 8_500, services), sale(survey, "Survey", 1, 60_000, services)], Cents(20_000)))
         .await
         .expect("estimate");
     let invoice = |name: &str, date, lines: Vec<SalesLineInput>| InvoiceInput {
@@ -211,7 +211,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
             memo: None,
             lines: vec![sale(oak, "Oak panels", 2, 30_000, sales)],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )

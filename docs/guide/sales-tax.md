@@ -37,6 +37,15 @@ tax on for you and adds a **Sales Tax Payable** account. You still add your rate
 
 The **Tax rates** list shows each rate's name, percentage, agency and whether it's **Active**.
 
+### Choose the default rate
+
+**Default rate**, at the top of **Sales › Sales Tax**, is the rate for customers whose **Default
+sales tax** is **Company default**: their new sales forms start with it (see [Choose the rate on a
+sale](#choose-the-rate-on-a-sale)). Choose your most common rate there, which can be a combined
+rate. Leave it on **None (the only rate, if just one)** and those customers start with the
+company's only active rate when there is just one, or with no rate once there are two or more. A
+default rate you make inactive stops being used until you make it active again or choose another.
+
 ### Change or retire a rate
 
 - **Change a rate:** double-click it, or choose **Edit…** in its row menu, change it and click
@@ -131,7 +140,7 @@ the two dates to look at another period.
 
 For each rate it shows:
 
-- **Taxable sales** and **Non-taxable** sales in the period.
+- **Taxable sales** and **Non-taxable** sales in the period, after the forms' discounts.
 - **Tax** on those sales.
 
 Sales with no rate count as non-taxable, under **No tax rate**, whatever their lines say. Below the
@@ -162,13 +171,16 @@ agency's return. It uses the same dates as the liability above it.
    starts on the basis set in Preferences; changing it here changes only this table.
 3. Read each agency's block:
    - The agency's name with its **Tax** for the period and what you **Paid** it in the period.
-   - Under it, each of its rates with **Taxable sales** and **Tax**.
+   - Under it, each of its rates with **Taxable sales** and **Tax**. Taxable sales are after the
+     form's discounts (discount lines and a discount off the whole form), the same as on the
+     liability report.
 
 A sale at a combined rate shows under every agency in it, each with its own share of the tax. Rates
 without an agency are under **No agency**. **All agencies** at the bottom adds them up.
 
-A payment counts for the agency of the rate it was recorded for. A payment recorded for **All
-rates** counts under **No agency**.
+A payment counts for the agency of the rate it was recorded for; a payment for a combined rate
+counts for each of its agencies, by their shares (see [Pay sales tax](#pay-sales-tax)). A payment
+recorded for **All rates** counts under **No agency**.
 
 ## Pay sales tax
 
@@ -204,18 +216,22 @@ greyed, and no longer counts as paid (see [Undo a transaction
 
 ## Adjust what you owe
 
-LocalBooks has no separate sales tax adjustment form. When what you owe the agency differs from what
-LocalBooks built up (a discount for filing on time, a penalty, or a rounding difference), record it
-with a journal entry to the liability account (see [Post a manual journal
-entry](journal-entries-and-voids.md#post-a-manual-journal-entry)):
+When what you owe the agency differs from what LocalBooks built up (a discount for filing on time,
+a penalty or interest, or a rounding difference), record a sales tax adjustment:
 
-- **You owe less** (for example a timely-filing discount): Dr the sales tax liability account, Cr an
-  income account.
-- **You owe more** (for example a penalty or interest): Dr an expense account, Cr the sales tax
-  liability account. Then pay it with **Pay sales tax**.
+1. On **Sales › Sales Tax**, click **Adjust…** next to **Pay sales tax**.
+2. Choose the **Rate**, the **Adjustment date**, the **Amount**, and **Reduce sales tax owed** or
+   **Increase sales tax owed**.
+3. Choose the account on the other side: an income account for a reduction (such as a
+   timely-filing discount), an expense account for an increase (such as penalties).
+4. Add a **Memo** if you like, then click **Record adjustment**.
 
-The adjustment changes **Owed as of** on the liability, which reads the account's balance. It doesn't
-change the taxable sales or tax on the liability or the return, and it isn't counted as **Paid**.
+A reduction posts Dr the rate's liability account / Cr the income account; an increase posts Dr
+the expense account / Cr the liability account (pay it with **Pay sales tax**). The adjustment
+changes **Owed as of**, and the [sales tax return](#file-the-sales-tax-return-by-agency) adds it to
+the rate's tax under its agency for the period it is dated in, marked *adj.* A combined rate is
+adjusted one part at a time, so each agency's figure is right. Adjustments are listed under
+**Adjustments** on the Sales Tax screen; choose **Void** in a row's **▾** menu to undo one.
 
 To correct the tax on one sale, edit or void that invoice, sales receipt or credit memo instead.
 

@@ -64,6 +64,13 @@ export const topics = [
     guide: 'troubleshooting',
   },
   {
+    id: 'opening-company', area: 'company', views: ['settings/diagnostics'],
+    title: 'When LocalBooks says “Opening <company>…”',
+    body: 'While a company file opens (when LocalBooks starts, or with File › Open, the recent list, Restore or New Company), the window names the company and what it is doing. It takes longer the first time a new version opens the file: LocalBooks saves a copy of the file as it was, then updates it. A network or synced folder, or an antivirus check, can slow it too. Let it finish; then the company, the sign-in screen, or the reason it could not open appears.',
+    keywords: 'opening slow startup blank window loading upgrade update company file waiting',
+    guide: 'troubleshooting',
+  },
+  {
     id: 'save-diagnostics', area: 'company', views: ['settings/diagnostics', 'settings/updates'],
     title: 'Save diagnostics for whoever is helping you',
     body: 'Help › Save Diagnostics… (or Settings › Diagnostics) saves a zip file where you choose: LocalBooks’ version, your operating system, the company file’s size, schema version and integrity check, how many rows each table has, and LocalBooks’ log of when it started, stopped, which file it opened and any crash. It holds no customers, vendors or amounts, and LocalBooks never sends it anywhere. Show what’s in it lets you read it first.',
@@ -168,7 +175,7 @@ export const topics = [
   {
     id: 'safeguards-rule', area: 'company', views: ['settings/users'],
     title: 'The FTC Safeguards Rule and LocalBooks',
-    body: 'Tax preparers and many bookkeepers must keep a written security program under the FTC Safeguards Rule. The step-by-step guide goes through each duty and says what LocalBooks does (users and roles, encrypted tax IDs and bank details, encrypted offsite backups, the hash-chained audit trail) and what stays your job: multi-factor sign-in, which LocalBooks does not have, full-disk encryption for the rest of the company file and its backups, training, testing and breach notices. It is a map, not legal advice.',
+    body: 'Tax preparers and many bookkeepers must keep a written security program under the FTC Safeguards Rule. The step-by-step guide goes through each duty and says what LocalBooks does (users and roles, encrypted tax IDs and bank details, encrypted offsite backups, the hash-chained audit trail, optional two-step sign-in with an authenticator app) and what stays your job: full-disk encryption for the rest of the company file and its backups, training, testing and breach notices. It is a map, not legal advice.',
     keywords: 'ftc safeguards rule glba gramm leach bliley compliance wisp written information security plan tax preparer bookkeeper cpa irs publication 4557 mfa multi-factor encryption breach notification qualified individual risk assessment',
     guide: 'safeguards-rule',
   },
@@ -183,8 +190,8 @@ export const topics = [
   {
     id: 'users', area: 'company', views: ['settings/users', 'expenses/vendors'],
     title: 'Users, passwords and sensitive data',
-    body: 'Turn on users so everyone signs in with their own password and a role: Admin (everything, including users, settings, imports and restores), Standard (day-to-day bookkeeping), View only (looks and runs reports, changes nothing) or External Accountant (your outside accountant: like Standard, may post in closed periods, never sees sensitive data). LocalBooks checks the role before every action. Vendor tax IDs and bank details are then encrypted and shown in full only to users allowed to see sensitive data. Everyone is signed out after 15 minutes without typing or clicking (an Admin can change this under Sign out when idle). Remember me on this computer skips the sign-in once per opening. Save the recovery key you are given: it is the only way back in if every Admin forgets their password. An Admin can also encrypt the whole company file and its backups (off unless turned on): then losing every Admin password and the recovery key means losing the books. Otherwise only those sensitive values are encrypted: use FileVault or BitLocker for the rest of the file and its backups.',
-    keywords: 'whole file encryption encrypted company file sqlcipher at rest user users password sign in login log in role admin permission security encrypt encryption ssn ein tax id sensitive recovery key forgot lock idle remember',
+    body: 'Turn on users so everyone signs in with their own password and a role: Admin (everything, including users, settings, imports and restores), Standard (day-to-day bookkeeping), View only (looks and runs reports, changes nothing) or External Accountant (your outside accountant: like Standard, may post in closed periods, never sees sensitive data). LocalBooks checks the role before every action. Vendor tax IDs and bank details are then encrypted and shown in full only to users allowed to see sensitive data. Everyone is signed out after 15 minutes without typing or clicking (an Admin can change this under Sign out when idle). Remember me on this computer skips the sign-in once per opening. An Admin can turn on two-step sign-in (off by default): users then also enter a 6-digit code from an authenticator app on their phone, with backup codes, an Admin reset or the recovery key if the phone is lost. Save the recovery key you are given: it is the only way back in if every Admin forgets their password. An Admin can also encrypt the whole company file and its backups (off unless turned on): then losing every Admin password and the recovery key means losing the books. Otherwise only those sensitive values are encrypted: use FileVault or BitLocker for the rest of the file and its backups.',
+    keywords: 'whole file encryption encrypted company file sqlcipher at rest user users password sign in login log in role admin permission security encrypt encryption ssn ein tax id sensitive recovery key forgot lock idle remember two-step two factor 2fa mfa multi-factor authenticator totp one-time code backup codes',
     go: { label: 'Go to Users & Passwords', view: 'settings/users' },
     guide: 'users-and-passwords',
   },
