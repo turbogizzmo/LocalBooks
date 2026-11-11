@@ -122,8 +122,33 @@ secret is kept in the company file locked with your password (AES-256, the key m
 password by Argon2id), so the file alone can't produce codes; changing your password re-locks it.
 On an encrypted company file your password opens the file first, then Tillhouse asks for the code.
 
-Passkeys and Touch ID / Windows Hello as a second step aren't available yet: an authenticator code
-moves with the company file to any computer, which a fingerprint on one computer can't.
+### Touch ID or Windows Hello on this computer
+
+Once you have an authenticator app set up, you can also let **this computer** confirm it's you with
+**Touch ID** (on a Mac) or **Windows Hello** (fingerprint, face or PIN on Windows) in place of typing
+the code. The app stays: other computers, and copies of the company file, still ask for its code.
+
+- **Add this computer.** In **Settings › Users & Passwords › Two-step sign-in**, click **Use Touch ID
+  on This Computer…** (or **Use Windows Hello on This Computer…**), enter your password and confirm
+  with Touch ID or Windows Hello. The list under it shows each computer added for you, when it was
+  last used, and which one you're on.
+- **Signing in.** After your password, click **Use Touch ID** (or **Use Windows Hello**) on the code
+  step. The code box and backup codes still work there too.
+- **Remove a computer** with **Remove** beside it in that list, for example a laptop you sold. Your
+  authenticator app stays. Anything that removes the app also removes every computer: turning
+  two-step sign-in off, an Admin's reset, a temporary password from an Admin, the recovery key and
+  the company setting going to Off. **Set Up Again…** for the app keeps your computers.
+- **How it works.** Adding the computer saves a random secret in the computer's own credential
+  store (the macOS Keychain or Windows Credential Manager); the company file keeps only a one-way
+  fingerprint of it. Touch ID or Windows Hello is asked before LocalBooks reads the secret. No
+  fingerprint, face or PIN ever reaches LocalBooks: the system checks them.
+- **What it's worth.** Touch ID and Windows Hello let the computer's own password or PIN stand in
+  for a fingerprint, so on this computer the second step is as strong as the computer's sign-in.
+  Someone who knows both your LocalBooks password and your computer's password can sign in here.
+  If that matters for you, don't add the computer, and keep using the app's code.
+- **Not on Linux.** Linux has no common fingerprint or face check that LocalBooks can use, so the
+  option isn't offered there; use the authenticator app. It also needs the computer's check to be
+  set up: Touch ID (or a Mac password) in System Settings, or Windows Hello in Windows Settings.
 
 ## Forgot your password?
 

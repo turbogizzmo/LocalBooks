@@ -109,7 +109,10 @@ the Qualified Individual approves in writing other controls that are as secure.
 Users & Passwords › Two-step sign-in** and can require it for Admins and External Accountants or for
 everyone; each user then signs in with their password and a code from an authenticator app on their
 phone (see [Users and passwords](users-and-passwords.md#two-step-sign-in)). Remembered sign-ins and
-signing in again after an idle sign-out still ask for the code.
+signing in again after an idle sign-out still ask for the code. On a Mac or Windows computer a user
+may also let that computer confirm them with Touch ID or Windows Hello instead of the code; the
+computer's own password or PIN can stand in for the fingerprint there, so note in your written
+program whether staff may use it.
 **Limits:** it protects the Tillhouse sign-in, not the company file itself: someone with a copy of
 the file can read it with another program. Keep full-disk encryption (or whole-file encryption) on,
 and have your Qualified Individual record which setting the business uses.

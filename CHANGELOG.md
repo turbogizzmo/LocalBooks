@@ -40,6 +40,10 @@ becomes its release notes on GitHub and in the app's update window (see
   easier to read, and the Preferences categories, the Custom Forms preview and the Import steps
   work better with screen readers. Every page, form and Help is now checked automatically for
   accessibility (WCAG 2.1 AA), and Help has a new guide, Use LocalBooks from the keyboard.
+- **Touch ID and Windows Hello for two-step sign-in.** If you use two-step sign-in with an
+  authenticator app, you can now add your Mac or Windows computer in Settings › Users & Passwords:
+  signing in there then asks for Touch ID or Windows Hello instead of the code. The app still works
+  everywhere else, and nothing changes unless you add a computer. Not available on Linux.
 - **More accurate company-file imports.** Memorized transactions (templates) are no longer
   imported as real ones, which doubled some balances. Files whose description of a line table is
   missing several columns now read those lines, and a payment and deposit that a file keeps as two

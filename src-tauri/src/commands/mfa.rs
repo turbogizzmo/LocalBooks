@@ -164,6 +164,41 @@ pub async fn finish_two_step_sign_in(app: AppHandle, db: State<'_, Db>, code: St
     complete_sign_in(&app, &db, pending.session, pending.remember).await
 }
 
+/// The user a sign-in on this file is held for, if it is still current: `(id, user name, started)`.
+pub(super) async fn held_sign_in(db: &Db) -> Option<(i64, String, std::time::Instant)> {
+    let (_, slot) = db.pool_and_session().await.ok()?;
+    let pending = PENDING.lock().await;
+    pending
+        .as_ref()
+        .filter(|p| std::sync::Arc::ptr_eq(&p.slot, &slot) && p.started.elapsed() < CODE_STEP_LIMIT)
+        .map(|p| (p.session.user.id, p.session.user.username.clone(), p.started))
+}
+
+/// Finishes the held sign-in `started` at that moment, once its second step was passed another way
+/// (this computer's Touch ID or Windows Hello, gap R29). Refused when it ran out of time, was
+/// cancelled or replaced meanwhile, or someone else signed in.
+pub(super) async fn finish_held(app: &AppHandle, db: &Db, started: std::time::Instant) -> Result<UserView, String> {
+    let (_, slot) = db.pool_and_session().await?;
+    let mut guard = PENDING.lock().await;
+    let current = guard.as_ref().is_some_and(|p| std::sync::Arc::ptr_eq(&p.slot, &slot) && p.started == started);
+    if !current {
+        return Err("MFA_NO_SIGN_IN: sign in with your password first".into());
+    }
+    if started.elapsed() >= CODE_STEP_LIMIT || db.is_locked().await {
+        guard.take();
+        drop(guard);
+        db.relock().await;
+        return Err("MFA_EXPIRED: that took too long; sign in with your password again".into());
+    }
+    if slot.lock().await.is_some() {
+        guard.take();
+        return Err("MFA_NO_SIGN_IN: sign in with your password first".into());
+    }
+    let pending = guard.take().expect("checked above");
+    drop(guard);
+    complete_sign_in(app, db, pending.session, pending.remember).await
+}
+
 /// Back to the sign-in screen from the code step: forgets the held sign-in and locks an
 /// encrypted file again.
 #[tauri::command]
@@ -266,7 +301,18 @@ pub async fn remove_my_two_step(app: AppHandle, db: State<'_, Db>, password: Str
         let guard = slot.lock().await;
         let session = guard.as_ref().ok_or_else(|| users::SIGN_IN_REQUIRED.to_string())?;
         let name = session.user.username.clone();
+        // This computer's sign-in secrets (gap R29) go with the app; read them before the rows go.
+        let computers = super::two_step_computer::store(&app).ok();
+        let mut conn = pool.acquire().await.map_err(ledger::db_err)?;
+        let ids = match &computers {
+            Some(store) => mfa::device::here_keys(&mut conn, store, session.user.id).await?,
+            None => Vec::new(),
+        };
+        drop(conn);
         throttle(&app).attempt(&file, Who::User(&name), |e| e.starts_with("PASSWORD_WRONG"), mfa::remove_own(&pool, session, &password)).await?;
+        if let Some(store) = &computers {
+            mfa::device::forget_keys(store, &ids).await;
+        }
     }
     refresh_signed_in(&db).await?;
     Ok(())
