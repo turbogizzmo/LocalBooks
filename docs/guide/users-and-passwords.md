@@ -122,7 +122,9 @@ drive, a synced folder) shows nothing readable without a user's password or the 
    their own the next time they sign in.
 4. Click **Encrypt Company File**. LocalBooks makes an encrypted copy, checks it against your books,
    and switches to it.
-5. Save the **new recovery key** it shows: the one you had before no longer opens this file.
+5. Under **The company file is encrypted. Save the new recovery key**, save the key it shows (write
+   it down or store it in a password manager), then tick that you've saved it. The recovery key you
+   had before no longer opens this file, and this one is shown only once.
 
 The company file then opens on the sign-in screen and nothing in it can be read until someone signs
 in. Signing out, or being signed out when idle, closes it again.
