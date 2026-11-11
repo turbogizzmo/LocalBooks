@@ -480,7 +480,7 @@ installed? Export from my installed QuickBooks** below the file box instead: see
    on the form) comes in at quantity 1, since a LocalBooks group needs one; check those groups
    after the import. A group with the same name as one you already have is
    left as it is. A discount or percent charge in a group is left out of it, since a LocalBooks
-   group can't hold one. A group whose name an item already has, or none of whose items came in,
+   group can't hold one; the summary says how many items were left out of groups. A group whose name an item already has, or none of whose items came in,
    is not added; the summary counts them.
 
 ## 3. Post to your books

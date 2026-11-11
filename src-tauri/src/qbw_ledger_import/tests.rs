@@ -1389,7 +1389,7 @@ async fn item_groups_come_in_as_groups() {
     ];
     let batch = stage(&pool, Path::new("/books/Kits.qbw"), 1, &books).await.unwrap();
     let r = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().lists.unwrap();
-    assert_eq!((r.groups_created, r.groups_matched, r.groups_left_out), (1, 1, 2));
+    assert_eq!((r.groups_created, r.groups_matched, r.groups_left_out, r.group_items_left_out), (1, 1, 2, 1), "the discount is left out of Door kit");
     let (id, description, print_items, active): (i64, Option<String>, i64, i64) =
         sqlx::query_as("SELECT id, description, print_items, is_active FROM item_groups WHERE name = 'Door kit'").fetch_one(&pool).await.unwrap();
     assert_eq!((description.as_deref(), print_items, active), (Some("Door kit description"), 0, 1));

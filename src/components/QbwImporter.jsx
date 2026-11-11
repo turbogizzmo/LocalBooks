@@ -468,7 +468,10 @@ function groupsNote(r) {
   return (
     ` Groups: ${r.groupsCreated} added, ${r.groupsMatched} already there` +
     (r.groupsLeftOut ? `, ${r.groupsLeftOut} left out (an item has the name, or none of its items came in)` : '') +
-    '.'
+    '.' +
+    (r.groupItemsLeftOut
+      ? ` ${r.groupItemsLeftOut} item${r.groupItemsLeftOut === 1 ? ' was' : 's were'} left out of the groups added (a discount or percent charge can't be in a group); check those groups.`
+      : '')
   );
 }
 

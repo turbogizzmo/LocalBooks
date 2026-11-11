@@ -873,6 +873,8 @@ fn read_item_groups(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItemG
         .table_id("abmc_grouped_items")
         .and_then(|t| catalog.columns.get(&t))
         .and_then(|cols| cols.iter().find(|c| c.id == 2))
+        // A position is a whole number that isn't an id; any other column 2 leaves the file's order.
+        .filter(|c| matches!(c.domain, crate::qbw_records::MISSING_DOMAIN | 1 | 2 | 19 | 21 | 22) && !c.name.ends_with("_id"))
         .map(|c| c.name.clone());
     item_groups_from(&rows_of(pages, catalog, "abmc_item_user"), &rows_of(pages, catalog, "abmc_grouped_items"), order_column.as_deref())
 }

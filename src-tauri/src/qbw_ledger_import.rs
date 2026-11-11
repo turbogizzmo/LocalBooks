@@ -877,6 +877,9 @@ pub struct ImportListsResult {
     pub groups_created: i64,
     pub groups_matched: i64,
     pub groups_left_out: i64,
+    /// Items left out of the groups created: discounts and percent charges (a LocalBooks group
+    /// can't hold them) and items that did not come in.
+    pub group_items_left_out: i64,
     /// What became of the file's classes, when it has any (see [`ClassesResult`]).
     pub classes: Option<ClassesResult>,
 }
@@ -1226,6 +1229,7 @@ async fn import_item_groups(tx: &mut sqlx::SqliteConnection, batch_id: i64, resu
             }
             None => {
                 let mut products = Vec::new();
+                let mut left_out = 0;
                 for (item, quantity_e4) in serde_json::from_str::<Vec<(i64, i64)>>(&members).unwrap_or_default() {
                     let product: Option<i64> = sqlx::query_scalar(
                         "SELECT i.product_id FROM ledger_import_items i JOIN products_services p ON p.id = i.product_id
@@ -1237,8 +1241,9 @@ async fn import_item_groups(tx: &mut sqlx::SqliteConnection, batch_id: i64, resu
                     .await
                     .map_err(db_err)?
                     .flatten();
-                    if let Some(product) = product.filter(|_| (1..=crate::invoices::MAX_QUANTITY_E4).contains(&quantity_e4)) {
-                        products.push((product, quantity_e4));
+                    match product {
+                        Some(product) => products.push((product, quantity_e4.clamp(1, crate::invoices::MAX_QUANTITY_E4))),
+                        None => left_out += 1,
                     }
                 }
                 let name_taken: bool =
@@ -1266,6 +1271,7 @@ async fn import_item_groups(tx: &mut sqlx::SqliteConnection, batch_id: i64, resu
                         .map_err(|e| format!("{} (group {name})", db_err(e)))?;
                 }
                 result.groups_created += 1;
+                result.group_items_left_out += left_out;
                 (id, true)
             }
         };
