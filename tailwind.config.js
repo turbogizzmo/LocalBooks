@@ -18,23 +18,20 @@ const qb = {
   // The work area behind windows open inside Tillhouse.
   desktop: '#d8dedc',
   surface: '#ffffff',
-  ink: '#393a3d',
-  // Text colors meet WCAG 2.1 AA (4.5:1) on white, the canvas and the row and header greys (gap
-  // R19; the e2e accessibility spec checks every page). Faint text is the muted grey: a lighter one
-  // (#8d9096, 3.2:1 on white) was too pale to read.
-  inkMuted: '#6b6c72',
-  inkFaint: '#6b6c72',
-  border: '#d4d7dc',
-  borderStrong: '#babec5',
-  rowHover: '#f5f5f5',
-  rowSelected: '#eef7ec',
-  headerBg: '#eceef1',
-  negative: '#c8281c',
-  warning: '#ff8000',
-  // Orange text (`text-qb-warning-ink`): the warning orange itself is 2.5:1 on white, fine for a
-  // border but not for words.
-  warningInk: '#a65300',
-  info: '#006cb4',
+  ink: '#1c2426',
+  inkMuted: '#56615f',
+  inkFaint: '#626c6a',
+  border: '#dce1df',
+  borderStrong: '#b9c2bf',
+  rowHover: '#f2f4f3',
+  rowSelected: '#e6f2f0',
+  headerBg: '#eceeed',
+  negative: '#b42318',
+  warning: '#b54708',
+  // Orange text (`text-qb-warning-ink`, gap R19). The Spruce & Brass warning already meets WCAG AA
+  // (4.5:1) on white, so the ink is the same colour.
+  warningInk: '#b54708',
+  info: '#22609e',
 };
 
 /** @type {import('tailwindcss').Config} */
