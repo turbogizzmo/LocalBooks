@@ -13,9 +13,9 @@ import { hiddenMessages, hideMessage } from './myPreferences.js';
  * offers "Don't show this again": once ticked and confirmed, later asks with that key answer yes
  * at once, until My Preferences › General › Bring back all messages.
  */
-export async function askConfirm(message, { confirmLabel = 'OK', danger = false, hideKey = null } = {}) {
+export async function askConfirm(message, { confirmLabel = 'OK', cancelLabel = 'Cancel', danger = false, hideKey = null } = {}) {
   if (hideKey && hiddenMessages().includes(hideKey)) return true;
-  const answer = await show((done) => <Dialog message={message} confirmLabel={confirmLabel} danger={danger} offerHide={Boolean(hideKey)} onDone={done} />, false);
+  const answer = await show((done) => <Dialog message={message} confirmLabel={confirmLabel} cancelLabel={cancelLabel} danger={danger} offerHide={Boolean(hideKey)} onDone={done} />, false);
   if (answer === 'hide') {
     hideMessage(hideKey);
     return true;
@@ -47,7 +47,7 @@ function show(render, cancelled) {
   });
 }
 
-function Dialog({ message, input = false, defaultValue = '', confirmLabel, danger = false, offerHide = false, onlyOk = false, onDone }) {
+function Dialog({ message, input = false, defaultValue = '', confirmLabel, cancelLabel = 'Cancel', danger = false, offerHide = false, onlyOk = false, onDone }) {
   const [text, setText] = useState(defaultValue);
   const [hide, setHide] = useState(false);
   const focusRef = useRef(null);
@@ -83,7 +83,7 @@ function Dialog({ message, input = false, defaultValue = '', confirmLabel, dange
         <div className="flex justify-end gap-2 border-t border-qb-border px-3 py-1.5">
           {!onlyOk && (
             <button ref={input ? undefined : focusRef} type="button" className="qb-btn qb-btn-secondary" onClick={() => onDone(undefined)}>
-              Cancel
+              {cancelLabel}
             </button>
           )}
           <button ref={onlyOk ? focusRef : undefined} type="submit" className={`qb-btn ${danger ? 'bg-qb-negative text-white hover:opacity-90' : 'qb-btn-primary'}`}>

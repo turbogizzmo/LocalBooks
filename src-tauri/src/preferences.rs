@@ -72,6 +72,7 @@ pub const DEFAULTS: &[(&str, &str)] = &[
     (tax_time::REIMBURSED_ACCOUNT, ""),
     (tax_time::MARKUP_PERCENT, "0"),
     (tax_time::MARKUP_ACCOUNT, ""),
+    (tax_time::PROMPT_BILLABLE, "true"),
     (tax_time::TAX_1099, "true"),
     (tax_time::TAX_1099_ACCOUNTS, "{}"),
     (tax_time::INVENTORY, "true"),

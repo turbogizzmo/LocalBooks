@@ -63,6 +63,25 @@ people using LocalBooks.
 - **Clearer fiscal years for new budgets.** New budget… lists each fiscal year by its months (for
   example "Jul 2026 – Jun 2027") and marks the current one. Before, a bare year could create the
   budget for the wrong fiscal year when it doesn't start in January.
+
+
+## [0.14.0]
+
+- **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a
+  state rate plus a city rate, say) now splits the payment among its rates, in proportion to their
+  percentages, and pays down each rate's own liability account in one entry. The sales tax return
+  lists the payment under each agency instead of "No agency". A payment for a combined rate
+  recorded in 0.14.0 went entirely to its first rate's account; the return now lists it under that
+  rate's agency. To spread it across the agencies, void it and record it again.
+- **Duplicating a credit memo keeps its discounts.** Duplicate on a credit memo or refund receipt
+  now copies its subtotals, discount lines, percentage charges and groups, so the copy credits the
+  same amount as the original. Before, the copy left them out and credited the full amount of the
+  item lines.
+- **Billable costs from the invoice.** The invoice form has **Add billable costs…**: it lists the
+  customer's or job's unbilled time and costs, including credit-card charges marked Bill?, with the
+  same markup and rules as Sales › Bill Costs, and adds the ones you pick as lines. They are marked
+  billed when the invoice is saved. Choosing a customer with unbilled costs or time on a new
+  invoice asks whether to add them; Preferences › Time & Expenses can turn the question off.
 - **Diagnostics say why starting was slow.** The log in Help › Save Diagnostics now records how
   long LocalBooks took to start and which steps were slow, such as opening the company file.
 - **No more surprise customers and vendors.** A name typed on a form that isn't on your list is no

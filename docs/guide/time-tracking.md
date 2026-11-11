@@ -26,3 +26,17 @@ In **Employees › Time Tracking**, type a name in **New employee name** and cli
 4. Click **Save timesheet**.
 
 Saved activities are listed under **Time activities**.
+
+## Invoice billable time and costs
+
+Billable time, and costs marked **Bill?** for a customer or job on checks, expenses, credit-card
+charges and bills, are invoiced in either of two ways, which bill them the same way:
+
+- **Sales › Bill Costs** lists them by customer: tick what to bill, check the markup and click
+  **Create invoice**. The invoice holds only the billed costs and time.
+- On the invoice form, **Add billable costs…** adds them to the invoice you are writing, beside
+  its other lines (see [Add billable costs and time](invoices.md#add-billable-costs-and-time)).
+  Choosing a customer or job with unbilled costs or time asks whether to add them, unless that
+  question is turned off in **Preferences › Time & Expenses**.
+
+Time needs a service item to be billed: the item gives the invoice line its income account.

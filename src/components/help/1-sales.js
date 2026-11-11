@@ -334,6 +334,14 @@ export const topics = [
     guide: 'getting-started',
   },
   {
+    id: 'invoice-billable-costs', area: 'sales', views: ['sales/invoices', 'sales/bill-costs', 'settings/preferences'],
+    title: 'Add billable costs and time to an invoice',
+    body: 'On a new invoice, choose the customer or job, then click Add billable costs… under the lines. The window lists their unbilled time and costs (checks, expenses, credit-card charges and bills with Bill? ticked), with the markup from Preferences › Time & Expenses: untick what to leave for later and click Add to invoice. They show under the lines in Billable costs and time and count in the balance due; Change… and Remove adjust them. They are marked billed only when the invoice is saved, exactly as Sales › Bill Costs bills them, and voiding the invoice frees them again. Choosing a customer with unbilled costs or time asks whether to add them; turn the question off with "Ask about billable costs and time when I choose a customer" in Preferences › Time & Expenses. Billable costs go on new invoices in the home currency.',
+    keywords: 'add billable costs invoice unbilled expenses time reimbursable credit card charge markup prompt choose billable time costs to add',
+    go: { label: 'Go to Invoices', view: 'sales/invoices' },
+    guide: 'invoices',
+  },
+  {
     id: 'change-prices', area: 'sales', views: ['sales/products'],
     title: 'Change many prices at once',
     body: 'On Sales › Products & Services, click Change prices… and tick the items. Raise or lower them by a percentage or a fixed amount, based on the current price or the unit cost, and round the result; check the new prices, then apply. Documents already written keep their prices, and each change is recorded in the audit trail.',

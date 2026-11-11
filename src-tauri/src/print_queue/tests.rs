@@ -164,8 +164,8 @@ async fn an_edited_queued_check_stays_queued() {
 async fn invoices_queue_and_leave_the_queue_when_printed() {
     let pool = test_pool().await;
     let services = account_id(&pool, "4100").await;
-    let queued = create_invoice(&pool, invoice_input(services), true, None).await.unwrap();
-    let plain = create_invoice(&pool, invoice_input(services), false, None).await.unwrap();
+    let queued = create_invoice(&pool, invoice_input(services), &Default::default(), true, None).await.unwrap();
+    let plain = create_invoice(&pool, invoice_input(services), &Default::default(), false, None).await.unwrap();
     assert!(queued.to_be_printed && !plain.to_be_printed);
     assert_eq!(queued.status, "UNPAID", "it posts like any invoice");
 
@@ -258,21 +258,21 @@ async fn a_payment_taken_on_the_invoice_is_saved_with_it() {
     let paid = |cents: i64| crate::invoices::PaidNow { deposit_account_id: checking, amount_cents: Cents(cents), payment_method: "CHECK".into(), payment_method_id: None, reference: Some("1042".into()) };
 
     // Part paid at the counter: the invoice is PARTIAL and the money is in the bank, dated the invoice's date.
-    let part = create_invoice(&pool, invoice_input(services), false, Some(&paid(5_000))).await.unwrap();
+    let part = create_invoice(&pool, invoice_input(services), &Default::default(), false, Some(&paid(5_000))).await.unwrap();
     assert_eq!((part.status.as_str(), part.balance_cents), ("PARTIAL", 7_500));
     let payments = crate::invoices::list_payments(&pool, part.id).await.unwrap();
     assert_eq!(payments.iter().map(|p| (p.amount_cents, p.payment_date.clone(), p.reference.clone())).collect::<Vec<_>>(), [(5_000, d(1).to_string(), Some("1042".into()))]);
     assert_eq!((balance(ar).await, balance(checking).await), (7_500, 5_000));
 
     // Paid in full and queued to print.
-    let full = create_invoice(&pool, invoice_input(services), true, Some(&paid(12_500))).await.unwrap();
+    let full = create_invoice(&pool, invoice_input(services), &Default::default(), true, Some(&paid(12_500))).await.unwrap();
     assert_eq!((full.status.as_str(), full.balance_cents, full.to_be_printed), ("PAID", 0, true));
 
     // More than the invoice, or into an account money can't be deposited to: nothing is saved.
     let before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM invoices").fetch_one(&pool).await.unwrap();
-    assert!(create_invoice(&pool, invoice_input(services), false, Some(&paid(12_501))).await.unwrap_err().starts_with("INV_OVERPAYMENT"));
+    assert!(create_invoice(&pool, invoice_input(services), &Default::default(), false, Some(&paid(12_501))).await.unwrap_err().starts_with("INV_OVERPAYMENT"));
     let wrong = crate::invoices::PaidNow { deposit_account_id: services, ..paid(100) };
-    assert!(create_invoice(&pool, invoice_input(services), false, Some(&wrong)).await.unwrap_err().starts_with("INV_BAD_DEPOSIT_ACCOUNT"));
+    assert!(create_invoice(&pool, invoice_input(services), &Default::default(), false, Some(&wrong)).await.unwrap_err().starts_with("INV_BAD_DEPOSIT_ACCOUNT"));
     let after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM invoices").fetch_one(&pool).await.unwrap();
     assert_eq!(before, after, "a refused payment leaves no invoice behind");
 }

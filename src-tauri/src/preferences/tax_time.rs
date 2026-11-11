@@ -31,6 +31,9 @@ pub const REIMBURSED_ACCOUNT: &str = "reimbursed_income_account_id";
 /// The markup added when billable expenses are invoiced, in percent, and the income account it goes to.
 pub const MARKUP_PERCENT: &str = "billable_markup_percent";
 pub const MARKUP_ACCOUNT: &str = "billable_markup_account_id";
+/// A new invoice offers the chosen customer's unbilled costs and time (the invoice form reads it;
+/// Add billable costs… stays on the form either way).
+pub const PROMPT_BILLABLE: &str = "billable_prompt_on_invoice";
 /// "Do you file 1099s?": off hides the 1099 fields, reports and deadline.
 pub const TAX_1099: &str = "tax_1099_enabled";
 /// JSON object: expense account id → 1099 box code (`workflows::BOXES_1099`).
@@ -47,7 +50,7 @@ pub const DATE_CHECKS_PRINTED: &str = "date_checks_when_printed";
 /// The largest markup accepted: 1,000%.
 pub const MAX_MARKUP_MILLI_PERCENT: i64 = 1_000_000;
 
-const FLAGS: &[&str] = &[SALES_TAX_MARK_TAXABLE, TIME_BILLABLE, EXPENSES_BILLABLE, REIMBURSED_AS_INCOME, TAX_1099, INVENTORY, CHECK_MEMO_ACCOUNT, DATE_CHECKS_PRINTED];
+const FLAGS: &[&str] = &[SALES_TAX_MARK_TAXABLE, TIME_BILLABLE, EXPENSES_BILLABLE, REIMBURSED_AS_INCOME, PROMPT_BILLABLE, TAX_1099, INVENTORY, CHECK_MEMO_ACCOUNT, DATE_CHECKS_PRINTED];
 
 fn one_of(v: &str, allowed: &[&str], code: &str, what: &str) -> Result<String, String> {
     if allowed.contains(&v) {
