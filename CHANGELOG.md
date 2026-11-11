@@ -6,6 +6,14 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
+  "Company default" start at it on new sales forms. Before, once a company had two or more rates,
+  those customers got no tax unless someone picked a rate on each form.
+- **Discounts on the sales tax reports.** A discount taken off a whole invoice or sales receipt,
+  and a discount line on a credit memo, now lower the taxable sales on the Sales Tax Liability
+  report and the sales tax return, matching the tax that was charged. The tax amounts were already
+  right.
+- The message after **Pay sales tax** names the account actually paid down.
 ## [0.14.1]
 - **Help for every screen, setting and menu command.** F1 now explains every page in the sidebar,
   including Approvals, Payout Feeds, the Attachments Library, Reps, Ship Via & Fields and each

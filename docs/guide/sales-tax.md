@@ -91,15 +91,17 @@ line to change just that sale. Subtotal and group heading lines don't have one.
 **Customers.** Open a customer in **Sales › Customers**. With sales tax on, the record has:
 
 - **Default sales tax**: the rate their sales start with. **Company default** (the starting choice)
-  means: the company's only active rate, if it has exactly one; otherwise no rate until you pick
-  one on the form.
+  means the **Default rate** chosen at the top of **Sales › Sales Tax**. With no default rate
+  chosen, it's the company's only active rate if it has exactly one; otherwise no rate until you
+  pick one on the form.
 - **Tax exempt**: their sales start with no tax. **Exemption (reason or certificate no.)** keeps the
   reason or the resale or exemption certificate number on file.
 
 ## Choose the rate on a sale
 
 1. Pick the customer. The **Sales tax** box fills in from their record: their **Default sales tax**,
-   **No tax** if they're exempt, or the company's only rate.
+   **No tax** if they're exempt, or for **Company default** the company's **Default rate** (or its
+   only rate, when no default rate is chosen).
 2. Change the rate in **Sales tax** if this sale is taxed differently, or choose **No tax**. Once
    you change it, picking another customer doesn't change it back.
 3. Check each line's **Tax** box.
@@ -189,6 +191,12 @@ listed under **Payments** on the screen, and in **Paid in the period** on the li
 return.
 
 When you file with several agencies, record one payment per agency, each for that agency's rate.
+
+Paying a **combined rate** splits the payment among the rates it adds up, in proportion to their
+percentages (any rounding cent going to the largest): one entry debits each rate's own liability
+account for its share, and the return lists each share under that rate's agency. A combined-rate
+payment recorded in 0.14.0 went entirely to its first rate's account and counts for that rate's
+agency; void it and record it again to spread it across the agencies.
 
 To undo a payment, choose **Void Transaction** in its row menu. The voided payment stays in the list,
 greyed, and no longer counts as paid (see [Undo a transaction

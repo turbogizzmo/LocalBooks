@@ -217,3 +217,47 @@ fn a_tax_payment_amount_arrives_as_a_bare_integer() {
     assert_eq!(input.amount_cents, Cents::from(1_237));
     assert!(serde_json::from_str::<SalesTaxPaymentInput>(r#"{"accountId":3,"paymentDate":"2025-07-31","amountCents":12.37,"reference":null}"#).is_err());
 }
+
+#[tokio::test]
+async fn discounts_lower_taxable_sales_on_the_liability_report_and_the_return() {
+    let pool = test_pool().await;
+    let services = account(&pool, "4100").await;
+    let rate = create_tax_rate(&pool, TaxRateInput { name: "State 8%".into(), rate_ppm: 80_000, agency_name: Some("State".into()), liability_account_id: None }).await.unwrap();
+    // A $100 taxable + $100 non-taxable invoice with $20 off the whole form: $10 of the discount is
+    // off the taxable half, so $90 is taxed ($7.20).
+    let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
+        "customerName": "Acme", "issueDate": "2026-07-01", "dueDate": "2026-07-31", "taxRateId": rate.id, "discountCents": 2_000,
+        "lines": [
+            { "description": "Widgets", "quantityE4": 10_000, "rateCents": 10_000, "incomeAccountId": services, "isTaxable": true },
+            { "description": "Labor", "quantityE4": 10_000, "rateCents": 10_000, "incomeAccountId": services, "isTaxable": false }
+        ]
+    }))
+    .unwrap();
+    assert_eq!(crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap().total_cents, 18_720);
+    // A $100 taxable credit memo with 10% off: $90 taxable, $7.20 tax given back.
+    let memo = crate::credits::create_credit_memo(
+        &pool,
+        crate::credits::CreditMemoInput {
+            customer_name: "Acme".into(),
+            credit_date: d(3),
+            memo: None,
+            refund_account_id: None,
+            tax_rate_id: Some(rate.id),
+            lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 10_000, income_account_id: services, class_id: None, is_taxable: true, service_date: None }],
+            header: Default::default(),
+            form_lines: vec![crate::item_types::FormLineInput::discount(1, services, Some(100_000), None, true)],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(memo.total_cents, 9_720);
+
+    let report = tax_liability_on(&pool, d(1), d(31), Basis::Accrual).await.unwrap();
+    let row = report.rows.iter().find(|r| r.tax_rate_id == Some(rate.id)).unwrap();
+    assert_eq!((row.taxable_sales_cents, row.non_taxable_sales_cents, row.tax_collected_cents), (9_000 - 9_000, 9_000, 0), "invoice $90 taxable less the memo's $90; $90 non-taxable");
+
+    let r = combined::sales_tax_return(&pool, d(1), d(31), Basis::Accrual).await.unwrap();
+    assert_eq!(r.agencies[0].lines[0].taxable_sales_cents, 0, "the invoice's $90 less the credit memo's $90");
+    let memo_only = combined::sales_tax_return(&pool, d(2), d(31), Basis::Accrual).await.unwrap();
+    assert_eq!(memo_only.agencies[0].lines[0].taxable_sales_cents, -9_000);
+}

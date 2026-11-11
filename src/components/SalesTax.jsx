@@ -9,12 +9,13 @@ import { formatDate, periodRange, todayIso } from '../lib/dates.js';
 import DateBox from './DateBox.jsx';
 import { layOut } from '../lib/itemTypes.js';
 import { CombinedRateDialog, SalesTaxReturn } from './SalesTaxCombined.jsx';
+import { companyDefaultRateId, startingTaxRateId } from '../lib/salesTaxDefault.js';
 
 /** Sales tax as set up for the company: on or off, and the rates. */
 export function useSalesTax() {
   const prefs = useLedgerQuery(api.getPreferences).data;
   const rates = useLedgerQuery(api.listTaxRates).data ?? [];
-  return { enabled: prefs?.sales_tax_enabled === 'true', rates, activeRates: rates.filter((r) => r.isActive) };
+  return { enabled: prefs?.sales_tax_enabled === 'true', rates, activeRates: rates.filter((r) => r.isActive), defaultRateId: companyDefaultRateId(prefs) };
 }
 
 /** "8.25%" from parts per million. */
@@ -101,12 +102,12 @@ export function useFormTax(customerName, customers) {
   const customer = (customers ?? []).find((c) => c.name.toLowerCase() === customerName.trim().toLowerCase());
   useEffect(() => {
     if (touched || !tax.enabled) return;
-    // The customer's own rate; otherwise the company's only rate, if it has just one.
-    const only = tax.activeRates.length === 1 ? tax.activeRates[0].id : null;
-    if (customer) setRateId(customer.isTaxExempt ? null : (customer.taxRateId ?? only));
-    else if (rateId === null) setRateId(only);
+    // The customer's own rate; otherwise the company's default rate, or its only rate.
+    const start = startingTaxRateId(customer ?? null, tax.activeRates, tax.defaultRateId);
+    if (customer) setRateId(start);
+    else if (rateId === null) setRateId(start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customer?.id, tax.enabled, tax.activeRates.length]);
+  }, [customer?.id, tax.enabled, tax.activeRates.length, tax.defaultRateId]);
   // A rate loaded from an existing document is kept even if sales tax has since been turned off:
   // saving the document again must not silently drop the tax it was posted with.
   const [loaded, setLoaded] = useState(false);
@@ -136,7 +137,7 @@ export function useFormTax(customerName, customers) {
     reset: () => {
       setTouched(false);
       setLoaded(false);
-      setRateId(tax.activeRates.length === 1 ? tax.activeRates[0].id : null);
+      setRateId(startingTaxRateId(null, tax.activeRates, tax.defaultRateId));
     },
   };
 }
@@ -213,7 +214,7 @@ function PayDialog({ rates, accounts, owedCents, onClose, onPaid }) {
     setBusy(true);
     try {
       await api.paySalesTax({ taxRateId: rateId, accountId, paymentDate: date, amountCents: cents, reference: reference.trim() || null });
-      onPaid(`Recorded a ${formatCents(cents)} sales tax payment: Dr Sales Tax Payable / Cr the payment account.`);
+      onPaid(`Recorded a ${formatCents(cents)} sales tax payment: Dr ${rateId === null ? 'Sales Tax Payable' : 'the rate’s liability account'} / Cr the payment account.`);
     } catch (err) {
       setError(errorText(err));
       setBusy(false);
@@ -300,6 +301,16 @@ export default function SalesTax({ accounts, intent }) {
       setNotice({ kind: 'error', text: errorText(err) });
     }
   };
+  const defaultRateId = companyDefaultRateId(prefs);
+  const setDefaultRate = async (id) => {
+    try {
+      await api.setPreference('sales_tax_default_rate_id', id === null ? '' : String(id));
+      const name = (rates ?? []).find((r) => r.id === id)?.name;
+      setNotice({ kind: 'success', text: name ? `New sales forms for customers on Company default now start at ${name}.` : 'Customers on Company default start with no tax unless the company has only one rate.' });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
   const done = (text) => {
     setDialog(null);
     setNotice({ kind: 'success', text });
@@ -322,6 +333,17 @@ export default function SalesTax({ accounts, intent }) {
               ? 'Invoices, sales receipts, estimates and credit memos have a Tax column and a rate; mark products taxable or not, and customers exempt, on their records.'
               : 'Turn this on to charge sales tax on sales forms.'}
           </span>
+          {enabled && (
+            <label className="ml-auto flex flex-none items-center gap-1.5 text-xs">
+              <span className="font-semibold text-qb-ink-muted">Default rate</span>
+              <select className="qb-input" value={defaultRateId ?? ''} onChange={(e) => setDefaultRate(e.target.value === '' ? null : Number(e.target.value))} title="The rate for customers set to Company default">
+                <option value="">None (the only rate, if just one)</option>
+                {(rates ?? []).filter((r) => r.isActive || r.id === defaultRateId).map((r) => (
+                  <option key={r.id} value={r.id}>{r.name} ({ratePercent(r.ratePpm)})</option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       )}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
