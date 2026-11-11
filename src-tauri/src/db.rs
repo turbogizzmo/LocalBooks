@@ -161,6 +161,11 @@ async fn open_live(path: &Path, backups: Option<&Path>) -> Result<Live, String> 
 
 impl Db {
     fn with(live: Option<Live>, config: DbConfig) -> Db {
+        // A lazy pool must be made inside a Tokio runtime. Tauri's setup runs on the main thread
+        // outside one (where the launch builds the empty `Db`, gap R28), so enter Tauri's runtime
+        // there; anywhere already inside a runtime keeps its own.
+        let runtime = tauri::async_runtime::handle();
+        let _enter = tokio::runtime::Handle::try_current().is_err().then(|| runtime.inner().enter());
         let closed = SqlitePoolOptions::new()
             .max_connections(1)
             .connect_lazy_with(SqliteConnectOptions::new().filename(":memory:").pragma("query_only", "ON"));
