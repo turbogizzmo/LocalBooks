@@ -120,3 +120,30 @@ async fn an_external_accountant_posts_in_a_closed_period_and_the_report_says_who
     let by = found.report.columns.iter().position(|c| c.label == "Entered By").unwrap();
     assert!(rows[0].cells[by].as_str().is_some_and(|who| who.starts_with("cpa as ")), "{:?}", rows[0].cells);
 }
+
+/// Closing Date Exceptions orders a close and an entry by the entry ids the close recorded, not by
+/// clock time: on Windows the clock moves in ~15 ms steps, so the two often carry the same time.
+#[tokio::test]
+async fn an_entry_made_in_the_same_clock_step_as_a_close_is_ordered_by_entry_id() {
+    let pool = test_pool().await;
+    let date = |s: &str| s.parse::<chrono::NaiveDate>().unwrap();
+    let exceptions = |pool: SqlitePool| async move {
+        let report = crate::list_reports::run(&pool, "closing-date-exceptions", Some(date("2025-01-01")), Some(date("2025-12-31")), date("2026-01-15")).await.unwrap();
+        report.report.rows.iter().filter_map(|r| r.journal_entry_id).collect::<Vec<i64>>()
+    };
+    let before = post(&pool, "2025-11-10").await.unwrap();
+    set_closing_date(&pool, &lock(Some("2025-11-30"), None, None)).await.unwrap();
+    set_closing_date(&pool, &lock(None, None, None)).await.unwrap();
+    let late = post(&pool, "2025-11-20").await.unwrap();
+    set_closing_date(&pool, &lock(Some("2025-11-30"), None, None)).await.unwrap();
+
+    // The worst case for clock times: every change to the closing date at the very instant the
+    // late entry was made, which the clock's ~15 ms step on Windows produces. Compared by time, the
+    // late entry would not be after the first close. (The history is immutable in the app; the
+    // test lifts the guard to set the times.)
+    sqlx::query("DROP TRIGGER trg_closing_locks_no_update").execute(&pool).await.unwrap();
+    sqlx::query("UPDATE closing_locks SET set_at = (SELECT created_at FROM journal_entries WHERE id = ?1)").bind(late).execute(&pool).await.unwrap();
+
+    assert_eq!(exceptions(pool.clone()).await, vec![late], "posted after the first close, though at the same time; the entry made before it is not an exception");
+    assert!(!exceptions(pool.clone()).await.contains(&before));
+}

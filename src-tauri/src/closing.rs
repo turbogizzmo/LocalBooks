@@ -165,7 +165,9 @@ pub async fn set_closing_date(pool: &SqlitePool, input: &ClosingInput) -> Result
         return Err("CLOSE_PASSCODE_WITHOUT_DATE: set a closing date to protect it with a passcode".into());
     }
     let next_hash = if input.lock_date.is_none() { None } else { next_hash };
-    sqlx::query("INSERT INTO closing_locks (lock_date, hashed_passcode) VALUES (?1, ?2)")
+    // The highest entry id at this moment: an entry is posted after this change exactly when its id
+    // is higher (writes are serialized), which clock times can't tell within one clock step.
+    sqlx::query("INSERT INTO closing_locks (lock_date, hashed_passcode, last_entry_id) VALUES (?1, ?2, (SELECT COALESCE(MAX(id), 0) FROM journal_entries))")
         .bind(input.lock_date.map(|d| d.to_string()))
         .bind(next_hash)
         .execute(&mut *tx)

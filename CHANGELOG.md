@@ -14,6 +14,9 @@ people using LocalBooks.
   everyone. It's off unless you turn it on. Users with it sign in with their password and a 6-digit
   code from an authenticator app on their phone, and get ten one-time backup codes for a lost phone.
   An Admin can reset it for a user, and the recovery key still gets the only Admin back in.
+- **Closing Date Exceptions no longer misses an entry made at almost the same moment as a close.**
+  The report now orders entries and changes to the closing date by when they were recorded in the
+  books, not by clock time, which on Windows only advances every few milliseconds.
 - **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
   "Company default" start at it on new sales forms. Before, once a company had two or more rates,
   those customers got no tax unless someone picked a rate on each form.
