@@ -109,12 +109,34 @@ file can see and change everything, as in earlier versions.
   window activity count as use, not screens refreshing themselves (`Db::check` in
   [`db.rs`](src-tauri/src/db.rs); `the_gate_follows_the_open_file_and_its_sign_in` in
   [`permissions/tests.rs`](src-tauri/src/permissions/tests.rs)).
+- **Two-step sign-in** (optional, off by default; an Admin turns it on for the company, and can
+  require it for Admins and External Accountants or for everyone): after the password, a 6-digit
+  TOTP code (RFC 6238, HMAC-SHA-1, 30-second steps) from an authenticator app, or a one-time backup
+  code ([`mfa.rs`](src-tauri/src/mfa.rs); `codes_match_the_rfc_6238_test_vectors` and
+  `off_by_default_and_an_admin_turns_it_on` in [`mfa/tests.rs`](src-tauri/src/mfa/tests.rs)). A
+  code works once on the file, and one step of clock drift either way is accepted
+  (`a_code_works_once_and_one_step_of_drift_is_allowed`). The secret behind the codes is sealed with
+  AES-256-GCM under a key derived by Argon2id from the user's password and bound to the user, so
+  the company file alone can't make codes, and changing the password re-seals it
+  (`the_secret_is_sealed_under_the_password_and_never_written_in_clear`,
+  `changing_your_password_reseals_the_secret`). Backup codes are kept as salted SHA-256 hashes and
+  work once (`a_backup_code_signs_in_once`). A remembered sign-in still asks for the code
+  (`hold_for_code` in [`commands/mfa.rs`](src-tauri/src/commands/mfa.rs)); until the code is right
+  nobody is signed in, so every other command is refused, and a company that requires it holds a
+  user without one at the set-up step (`every_role_gets_what_it_should` in
+  [`permissions/tests.rs`](src-tauri/src/permissions/tests.rs),
+  `a_stricter_setting_makes_the_right_roles_set_it_up`). Wrong codes wait like wrong passwords
+  (four free tries, counted apart from passwords) and are audited past the free tries. An Admin's
+  reset, a password reset by an Admin, the recovery key, turning the setting off and removing all
+  users each remove the factor (`every_way_back_removes_the_factor`). It guards the LocalBooks
+  sign-in, not the file: someone with a copy of the file and another program isn't stopped by it.
 - **Remember me on this computer** (optional, off by default) keeps the user's password in the
   credential store above and is used once per opening of the file, never after a sign-out or idle
   sign-out (`sign_in_remembered` in [`commands/users.rs`](src-tauri/src/commands/users.rs)).
 - **Audit trail:** ledger entries record the signed-in user together with the computer's user.
-  Turning users on, adding or changing a user, password resets, using or replacing the recovery key
-  and removing all users are recorded in the same hash-chained trail (never with a password or key).
+  Turning users on, adding or changing a user, password resets, using or replacing the recovery key,
+  two-step sign-in changes and resets, used backup codes, repeated wrong codes and removing all
+  users are recorded in the same hash-chained trail (never with a password or key).
   The newest link is also recorded outside the file, so a rebuilt or shortened trail is detected
   ([`audit_chain.rs`](src-tauri/src/audit_chain.rs);
   `every_write_seals_its_audit_rows_with_an_actor` and

@@ -39,6 +39,14 @@ const OPEN: &[&str] = &[
     "forget_remembered_sign_in",
     "sign_out_if_idle",
     "change_my_password",
+    // Two-step sign-in (gap R26): the code step of signing in, and setting up an authenticator,
+    // which a user the company requires it for must do before anything else. Each checks who is
+    // signed in (or half signed in) itself.
+    "get_two_step_sign_in",
+    "finish_two_step_sign_in",
+    "cancel_two_step_sign_in",
+    "begin_two_step_setup",
+    "finish_two_step_setup",
     "recover_with_recovery_key",
     "remove_all_users",
     "get_start_screen",
@@ -69,6 +77,8 @@ const ADMIN: &[&str] = &[
     "add_user",
     "update_user",
     "replace_recovery_key",
+    "set_two_step_policy",
+    "reset_two_step",
     // Company-wide settings.
     "set_preference",
     "set_company_logo",
@@ -202,6 +212,8 @@ const READ: &[&str] = &[
     // Personal: the signed-in user's own reminder settings, and ticking off to-dos (a View-only user
     // only their own, which `reminders::set_done` checks).
     "save_reminder_settings",
+    // Personal: turning off your own two-step sign-in, after your password (gap R26).
+    "remove_my_two_step",
     "set_todo_done",
 ];
 
@@ -240,6 +252,8 @@ pub enum Gate {
 pub struct SignedIn {
     pub role: Role,
     pub must_change_password: bool,
+    /// The company requires two-step sign-in for this user and it isn't set up yet (gap R26).
+    pub must_set_up_two_step: bool,
 }
 
 pub fn check(gate: &Gate, need: Need) -> Result<(), String> {
@@ -254,6 +268,9 @@ pub fn check(gate: &Gate, need: Need) -> Result<(), String> {
     };
     if user.must_change_password {
         return Err("PASSWORD_CHANGE_REQUIRED: choose your own password first".into());
+    }
+    if user.must_set_up_two_step {
+        return Err("MFA_SETUP_REQUIRED: this company requires two-step sign-in; set up your authenticator app first".into());
     }
     match (need, user.role) {
         (Need::Write, Role::ViewOnly) => Err("ROLE_VIEW_ONLY: view only: your user can look at the books but not change them".into()),

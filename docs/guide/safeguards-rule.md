@@ -102,10 +102,14 @@ they carry the project's signature. Report a problem privately through the link 
 
 The rule asks for multi-factor authentication for anyone getting into an information system, unless
 the Qualified Individual approves in writing other controls that are as secure.
-**Limits:** LocalBooks has **no multi-factor sign-in**: a LocalBooks user signs in with a password
-only. What you can do: require a strong password or Touch ID / Windows Hello on the computer's own
-account, keep full-disk encryption on, leave **Remember me on this computer** off on shared
-computers, and have your Qualified Individual record whether that combination is acceptable.
+**LocalBooks:** optional **two-step sign-in**, off by default. An Admin turns it on in **Settings ›
+Users & Passwords › Two-step sign-in** and can require it for Admins and External Accountants or for
+everyone; each user then signs in with their password and a code from an authenticator app on their
+phone (see [Users and passwords](users-and-passwords.md#two-step-sign-in)). Remembered sign-ins and
+signing in again after an idle sign-out still ask for the code.
+**Limits:** it protects the LocalBooks sign-in, not the company file itself: someone with a copy of
+the file can read it with another program. Keep full-disk encryption (or whole-file encryption) on,
+and have your Qualified Individual record which setting the business uses.
 
 ### (c)(6) Dispose of data you no longer need
 

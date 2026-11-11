@@ -35,7 +35,7 @@ pub struct SignInState {
 
 /// Sign-ins remembered on this computer ("Remember me on this computer"), one per company file, keyed by
 /// the file's data-key id: `{"username": …, "password": …}` in the operating system's credential store.
-fn remembered_sign_ins(app: &AppHandle) -> Result<SecretStore, String> {
+pub(super) fn remembered_sign_ins(app: &AppHandle) -> Result<SecretStore, String> {
     let (_, dir) = crate::data_dirs(app).map_err(|e| format!("SIGN_IN_CONFIG: {e}"))?;
     Ok(SecretStore::for_this_computer(&dir, "LocalBooks sign-in", "remembered-sign-ins.json", "the remembered sign-in"))
 }
@@ -45,7 +45,7 @@ async fn file_key_id(pool: &sqlx::SqlitePool) -> Result<Option<String>, String> 
 }
 
 /// The wait after failed sign-ins (gap R27), kept in this computer's settings folder.
-fn throttle(app: &AppHandle) -> &'static crate::sign_in_throttle::Throttle {
+pub(super) fn throttle(app: &AppHandle) -> &'static crate::sign_in_throttle::Throttle {
     static THROTTLE: std::sync::OnceLock<crate::sign_in_throttle::Throttle> = std::sync::OnceLock::new();
     THROTTLE.get_or_init(|| crate::sign_in_throttle::Throttle::new(crate::data_dirs(app).ok().map(|(_, dir)| dir).as_deref()))
 }
@@ -53,7 +53,7 @@ fn throttle(app: &AppHandle) -> &'static crate::sign_in_throttle::Throttle {
 /// What names the open company file for remembered sign-ins and the sign-in wait: an encrypted
 /// file's id from its key header (readable while it is locked), else its data key's id. Both are
 /// shared by the file's copies.
-async fn file_identity(db: &Db, pool: &sqlx::SqlitePool) -> Result<Option<String>, String> {
+pub(super) async fn file_identity(db: &Db, pool: &sqlx::SqlitePool) -> Result<Option<String>, String> {
     match db.encrypted_file_id().await {
         Some(id) => Ok(Some(id)),
         None => file_key_id(pool).await,
@@ -61,18 +61,18 @@ async fn file_identity(db: &Db, pool: &sqlx::SqlitePool) -> Result<Option<String
 }
 
 /// Which company file a wait belongs to.
-async fn throttle_file(db: &Db, pool: &sqlx::SqlitePool) -> String {
+pub(super) async fn throttle_file(db: &Db, pool: &sqlx::SqlitePool) -> String {
     file_identity(db, pool).await.ok().flatten().unwrap_or_else(|| "(no key)".into())
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct RememberedSignIn {
+pub(super) struct RememberedSignIn {
     username: String,
     password: String,
 }
 
 /// Signing in or out changes what every window may show, so each reloads (as for another file).
-fn signed_in_changed(app: &AppHandle) {
+pub(super) fn signed_in_changed(app: &AppHandle) {
     let _ = app.emit(COMPANY_FILE_CHANGED, ());
 }
 
@@ -112,6 +112,8 @@ pub async fn sign_in_remembered(app: AppHandle, db: State<'_, Db>) -> Result<Opt
     let Some(saved) = store.get(&id).await?.and_then(|json| serde_json::from_str::<RememberedSignIn>(&json).ok()) else { return Ok(None) };
     match crate::file_cipher::user_slots::sign_in(&db, &saved.username, &saved.password).await {
         Ok(session) if !session.user.must_change_password => {
+            // A remembered password never skips two-step sign-in: the sign-in screen asks for the code.
+            let Some(session) = super::mfa::hold_for_code(&db, session, &saved.password, Remember::Keep).await.ok().flatten() else { return Ok(None) };
             let user = session.user.clone();
             *slot.lock().await = Some(session);
             db.refresh_gate().await;
@@ -203,23 +205,46 @@ pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, passwo
     let session = throttle(&app)
         .attempt(&file, crate::sign_in_throttle::Who::User(&username), |e| e.starts_with("SIGN_IN_FAILED"), crate::file_cipher::user_slots::sign_in(&db, &username, &password))
         .await?;
+    let remember = if remember { Remember::Save(zeroize::Zeroizing::new(password.clone())) } else { Remember::Forget };
+    // A user with two-step sign-in (gap R26) isn't signed in yet: the screen asks for their code.
+    let Some(session) = super::mfa::hold_for_code(&db, session, &password, remember.clone()).await? else {
+        return Err(crate::mfa::CODE_REQUIRED.into());
+    };
+    complete_sign_in(&app, &db, session, remember).await
+}
+
+/// What a finished sign-in does with "Remember me on this computer".
+#[derive(Clone)]
+pub(super) enum Remember {
+    /// Remember this password for the file.
+    Save(zeroize::Zeroizing<String>),
+    /// Stop remembering any password for the file.
+    Forget,
+    /// Leave what is remembered alone (a remembered sign-in).
+    Keep,
+}
+
+/// Signs `session` in to the open file: remembers (or forgets) the password, reloads every window.
+pub(super) async fn complete_sign_in(app: &AppHandle, db: &Db, session: Session, remember: Remember) -> Result<UserView, String> {
     // The pool changes when an encrypted file is unlocked.
     let (pool, slot) = db.pool_and_session().await?;
-    if let Some(id) = file_identity(&db, &pool).await? {
-        let store = remembered_sign_ins(&app)?;
-        if remember {
-            let saved = RememberedSignIn { username: session.user.username.clone(), password };
-            store.put(&id, &serde_json::to_string(&saved).map_err(|e| e.to_string())?).await?;
-        } else {
-            store.delete(&id).await?;
+    if let Some(id) = file_identity(db, &pool).await? {
+        let store = remembered_sign_ins(app)?;
+        match remember {
+            Remember::Save(password) => {
+                let saved = RememberedSignIn { username: session.user.username.clone(), password: password.to_string() };
+                store.put(&id, &serde_json::to_string(&saved).map_err(|e| e.to_string())?).await?;
+            }
+            Remember::Forget => store.delete(&id).await?,
+            Remember::Keep => {}
         }
     }
     let user = session.user.clone();
     *slot.lock().await = Some(session);
     db.refresh_gate().await;
     // As in QuickBooks, each user's desktop is their own: theirs reopens, not the last user's windows.
-    windows::restore_on_next_load(&app, true);
-    signed_in_changed(&app);
+    windows::restore_on_next_load(app, true);
+    signed_in_changed(app);
     Ok(user)
 }
 
@@ -229,6 +254,8 @@ pub async fn sign_out(app: AppHandle, db: State<'_, Db>) -> Result<(), String> {
     // Their windows are their desktop, saved for when they sign in again.
     windows::save_on_close(&app).await;
     *slot.lock().await = None;
+    // A sign-in waiting for its code ends too.
+    super::mfa::forget_pending().await;
     // Signing out means someone else may sign in next: no automatic sign-in until the file reopens.
     db.forbid_remembered_sign_in().await;
     db.relock().await;

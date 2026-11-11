@@ -35,7 +35,7 @@ async function firstScreen() {
   const signIn = await api.getSignInState().catch(() => null);
   // "Remember me on this computer": once per opening of the file, never after a sign-out or idle lock.
   if (signIn?.usersEnabled && !signIn.user && (await api.signInRemembered().catch(() => null))) return app();
-  if (signIn?.usersEnabled && (!signIn.user || signIn.user.mustChangePassword)) {
+  if (signIn?.usersEnabled && (!signIn.user || signIn.user.mustChangePassword || signIn.user.mustSetUpTwoStep)) {
     return <SignIn companyName={status?.companyName} user={signIn.user} />;
   }
   return app();

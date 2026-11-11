@@ -1,6 +1,13 @@
 # Multi-factor sign-in (R26)
 
-Status: **design, not built.** Gap R26 in [`docs/gaps.md`](../gaps.md). The FTC Safeguards Rule guide
+Status: **option A built (TOTP), optional and off by default.** The project owner decided two-step
+sign-in must be a choice, like whole-file encryption: the company setting is `OFF` by default, with
+`OPTIONAL`, `ADMINS` and `ALL` beside it (table `two_step_policy`, migration 0161). Turning it off
+removes every factor. What changed from the design below: the factor key is its own Argon2id run
+with its own salt (the verifier's output is stored, so a second output from that run would be
+derivable from the file); wrong codes use the existing sign-in throttle (four free tries, its own
+count per user name, so a right password doesn't clear it) and are audited past the free tries.
+Option B (passkeys, Touch ID) is gap R28. Gap R26 in [`docs/gaps.md`](../gaps.md). The FTC Safeguards Rule guide
 ([`docs/guide/safeguards-rule.md`](../guide/safeguards-rule.md), § 314.4(c)(5)) names this as the
 main limit LocalBooks has today.
 

@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Two-step sign-in (optional).** An Admin can turn on two-step sign-in in Settings › Users &
+  Passwords, for anyone who wants it or required for Admins and External Accountants or for
+  everyone. It's off unless you turn it on. Users with it sign in with their password and a 6-digit
+  code from an authenticator app on their phone, and get ten one-time backup codes for a lost phone.
+  An Admin can reset it for a user, and the recovery key still gets the only Admin back in.
+
 ## [0.14.1]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a

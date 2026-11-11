@@ -1,7 +1,7 @@
 use super::*;
 
 fn signed_in(role: Role) -> Gate {
-    Gate::Users(Some(SignedIn { role, must_change_password: false }))
+    Gate::Users(Some(SignedIn { role, must_change_password: false, must_set_up_two_step: false }))
 }
 
 #[test]
@@ -31,9 +31,17 @@ fn every_role_gets_what_it_should() {
     assert!(check(&Gate::Users(None), Need::Read).unwrap_err().starts_with("SIGN_IN_REQUIRED"));
     assert!(check(&Gate::Users(None), Need::Open).is_ok());
 
-    let temporary = Gate::Users(Some(SignedIn { role: Role::Admin, must_change_password: true }));
+    let temporary = Gate::Users(Some(SignedIn { role: Role::Admin, must_change_password: true, must_set_up_two_step: false }));
     assert!(check(&temporary, Need::Read).unwrap_err().starts_with("PASSWORD_CHANGE_REQUIRED"));
     assert!(check(&temporary, Need::Open).is_ok(), "change_my_password is open");
+
+    let no_second_step = Gate::Users(Some(SignedIn { role: Role::Admin, must_change_password: false, must_set_up_two_step: true }));
+    assert!(check(&no_second_step, Need::Read).unwrap_err().starts_with("MFA_SETUP_REQUIRED"));
+    assert!(check(&no_second_step, Need::Open).is_ok(), "setting up two-step sign-in is open");
+    assert_eq!(need("begin_two_step_setup"), Need::Open);
+    assert_eq!(need("finish_two_step_sign_in"), Need::Open);
+    assert_eq!(need("set_two_step_policy"), Need::Admin);
+    assert_eq!(need("reset_two_step"), Need::Admin);
 
     assert!(check(&signed_in(Role::ViewOnly), Need::Read).is_ok());
     assert!(check(&signed_in(Role::ViewOnly), Need::Write).unwrap_err().starts_with("ROLE_VIEW_ONLY"));

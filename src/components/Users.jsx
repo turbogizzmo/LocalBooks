@@ -5,6 +5,8 @@ import { useCompanyFileActions } from './CompanyFiles.jsx';
 import { api, COMPANY_FILE_CHANGED, errorText } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { formatDate } from '../lib/dates.js';
+import { needsCode } from '../lib/twoStep.js';
+import { CodeStep, TwoStepSettings, TwoStepSetup } from './TwoStep.jsx';
 
 const MIN_PASSWORD = 8;
 const REMOVE_ALL = 'REMOVE ALL USERS';
@@ -188,7 +190,10 @@ function ForgotChoices({ onRecover, onRemoveAll, onBack }) {
       </div>
       <div className="rounded-xs border border-qb-border p-2">
         <div className="font-semibold">You are an Admin</div>
-        <p className="mb-1 text-qb-ink-muted">Another Admin can reset your password the same way. Otherwise, use the recovery key you saved when users were turned on.</p>
+        <p className="mb-1 text-qb-ink-muted">
+          Another Admin can reset your password the same way. Otherwise, use the recovery key you saved when users were turned on. It also turns off your two-step sign-in,
+          if you lost the phone too.
+        </p>
         <button type="button" className="qb-btn qb-btn-secondary" onClick={onRecover}>
           Use the recovery key
         </button>
@@ -300,11 +305,22 @@ function ChangeOwnPasswordForm({ busy, run, temporary, onDone, submitLabel = 'Ch
  * the signed-in user still has a temporary password.
  */
 export default function SignIn({ companyName, user }) {
-  const [mode, setMode] = useState(user?.mustChangePassword ? 'change' : 'signin');
+  const [mode, setMode] = useState(user?.mustChangePassword ? 'change' : user?.mustSetUpTwoStep ? 'setup' : 'signin');
+  const [codeFor, setCodeFor] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const actions = useCompanyFileActions();
   useReloadOnCompanyChange();
+
+  // A password (typed, or remembered on this computer) was right and the user has two-step
+  // sign-in: the code step.
+  useEffect(() => {
+    if (user) return;
+    api.getTwoStepSignIn().then(
+      (name) => name && (setCodeFor(name), setMode('code')),
+      () => {},
+    );
+  }, [user]);
 
   // Signing in reloads every window (the backend says so); errors stay here.
   const run = async (action) => {
@@ -313,7 +329,12 @@ export default function SignIn({ companyName, user }) {
     try {
       await action();
     } catch (err) {
-      setError(errorText(err));
+      if (needsCode(err)) {
+        setCodeFor(await api.getTwoStepSignIn().catch(() => null));
+        setMode('code');
+      } else {
+        setError(errorText(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -329,6 +350,8 @@ export default function SignIn({ companyName, user }) {
     recover: 'Reset an Admin password',
     removeAll: 'Remove all users',
     change: 'Choose your own password',
+    code: 'Two-step sign-in',
+    setup: 'Set up two-step sign-in',
   };
 
   return (
@@ -342,6 +365,8 @@ export default function SignIn({ companyName, user }) {
         </div>
         {(error ?? actions.error) && <Notice kind="error" text={error ?? actions.error} onDismiss={() => (setError(null), actions.clearError())} />}
         {mode === 'signin' && <SignInForm busy={busy} run={run} onForgot={() => go('forgot')} />}
+        {mode === 'code' && <CodeStep username={codeFor} busy={busy} run={run} onBack={() => run(async () => (await api.cancelTwoStepSignIn(), go('signin')))} />}
+        {mode === 'setup' && <TwoStepSetup required onDone={() => window.location.reload()} />}
         {mode === 'forgot' && <ForgotChoices onRecover={() => go('recover')} onRemoveAll={() => go('removeAll')} onBack={() => go('signin')} />}
         {mode === 'recover' && <RecoverForm busy={busy} run={run} onBack={() => go('forgot')} />}
         {mode === 'removeAll' && <RemoveAllForm busy={busy} run={run} onBack={() => go('forgot')} />}
@@ -354,7 +379,7 @@ export default function SignIn({ companyName, user }) {
           </>
         )}
         <div className="flex gap-3 border-t border-qb-border pt-2 text-xs">
-          {mode === 'change' ? (
+          {mode === 'change' || mode === 'setup' ? (
             <button type="button" className="text-qb-link hover:underline" onClick={() => run(api.signOut)}>
               Sign out
             </button>
@@ -465,6 +490,21 @@ function UserDialog({ user, me, onClose, onSaved }) {
     }
   };
 
+  // For a user who lost their phone: they sign in with their password and set it up again.
+  const resetTwoStep = async () => {
+    const who = self ? 'your' : `${user.username}’s`;
+    if (!(await askConfirm(`Reset ${who} two-step sign-in? The authenticator and backup codes stop working.`, { confirmLabel: 'Reset' }))) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.resetTwoStep(user.id);
+      onSaved({ ...user, twoStep: false });
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30" role="dialog" aria-modal="true" aria-label={editing ? `Edit ${user.username}` : 'Add a user'}>
       <form className="qb-panel flex w-[480px] flex-col gap-2 p-3 shadow-panel" onSubmit={save}>
@@ -512,7 +552,16 @@ function UserDialog({ user, me, onClose, onSaved }) {
             )}
             <NewPasswordFields value={next} onChange={setNext} disabled={busy} label="Temporary password" />
             <p className="text-xs text-qb-ink-muted">Tell the user this password; they choose their own when they next sign in.</p>
+            {editing && user.twoStep && <p className="text-xs text-qb-ink-muted">A new password also resets their two-step sign-in; they set it up again.</p>}
           </>
+        )}
+        {editing && user.twoStep && (
+          <div className="flex items-center gap-2 text-sm">
+            <span>Uses two-step sign-in.</span>
+            <button type="button" className="qb-btn qb-btn-secondary h-row px-2 text-xs" disabled={busy} onClick={resetTwoStep}>
+              Reset Two-Step Sign-In…
+            </button>
+          </div>
         )}
         <div className="flex justify-end gap-2">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onClose} disabled={busy}>
@@ -575,6 +624,7 @@ function UserList({ me }) {
             <th className="qb-grid-head">Name</th>
             <th className="qb-grid-head">Role</th>
             <th className="qb-grid-head">Sensitive data</th>
+            <th className="qb-grid-head">Two-step</th>
             <th className="qb-grid-head">Last signed in</th>
             <th className="qb-grid-head" aria-label="Actions" />
           </tr>
@@ -591,6 +641,7 @@ function UserList({ me }) {
               <td className="qb-grid-cell">{u.displayName}</td>
               <td className="qb-grid-cell">{roleLabel(u.role)}</td>
               <td className="qb-grid-cell">{u.canSeeSensitive ? 'Yes' : 'No'}</td>
+              <td className="qb-grid-cell">{u.twoStep ? 'On' : u.mustSetUpTwoStep ? 'Required' : 'Off'}</td>
               <td className="qb-grid-cell">{u.lastSignedInAt ? formatDate(u.lastSignedInAt.slice(0, 10)) : 'Never'}</td>
               <td className="qb-grid-cell cell-tight">
                 <button type="button" className="qb-btn qb-btn-secondary h-[20px] px-2 text-xs" onClick={() => setEditing(u)}>
@@ -735,6 +786,7 @@ export function UsersSettings() {
           <ChangeOwnPasswordForm busy={busy} run={run} onDone={() => setChanged(true)} />
         </div>
       </section>
+      <TwoStepSettings me={me} />
       {me.role === 'ADMIN' && <AutoLockSetting minutes={state.autoLockMinutes} />}
       {me.role === 'ADMIN' && <UserList me={me} />}
     </div>

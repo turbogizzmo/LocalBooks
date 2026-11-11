@@ -162,7 +162,7 @@ fn parse_recovery_key(text: &str) -> Result<Zeroizing<[u8; RECOVERY_BYTES]>, Str
     Ok(out)
 }
 
-fn encode_base32(bytes: &[u8]) -> String {
+pub(crate) fn encode_base32(bytes: &[u8]) -> String {
     let (mut bits, mut count, mut out) = (0u64, 0u32, String::new());
     for &b in bytes {
         bits = (bits << 8) | b as u64;
@@ -372,6 +372,57 @@ pub async fn unlock_with_recovery_key(conn: &mut SqliteConnection, recovery_key:
     open_slot(key_id, "RECOVERY", None, slot, Zeroizing::new(bytes.to_vec()))
         .await?
         .ok_or_else(|| "KEY_WRONG_RECOVERY: that is not this company file's recovery key".to_string())
+}
+
+/// A small secret sealed with AES-256-GCM under a key derived by Argon2id from a user's password,
+/// in the same form as a key slot: its cost and salt are stored beside it. Two-step sign-in
+/// ([`crate::mfa`]) keeps its authenticator secrets this way.
+#[derive(Clone)]
+pub(crate) struct PasswordSealed {
+    pub memory_kib: i64,
+    pub iterations: i64,
+    pub parallelism: i64,
+    pub salt: Vec<u8>,
+    pub nonce: Vec<u8>,
+    pub sealed: Vec<u8>,
+}
+
+// Debug output never shows the sealed bytes.
+impl std::fmt::Debug for PasswordSealed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PasswordSealed(..)")
+    }
+}
+
+/// Seals `plain` under `password`, authenticated together with `aad`.
+pub(crate) async fn seal_with_password(password: &str, aad: &[u8], plain: &[u8]) -> Result<PasswordSealed, String> {
+    let salt: [u8; SALT_LEN] = random()?;
+    let nonce: [u8; NONCE_LEN] = random()?;
+    let key = derive(Zeroizing::new(password.as_bytes().to_vec()), salt, COST).await?;
+    let sealed = Aes256Gcm::new_from_slice(&key[..])
+        .expect("a 32-byte key")
+        .encrypt(&Nonce::from(nonce), Payload { msg: plain, aad })
+        .map_err(|_| "CRYPTO_ENCRYPT: could not protect the secret".to_string())?;
+    Ok(PasswordSealed {
+        memory_kib: COST.memory_kib.into(),
+        iterations: COST.iterations.into(),
+        parallelism: COST.parallelism.into(),
+        salt: salt.to_vec(),
+        nonce: nonce.to_vec(),
+        sealed,
+    })
+}
+
+/// Opens what [`seal_with_password`] sealed; `None` when the password is wrong or the bytes, or the
+/// `aad` they belong to, were changed.
+pub(crate) async fn open_with_password(password: &str, aad: &[u8], sealed: &PasswordSealed) -> Result<Option<Zeroizing<Vec<u8>>>, String> {
+    let damaged = || "CRYPTO_SEALED: a protected secret is damaged".to_string();
+    let as_u32 = |v: i64| u32::try_from(v).map_err(|_| "CRYPTO_KDF: unusable key cost".to_string());
+    let cost = Cost { memory_kib: as_u32(sealed.memory_kib)?, iterations: as_u32(sealed.iterations)?, parallelism: as_u32(sealed.parallelism)? };
+    let salt: [u8; SALT_LEN] = sealed.salt.as_slice().try_into().map_err(|_| damaged())?;
+    let nonce = Nonce::try_from(sealed.nonce.as_slice()).map_err(|_| damaged())?;
+    let key = derive(Zeroizing::new(password.as_bytes().to_vec()), salt, cost).await?;
+    Ok(Aes256Gcm::new_from_slice(&key[..]).expect("a 32-byte key").decrypt(&nonce, Payload { msg: &sealed.sealed, aad }).ok().map(Zeroizing::new))
 }
 
 /// Argon2id cost of a key derived from a password outside the company file (an offsite backup's),

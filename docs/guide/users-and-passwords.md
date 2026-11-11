@@ -71,6 +71,57 @@ yourself off: another Admin has to.
   windows, including time the computer was asleep. An Admin can change this under **Sign out when idle**
   (or choose **Never**). Anything not yet saved is lost when it signs out.
 
+## Two-step sign-in
+
+Two-step sign-in is **optional and off by default**. When it's on for you, signing in asks for your
+password and then a 6-digit code from an authenticator app on your phone (any app that scans a QR
+code for one-time codes). Someone who learns your password still can't sign in to LocalBooks
+without your phone.
+
+**Turn it on for the company (Admin).** In **Settings › Users & Passwords › Two-step sign-in**,
+choose:
+
+- **Off** (the default): nobody is asked for a code. Choosing Off later removes everyone's
+  authenticator and backup codes.
+- **Optional**: each user may set it up; nobody has to.
+- **Required for Admins and External Accountants**: they set it up at their next sign-in and can't
+  do anything else until they have. Other users may.
+- **Required for everyone**: every user sets it up at their next sign-in.
+
+**Set it up for yourself.** In the same section click **Set Up…**, enter your password, scan the QR
+code with your authenticator app (or type the key shown under it), and enter the code the app now
+shows. LocalBooks draws the QR code on your computer; nothing is sent anywhere. You then get **ten
+backup codes**, shown only once: save them somewhere apart from your phone. Each one signs you in
+once in place of a code. **Set Up Again…** replaces your authenticator and backup codes;
+**Turn Off…** removes it, unless the company requires it for you.
+
+**Signing in.** After your password, enter the code your app shows for LocalBooks, or click **Use a
+backup code**. A code works once. A phone clock up to 30 seconds off is fine. **Remember me on this
+computer** fills in your password but still asks for the code, and so does signing in again after
+an idle sign-out. Wrong codes wait the same way as wrong passwords: four free tries, then 30
+seconds, 1, 2 and at most 5 minutes. Past the free tries, wrong codes are recorded in the audit
+trail.
+
+**Lost your phone?**
+
+- Use one of your backup codes.
+- Ask an Admin: **Edit…** your user and click **Reset Two-Step Sign-In…**. You sign in with your
+  password and set it up again (at once, if the company requires it).
+- A temporary password from an Admin resets two-step sign-in too: your authenticator's secret is
+  locked with your old password, which the Admin doesn't know.
+- The only Admin, with no backup code: **I forgot my password › Use the recovery key** sets a new
+  password and turns off your two-step sign-in.
+
+**What it protects.** Two-step sign-in stops someone who has a password but not the phone from
+signing in to LocalBooks. It doesn't stop someone who copies the company file and reads it with
+another program, so keep full-disk encryption (or whole-file encryption) on. The authenticator's
+secret is kept in the company file locked with your password (AES-256, the key made from your
+password by Argon2id), so the file alone can't produce codes; changing your password re-locks it.
+On an encrypted company file your password opens the file first, then LocalBooks asks for the code.
+
+Passkeys and Touch ID / Windows Hello as a second step aren't available yet: an authenticator code
+moves with the company file to any computer, which a fingerprint on one computer can't.
+
 ## Forgot your password?
 
 After four wrong passwords for a user name, LocalBooks makes each next try wait: 30 seconds, then 1,

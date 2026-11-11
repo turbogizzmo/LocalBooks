@@ -104,6 +104,7 @@ features![
     lists,
     mcp,
     merges,
+    mfa,
     migration,
     mileage,
     money_bars,
