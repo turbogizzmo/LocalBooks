@@ -408,7 +408,7 @@ export const topics = [
   {
     id: 'recurring', area: 'accounting', views: ['accounting/recurring', 'expenses/expenses', 'expenses/bills', 'sales/invoices', 'accounting/journal'],
     title: 'Memorize a recurring transaction',
-    body: 'Fill in an expense, check, bill, invoice or journal entry and choose Memorize… to save it with a schedule. Accounting › Recurring Transactions enters everything that is due in one step; a reminder appears at the top of the window when something is due.',
+    body: 'Fill in an expense, check, bill, invoice or journal entry and choose Memorize… to save it with a schedule. Accounting › Recurring Transactions enters everything that is due in one step; a reminder appears at the top of the window when something is due. A monthly, quarterly or yearly schedule keeps to the day of the month it started on: from the 31st it falls on the last day of shorter months (February 28) and goes back to the 31st after them.',
     keywords: 'recurring memorize memorized repeat schedule subscription rent monthly automatic',
     go: { label: 'Go to Recurring Transactions', view: 'accounting/recurring' },
     guide: 'memorized-transactions',

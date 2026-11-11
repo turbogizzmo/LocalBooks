@@ -125,7 +125,7 @@ async fn recurring_due_follows_next_date_activity_and_end_date() {
     let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
     let check = serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-01",
         "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 120_000, "memo": null }] });
-    let template = |name: &str, next: NaiveDate, end: Option<NaiveDate>| crate::workflows::RecurringInput {
+    let template = |name: &str, next: NaiveDate, end: Option<NaiveDate>| crate::workflows::RecurringInput { anchor_day: None,
         name: name.into(), kind: "EXPENSE".into(), payload: check.clone(), frequency: "MONTHLY".into(), every: 1, next_date: next, end_date: end,
     };
     let rent_id = crate::workflows::save_recurring(&pool, None, template("Rent", d(3, 1), None)).await.unwrap();

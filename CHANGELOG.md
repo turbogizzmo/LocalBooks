@@ -14,6 +14,11 @@ people using LocalBooks.
   report and the sales tax return, matching the tax that was charged. The tax amounts were already
   right.
 - The message after **Pay sales tax** names the account actually paid down.
+- **Month-end schedules stay at month end.** A recurring transaction that repeats monthly,
+  quarterly or yearly from the 29th, 30th or 31st now falls on the last day of shorter months and
+  goes back to its own day after them (January 31, February 28, March 31). Before, it moved to the
+  28th for good after February. Schedules already set up pick this up from their next date on.
+- In Memorize, changing **Repeat every** now moves the **Next date** too.
 ## [0.14.1]
 - **Help for every screen, setting and menu command.** F1 now explains every page in the sidebar,
   including Approvals, Payout Feeds, the Attachments Library, Reps, Ship Via & Fields and each
