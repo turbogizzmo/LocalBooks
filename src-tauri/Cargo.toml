@@ -28,6 +28,8 @@ libc = "0.2"
 openqbw = "=0.1.6"
 opensqlany = "=0.2.0"
 pdf-extract = "0.12"
+# Two-step sign-in (gap R26): the QR code an authenticator app scans, drawn as SVG, no network.
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 quick-xml = "0.42"
 regex = "1"
 rust_xlsxwriter = "0.101"
@@ -35,6 +37,8 @@ reqwest = { version = "0.13", default-features = false, features = ["native-tls"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 sha2 = "=0.10.9"
+# TOTP codes (RFC 6238) use HMAC-SHA-1, the only hash every authenticator app supports.
+sha1 = "=0.10.7"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "chrono", "migrate", "macros", "derive"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"

@@ -386,7 +386,7 @@ impl Db {
                     let session = live.session.lock().await;
                     let user = session.as_ref().map(|s| &s.user);
                     (
-                        Gate::Users(user.map(|u| SignedIn { role: u.role, must_change_password: u.must_change_password })),
+                        Gate::Users(user.map(|u| SignedIn { role: u.role, must_change_password: u.must_change_password, must_set_up_two_step: u.must_set_up_two_step })),
                         user.map(|u| (u.username.clone(), u.role)),
                     )
                 } else {
