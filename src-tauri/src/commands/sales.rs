@@ -48,6 +48,7 @@ pub async fn post_sales_receipt(
     confirmed: Option<Vec<String>>,
 ) -> Result<SalesReceiptSummary, String> {
     let pool = db.pool().await;
+    crate::sales::require_listed_opt(&pool, crate::sales::Party::Customer, input.customer_name.as_deref()).await?;
     guards::check(&pool, guards::sales_receipt(&input), confirmed.as_deref()).await?;
     let receipt = sales::post_sales_receipt(&pool, input).await?;
     notify(&app);

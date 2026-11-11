@@ -5,6 +5,7 @@
 //! record about the form; it never changes the posted transaction, and the database refuses to
 //! edit or delete it.
 
+use chrono::NaiveDate;
 use serde::Serialize;
 use sqlx::SqlitePool;
 
@@ -39,14 +40,21 @@ pub struct SentRecord {
 }
 
 /// Records a send and takes the form off the "Email later" queue.
+#[cfg(test)]
 pub async fn record(pool: &SqlitePool, kind: FormKind, document_id: i64, recipients: &[String], method: Method, subject: &str) -> Result<(), String> {
+    record_for(pool, kind, document_id, None, recipients, method, subject).await
+}
+
+/// [`record`], with the statement period's end date for a statement (its statement date).
+pub async fn record_for(pool: &SqlitePool, kind: FormKind, document_id: i64, period_end: Option<NaiveDate>, recipients: &[String], method: Method, subject: &str) -> Result<(), String> {
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
-    sqlx::query("INSERT INTO form_email_log (form_type, document_id, recipients, method, subject) VALUES (?1, ?2, ?3, ?4, ?5)")
+    sqlx::query("INSERT INTO form_email_log (form_type, document_id, recipients, method, subject, period_end) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
         .bind(kind.key())
         .bind(document_id)
         .bind(recipients.join(", "))
         .bind(method.key())
         .bind(subject)
+        .bind(period_end)
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;
@@ -113,21 +121,24 @@ pub struct EmailStatus {
     pub queued: bool,
 }
 
-/// The forms of a type that have been emailed or are queued (others have no entry).
-pub async fn statuses(pool: &SqlitePool, kind: FormKind) -> Result<Vec<EmailStatus>, String> {
+/// The forms of a type that have been emailed or are queued (others have no entry). With
+/// `period_end` (statements), only sends of the statement for the period ending then count.
+pub async fn statuses(pool: &SqlitePool, kind: FormKind, period_end: Option<NaiveDate>) -> Result<Vec<EmailStatus>, String> {
     sqlx::query_as(
-        "WITH ids AS (
-             SELECT document_id FROM form_email_log WHERE form_type = ?1
+        "WITH log AS (SELECT * FROM form_email_log WHERE form_type = ?1 AND (?2 IS NULL OR period_end = ?2)),
+         ids AS (
+             SELECT document_id FROM log
              UNION SELECT document_id FROM form_email_queue WHERE form_type = ?1
          )
          SELECT ids.document_id,
-                (SELECT sent_at FROM form_email_log l WHERE l.form_type = ?1 AND l.document_id = ids.document_id ORDER BY l.id DESC LIMIT 1) AS last_sent_at,
-                (SELECT recipients FROM form_email_log l WHERE l.form_type = ?1 AND l.document_id = ids.document_id ORDER BY l.id DESC LIMIT 1) AS last_recipients,
-                (SELECT COUNT(*) FROM form_email_log l WHERE l.form_type = ?1 AND l.document_id = ids.document_id) AS send_count,
+                (SELECT sent_at FROM log l WHERE l.document_id = ids.document_id ORDER BY l.id DESC LIMIT 1) AS last_sent_at,
+                (SELECT recipients FROM log l WHERE l.document_id = ids.document_id ORDER BY l.id DESC LIMIT 1) AS last_recipients,
+                (SELECT COUNT(*) FROM log l WHERE l.document_id = ids.document_id) AS send_count,
                 EXISTS (SELECT 1 FROM form_email_queue q WHERE q.form_type = ?1 AND q.document_id = ids.document_id) AS queued
          FROM ids ORDER BY ids.document_id",
     )
     .bind(kind.key())
+    .bind(period_end)
     .fetch_all(pool)
     .await
     .map_err(db_err)

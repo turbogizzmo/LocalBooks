@@ -21,7 +21,54 @@ use sqlx::SqlitePool;
 pub mod header;
 pub mod keys;
 pub mod user_slots;
+pub mod whole_file;
 pub mod vfs;
+
+/// The page keys of the encrypted company files unlocked in this process, by the key header's file
+/// id. Registered when a file is unlocked and forgotten when it is locked or closed, so a copy of
+/// the open company (a backup, a restore or Condense staging file, a moved file) opens by its path
+/// with the same key ([`options_for`]), and nothing else does.
+pub mod keyring {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+
+    use super::keys::PageKey;
+
+    static KEYS: Mutex<Option<HashMap<String, Arc<PageKey>>>> = Mutex::new(None);
+
+    pub fn register(file_id: &str, key: Arc<PageKey>) {
+        KEYS.lock().expect("keyring").get_or_insert_with(HashMap::new).insert(file_id.to_string(), key);
+    }
+
+    pub fn forget(file_id: &str) {
+        if let Some(keys) = KEYS.lock().expect("keyring").as_mut() {
+            keys.remove(file_id);
+        }
+    }
+
+    pub fn get(file_id: &str) -> Option<Arc<PageKey>> {
+        KEYS.lock().expect("keyring").as_ref().and_then(|keys| keys.get(file_id).cloned())
+    }
+}
+
+/// What opening an encrypted file needs and its key couldn't be found: the file isn't unlocked here.
+pub const LOCKED: &str = "FILE_ENCRYPTED_LOCKED: this file is encrypted; open it with File › Open Company File and sign in to it";
+
+/// Connection options for the company file (or copy) at `path`: plain SQLite as always for a plain
+/// file; for an encrypted one, through the VFS with its key from the [`keyring`] (an error if it
+/// isn't unlocked in this process), together with its file id and key.
+///
+/// Reads the key header by path, so only for a file no connection in this process has open (a
+/// copy, or the company file while its pool is closed); see [`header`].
+#[allow(clippy::type_complexity)]
+pub fn options_for(path: &Path) -> Result<(SqliteConnectOptions, Option<(String, std::sync::Arc<keys::PageKey>)>), String> {
+    if !header::is_encrypted(path) {
+        return Ok((SqliteConnectOptions::new().filename(path), None));
+    }
+    let file_id = header::read(path)?.file_id;
+    let key = keyring::get(&file_id).ok_or_else(|| LOCKED.to_string())?;
+    Ok((open_options(path, Some(&key))?, Some((file_id, key))))
+}
 
 /// Connection options for `path` through the [`vfs`], with SQLCipher's `key` when the file is
 /// encrypted. `page_key` is the raw 256-bit page key. A plain file opens as plain SQLite through
@@ -61,10 +108,8 @@ pub async fn cipher_provider() -> Option<String> {
 /// exist): writes `header`, then exports every table, index and trigger into it under `key`
 /// (SQLCipher's `sqlcipher_export`). The source is only read. On failure `dest` is removed.
 ///
-/// Test-only until turning encryption on ships (phase 3b): this is the one way to make an encrypted
-/// company file, so nothing outside the tests can make one yet. (A backup of an encrypted file is
-/// encrypted too, but that needs one to exist first.)
-#[cfg(test)]
+/// The one way to make an encrypted company file: used by [`whole_file::encrypt`], which an Admin
+/// starts from Settings › Users & Passwords. (A backup of an encrypted file is encrypted too.)
 pub async fn encrypt_into(source: &Path, dest: &Path, key: &keys::PageKey, header: &header::Header) -> Result<(), String> {
     use sqlx::{ConnectOptions, Connection};
     header::create(dest, header)?;

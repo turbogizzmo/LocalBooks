@@ -62,6 +62,9 @@ async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transacti
 #[serde(rename_all = "camelCase")]
 pub struct CreditMemoInput {
     pub customer_name: String,
+    /// The number typed in the form's number box; `None` takes the next one (`doc_numbers`).
+    #[serde(default)]
+    pub credit_number: Option<i64>,
     pub credit_date: NaiveDate,
     pub memo: Option<String>,
     /// Set for a refund receipt: the bank or card account the money was paid back from.
@@ -156,6 +159,7 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
     let customer = input.customer_name.trim();
     let customer_id = find_or_create_named(tx, Party::Customer, customer).await?;
 
+    let credit_number = crate::doc_numbers::take_number(tx, crate::doc_numbers::DocKind::CreditMemo, input.credit_number).await?;
     let (memo_id, number): (i64, i64) = sqlx::query_as(
         "INSERT INTO credit_memos (credit_number, customer_id, credit_date, memo, refund_account_id, total_cents, tax_rate_id, tax_cents)
          VALUES (?8, ?1, ?2, ?3, ?4, ?5, ?6, ?7)
@@ -168,7 +172,7 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
     .bind(total)
     .bind(tax.as_ref().and_then(|t| t.rate_id))
     .bind(tax_cents)
-    .bind(next_credit_number(tx, false).await?)
+    .bind(credit_number)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -304,7 +308,8 @@ pub(crate) async fn apply_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite>
     if voided || refund.is_some() {
         return Err("CM_NOT_AVAILABLE: a voided credit memo or a refund receipt has no credit to apply".into());
     }
-    let invoice: Option<(Option<i64>, i64, i64, bool, String, Option<String>)> = sqlx::query_as(
+    type InvoiceRow = (Option<i64>, i64, i64, bool, String, Option<String>);
+    let invoice: Option<InvoiceRow> = sqlx::query_as(
         "SELECT customer_id, total_cents, amount_paid_cents, is_voided, status, currency_code FROM invoices WHERE id = ?1",
     )
     .bind(input.document_id)
@@ -557,24 +562,18 @@ pub struct UnappliedPaymentInput {
 /// statements and reports show its payment reference), so credit memo numbers never skip.
 pub(crate) const PAYMENT_CREDIT_NUMBERS: i64 = 1_000_000_000;
 
-/// The next number in a credit sequence: for a credit memo (or refund receipt), one more than the
-/// highest below [`PAYMENT_CREDIT_NUMBERS`]; for an unapplied payment kept as credit, one more than
-/// the highest at or above it. Both stay unique; a credit memo sequence that reaches the payments'
-/// range is refused rather than mixed into it.
+/// The next number in a credit sequence: for a credit memo (or refund receipt), the next one below
+/// [`PAYMENT_CREDIT_NUMBERS`] (`doc_numbers`, which refuses one that would reach the range); for an
+/// unapplied payment kept as credit, one more than the highest at or above it.
 pub(crate) async fn next_credit_number(tx: &mut Transaction<'_, Sqlite>, payment: bool) -> Result<i64, String> {
-    let next: i64 = if payment {
-        sqlx::query_scalar("SELECT COALESCE(MAX(credit_number), ?1) + 1 FROM credit_memos WHERE credit_number >= ?1")
-    } else {
-        sqlx::query_scalar("SELECT COALESCE(MAX(credit_number), 0) + 1 FROM credit_memos WHERE credit_number < ?1")
+    if !payment {
+        return crate::doc_numbers::next_number(tx, crate::doc_numbers::DocKind::CreditMemo).await;
     }
-    .bind(PAYMENT_CREDIT_NUMBERS)
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(db_err)?;
-    if !payment && next >= PAYMENT_CREDIT_NUMBERS {
-        return Err("CM_NUMBERS_FULL: credit memo numbers have reached 999,999,999".into());
-    }
-    Ok(next)
+    sqlx::query_scalar("SELECT COALESCE(MAX(credit_number), ?1) + 1 FROM credit_memos WHERE credit_number >= ?1")
+        .bind(PAYMENT_CREDIT_NUMBERS)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)
 }
 
 /// Posts an unapplied payment as the customer's credit (Dr the deposit account / Cr A/R), then

@@ -94,10 +94,12 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
   const { prefs, ready: prefsReady } = useCompanyPreferencesState();
   const [chosenBasis, setBasis] = useState(initial?.basis ?? null);
   const basis = chosenBasis ?? reportBasis(prefs);
-  const [split, setSplit] = useState('total'); // total | months | quarters
+  const [split, setSplit] = useState('total'); // total | months | quarters | class | job
+  // Columns by name: a column per class (the Profit and Loss by Class report always), or per customer and job.
+  const byName = byClass ? 'class' : split === 'class' || split === 'job' ? split : null;
   const [compare, setCompare] = useState(initialCompare); // none | period | year
   const periodColumns = () => {
-    if (split !== 'total') return splitPeriods(start, end, split);
+    if (split === 'months' || split === 'quarters') return splitPeriods(start, end, split);
     if (compare === 'none') return null;
     const [ps, pe] = priorRange(start, end, compare);
     return [
@@ -105,15 +107,24 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
       { label: shortRange(ps, pe), startDate: ps, endDate: pe },
     ];
   };
-  const multi = !byClass && (split !== 'total' || compare !== 'none');
-  const { data, error, reload } = useLedgerQuery(() => {
+  const multi = !byName && (split !== 'total' || compare !== 'none');
+  const heading = title ?? (byClass ? 'Profit and Loss by Class' : byName === 'job' ? 'Profit and Loss by Job' : 'Profit and Loss');
+  const fileBase = byName === 'job' ? 'Profit-and-Loss-by-Job' : 'Profit-and-Loss';
+  // Which layout a result belongs to, so a reload after a Columns change never draws the old one.
+  const layout = byName ?? (multi ? 'periods' : 'total');
+  const { data: fetched, error, reload } = useLedgerQuery(() => {
     if (!prefsReady && !chosenBasis) return Promise.resolve(null); // wait for the default basis (accrual if it can't load)
-    if (byClass) return api.getProfitAndLossByClass(start, end);
-    if (!multi) return api.getProfitAndLoss(start, end, classFilter, basis);
+    const tag = (d) => d && { ...d, layout };
+    if (byName === 'class') return api.getProfitAndLossByClass(start, end).then(tag);
+    if (byName === 'job') return api.getProfitAndLossByJob(start, end).then(tag);
+    if (!multi) return api.getProfitAndLoss(start, end, classFilter, basis).then(tag);
     const columns = periodColumns();
     if (columns.length > 36) return Promise.reject(new Error('RPT_BAD_COLUMNS: choose a shorter range or quarters (at most 36 columns)'));
-    return api.getProfitAndLossPeriods({ columns, total: split !== 'total', compare: split === 'total' && compare !== 'none', basis, classFilter });
+    return api.getProfitAndLossPeriods({ columns, total: split !== 'total', compare: split === 'total' && compare !== 'none', basis, classFilter }).then(tag);
   });
+
+  // Until a reload after a Columns change finishes, `fetched` is the old layout's; show nothing then.
+  const data = fetched?.layout === layout ? fetched : null;
 
   // Once the fiscal calendar loads (or changes in Settings), re-resolve the selected preset.
   useEffect(() => {
@@ -126,7 +137,7 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
   const classSubtitle = classChoice === '' ? '' : ` · Class: ${classChoice === 'none' ? 'Unclassified' : `${classLabel(classes, Number(classChoice))} (with subclasses)`}`;
   const company = useCompany();
   const subtitle = data
-    ? (data.startDate === data.endDate ? longDate(data.startDate) : `${longDate(start)} – ${longDate(end)}`) + (byClass ? '' : classSubtitle)
+    ? (data.startDate === data.endDate ? longDate(data.startDate) : `${longDate(start)} – ${longDate(end)}`) + (byName ? '' : classSubtitle)
     : '';
 
   return (
@@ -159,17 +170,20 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
           <>
             <label>
               <span className="qb-label">Basis</span>
-              <select className="qb-input w-[100px]" value={basis} onChange={(e) => setBasis(e.target.value)}>
+              {/* Columns by name are accrual only. */}
+              <select className="qb-input w-[100px]" value={byName ? 'ACCRUAL' : basis} onChange={(e) => setBasis(e.target.value)} disabled={Boolean(byName)}>
                 <option value="ACCRUAL">Accrual</option>
                 <option value="CASH">Cash</option>
               </select>
             </label>
             <label>
               <span className="qb-label">Columns</span>
-              <select className="qb-input w-[120px]" value={split} onChange={(e) => setSplit(e.target.value)}>
+              <select className="qb-input w-[130px]" value={split} onChange={(e) => setSplit(e.target.value)}>
                 <option value="total">Total only</option>
                 <option value="months">Months</option>
                 <option value="quarters">Quarters</option>
+                {classes.length > 0 && <option value="class">Class</option>}
+                <option value="job">Customer:Job</option>
               </select>
             </label>
             <label>
@@ -182,7 +196,7 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
             </label>
           </>
         )}
-        {!byClass && classes.length > 0 && (
+        {!byName && classes.length > 0 && (
           <label>
             <span className="qb-label">Class</span>
             <select className="qb-input w-[180px]" value={classChoice} onChange={(e) => setClassChoice(e.target.value)}>
@@ -197,26 +211,26 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
             </select>
           </label>
         )}
-        {data && !byClass && !multi && (
+        {data && !byName && !multi && (
           <div className="ml-auto flex gap-4 self-center text-sm">
             <span className="text-qb-ink-muted">Revenue <span className="num font-semibold text-qb-ink">{formatCents(data.totalRevenueCents)}</span></span>
             <span className="text-qb-ink-muted">Expenses <span className="num font-semibold text-qb-ink">{formatCents(data.totalExpensesCents)}</span></span>
             <span className="text-qb-ink-muted">Net income <span className={`num font-semibold ${data.netIncomeCents < 0 ? 'text-qb-negative' : 'text-qb-green-active'}`}>{data.netIncomeDisplay}</span></span>
           </div>
         )}
-        <div className={data && !byClass && !multi ? '' : 'ml-auto'}>
+        <div className={data && !byName && !multi ? '' : 'ml-auto'}>
           <ExportMenu
             onNotice={setNotice}
             onCsv={() => {
-              if (byClass) return saveCsv('profit_and_loss_by_class', { startDate: start, endDate: end }, `Profit-and-Loss-by-Class_${start}_to_${end}.csv`, setNotice);
-              if (!multi && basis === 'ACCRUAL') return saveCsv('profit_and_loss', { startDate: start, endDate: end, classFilter }, `Profit-and-Loss_${start}_to_${end}.csv`, setNotice);
-              // Cash basis and multi-column layouts export what is on screen.
+              if (byName === 'class') return saveCsv('profit_and_loss_by_class', { startDate: start, endDate: end }, `Profit-and-Loss-by-Class_${start}_to_${end}.csv`, setNotice);
+              if (!byName && !multi && basis === 'ACCRUAL') return saveCsv('profit_and_loss', { startDate: start, endDate: end, classFilter }, `Profit-and-Loss_${start}_to_${end}.csv`, setNotice);
+              // Cash basis, multi-column and Customer:Job layouts export what is on screen.
               const columns = data.columns ?? [{ label: 'Total' }];
               const rows = [
                 [company.name],
-                [title ?? 'Profit and Loss'],
+                [heading],
                 [subtitle],
-                [`${basis === 'CASH' ? 'Cash' : 'Accrual'} basis`],
+                [`${basis === 'CASH' && !byName ? 'Cash' : 'Accrual'} basis`],
                 [],
                 ['Account', ...columns.map((c) => c.label)],
                 ...data.lines.map((l) => [
@@ -224,20 +238,20 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
                   ...(data.columns ? l.amountsCents : [l.amountCents]).map((a, i) => (columns[i]?.kind === 'percent' ? (a === null ? '' : (a / 100).toFixed(1)) : plainAmount(a))),
                 ]),
               ];
-              return saveText(toCsv(rows), `Profit-and-Loss_${start}_to_${end}.csv`, setNotice);
+              return saveText(toCsv(rows), `${fileBase}_${start}_to_${end}.csv`, setNotice);
             }}
             onXlsx={() => {
-              if (byClass) return saveReportXlsx('profit_and_loss_by_class', { startDate: start, endDate: end }, `Profit-and-Loss-by-Class_${start}_to_${end}.xlsx`, setNotice);
-              if (!multi && basis === 'ACCRUAL') return saveReportXlsx('profit_and_loss', { startDate: start, endDate: end, classFilter }, `Profit-and-Loss_${start}_to_${end}.xlsx`, setNotice);
+              if (byName === 'class') return saveReportXlsx('profit_and_loss_by_class', { startDate: start, endDate: end }, `Profit-and-Loss-by-Class_${start}_to_${end}.xlsx`, setNotice);
+              if (!byName && !multi && basis === 'ACCRUAL') return saveReportXlsx('profit_and_loss', { startDate: start, endDate: end, classFilter }, `Profit-and-Loss_${start}_to_${end}.xlsx`, setNotice);
               const sheet = statementSheet({
                 company: company.name,
-                title: title ?? 'Profit and Loss',
+                title: heading,
                 subtitle,
-                notes: [`${basis === 'CASH' ? 'Cash' : 'Accrual'} basis`],
+                notes: [`${basis === 'CASH' && !byName ? 'Cash' : 'Accrual'} basis`],
                 lines: data.lines,
                 columns: data.columns ?? null,
               });
-              return saveXlsx(sheet, `Profit-and-Loss_${start}_to_${end}.xlsx`, setNotice);
+              return saveXlsx(sheet, `${fileBase}_${start}_to_${end}.xlsx`, setNotice);
             }}
           />
         </div>
@@ -245,17 +259,17 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
       {end < start && <Notice kind="error" text="The end date is before the start date." />}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={error} />}
-      {byClass && data && data.columns.length === 1 && (
+      {byName === 'class' && data && data.columns.length === 1 && (
         <Notice kind="info" text="No income or expenses in this period carry a class. Add classes under Accounting › Classes, then choose one on each line." />
       )}
       {data && (
         <Statement
-          title={title ?? (byClass ? 'Profit and Loss by Class' : 'Profit and Loss')}
+          title={heading}
           subtitle={subtitle}
           lines={data.lines}
-          columns={byClass || multi ? data.columns : null}
+          columns={byName || multi ? data.columns : null}
           onAccount={(line, c) => {
-            // A month, quarter or comparison column opens its own dates; Total and class columns the whole range.
+            // A month, quarter or comparison column opens its own dates; Total, class and job columns the whole range.
             const column = multi && c !== null && data.columns[c]?.kind === 'period' ? periodColumns()[c] : null;
             navigate?.('accounting/register', 'open', {
               accountId: line.accountId,
@@ -265,8 +279,10 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
             });
           }}
           footer={
-            byClass
+            byName === 'class'
               ? 'Accrual basis · posted transactions only · lines without a class are in Unclassified'
+              : byName === 'job'
+              ? 'Accrual basis · posted transactions only · lines without a customer are in their own column'
               : `${basis === 'CASH' ? 'Cash basis: invoices and bills count as they are paid' : 'Accrual basis'} · posted transactions only`
           }
         />

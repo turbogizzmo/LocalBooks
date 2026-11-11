@@ -57,6 +57,7 @@ pub async fn email_form_with_mail_app(
 ) -> Result<ComposeOutcome, String> {
     let (to, subject, body) = email.checked()?;
     let pool = db.pool().await;
+    let period_end = period.as_ref().map(|p| p.end_date);
     let (file_name, bytes) = forms::pdf_file_for(&pool, kind, document_id, period).await?;
     // The files marked Send with the form go with it, as they do through the email server.
     let more = crate::attachments_library::files_to_send(&pool, kind, document_id).await?;
@@ -70,14 +71,15 @@ pub async fn email_form_with_mail_app(
     })
     .await
     .map_err(|e| format!("MAIL_OPEN: {e}"))??;
-    record_sent(&app, &pool, kind, document_id, &to, email_log::Method::MailApp, &subject).await;
+    record_sent(&app, &pool, kind, document_id, period_end, &to, email_log::Method::MailApp, &subject).await;
     Ok(outcome)
 }
 
 /// Adds the send to the form's history. The message has already gone out (or is open in the mail
 /// app), so a failure here is logged rather than reported as a failed send.
-async fn record_sent(app: &AppHandle, pool: &sqlx::SqlitePool, kind: FormKind, document_id: i64, to: &[String], method: email_log::Method, subject: &str) {
-    match email_log::record(pool, kind, document_id, to, method, subject).await {
+#[allow(clippy::too_many_arguments)]
+async fn record_sent(app: &AppHandle, pool: &sqlx::SqlitePool, kind: FormKind, document_id: i64, period_end: Option<NaiveDate>, to: &[String], method: email_log::Method, subject: &str) {
+    match email_log::record_for(pool, kind, document_id, period_end, to, method, subject).await {
         Ok(()) => notify(app),
         Err(err) => eprintln!("could not record the emailed form in its history: {err}"),
     }
@@ -90,8 +92,8 @@ pub async fn get_email_history(db: State<'_, Db>, kind: FormKind, document_id: i
 
 /// The forms of a type that were emailed or are marked Email later.
 #[tauri::command]
-pub async fn list_email_statuses(db: State<'_, Db>, kind: FormKind) -> Result<Vec<EmailStatus>, String> {
-    email_log::statuses(&db.pool().await, kind).await
+pub async fn list_email_statuses(db: State<'_, Db>, kind: FormKind, period_end: Option<NaiveDate>) -> Result<Vec<EmailStatus>, String> {
+    email_log::statuses(&db.pool().await, kind, period_end).await
 }
 
 #[tauri::command]
@@ -112,10 +114,11 @@ pub async fn list_email_queue(db: State<'_, Db>) -> Result<Vec<QueuedForm>, Stri
 pub async fn email_form_with_smtp(app: AppHandle, db: State<'_, Db>, kind: FormKind, document_id: i64, period: Option<Period>, email: EmailInput) -> Result<(), String> {
     let (to, subject, body) = email.checked()?;
     let pool = db.pool().await;
+    let period_end = period.as_ref().map(|p| p.end_date);
     let (file_name, pdf) = forms::pdf_file_for(&pool, kind, document_id, period).await?;
     let more = crate::attachments_library::files_to_send(&pool, kind, document_id).await?;
     smtp::send(&pool, &smtp_secrets(&app)?, smtp::Outgoing { to: to.clone(), subject: subject.clone(), body, file_name, pdf, more }).await?;
-    record_sent(&app, &pool, kind, document_id, &to, email_log::Method::Smtp, &subject).await;
+    record_sent(&app, &pool, kind, document_id, period_end, &to, email_log::Method::Smtp, &subject).await;
     Ok(())
 }
 

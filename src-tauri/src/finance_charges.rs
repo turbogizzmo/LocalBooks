@@ -31,6 +31,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::invoices::{InvoiceInput, InvoiceLineInput, InvoiceSummary};
 use crate::ledger::{db_err, format_cents, rollback, MAX_LINE_CENTS, QUANTITY_SCALE};
+use crate::money::Cents;
 
 /// Every year counts as 365 days; rates are in thousandths of a percent.
 const DAYS_PER_YEAR: i128 = 365;
@@ -305,13 +306,14 @@ async fn write_charges(tx: &mut Transaction<'_, Sqlite>, input: &AssessInput, se
             return Err(format!("FC_BAD_AMOUNT: the finance charge for {name} must be more than zero"));
         }
         let invoice = InvoiceInput {
+            invoice_number: None,
             customer_name: name.to_string(),
             issue_date: input.as_of,
             due_date: input.as_of,
             lines: vec![InvoiceLineInput {
                 description: format!("Finance charge on overdue balance of {} through {}", format_cents(customer.overdue_balance_cents), input.as_of.format("%m/%d/%Y")),
                 quantity_e4: QUANTITY_SCALE,
-                rate_cents: charge.charge_cents,
+                rate_cents: Cents(charge.charge_cents),
                 income_account_id: account,
                 product_service_id: None,
                 class_id: None,
@@ -319,7 +321,7 @@ async fn write_charges(tx: &mut Transaction<'_, Sqlite>, input: &AssessInput, se
             }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         };
         let invoice_id = crate::invoices::write_invoice(tx, &invoice).await.map_err(|e| e.replacen("INV_", "FC_", 1))?;

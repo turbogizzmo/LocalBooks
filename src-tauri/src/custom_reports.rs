@@ -191,6 +191,7 @@ pub enum PaidStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::enum_variant_names, reason = "the variant names are the JSON values the report screen sends")]
 pub enum Cleared {
     /// Marked cleared in a reconciliation, finished or not.
     Cleared,
@@ -945,7 +946,8 @@ struct Opening {
 async fn opening_balances(pool: &SqlitePool, filter: &LineFilter<'_>, start: Option<NaiveDate>, end: NaiveDate, sign: Sign) -> Result<Vec<Opening>, String> {
     let Some(start) = start else { return Ok(Vec::new()) };
     let (fiscal_start, _) = fiscal_year_bounds(start, fiscal_start_month(pool).await?);
-    let rows: Vec<(i64, String, Option<String>, String, String, bool, i64, i64)> = sqlx::query_as(
+    type AccountRow = (i64, String, Option<String>, String, String, bool, i64, i64);
+    let rows: Vec<AccountRow> = sqlx::query_as(
         "SELECT a.id, a.full_name, a.account_number, a.account_type, a.classification, a.normal_balance = 'DEBIT', a.type_sort_order,
                 COALESCE((SELECT SUM(p.debit_cents - p.credit_cents) FROM v_posted_lines p
                           WHERE p.account_id = a.id AND p.entry_date < ?1 AND (a.is_balance_sheet = 1 OR p.entry_date >= ?2)), 0)
