@@ -581,7 +581,7 @@ pub fn inputs_of(views: &[FormLineView], item_numbers: &[i64]) -> Vec<FormLineIn
                 description: v.description.clone(),
                 product_service_id: v.product_service_id,
                 percent_ppm: v.percent_ppm,
-                amount_cents: if v.kind == "DISCOUNT" && v.percent_ppm.is_none() { Some(Cents(-v.amount_cents)) } else { None },
+                amount_cents: if v.kind == "DISCOUNT" && v.percent_ppm.is_none() { v.amount_cents.checked_neg().map(Cents) } else { None },
                 account_id: v.account_id,
                 class_id: v.class_id,
                 is_taxable: v.is_taxable,
