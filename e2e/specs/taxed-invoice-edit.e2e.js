@@ -40,12 +40,19 @@ describe('A taxed invoice edited with sales tax turned off', () => {
     if (await saveAnyway.waitForDisplayed({ timeout: 3000 }).catch(() => false)) await click(saveAnyway);
     await $('//*[@role="status"][contains(., "replaced")]').waitForDisplayed();
     // The corrected invoice keeps number 1003, for the same total, tax included, and the voided
-    // original stays listed under it; nothing takes the next number (1007).
+    // original stays listed under it; nothing takes the next number (1007). An invoice list open in
+    // more than one window lists each invoice once per window.
     let rows = [];
-    await browser.waitUntil(async () => (rows = await listed('1003')).length === 2, { timeoutMsg: 'invoice 1003 is not listed twice after the edit' });
-    const live = rows.filter((cells) => !cells.includes('Voided'));
-    expect(live).toHaveLength(1);
-    expect(live[0]).toContain('$134.52');
+    const voided = (cells) => cells.includes('Voided');
+    await browser.waitUntil(
+      async () => {
+        rows = await listed('1003');
+        const old = rows.filter(voided).length;
+        return old > 0 && rows.length === 2 * old;
+      },
+      { timeoutMsg: 'invoice 1003 is not listed both corrected and voided after the edit' },
+    );
+    for (const live of rows.filter((cells) => !voided(cells))) expect(live).toContain('$134.52');
     expect(await listed('1007')).toHaveLength(0);
   });
 });
