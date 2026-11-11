@@ -5,7 +5,8 @@ the files a release actually ships, on macOS, Windows and Linux, and replaces th
 It runs when a pre-release or draft is published or edited, and by hand (Actions › Release check ›
 Run workflow, with the tag and optionally the tag to upgrade from). A pull request that changes the
 release check itself runs it against the newest release. Promote a release to latest only
-when all three jobs are green.
+when all three jobs are green. The whole release procedure, including re-running a Build job after
+publishing, is in [`docs/dev/releasing.md`](../dev/releasing.md).
 
 ## What each job checks
 
