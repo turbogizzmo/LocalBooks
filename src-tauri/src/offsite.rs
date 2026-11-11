@@ -339,9 +339,16 @@ pub async fn back_up_now(db: &Db, store: &SecretStore) -> Result<OffsiteCopy, St
         .execute(&pool)
         .await
         .map_err(db_err)?;
-    // Counts toward Backup safety (gap R8) only when the folder is off the company file's disk.
+    // Counts toward Backup safety (gap R8) only when the folder is off the company file's disk. The
+    // copy is made either way: failing to note it never turns it into a failed backup.
     if let Ok(copy) = &result {
-        crate::backup_safety::saved_copy(&pool, Path::new(&copy.path), &db.path().await?, crate::backup_safety::Source::Offsite).await?;
+        let noted = match db.path().await {
+            Ok(company) => crate::backup_safety::saved_copy(&pool, Path::new(&copy.path), &company, crate::backup_safety::Source::Offsite).await.map(|_| ()),
+            Err(e) => Err(e),
+        };
+        if let Err(e) = noted {
+            crate::diagnostics::log(&format!("backup safety: could not note the offsite copy: {e}"));
+        }
     }
     result
 }
@@ -428,8 +435,11 @@ pub async fn test_restore(db: &Db, path: &Path, password: &str) -> Result<Compan
         let pool = db.pool().await;
         sqlx::query("UPDATE offsite_backup SET last_test_restore_at = ?1 WHERE id = 1").bind(now()).execute(&pool).await.map_err(db_err)?;
         // Backup safety (gap R8): a passing test of a copy of these books.
+        // A passing test stays passed if noting it fails.
         if crate::backup_safety::is_these_books(&pool, &info).await {
-            crate::backup_safety::record(&pool, crate::backup_safety::Kind::TestRestore, crate::backup_safety::Source::Offsite, Some(path)).await?;
+            if let Err(e) = crate::backup_safety::record(&pool, crate::backup_safety::Kind::TestRestore, crate::backup_safety::Source::Offsite, Some(path)).await {
+                crate::diagnostics::log(&format!("backup safety: could not note the test restore: {e}"));
+            }
         }
     }
     Ok(info)

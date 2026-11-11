@@ -191,8 +191,11 @@ pub async fn test_restore(pool: Option<&SqlitePool>, scratch: &Path, path: &Path
         backup::rehearse_upgrade(path, scratch).await?;
     }
     if let Some(pool) = pool {
+        // A passing test stays passed if noting it fails.
         if is_these_books(pool, &info).await {
-            record(pool, Kind::TestRestore, Source::Local, Some(path)).await?;
+            if let Err(e) = record(pool, Kind::TestRestore, Source::Local, Some(path)).await {
+                crate::diagnostics::log(&format!("backup safety: could not note the test restore: {e}"));
+            }
         }
     }
     Ok(info)
