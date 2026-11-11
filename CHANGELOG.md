@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Change what a memorized transaction enters.** Edit transaction… on Recurring Transactions
+  reopens the memorized check, expense, bill, invoice or journal entry in its form. Change its
+  lines, amounts or accounts and save, and the copies entered from then on use the changes.
+  Copies already entered stay as they were. Edit schedule… still changes the name and timing.
+
 - **Edit memorized transactions.** Recurring Transactions has Edit… to change a memorized
   transaction's name, how often it repeats, its next date and its end date.
 - **Enter all due enters what it can.** A copy that can't be entered, such as one dated in a

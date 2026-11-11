@@ -12,7 +12,8 @@ import { useVoucherActions } from './VoucherPrint.jsx';
 import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
 import { AchFilesPanel, OriginatorDialog, chooseAchPath, nextBusinessDay } from './AchPayments.jsx';
-import { MemorizeDialog } from './Recurring.jsx';
+import { MemorizeDialog, saveMemorizedTransaction } from './Recurring.jsx';
+import { billSource } from '../lib/memorizedEdit.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
 import { useTransactionReports } from './TransactionHistory.jsx';
@@ -50,7 +51,9 @@ const isOpen = (b) => !b.isVoided && (b.status === 'UNPAID' || b.status === 'PAR
 function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, editing = null, copyOf = null, fromInbox = null, onDuplicate, onCancelEdit, saved = [], onOpenSaved }) {
   const stockItems = useLedgerQuery(api.listInventoryItems);
   const source = editing ?? copyOf;
-  const copyDates = copyOf ? duplicateDates(copyOf.bill.billDate, copyOf.bill.dueDate, todayIso()) : null;
+  // Edit transaction… on Recurring Transactions: the memorized bill, saved back to its template.
+  const memorized = copyOf?.memorized ?? null;
+  const copyDates = memorized ? { date: copyOf.bill.billDate, due: copyOf.bill.dueDate } : copyOf ? duplicateDates(copyOf.bill.billDate, copyOf.bill.dueDate, todayIso()) : null;
   // A document from the inbox fills in what was read from it, and attaches when the bill posts.
   const [vendor, setVendor] = useState(source?.bill.vendorName ?? fromInbox?.nameHint ?? '');
   const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
@@ -111,7 +114,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const totalCents = parseMoneyToCents(total);
   const { lines, invalid, total: splitTotal } = summarizeSplits(rows);
   // Discounts and charges among the split lines (an edited or copied bill starts with its own).
-  const [formRows, setFormRows, laid, formTouched] = usePurchaseFormLines(lines, source ? { doc: 'BILL', id: source.bill.id } : null);
+  const [formRows, setFormRows, laid, formTouched] = usePurchaseFormLines(lines, memorized ? { inputs: copyOf.formLines } : source ? { doc: 'BILL', id: source.bill.id } : null);
   const dirty = useDirtySince('bill', { vendor, billNumber, billDate, total, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]), formTouched }, Boolean(copyOf));
   const allocated = laid.error ? splitTotal : laid.total;
   const unallocated = totalCents === null ? null : totalCents - allocated;
@@ -126,7 +129,9 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const [memorizing, setMemorizing] = useState(null);
   // Payments and vendor credits applied stay applied to the edited version.
   const appliedText = editing?.bill.amountPaidCents > 0 ? `This bill has ${formatCents(editing.bill.amountPaidCents)} in payments or credits applied. Saving will keep them applied to the new version.` : null;
-  const post = async (mode) => {
+  const post = async (requested) => {
+    // A memorized bill is saved back to its template, whichever Save is used.
+    const mode = memorized ? 'memorize' : requested;
     if (!vendor.trim()) return setError('Enter a vendor.');
     if (totalCents === null || totalCents <= 0) return setError('Enter the bill total.');
     if (invalid > 0) return setError(`${invalid} split row(s) need a category and an amount above zero.`);
@@ -156,6 +161,10 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     setBusy(true);
     try {
       const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines, termsId, formLines: laid.formLines ?? [] };
+      if (mode === 'memorize' && memorized) {
+        onPosted(await saveMemorizedTransaction(memorized, { ...input, billNumber: null }));
+        return;
+      }
       if (mode === 'memorize') return setMemorizing({ ...input, billNumber: null });
       let bill;
       try {
@@ -1011,7 +1020,9 @@ export default function Bills({ accounts, intent }) {
   const [payments, setPayments] = useState({});
   const [editing, setEditing] = useState(null); // { bill, lines }
   // Duplicate: the saved bill the new one on the form was copied from ({ bill, lines, n }).
-  const [copy, setCopy] = useState(null);
+  // Edit transaction… on Recurring Transactions opens the memorized bill as a copy marked `memorized`.
+  const memorizedCopy = (template) => ({ ...billSource(template.payload), memorized: template, n: Date.now() });
+  const [copy, setCopy] = useState(() => (intent?.action === 'edit-memorized' && intent.data?.template ? memorizedCopy(intent.data.template) : null));
   // Document Inbox › Enter as bill: the document the new bill starts from.
   const inboxDoc = intent?.action === 'bill' ? (intent.data?.inbox ?? null) : null;
   const duplicate = (from) => {
@@ -1060,6 +1071,13 @@ export default function Bills({ accounts, intent }) {
       setPaying(false);
       vendorRef.current?.focus();
     }
+    if (intent?.action === 'edit-memorized' && intent.data?.template) {
+      setPaying(false);
+      setEditing(null);
+      setCopy(memorizedCopy(intent.data.template));
+      setNotice({ kind: 'info', text: `Editing the memorized “${intent.data.template.name}”: saving puts the changes on it for the copies entered from now on.` });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent]);
 
   const bills = data ?? [];

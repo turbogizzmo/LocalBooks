@@ -261,3 +261,34 @@ async fn enter_all_due_skips_a_copy_in_a_closed_period_lists_it_and_enters_the_r
     assert_eq!(list_recurring(&pool).await.unwrap().iter().find(|t| t.id == late).unwrap().name, "Storage rent");
     assert!(edit_recurring_schedule(&pool, late, &ScheduleInput { name: " ".into(), frequency: "MONTHLY".into(), every: 1, next_date: d(5, 15), end_date: None, anchor_day: None }).await.unwrap_err().starts_with("REC_NAME_REQUIRED"));
 }
+
+#[tokio::test]
+async fn a_memorized_transactions_lines_can_be_changed_and_only_later_copies_follow() {
+    let pool = test_pool().await;
+    let (checking, rent, supplies) = (account(&pool, "1010").await, account(&pool, "6300").await, account(&pool, "6250").await);
+    let check = |account: i64, cents: i64| serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-31",
+        "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": account, "amountCents": cents, "memo": null }] });
+    let id = save_recurring(&pool, None, RecurringInput { anchor_day: Some(31), name: "Rent".into(), kind: "EXPENSE".into(), payload: check(rent, 100_000), frequency: "MONTHLY".into(), every: 1, next_date: d(1, 31), end_date: None }).await.unwrap();
+    enter_due(&pool, d(2, 28), None).await.unwrap();
+    assert_eq!(balance(&pool, rent).await, 200_000, "January and February at $1,000");
+
+    // Edit transaction…: the form gets the memorized transaction back and saves a changed one.
+    let template = get_recurring(&pool, id).await.unwrap();
+    assert_eq!((template.kind.as_str(), template.next_date, template.payload["lines"][0]["amountCents"].as_i64()), ("EXPENSE", d(3, 31), Some(100_000)));
+    save_recurring(&pool, Some(id), RecurringInput {
+        anchor_day: None,
+        name: template.name.clone(),
+        kind: template.kind.clone(),
+        payload: check(supplies, 120_000),
+        frequency: template.frequency.clone(),
+        every: template.every,
+        next_date: template.next_date,
+        end_date: template.end_date,
+    })
+    .await
+    .unwrap();
+    enter_due(&pool, d(4, 30), None).await.unwrap();
+    assert_eq!(balance(&pool, rent).await, 200_000, "the copies already entered are untouched");
+    assert_eq!(balance(&pool, supplies).await, 240_000, "March 31 and April 30 use the changed lines");
+    assert!(get_recurring(&pool, 99_999).await.unwrap_err().starts_with("REC_NOT_FOUND"));
+}

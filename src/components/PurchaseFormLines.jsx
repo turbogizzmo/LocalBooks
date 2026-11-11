@@ -16,7 +16,8 @@ const postable = (a) => !a.isSystem && (a.classification === 'INCOME' || a.class
  * to a list, as clearing the form does, starts over untouched.
  */
 export function usePurchaseFormLines(lines, stored = null) {
-  const [rows, setRows] = useState([]);
+  // `stored.inputs`: lines as a form sends them (a memorized transaction), loaded as they are.
+  const [rows, setRows] = useState(() => (stored?.inputs ? rowsFromStored(stored.inputs) : []));
   const [touched, setTouched] = useState(false);
   const doc = stored?.doc ?? null;
   const id = stored?.id ?? null;

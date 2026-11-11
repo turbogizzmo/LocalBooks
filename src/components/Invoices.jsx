@@ -8,7 +8,8 @@ import { useFormClass } from './ClassSelect.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
 import { SortTh, useSort } from './SortHead.jsx';
-import { MemorizeDialog } from './Recurring.jsx';
+import { MemorizeDialog, saveMemorizedTransaction } from './Recurring.jsx';
+import { invoiceDocument } from '../lib/memorizedEdit.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
 import { useTransactionReports } from './TransactionHistory.jsx';
@@ -969,6 +970,8 @@ export default function Invoices({ accounts, intent }) {
     } else if (intent?.action === 'edit' && intent.data?.invoiceId) {
       // Opened in a window of its own from the list, or reopened with the desktop.
       loadForEdit({ id: intent.data.invoiceId }, false);
+    } else if (intent?.action === 'edit-memorized' && intent.data?.template) {
+      loadMemorized(intent.data.template);
     } else if (intent?.action === 'duplicate' && intent.data?.invoiceId) {
       // Duplicate on a row of the invoice list.
       loadForEdit({ id: intent.data.invoiceId }, false, true, true);
@@ -1138,7 +1141,34 @@ export default function Invoices({ accounts, intent }) {
   };
   const duplicateInvoice = () => editing && startCopy(editing.number, issueDate, dueDate);
 
+  // Edit transaction… on Recurring Transactions: the memorized invoice on the form, saved back to its
+  // template (its name and schedule stay; copies already entered don't change).
+  const [memorized, setMemorized] = useState(null);
+  const loadMemorized = (template) => {
+    const p = template.payload;
+    const { items, storedForm } = invoiceDocument(p);
+    setReceiving(false);
+    setEditing(null);
+    setBaseline(null);
+    setFromEstimate(null);
+    setFromOrder(null);
+    sales.set(p);
+    setTermsTouched(true);
+    setTermsId(p.termsId ?? null);
+    setCurrency(p.currency?.code ?? '');
+    setRate(p.currency ? formatRate(p.currency.exchangeRateE6) : '');
+    setDiscountText(p.discountCents ? centsToInput(p.discountCents) : '');
+    tax.set(p.taxRateId ?? null);
+    setLines(linesFromDocument(items, storedForm, defaultAccountId));
+    setCustomer(p.customerName ?? '');
+    setIssueDate(p.issueDate);
+    setDueDate(p.dueDate ?? p.issueDate);
+    setMemorized(template);
+    setNotice({ kind: 'info', text: `Editing the memorized “${template.name}”: saving puts the changes on it for the copies entered from now on.` });
+  };
+
   const reset = () => {
+    setMemorized(null);
     setCustomer('');
     setIssueDate(newTransactionDate());
     setTermsTouched(false);
@@ -1183,7 +1213,9 @@ export default function Invoices({ accounts, intent }) {
   const locked = current && current.isVoided;
   const appliedText = editing?.applied ? `This invoice has ${editing.applied} in payments or credits applied. Saving will keep them applied to the new version.` : null;
 
-  const save = async (mode) => {
+  const save = async (requested) => {
+    // A memorized invoice is saved back to its template, whichever Save is used.
+    const mode = memorized ? 'memorize' : requested;
     if (locked) return setNotice({ kind: 'error', text: 'This invoice is voided.' });
     if (!customer.trim()) return setNotice({ kind: 'error', text: 'Enter a customer name.' });
     if (filled.length === 0) return setNotice({ kind: 'error', text: 'Add at least one line item.' });
@@ -1233,6 +1265,13 @@ export default function Invoices({ accounts, intent }) {
         termsId,
         formLines,
       };
+      if (mode === 'memorize' && memorized) {
+        const text = await saveMemorizedTransaction(memorized, input);
+        setMemorized(null);
+        reset();
+        setNotice({ kind: 'success', text });
+        return;
+      }
       if (mode === 'memorize') return setMemorizing(input);
       // A credit limit warns; it never stops the sale.
       const homeTotal = currency ? toHomeCents(total, parseRateE6(rate)) : total;

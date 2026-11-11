@@ -6,7 +6,8 @@ import NameField from './NameField.jsx';
 import AccountSelect, { accountLabel, EndingBalance } from './AccountSelect.jsx';
 import FormToolbar, { attachLaterButton, duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import Notice from './Notice.jsx';
-import { MemorizeDialog } from './Recurring.jsx';
+import { MemorizeDialog, saveMemorizedTransaction } from './Recurring.jsx';
+import { expenseSource } from '../lib/memorizedEdit.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
 import { useTransactionReports } from './TransactionHistory.jsx';
@@ -65,12 +66,14 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const defaultCategory = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'EXPENSE' && !a.isSystem)?.id ?? null, [accounts]);
 
   const was = editing?.expense;
+  // Edit transaction… on Recurring Transactions: the memorized one, saved back to its template.
+  const memorized = copyOf?.memorized ?? null;
   // What the form starts from: the one being edited, or the one being duplicated.
   const from = (editing ?? copyOf)?.expense;
   // A document from the inbox fills in what was read from it, and attaches when this posts.
   const [payee, setPayee] = useState(from?.payeeName ?? fromInbox?.nameHint ?? '');
   const [accountId, setAccountId] = useState(from?.paymentAccountId ?? defaultPayFrom);
-  const [date, setDate] = useTransactionDate(was?.expenseDate ?? (copyOf ? todayIso() : (fromInbox?.documentDate ?? undefined)));
+  const [date, setDate] = useTransactionDate(was?.expenseDate ?? (memorized ? copyOf.date : copyOf ? todayIso() : (fromInbox?.documentDate ?? undefined)));
   const [checkNumber, setCheckNumber] = useState(was ? (was.checkNumber ?? '') : '');
   const method = usePaymentMethodChoice(from?.paymentMethod ?? 'CREDIT_CARD', from?.paymentMethodId ?? null);
   const [memo, setMemo] = useState(from?.memo ?? '');
@@ -142,12 +145,14 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
 
   const { lines, invalid, total: splitTotal } = summarizeSplits(rows);
   // Discounts and charges among the split lines (an edited or copied one starts with its own).
-  const [formRows, setFormRows, laid, formTouched] = usePurchaseFormLines(lines, from ? { doc: 'EXPENSE', id: from.id } : null);
+  const [formRows, setFormRows, laid, formTouched] = usePurchaseFormLines(lines, memorized ? { inputs: copyOf.formLines } : from ? { doc: 'EXPENSE', id: from.id } : null);
   const dirty = useDirtySince('expense', { payee, date, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]), formTouched }, Boolean(copyOf));
   const total = laid.error ? splitTotal : laid.total;
 
   const [memorizing, setMemorizing] = useState(null);
-  const save = async (mode) => {
+  const save = async (requested) => {
+    // A memorized one is saved back to its template, whichever Save is used.
+    const mode = memorized ? 'memorize' : requested;
     if (accountId === null)
       return setError(kind === 'CHECK' ? 'Choose the bank account the check is drawn on.' : isCredit ? 'Choose the credit card the credit goes to.' : 'Choose the payment account.');
     if (invalid > 0) return setError(`${invalid} split row(s) need a category and an amount above zero.`);
@@ -172,6 +177,10 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         formLines: laid.formLines ?? [],
         currency: currency ? { code: currency, exchangeRateE6: rateE6 } : null,
       };
+      if (mode === 'memorize' && memorized) {
+        onPosted(await saveMemorizedTransaction(memorized, { ...input, checkNumber: null }));
+        return;
+      }
       if (mode === 'memorize') return setMemorizing({ ...input, checkNumber: null });
       if (editing) {
         await api.replaceExpense(was.id, input);
@@ -382,14 +391,17 @@ const INTENT_KINDS = { expense: 'EXPENSE', check: 'CHECK', 'card-credit': 'CARD_
 export default function ExpensesChecks({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listExpenses);
   const vendors = useLedgerQuery(api.listVendors);
-  const initialKind = INTENT_KINDS[intent?.action] ?? null;
+  const memorizedTemplate = intent?.action === 'edit-memorized' ? (intent.data?.template ?? null) : null;
+  const initialKind = INTENT_KINDS[intent?.action] ?? memorizedTemplate?.payload?.kind ?? null;
   // Document Inbox › Enter as expense / check: the document the new one starts from.
   const inboxDoc = INTENT_KINDS[intent?.action] ? (intent.data?.inbox ?? null) : null;
   const [kind, setKind] = useState(initialKind);
   const [notice, setNotice] = useState(null);
   const [editing, setEditing] = useState(null); // { expense, lines }
   // Duplicate: the saved one the new one on the form was copied from ({ expense, lines, n }).
-  const [copy, setCopy] = useState(null);
+  // Edit transaction… on Recurring Transactions opens the memorized one as a copy marked `memorized`.
+  const memorizedCopy = (template) => ({ ...expenseSource(template.payload), date: template.payload.expenseDate, memorized: template, n: Date.now() });
+  const [copy, setCopy] = useState(() => (memorizedTemplate ? memorizedCopy(memorizedTemplate) : null));
   const duplicate = (from) => {
     setEditing(null);
     setKind(from.expense.kind);
@@ -423,6 +435,13 @@ export default function ExpensesChecks({ accounts, intent }) {
 
   useEffect(() => {
     if (INTENT_KINDS[intent?.action]) setKind(INTENT_KINDS[intent.action]);
+    if (intent?.action === 'edit-memorized' && intent.data?.template) {
+      setEditing(null);
+      setCopy(memorizedCopy(intent.data.template));
+      setKind(intent.data.template.payload.kind);
+      setNotice({ kind: 'info', text: `Editing the memorized “${intent.data.template.name}”: saving puts the changes on it for the copies entered from now on.` });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent]);
   // A check or expense chosen in the list opens in a window of its own, as forms do in QuickBooks.
   const openFromList = useOpenFromList();
