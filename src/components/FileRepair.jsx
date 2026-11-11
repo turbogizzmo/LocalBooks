@@ -56,7 +56,7 @@ function RebuildConfirm({ busy, onConfirm, onCancel }) {
     <div className="border-t border-qb-border bg-[#fff8eb] px-2 py-1 text-sm">
       <div className="font-semibold">Rebuild the company file?</div>
       <div>
-        LocalBooks saves a verified snapshot first, then restores any missing or changed safeguards and indexes from this version, and
+        Tillhouse saves a verified snapshot first, then restores any missing or changed safeguards and indexes from this version, and
         compacts the file. Your transactions are never rewritten. Other screens may pause for a moment while it runs.
       </div>
       <div className="mt-1 flex gap-2">

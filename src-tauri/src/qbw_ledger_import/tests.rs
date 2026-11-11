@@ -461,7 +461,7 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
 
     let summary = batch_summary(&pool, batch).await.unwrap();
     assert_eq!(summary.fallbacks.len(), 1);
-    assert_eq!(summary.fallbacks[0].reason, "it is a refund into a bank account, which has no LocalBooks form");
+    assert_eq!(summary.fallbacks[0].reason, "it is a refund into a bank account, which has no Tillhouse form");
     let mapped = |name: &str| summary.accounts.iter().find(|a| a.full_name == name).and_then(|a| a.account_id).unwrap();
     assert_eq!(balance(&pool, mapped("Riverside Bank")).await, -7_100);
     assert_eq!(balance(&pool, mapped("Visa")).await, -900);
@@ -583,7 +583,7 @@ async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
     assert_eq!((from, to, amount), (mapped("Riverside Bank"), mapped("Savings"), 20_000));
     assert_eq!(summary.postable_count, 0);
     let reasons: Vec<&str> = summary.fallbacks.iter().map(|f| f.reason.as_str()).collect();
-    assert_eq!(reasons, ["not brought in: its customer was not imported", "LocalBooks transfers cannot use one of its accounts (accounts receivable)"]);
+    assert_eq!(reasons, ["not brought in: its customer was not imported", "Tillhouse transfers cannot use one of its accounts (accounts receivable)"]);
 }
 
 /// Full pipeline on a real company file (or backup) into a fresh test database: set LOCALBOOKS_QBW_CHECK
@@ -609,7 +609,7 @@ async fn posts_a_real_company_file() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    println!("LocalBooks now has {customers} customers ({active_customers} active), {vendors} vendors, {items} items");
+    println!("Tillhouse now has {customers} customers ({active_customers} active), {vendors} vendors, {items} items");
     let mode = if std::env::var("LOCALBOOKS_QBW_MODE").as_deref() == Ok("full") { ImportMode::Full } else { ImportMode::Journal };
     let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode }).await.unwrap();
     println!("staged, mapped {mapped:?}, posted {posted:?} in {:.1}s", started.elapsed().as_secs_f64());
@@ -639,7 +639,7 @@ async fn posts_a_real_company_file() {
             println!("  {:<45} books {:>14} file {:>14}", names.join(" + "), crate::ledger::format_cents(books), crate::ledger::format_cents(-stored));
         }
     }
-    println!("LocalBooks accounts matching the file: {same}, differing: {differ}");
+    println!("Tillhouse accounts matching the file: {same}, differing: {differ}");
     if mode == ImportMode::Full {
         let fallbacks: Vec<(String, String, i64)> = sqlx::query_as(
             "SELECT kind, fallback_reason, COUNT(*) FROM ledger_import_transactions
@@ -1427,7 +1427,7 @@ async fn item_groups_come_in_as_groups() {
     .unwrap();
     assert_eq!(members, [("Install".to_string(), 10_000), ("Door frame".to_string(), 10_000), ("Hinge".to_string(), 30_000)]);
     let starter: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM item_group_members WHERE group_id = 1").fetch_one(&pool).await.unwrap();
-    assert_eq!(starter, 1, "a group already in LocalBooks is left as it is");
+    assert_eq!(starter, 1, "a group already in Tillhouse is left as it is");
     // Again: nothing new. The groups left out are tried again (an item may have been renamed since).
     let left_out = ImportListsResult { groups_left_out: 2, ..Default::default() };
     assert_eq!(import_lists(&pool, batch).await.unwrap(), left_out);

@@ -71,7 +71,7 @@ impl Drop for Turn {
 }
 
 /// Refused while the window shows why the launch could not open the company file.
-pub const STARTUP_FAILED: &str = "STARTUP_FAILED: the company file could not be opened at launch; quit LocalBooks and open it again";
+pub const STARTUP_FAILED: &str = "STARTUP_FAILED: the company file could not be opened at launch; quit Tillhouse and open it again";
 
 /// Waits for any open in progress to finish, then announces this one: `path`, called `name` (the
 /// company name, when it is known), on its first step. Refused once the launch's open has failed:

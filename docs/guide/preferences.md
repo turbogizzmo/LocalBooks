@@ -7,12 +7,12 @@ itself, see [Find your way around Preferences](getting-started.md#find-your-way-
 Each category has up to two tabs:
 
 - **My Preferences** are yours, on this computer. They change how the screens behave for you and
-  never change what is posted. Each one takes effect at once, in every LocalBooks window.
+  never change what is posted. Each one takes effect at once, in every Tillhouse window.
   **Default** at the top of a panel puts that panel back as it was.
 - **Company Preferences** are everyone's. They are saved in the company file as soon as you leave a
   box or pick a value (a ✓ Saved mark shows beside it), and only an Admin can change them.
 
-A row marked **✓ Always** is something LocalBooks always does, shown where you would look for the
+A row marked **✓ Always** is something Tillhouse always does, shown where you would look for the
 option. Settings that live on their own screen are listed at the bottom of a category under **Set
 on their own screens**, with a link to each.
 
@@ -39,7 +39,7 @@ on their own screens**, with a link to each.
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Retained Earnings** | On | Warns before you post a transaction straight to Retained Earnings. LocalBooks already moves each year's profit there. |
+| **Retained Earnings** | On | Warns before you post a transaction straight to Retained Earnings. Tillhouse already moves each year's profit there. |
 | **Dates in the past** | 90 days | Warns when a transaction's date is more than this many days before today. 0 turns the warning off. |
 | **Dates in the future** | 30 days | Warns when a transaction's date is more than this many days after today. 0 turns the warning off. |
 
@@ -108,7 +108,7 @@ Renaming rules for downloaded payees are in **Banking › Bank Feeds › Rules�
 
 | Setting | Default | What it does |
 |---|---|---|
-| **View** | Multiple Windows | **One Window** shows one window at a time, filling the work area. **Multiple Windows** lets windows float inside LocalBooks, side by side, and minimize to the bottom. Kept with the company file. |
+| **View** | Multiple Windows | **One Window** shows one window at a time, filling the work area. **Multiple Windows** lets windows float inside Tillhouse, side by side, and minimize to the bottom. Kept with the company file. |
 | **Desktop** | Save when closing company | What reopens with this company: **Save when closing company** (the windows open when you close it), **Save current desktop** (the windows open now, every time), or **Don't save the desktop** (the Home page alone). After you save one, it shows as **Keep previously saved desktop** until you choose again. |
 | **Left pane** | Full menu | **Full menu** (every page, grouped), **Open windows only** (like the Open Window List) or **Hidden** (View › Show or Hide Left Icon Bar brings it back). |
 | **Start on** | Last open windows | What a company opens on: **Last open windows**, the **Home page**, **This screen** (pick any page), or **No windows**. |
@@ -166,7 +166,7 @@ message again".
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Company name** | LocalBooks Ledger | Shown on reports, in the sidebar and in the window title. Can't be blank. |
+| **Company name** | Tillhouse Ledger | Shown on reports, in the sidebar and in the window title. Can't be blank. |
 | **Logo** | None | A PNG, JPEG, GIF or WebP picture under 512 KB, printed on invoices, estimates and reports. **Upload logo…**, **Replace…** or **Remove**. |
 | **Legal name** | Blank | Your registered name, if it differs from the company name. |
 | **EIN** | Blank | Your federal employer identification number (XX-XXXXXXX), used on 1099s and tax forms. |
@@ -178,7 +178,7 @@ message again".
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Daily backup** | On | **Back up the company file automatically** when LocalBooks starts, at most once a day. |
+| **Daily backup** | On | **Back up the company file automatically** when Tillhouse starts, at most once a day. |
 | **Keep** | 7 | How many daily backups to keep (1 to 60). Older ones are removed. |
 
 See [Back up, restore and open company files](backups-and-company-files.md). Signing out after a
@@ -195,7 +195,7 @@ period of no use is in **Settings › Users & Passwords**.
 | **Not enough stock** | Warn | When an invoice or sales receipt would take a tracked item below zero: **Warn**, **Don't allow the sale**, or **Say nothing**. |
 | **Purchase order numbers** | ✓ Always | Each purchase order takes the next number, so no two share one. |
 
-Units of measure aren't in LocalBooks: each item has one unit. See [Track inventory](inventory.md).
+Units of measure aren't in Tillhouse: each item has one unit. See [Track inventory](inventory.md).
 
 ## Jobs & Estimates
 

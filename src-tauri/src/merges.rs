@@ -287,7 +287,7 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, kind: MergeKind, from_id: i64, 
                 return Err("MERGE_ACCOUNT_TYPES: only accounts of the same type can be merged".into());
             }
             if from_system || to_system {
-                return Err("MERGE_SYSTEM_ACCOUNT: LocalBooks' own accounts (such as Accounts Receivable or Undeposited Funds) can't be merged".into());
+                return Err("MERGE_SYSTEM_ACCOUNT: Tillhouse's own accounts (such as Accounts Receivable or Undeposited Funds) can't be merged".into());
             }
             if matches!(from_type.as_str(), "BANK" | "CREDIT_CARD") {
                 return Err("MERGE_BANK_ACCOUNT: bank and credit card accounts keep their reconciliations, so they can't be merged; make the one you don't use inactive".into());

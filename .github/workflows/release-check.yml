@@ -1,4 +1,4 @@
-# LocalBooks release check
+# Tillhouse release check
 #
 # The gate before a test build is promoted to latest (which every installed copy then updates to).
 # On macOS, Windows and Linux, against the release's own published files:
@@ -13,6 +13,12 @@
 #   Launch       the installed app is started on a copy of each seeded company; it must still be
 #                running after 30 s with no crash report, quit, and leave that file upgraded (with a
 #                pre-upgrade copy), intact and with unchanged balances.
+#   Installer upgrade
+#                the PREVIOUS release's installer is installed, then this release's is applied over it
+#                the way the in-app updater does (Windows NSIS `/P /UPDATE`, macOS bundle swapped in
+#                place, Linux `dpkg -i` and `rpm -U`). Exactly one copy must be left, the app data
+#                folder must keep every file, and the upgraded app must open each seeded company
+#                with `--check-file` (and, on macOS, launch). See docs/plans/rebrand.md.
 #
 # A pull request that changes the release check runs it against the newest release.
 #
@@ -112,14 +118,17 @@ jobs:
             os: macos-latest
             platform: darwin
             assets: -p latest.json -p '*.dmg' -p '*.app.tar.gz' -p '*.app.tar.gz.sig'
+            previous_assets: -p '*.app.tar.gz'
           - name: Windows
             os: windows-latest
             platform: windows
             assets: -p latest.json -p '*-setup.exe' -p '*-setup.exe.sig' -p '*.msi' -p '*.msi.sig'
+            previous_assets: -p '*-setup.exe'
           - name: Linux
             os: ubuntu-latest
             platform: linux
             assets: -p latest.json -p '*.deb' -p '*.deb.sig' -p '*.rpm' -p '*.rpm.sig' -p '*.AppImage' -p '*.AppImage.sig'
+            previous_assets: -p '*.deb' -p '*.rpm'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     # Downloads draft releases.
@@ -165,6 +174,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download "$TAG" --repo "$REPO" --dir "$WORK/release" ${{ matrix.assets }}
+          # The previous release's installers, for the Installer upgrade step. Old releases may lack
+          # one kind; that step then fails on its own, the others still run.
+          gh release download "$PREVIOUS" --repo "$REPO" --dir "$WORK/previous" ${{ matrix.previous_assets }} \
+            || echo "::warning::$PREVIOUS has no ${{ matrix.previous_assets }} to upgrade from"
           for ref in "$TAG" "$PREVIOUS"; do
             gh api -H "Accept: application/vnd.github.raw" "repos/$REPO/contents/src-tauri/tauri.conf.json?ref=$ref" > "$WORK/tauri.conf.$ref.json"
           done
@@ -188,7 +201,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev build-essential libxdo-dev \
-            libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb
+            libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb rpm
           Xvfb :99 -screen 0 1440x900x24 >/dev/null 2>&1 &
           echo "DISPLAY=:99" >> "$GITHUB_ENV"
 
@@ -264,6 +277,15 @@ jobs:
           python -I .github/release-check/release_check.py launch --app "$APP" --seed-dir "$SEEDED"
           --before "$WORK/before" --work "$WORK/launch" --app-schema "$APP_SCHEMA"
 
+      - name: Installer upgrade from ${{ needs.plan.outputs.previous }}
+        # Runs last: it removes the copy the Install step made, so the steps above see a clean install.
+        if: ${{ !cancelled() && steps.balances.outcome == 'success' && steps.install.outcome == 'success' && needs.plan.outputs.check_mode == 'true' }}
+        run: >
+          python -I .github/release-check/release_check.py installer-upgrade --platform ${{ matrix.platform }}
+          --release-dir "$WORK/release" --previous-dir "$WORK/previous"
+          --config "$WORK/tauri.conf.$TAG.json" --previous-config "$WORK/tauri.conf.$PREVIOUS.json" --previous "$PREVIOUS"
+          --seed-dir "$SEEDED" --before "$WORK/before" --work "$WORK/installer-upgrade" --app-schema "$APP_SCHEMA"
+
       - name: Keep the company files and results (7 days)
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -273,6 +295,7 @@ jobs:
             release-check-work/before
             release-check-work/upgrade
             release-check-work/launch
+            release-check-work/installer-upgrade
             release-check-work/seeded
           retention-days: 7
           if-no-files-found: ignore

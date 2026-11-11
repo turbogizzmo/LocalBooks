@@ -1,7 +1,7 @@
 # Memorized (recurring) transactions
 
 A memorized transaction is a saved copy of a journal entry, expense or check, bill or invoice, with
-a schedule. When its date comes round, LocalBooks reminds you, and you enter it with one click. It
+a schedule. When its date comes round, Tillhouse reminds you, and you enter it with one click. It
 posts nothing until you enter it, and each one you enter posts like the form it came from.
 
 ## Memorize a transaction
@@ -50,7 +50,7 @@ paused, or one that has passed its end date. Click a column heading to sort.
 
 ## Enter what is due
 
-LocalBooks never enters a memorized transaction by itself. You choose when:
+Tillhouse never enters a memorized transaction by itself. You choose when:
 
 1. Go to **Accounting › Recurring Transactions**.
 2. **Enter transactions due through** is today's date. Change it to look further ahead (for

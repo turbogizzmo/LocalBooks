@@ -35,11 +35,11 @@ working. In **Settings › File & Data Controls › Accountant's Copy** (Admins)
    Accountant's Copy…**. Save the copy and send it to them however you like.
 2. Keep working. While the copy is out, nothing can be posted **on or before** the dividing date in
    your books (the accountant owns that period); everything after it works as usual.
-3. Your accountant opens the copy in LocalBooks. It says it's an Accountant's Copy and shows the
+3. Your accountant opens the copy in Tillhouse. It says it's an Accountant's Copy and shows the
    dividing date; they can post journal entries (adjusting or not) and add accounts **on or before**
    that date, and nothing after it. When they're done, **Export Changes for Client…** saves a changes
    file to send you.
-4. Click **Import Accountant's Changes…** and choose the file. LocalBooks checks it came from the copy
+4. Click **Import Accountant's Changes…** and choose the file. Tillhouse checks it came from the copy
    that's out and lists the new accounts and journal entries. **Apply the changes** adds the
    accounts and posts the entries (each memo says it came from the accountant), all or nothing, and
    ends the copy: the period opens again.

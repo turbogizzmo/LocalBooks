@@ -1,11 +1,11 @@
 # Set up your company
 
-LocalBooks keeps your books in a single company file on your computer. These steps set up the
+Tillhouse keeps your books in a single company file on your computer. These steps set up the
 details that appear on invoices and reports and decide how your fiscal year works.
 
 ## Made for US businesses
 
-LocalBooks is built for businesses in the United States. You can use it elsewhere for plain
+Tillhouse is built for businesses in the United States. You can use it elsewhere for plain
 double-entry books, but these parts follow US rules and formats only:
 
 - **Sales tax** is US-style: a rate (and the agency it's owed to) on each invoice or receipt, added
@@ -13,7 +13,7 @@ double-entry books, but these parts follow US rules and formats only:
   VAT or GST return.
 - **1099s and W-9s** are the IRS forms (1099-NEC and 1096). The **tax calendar**, tax-line mapping
   and **TXF export** cover US federal returns only (Schedule C, 1065, 1120-S, 1120).
-- **Payroll:** LocalBooks calculates no pay or withholding in any country. Payroll import posts the
+- **Payroll:** Tillhouse calculates no pay or withholding in any country. Payroll import posts the
   journal your payroll service exports.
 - **Bank and payment files:** ACH payment files use the US NACHA format and nine-digit US routing
   numbers, and printed checks follow US check layouts with the amount in English words.
@@ -32,7 +32,7 @@ double-entry books, but these parts follow US rules and formats only:
    multi-member LLC, partnership, corporation, S corporation, nonprofit, or other) and the
    **First month of fiscal year**.
 2. **Industry and accounts.** Choose the industry closest to yours from the 33 listed.
-   LocalBooks lists the accounts it suggests for that industry, with five-digit account numbers
+   Tillhouse lists the accounts it suggests for that industry, with five-digit account numbers
    (10100 Checking, 11000 Accounts Receivable, 60000 Advertising and Promotion…).
    The ones most businesses like yours need are already checked; check any others you want and
    uncheck the rest. **Default** puts back the suggested set. The equity accounts follow your tax
@@ -42,7 +42,7 @@ double-entry books, but these parts follow US rules and formats only:
    inventory. Each adds the accounts it needs.
 
 Click **Save As…** to choose where to save the company file; it opens straight away. If you'd
-rather start from LocalBooks' standard chart of accounts and set things up yourself, click
+rather start from Tillhouse's standard chart of accounts and set things up yourself, click
 **Skip — use the standard chart** instead. Either way, you can add, rename or remove accounts
 later in the Chart of Accounts.
 
@@ -50,11 +50,11 @@ later in the Chart of Accounts.
 
 To merge an account you don't need into another of the same type, open it with **Edit…** in the
 Chart of Accounts, change its name to the other's (they must sit at the same level), and click
-**Save**; LocalBooks asks whether to merge them. Posted transactions keep the account they posted
-to, so LocalBooks moves the merged account's balance with one journal entry dated today, and points
+**Save**; Tillhouse asks whether to merge them. Posted transactions keep the account they posted
+to, so Tillhouse moves the merged account's balance with one journal entry dated today, and points
 items, sales tax agencies, budgets, subaccounts, bank feed rules, settings, unposted estimates and
 purchase orders and memorized transactions at the account you kept. The merged account becomes
-inactive. Bank and credit card accounts, and LocalBooks' own accounts (such as Accounts Receivable),
+inactive. Bank and credit card accounts, and Tillhouse's own accounts (such as Accounts Receivable),
 can't be merged. Merging can't be undone; voiding its journal entry moves the balance back but
 doesn't restore the lists.
 
@@ -84,20 +84,20 @@ doesn't restore the lists.
 1. Open **Settings › Custom Forms** to choose how invoices and estimates look: title, font, colors,
    logo placement, columns, and the message and terms printed on them. See
    [Design your invoices and estimates](custom-forms.md).
-2. Emailed forms open in your own mail app with the PDF attached. To send them from LocalBooks
+2. Emailed forms open in your own mail app with the PDF attached. To send them from Tillhouse
    instead, enter your email provider's SMTP settings in **Settings › Email**.
 
 ## Check your chart of accounts
 
 A company set up with the assistant starts with the accounts you chose for your industry. One
-created with **Skip** starts with LocalBooks' standard chart of accounts (bank, receivables,
+created with **Skip** starts with Tillhouse's standard chart of accounts (bank, receivables,
 payables, equity, income and common expenses). You choose these accounts on every form, so you can
 start recording straight away. Accounts a feature needs, such as Sales Tax Payable or Inventory
 Asset, are added the first time you use that feature.
 
 ## Make sure backups are on
 
-1. In **Preferences › General › Company Preferences**, under **Automatic backups**, keep **Daily backup** turned on. A backup is taken when LocalBooks
+1. In **Preferences › General › Company Preferences**, under **Automatic backups**, keep **Daily backup** turned on. A backup is taken when Tillhouse
    starts, at most once a day.
 2. Set **Keep** to how many daily backups to keep (1–60).
 
@@ -133,7 +133,7 @@ and two tabs for each:
   box. Only an Admin can change them.
 
 Some settings live on their own screen (sales tax rates, reminders, email, forms). The category
-lists them under **Set on their own screens**, with a link to each. LocalBooks remembers the
+lists them under **Set on their own screens**, with a link to each. Tillhouse remembers the
 category you used last.
 
 The defaults for selling, getting paid and paying bills are in these categories' Company
@@ -176,7 +176,7 @@ choices back.
 - **Bring back all one-time messages.** Messages you turned off with **Don't show this message
   again** appear again.
 - **When the item on a sales line changes.** If you typed your own description or price on a line
-  and then pick a different item, LocalBooks can **Ask whether to keep it** (the default), **Always
+  and then pick a different item, Tillhouse can **Ask whether to keep it** (the default), **Always
   keep what I typed**, or **Never** keep it and use the new item's description and price.
 
 **Preferences › Accounting › My Preferences** has **Autofill memo in journal entries**: a line you
@@ -210,12 +210,12 @@ These ask before a transaction is saved. Click **Save anyway** to record it as y
 | **Sales & Customers** | A new sales receipt from a customer (or job) that has open invoices: it doesn't pay them, so use **Receive Payments** for an invoice | On |
 | **Accounting** | A date more than **N** days before today (0 turns it off) | 90 days |
 | **Accounting** | A date more than **N** days after today (0 turns it off) | 30 days |
-| **Accounting** | A transaction that posts to Retained Earnings, which LocalBooks updates itself at year end | On |
+| **Accounting** | A transaction that posts to Retained Earnings, which Tillhouse updates itself at year end | On |
 
 The date warnings cover bills, checks, expenses, invoices, sales receipts, estimates, purchase
 orders and journal entries; they catch a slip like 2062 for 2026.
 
-Some things LocalBooks always does, so they have no switch: every line needs an account; journal
+Some things Tillhouse always does, so they have no switch: every line needs an account; journal
 entries, invoices, estimates and purchase orders get the next number when saved, so no two share
 one.
 
@@ -269,7 +269,7 @@ account and is listed under that rate's agency; void it and record it again to s
 
 ## Sales tax, time, 1099 and inventory preferences
 
-These company preferences (Admins only) change how LocalBooks works out tax, time and stock.
+These company preferences (Admins only) change how Tillhouse works out tax, time and stock.
 
 | Category (Company Preferences) | Option | What it does | Default |
 |---|---|---|---|
@@ -344,7 +344,7 @@ medical payments; $10 for royalties; $600 for attorneys' gross proceeds.
 Keep each contractor's Form W-9 on the vendor: open the vendor (**Expenses › Vendors › Edit…**)
 and click **W-9…** beside **Track payments for a 1099**. Enter the name on line 1 (as on their tax
 return), any business name, the tax classification, whether the TIN is an **SSN or ITIN** or an
-**EIN**, the TIN itself, and the date the W-9 came in. LocalBooks rejects numbers the IRS never
+**EIN**, the TIN itself, and the date the W-9 came in. Tillhouse rejects numbers the IRS never
 issues (all-zero parts, SSNs starting 666, EIN prefixes it doesn't use) without repeating the
 number in the message. Once users are on, the TIN is encrypted in the company file, and only users
 who can see sensitive data see it in full; the audit trail notes only that it changed.
@@ -361,10 +361,10 @@ address (Settings › Company) are the payer's. **Print forms…** prints:
 - **Copy B** for each recipient, on plain paper, with their TIN shown as its last four digits, as
   the IRS allows on recipient copies. Send them by January 31.
 
-Filing electronically straight from LocalBooks, in the IRS's IRIS format, isn't built yet: the
+Filing electronically straight from Tillhouse, in the IRS's IRIS format, isn't built yet: the
 IRS gives its schema only to registered software developers.
 
-**Units of measure** (selling by the each, case or pallet) are not in LocalBooks: each item has one
+**Units of measure** (selling by the each, case or pallet) are not in Tillhouse: each item has one
 unit.
 
 ## Sort a list
@@ -373,7 +373,7 @@ Click a column heading in a list (invoices, bills, estimates, checks, customers,
 journal, account registers, Reconcile and others) to sort by it; click it again to reverse the
 order. An arrow shows which column is sorted.
 
-Lists of transactions start with the newest at the top. LocalBooks remembers the order you choose
+Lists of transactions start with the newest at the top. Tillhouse remembers the order you choose
 for each list on this computer; click the sorted heading a third time to go back to newest first.
 Registers and Reconcile start, and go back to, date order (oldest first). While a register is
 sorted by anything else, its **Balance** column is dimmed, because it is still the running balance
@@ -391,7 +391,7 @@ reports. With one open in front:
 - The size shows beside the buttons when it isn't the normal one; click it, choose
   **View › Actual Text Size**, or press **Cmd 0** (**Ctrl 0**) to go back.
 
-Every window of that kind takes the new size at once, and LocalBooks keeps it on this computer for
+Every window of that kind takes the new size at once, and Tillhouse keeps it on this computer for
 next time. The Home page and Settings keep the normal size.
 
 ## Give a register a color
@@ -405,7 +405,7 @@ color is kept on this computer for that account in that company file; **Default*
 The chart of accounts, the item list and the customer list can be put in any order you like:
 drag a row up or down and drop it where you want it. A row moves among the rows beside it (the
 accounts under the same parent, a customer's jobs, the sub-items of an item), and takes its
-subaccounts, jobs or sub-items with it. LocalBooks keeps the order in the company file, so everyone
+subaccounts, jobs or sub-items with it. Tillhouse keeps the order in the company file, so everyone
 who opens it sees the same order.
 
 - **Tree** shows subaccounts, jobs and sub-items (an item named `Parent:Child`) indented under
@@ -443,7 +443,7 @@ and description stay first and the amount last, so subtotals and groups line up)
 every column before the amount. A hidden column still keeps what was in it; show it again to
 change it. The sales forms share one layout, and so do the purchase and banking forms.
 
-LocalBooks keeps each table's columns on this computer for you, in **My Preferences**, so they stay
+Tillhouse keeps each table's columns on this computer for you, in **My Preferences**, so they stay
 the same the next time you open it.
 
 ## Open a transaction from a register
@@ -455,11 +455,11 @@ opens in the journal with the entry expanded.
 
 ## Work in more than one window
 
-LocalBooks handles windows the way QuickBooks Desktop for Windows does. Forms, registers and reports
-open as windows *inside* the LocalBooks window, so you can keep a report beside the invoice you're
+Tillhouse handles windows the way QuickBooks Desktop for Windows does. Forms, registers and reports
+open as windows *inside* the Tillhouse window, so you can keep a report beside the invoice you're
 entering, all in one program window. The menus use QuickBooks' names.
 
-### Windows inside LocalBooks
+### Windows inside Tillhouse
 
 - Choosing a page in the sidebar or the menu bar opens it in a window, or brings forward the window
   that already shows it. **Edit…** on an invoice, bill, check or expense, or a report chosen in the
@@ -472,7 +472,7 @@ entering, all in one program window. The menus use QuickBooks' names.
 - **Minimized** windows wait as small title bars along the bottom of the work area. Click one to bring
   it back.
 - Every window shows the same books: when you save a change in one, the others update straight away.
-  If a window has a form with entries you haven't saved, LocalBooks asks before it closes.
+  If a window has a form with entries you haven't saved, Tillhouse asks before it closes.
 
 | Keys | What they do |
 |---|---|
@@ -503,16 +503,16 @@ The choice is kept with each company.
   highlighted (minimized ones in italics). Click a window to bring it forward. Choose the menu item
   again (or **✕** on the pane) to hide it.
 
-### A second LocalBooks window
+### A second Tillhouse window
 
-**Window › New Window** (**Ctrl+Shift+N**, ⇧⌘N on a Mac) opens a second LocalBooks window on the same
+**Window › New Window** (**Ctrl+Shift+N**, ⇧⌘N on a Mac) opens a second Tillhouse window on the same
 company, for example on a second screen. It starts on the page you're looking at and has windows of
 its own inside it.
 
 ### Reopen your windows with the company (saved desktop)
 
-When you open a company, LocalBooks reopens the windows you had inside it: their screens, forms,
-registers and reports, where they were, which were minimized or maximized, and where the LocalBooks
+When you open a company, Tillhouse reopens the windows you had inside it: their screens, forms,
+registers and reports, where they were, which were minimized or maximized, and where the Tillhouse
 window itself was. Choose how in **Edit › Preferences › Desktop View**, under **Desktop**, the same
 choices as QuickBooks:
 
@@ -570,7 +570,7 @@ next and open it with one click.
 
 The **Insights** tab has the totals, income and expense for the last 12 months (by month, on the
 basis set in Preferences, the same figures as the Income and Expense Graph), the cash forecast, the
-assets and liabilities chart, the trial balance and Reminders. LocalBooks remembers which tab you last chose.
+assets and liabilities chart, the trial balance and Reminders. Tillhouse remembers which tab you last chose.
 
 ## Use the toolbar on a form
 
@@ -587,7 +587,7 @@ is greyed out, and hovering over it (or moving to it with the keyboard) says why
 | **Save** | Saves and posts, then clears the form for the next one (the same as **Save & New**). |
 | **Void** | On a saved transaction that's open on the form, voids it with a reversing entry after you confirm. **Ctrl+D** presses it. |
 | **Print ▾** | Prints or saves a PDF of the saved form. On a new form, **Post and print…** (or **Save and print…**) saves it first. On a saved check, **Print** prints the check. On a saved bill, expense, card credit, journal entry, credit memo, refund receipt, vendor credit, deposit or transfer, it prints a voucher: the header and the accounts it posted to, with debits and credits, and **Save as PDF…** saves that voucher (a check's too) as a PDF file. Saved sales receipts, estimates and purchase orders print as their own forms. |
-| **Email ▾** | Emails the saved form, or marks it **Email later**. On a new form, **Post and email…** saves it first. On a saved voucher (bill, check, expense, credit, deposit, journal entry), **Email** sends its PDF to the vendor or customer named on it, by your mail app or from LocalBooks, as forms are sent. |
+| **Email ▾** | Emails the saved form, or marks it **Email later**. On a new form, **Post and email…** saves it first. On a saved voucher (bill, check, expense, credit, deposit, journal entry), **Email** sends its PDF to the vendor or customer named on it, by your mail app or from Tillhouse, as forms are sent. |
 | **Attach File** | On a new form, picks files to attach when it posts. On a saved transaction that posted (anything but an estimate or purchase order), shows its attachments, where you can add more. |
 | **Memorize** | Saves the form as a recurring transaction. **Ctrl+M** presses it. |
 
@@ -686,7 +686,7 @@ In the **Check no.** box on **Write Checks** and **Pay Bills**, press **+** for 
 ## Find things in the menu bar
 
 The menu bar is laid out the way desktop accounting programs usually are, so the commands you know
-are where you expect them. [The menu bar](menus.md) lists every command and where it goes. Each one opens the screen, and often the form, in a window inside LocalBooks (or brings forward the window that already shows it):
+are where you expect them. [The menu bar](menus.md) lists every command and where it goes. Each one opens the screen, and often the form, in a window inside Tillhouse (or brings forward the window that already shows it):
 
 | Menu | What's in it |
 |---|---|

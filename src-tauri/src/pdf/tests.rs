@@ -76,12 +76,12 @@ fn a_protected_pdf_opens_only_with_its_password() {
     let plain = write_protected_pdf(std::slice::from_ref(&page), None, "Profit and Loss", None).unwrap();
     assert_eq!(plain, write_pdf(std::slice::from_ref(&page), None, "Profit and Loss"), "no password: the usual file");
     let plain_text = String::from_utf8_lossy(&plain);
-    assert!(plain_text.starts_with("%PDF-1.4") && plain_text.contains("/Producer (LocalBooks) /Creator (LocalBooks)") && !plain_text.contains("/Encrypt"));
+    assert!(plain_text.starts_with("%PDF-1.4") && plain_text.contains("/Producer (Tillhouse) /Creator (Tillhouse)") && !plain_text.contains("/Encrypt"));
 
     let pdf = write_protected_pdf(&[page.clone(), page], None, "Profit and Loss", Some("c0rrect horse")).unwrap();
     let raw = String::from_utf8_lossy(&pdf);
     assert!(raw.starts_with("%PDF-1.7") && raw.contains("/Encrypt ") && raw.contains("/ID ["));
-    assert!(!raw.contains("LocalBooks") && !raw.contains("Profit"), "the title and producer are encrypted too");
+    assert!(!raw.contains("Tillhouse") && !raw.contains("Profit"), "the title and producer are encrypted too");
 
     // A reader opens it with the password and sees the text.
     let doc = lopdf::Document::load_mem_with_options(&pdf, lopdf::LoadOptions::with_password("c0rrect horse")).expect("opens with the password");

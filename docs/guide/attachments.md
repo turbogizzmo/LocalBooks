@@ -25,7 +25,7 @@ On a new **bill**, click **Attach the vendor's invoice…** under the lines. On 
 removes one you picked by mistake.
 
 The files are attached when you post. If the transaction posts but a file can't be read (for
-example it was moved, or is larger than 25 MB), LocalBooks says so; the transaction is kept, and
+example it was moved, or is larger than 25 MB), Tillhouse says so; the transaction is kept, and
 you can attach the file afterwards.
 
 ## The Document Inbox
@@ -38,19 +38,19 @@ Receipts and vendor bills that arrive before you have time to enter them can wai
 2. Click one to see it beside the list: a PDF shows page by page, a photo as it is. Add a **Note** if
    it needs one (*ask Pat which job*).
 3. Click **Enter as bill**, **Expense** or **Check**. That form opens with the file attached and,
-   for a PDF with text, what LocalBooks read from it filled in: the **total** (the amount on a line
+   for a PDF with text, what Tillhouse read from it filled in: the **total** (the amount on a line
    such as *Total*, *Amount due* or *Balance due*), the **date**, and the **name** at the top as the
    vendor or payee. Check them, finish the form and post it.
 
 When it posts, the file is attached to the transaction and leaves the inbox. If you close the form
 without posting, the file stays in the inbox. **Remove** takes a file out without entering it.
 
-Nothing is sent anywhere to read a file: LocalBooks reads only the text a PDF already contains.
+Nothing is sent anywhere to read a file: Tillhouse reads only the text a PDF already contains.
 Photos and scanned PDFs have no text, so their fields are left for you to type (there's no OCR).
 
 To bring in paper, scan it with your scanner's own app (or a phone) to a PDF or photo, then drop
-the file on the inbox. LocalBooks doesn't drive scanners itself: each system has its own scanner
-interface (and some scanners need their maker's driver), so scanning from inside LocalBooks would
+the file on the inbox. Tillhouse doesn't drive scanners itself: each system has its own scanner
+interface (and some scanners need their maker's driver), so scanning from inside Tillhouse would
 work for some scanners and not others.
 
 ## Attach files to a posted transaction
@@ -68,7 +68,7 @@ A 📎 after the number marks a transaction with files (📎3 means three). Clic
 
 - Click a **file name** to save a copy where you choose, for example to email it to your
   accountant or open it in another program.
-- Click **×** next to a file to delete it. LocalBooks asks first. Deleting is reversible: the file
+- Click **×** next to a file to delete it. Tillhouse asks first. Deleting is reversible: the file
   is kept, and **Accounting › Attachments Library** can restore it (see below).
 - Click **Attach file…** in the strip to add more.
 - With two or more files, **Save all…** saves them together in one zip file.
@@ -92,10 +92,10 @@ its size.
   with the form when it is emailed or printed** to send it along with the invoice, estimate or
   sales receipt it belongs to. Click **Save details**. A file on an invoice's, sales receipt's,
   credit memo's or bill payment's transaction, or on an estimate, goes with that form; a file on a
-  customer goes with their statements. Marked files are attached whether LocalBooks emails the
+  customer goes with their statements. Marked files are attached whether Tillhouse emails the
   form (Settings › Email) or opens the message in your mail app, up to 20 MB together. When the
   form is printed, marked pictures and PDFs print after it, each on its own page; other kinds of
-  file are left out of the printout, and LocalBooks says which.
+  file are left out of the printout, and Tillhouse says which.
 - **Delete…** hides the file from its transaction or record but keeps it. Tick **Show deleted** to
   see deleted files, then **Restore** one to put it back.
 - **Remove for good…** (on a deleted file, Admins only) erases it from the company file after a
@@ -104,20 +104,20 @@ its size.
 ### How long to keep files
 
 Many tax authorities expect you to keep the records behind your books (receipts, invoices, bank
-statements) for several years, often six or seven; check what applies to you. LocalBooks never
+statements) for several years, often six or seven; check what applies to you. Tillhouse never
 removes a file unless an Admin removes a deleted one for good, and the files are in every backup.
 
 ## Save every attachment at once
 
 **Settings › File & Data Controls › Save All Attachments…** saves every file attached to any transaction
-in one zip file, for your accountant or an auditor, or to keep outside LocalBooks. Inside the zip
+in one zip file, for your accountant or an auditor, or to keep outside Tillhouse. Inside the zip
 each transaction has its own folder, named by its date, its kind and its number, such as
 `2026-10-01 Bill 118 (entry 42)`; two files with the same name in one transaction are kept as
 `receipt.pdf` and `receipt (2).pdf`. Nothing in the company file changes.
 
 ## When you edit or void a transaction
 
-- **Editing** a posted transaction keeps its files: LocalBooks voids the original and posts the
+- **Editing** a posted transaction keeps its files: Tillhouse voids the original and posts the
   corrected version, and the files move to the corrected version.
 - **Voiding** a transaction leaves its files on the voided transaction, so you still have the
   paperwork for the audit trail.

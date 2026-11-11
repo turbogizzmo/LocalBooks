@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "LocalBooks",
+  "productName": "Tillhouse",
   "version": "0.15.0",
   "identifier": "com.localbooks.desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "LocalBooks",
+        "title": "Tillhouse",
         "width": 1440,
         "height": 900,
         "minWidth": 760,
@@ -29,13 +29,13 @@
     "copyright": "Copyright © 2026 turbogizzmo",
     "targets": "all",
     "category": "Finance",
-    "shortDescription": "LocalBooks Desktop: local-first double-entry accounting",
-    "longDescription": "LocalBooks Desktop keeps a small business's books in a single file on its own computer: invoices, bills, banking, inventory, reconciliation and financial statements, with every transaction posted as a balanced double-entry journal entry.",
+    "shortDescription": "Tillhouse: local-first double-entry accounting",
+    "longDescription": "Tillhouse keeps a small business's books in a single file on its own computer: invoices, bills, banking, inventory, reconciliation and financial statements, with every transaction posted as a balanced double-entry journal entry.",
     "fileAssociations": [
       {
         "ext": ["localbooks"],
-        "name": "LocalBooks Company File",
-        "description": "LocalBooks Company File",
+        "name": "Tillhouse Company File",
+        "description": "Tillhouse Company File",
         "role": "Editor",
         "rank": "Owner",
         "mimeType": "application/x-localbooks",
@@ -56,6 +56,20 @@
       "../THIRD-PARTY-NOTICES.txt": "THIRD-PARTY-NOTICES.txt"
     },
     "createUpdaterArtifacts": true,
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/hooks.nsh"
+      }
+    },
+    "linux": {
+      "deb": {
+        "conflicts": ["local-books"],
+        "replaces": ["local-books"]
+      },
+      "rpm": {
+        "obsoletes": ["local-books"]
+      }
+    },
     "macOS": {
       "signingIdentity": "-",
       "entitlements": "./Entitlements.plist"

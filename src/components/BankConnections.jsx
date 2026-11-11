@@ -127,7 +127,7 @@ function LinkRow({ account, accounts, linkedIds, onChanged, setNotice }) {
           </div>
         ) : foreign ? (
           <span className="block whitespace-normal text-xs text-qb-ink-muted">
-            In {account.currency}; LocalBooks bank accounts are kept in {homeCurrency}. Import this account’s statements as files.
+            In {account.currency}; Tillhouse bank accounts are kept in {homeCurrency}. Import this account’s statements as files.
           </span>
         ) : (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -138,7 +138,7 @@ function LinkRow({ account, accounts, linkedIds, onChanged, setNotice }) {
               onChange={setBankAccountId}
               placeholder="Link to…"
               className="qb-input h-row w-[200px] text-sm"
-              aria-label={`LocalBooks account for ${account.name}`}
+              aria-label={`Tillhouse account for ${account.name}`}
             />
             {bankAccountId !== null && (
               <>
@@ -175,7 +175,7 @@ function LinkRow({ account, accounts, linkedIds, onChanged, setNotice }) {
 }
 
 /**
- * SimpleFIN bank connections: paste a setup token, link each bank account to a LocalBooks account,
+ * SimpleFIN bank connections: paste a setup token, link each bank account to a Tillhouse account,
  * then sync. Synced transactions land in the Bank Feeds review queue like imported statements.
  */
 export default function BankConnections({ accounts, onClose, onSynced }) {
@@ -205,7 +205,7 @@ export default function BankConnections({ accounts, onClose, onSynced }) {
   const connect = async (token) => {
     try {
       const view = await api.connectBank(token);
-      setNotice({ kind: 'success', text: `Connected to ${view.serverHost}: ${view.accounts.length} account${view.accounts.length === 1 ? '' : 's'} found. Link each one you want to a LocalBooks account.` });
+      setNotice({ kind: 'success', text: `Connected to ${view.serverHost}: ${view.accounts.length} account${view.accounts.length === 1 ? '' : 's'} found. Link each one you want to a Tillhouse account.` });
       await reload();
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
@@ -232,7 +232,7 @@ export default function BankConnections({ accounts, onClose, onSynced }) {
     });
 
   const remove = async (c) => {
-    if (!(await askConfirm(`Remove the connection to ${c.serverHost}? LocalBooks forgets its access on this computer. Transactions already imported stay in Bank Feeds.`, { confirmLabel: 'Remove', danger: true }))) return;
+    if (!(await askConfirm(`Remove the connection to ${c.serverHost}? Tillhouse forgets its access on this computer. Transactions already imported stay in Bank Feeds.`, { confirmLabel: 'Remove', danger: true }))) return;
     act(c.id, async () => {
       await api.disconnectBank(c.id);
       setNotice({ kind: 'info', text: 'Connection removed. To stop SimpleFIN sharing the data entirely, also disable the app connection in SimpleFIN Bridge.' });
@@ -253,8 +253,8 @@ export default function BankConnections({ accounts, onClose, onSynced }) {
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           <section className="border-b border-qb-border px-3 py-2 text-xs text-qb-ink-muted">
             <p className="mb-1">
-              SimpleFIN Bridge connects to your banks and shares <strong>read-only</strong> transactions with LocalBooks. It is a separate
-              service with its own subscription (about $15 a year, paid to SimpleFIN). LocalBooks never sees your bank sign-in.
+              SimpleFIN Bridge connects to your banks and shares <strong>read-only</strong> transactions with Tillhouse. It is a separate
+              service with its own subscription (about $15 a year, paid to SimpleFIN). Tillhouse never sees your bank sign-in.
             </p>
             <ol className="ml-4 list-decimal">
               <li>
@@ -355,7 +355,7 @@ export default function BankConnections({ accounts, onClose, onSynced }) {
 
         <div className="border-t border-qb-border px-3 py-1.5 text-xs text-qb-ink-muted">
           Synced transactions wait in Bank Feeds for you to categorize and approve; nothing posts on its own. SimpleFIN allows about 24
-          updates a day, so LocalBooks syncs only when you ask, at most every 10 minutes, and reaches back up to 90 days.
+          updates a day, so Tillhouse syncs only when you ask, at most every 10 minutes, and reaches back up to 90 days.
         </div>
       </div>
     </div>

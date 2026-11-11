@@ -121,12 +121,12 @@ export function RecoveryKeyPanel({ recoveryKey, onDone, doneLabel = 'Continue', 
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm">
-        This recovery key resets an Admin password if every Admin forgets theirs. LocalBooks does not keep a copy, and nobody else can reset it for you. Write it down or store
+        This recovery key resets an Admin password if every Admin forgets theirs. Tillhouse does not keep a copy, and nobody else can reset it for you. Write it down or store
         it in a password manager, somewhere apart from this computer.
       </p>
       {encrypted && (
         <p role="note" className="border border-qb-negative/40 bg-[#fdf0ef] px-2 py-1 text-sm text-qb-negative">
-          This company file is encrypted. If every Admin forgets their password and this recovery key is lost, nobody can open these books or any backup of them: not you, not LocalBooks' authors.
+          This company file is encrypted. If every Admin forgets their password and this recovery key is lost, nobody can open these books or any backup of them: not you, not Tillhouse's authors.
         </p>
       )}
       <div className="flex items-center gap-2">
@@ -686,7 +686,7 @@ function UserList({ me, encrypted }) {
   );
 }
 
-/** Admin: how long a signed-in user may be idle before LocalBooks signs them out. */
+/** Admin: how long a signed-in user may be idle before Tillhouse signs them out. */
 function AutoLockSetting({ minutes }) {
   const [value, setValue] = useState(String(minutes));
   const [status, setStatus] = useState(null);
@@ -694,7 +694,7 @@ function AutoLockSetting({ minutes }) {
     setValue(next);
     try {
       await api.setPreference('auto_lock_minutes', next);
-      setStatus({ kind: 'success', text: next === '0' ? 'LocalBooks will not sign anyone out for being idle.' : `Signs out after ${next} minutes without activity.` });
+      setStatus({ kind: 'success', text: next === '0' ? 'Tillhouse will not sign anyone out for being idle.' : `Signs out after ${next} minutes without activity.` });
     } catch (err) {
       setStatus({ kind: 'error', text: errorText(err) });
     }
@@ -715,7 +715,7 @@ function AutoLockSetting({ minutes }) {
           </select>
           <span>without activity</span>
         </label>
-        <span className="text-xs text-qb-ink-muted">Counts typing and clicking in every LocalBooks window, and time the Mac was asleep. Anything not yet saved is lost when it signs out.</span>
+        <span className="text-xs text-qb-ink-muted">Counts typing and clicking in every Tillhouse window, and time the Mac was asleep. Anything not yet saved is lost when it signs out.</span>
         {status && <Notice kind={status.kind} text={status.text} onDismiss={() => setStatus(null)} />}
       </div>
     </section>
@@ -821,7 +821,7 @@ function WholeFileEncryption({ me, encrypted }) {
               password or the recovery key. It is off unless you turn it on.
             </p>
             <p role="note" className="border border-qb-negative/40 bg-[#fdf0ef] px-2 py-1 text-sm text-qb-negative">
-              With it on, if every Admin forgets their password and the recovery key is lost, nobody can open these books or any backup of them: not you, not LocalBooks' authors. Without it, Remove all users can still get you back in.
+              With it on, if every Admin forgets their password and the recovery key is lost, nobody can open these books or any backup of them: not you, not Tillhouse's authors. Without it, Remove all users can still get you back in.
             </p>
             <label className="flex items-start gap-2">
               <input type="checkbox" className="mt-0.5" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} disabled={busy} />

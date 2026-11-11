@@ -113,7 +113,7 @@ fn actor() -> String {
     static COMPUTER: OnceLock<String> = OnceLock::new();
     let computer = COMPUTER.get_or_init(|| {
         let user = std::env::var("USER").or_else(|_| std::env::var("USERNAME")).unwrap_or_else(|_| "unknown user".into());
-        format!("{user} (LocalBooks {})", env!("CARGO_PKG_VERSION"))
+        format!("{user} (Tillhouse {})", env!("CARGO_PKG_VERSION"))
     });
     match signed_in().as_deref() {
         Some(username) => format!("{username} as {computer}"),
@@ -203,7 +203,7 @@ pub async fn continues_record(conn: &mut SqliteConnection, head: &Option<ChainHe
 pub async fn anchor(head: Option<ChainHead>) {
     if let Some(head) = head {
         if let Err(err) = record(&head, false).await {
-            eprintln!("LocalBooks: could not record the audit trail head: {err}");
+            eprintln!("Tillhouse: could not record the audit trail head: {err}");
         }
     }
 }

@@ -89,7 +89,7 @@ export default function PayrollImport({ busy = false }) {
       {expanded && (
         <div className="mt-2 flex flex-col gap-2">
           <p className="text-xs text-qb-ink-muted">
-            Export each payroll from your payroll service as a journal (a .csv or Excel file with a date, an account, and a debit and credit or one amount). LocalBooks groups the rows
+            Export each payroll from your payroll service as a journal (a .csv or Excel file with a date, an account, and a debit and credit or one amount). Tillhouse groups the rows
             into one entry per payroll, matches the service’s account names to yours (and remembers them for next time), and posts only when every entry balances.
           </p>
           <div className="flex items-center gap-2">
@@ -148,7 +148,7 @@ export default function PayrollImport({ busy = false }) {
                   <thead>
                     <tr>
                       <th className="qb-grid-head">Account in the file</th>
-                      <th className="qb-grid-head w-[320px]">LocalBooks account</th>
+                      <th className="qb-grid-head w-[320px]">Tillhouse account</th>
                       <th className="qb-grid-head w-[120px]">Matched</th>
                     </tr>
                   </thead>
@@ -157,7 +157,7 @@ export default function PayrollImport({ busy = false }) {
                       <tr key={s.name}>
                         <td className="qb-grid-cell">{s.name}</td>
                         <td className="qb-grid-cell">
-                          <AccountSelect accounts={accounts ?? []} value={s.accountId} placeholder="Choose an account…" className="qb-input h-row w-full" aria-label={`LocalBooks account for ${s.name}`} disabled={working} onChange={(id) => setAccount(s.name, id)} />
+                          <AccountSelect accounts={accounts ?? []} value={s.accountId} placeholder="Choose an account…" className="qb-input h-row w-full" aria-label={`Tillhouse account for ${s.name}`} disabled={working} onChange={(id) => setAccount(s.name, id)} />
                         </td>
                         <td className="qb-grid-cell text-qb-ink-muted">{HOW[s.how]}</td>
                       </tr>

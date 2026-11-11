@@ -134,10 +134,10 @@ fn windows_reopen_where_they_were_while_that_spot_is_still_on_a_screen() {
 #[test]
 fn window_titles_name_what_the_window_shows() {
     assert_eq!(window_title(Some("Invoice 1001 · Acme"), Some("Acme Ltd")), "Invoice 1001 · Acme — Acme Ltd");
-    assert_eq!(window_title(Some("Checking Register"), None), "Checking Register — LocalBooks");
-    assert_eq!(window_title(Some("  "), Some("Acme Ltd")), "Acme Ltd — LocalBooks");
-    assert_eq!(window_title(None, Some("Acme Ltd")), "Acme Ltd — LocalBooks");
-    assert_eq!(window_title(None, None), "LocalBooks");
+    assert_eq!(window_title(Some("Checking Register"), None), "Checking Register — Tillhouse");
+    assert_eq!(window_title(Some("  "), Some("Acme Ltd")), "Acme Ltd — Tillhouse");
+    assert_eq!(window_title(None, Some("Acme Ltd")), "Acme Ltd — Tillhouse");
+    assert_eq!(window_title(None, None), "Tillhouse");
 }
 
 #[test]

@@ -1,5 +1,5 @@
 /**
- * The windows inside a LocalBooks window, as QuickBooks Desktop for Windows keeps forms, registers
+ * The windows inside a Tillhouse window, as QuickBooks Desktop for Windows keeps forms, registers
  * and reports inside its own window. Pure state changes, used by `components/WindowManager.jsx`.
  *
  * state = { windows: [...] in the order they opened, order: [ids] bottom to top, activeId, next }
@@ -7,7 +7,7 @@
  *            bounds: { x, y, width, height } (in the work area), minimized, maximized, minimizedAt }
  */
 
-/** The smallest a window inside LocalBooks can be made. */
+/** The smallest a window inside Tillhouse can be made. */
 export const MIN_WIDTH = 320;
 export const MIN_HEIGHT = 180;
 /** How much of a window's title bar stays in the work area, so it can always be dragged back. */

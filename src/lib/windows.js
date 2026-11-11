@@ -6,20 +6,20 @@ import { NAV } from '../components/Sidebar.jsx';
 import { askConfirm } from './dialogs.jsx';
 import desktop from './api/desktop.js';
 
-/** Sent by Window › New Window to the focused LocalBooks window, which opens the page active in it. */
+/** Sent by Window › New Window to the focused Tillhouse window, which opens the page active in it. */
 export const NEW_WINDOW_REQUESTED = 'new-window-requested';
-/** Sent by a menu bar item to the focused LocalBooks window with the page to open: `{ view, action, data }`. */
+/** Sent by a menu bar item to the focused Tillhouse window with the page to open: `{ view, action, data }`. */
 export const MENU_NAVIGATE = 'menu-navigate';
 /** Sent by a menu bar item that acts on the page: 'find', 'help' or 'sidebar'. */
 export const MENU_COMMAND = 'menu-command';
 /** Sent by the Window menu: 'close-all', 'close', 'cascade', 'tile-vertically', 'tile-horizontally', 'arrange-icons' or 'focus:<id>'. */
 export const WINDOW_COMMAND = 'window-command';
-/** Sent to every LocalBooks window before the desktop is saved: report the windows inside it now. */
+/** Sent to every Tillhouse window before the desktop is saved: report the windows inside it now. */
 export const WINDOW_REPORT_FLUSH = 'window-report-flush';
-/** Sent to every LocalBooks window when View › One Window / Multiple Windows, Open Window List or the left pane changes. */
+/** Sent to every Tillhouse window when View › One Window / Multiple Windows, Open Window List or the left pane changes. */
 const WINDOW_PREFERENCES_CHANGED = 'window-preferences-changed';
 
-/** The window LocalBooks opens at launch. */
+/** The window Tillhouse opens at launch. */
 export function isMainWindow() {
   try {
     return getCurrentWebviewWindow().label === 'main';
@@ -31,7 +31,7 @@ export function isMainWindow() {
 /** The pages the app has (the sidebar's), which a saved desktop may reopen. */
 export const KNOWN_VIEWS = NAV.flatMap((item) => (item.children ? item.children.map((c) => c.id) : [item.id]));
 
-/** The page from the LocalBooks window's URL fragment (`#view=…&action=…&data=…`, see `windows.rs`), or null. */
+/** The page from the Tillhouse window's URL fragment (`#view=…&action=…&data=…`, see `windows.rs`), or null. */
 export function startPage() {
   const params = new URLSearchParams(window.location.hash.slice(1));
   const view = params.get('view');
@@ -50,7 +50,7 @@ let preferences = { windowMode: 'multiple', showOpenWindowList: false, sidebar: 
 let startOn = { startOn: 'last-windows', startScreen: null };
 
 /**
- * Asked once, before the app starts in this LocalBooks window: if the company has just opened, its
+ * Asked once, before the app starts in this Tillhouse window: if the company has just opened, its
  * saved desktop (Edit › Preferences › Desktop View) and the View mode. Never in the way of opening:
  * any failure means no desktop.
  */
@@ -64,7 +64,7 @@ export async function loadStartPage() {
 }
 
 /**
- * Edit › Preferences › Desktop View › Start on, as it was when this LocalBooks window loaded:
+ * Edit › Preferences › Desktop View › Start on, as it was when this Tillhouse window loaded:
  * `startOn` is 'last-windows', 'home', 'screen' (`startScreen`) or 'no-windows'.
  */
 export function startOnPreference() {
@@ -77,14 +77,14 @@ export function restoredDesktop() {
 }
 
 /**
- * Window › New Window: another LocalBooks window on the open company at `view`, with the request it
- * should open. Every LocalBooks window shares the company file and refreshes when any changes it.
+ * Window › New Window: another Tillhouse window on the open company at `view`, with the request it
+ * should open. Every Tillhouse window shares the company file and refreshes when any changes it.
  */
 export function openWindow(view, action = null, data = null) {
   return invoke('open_window', { view, action, data });
 }
 
-/** View › One Window / Multiple Windows and View › Open Window List, kept current in every LocalBooks window. */
+/** View › One Window / Multiple Windows and View › Open Window List, kept current in every Tillhouse window. */
 export function useWindowPreferences() {
   const [prefs, setPrefs] = useState(preferences);
   useEffect(() => {
@@ -106,12 +106,12 @@ export function useWindowPreferences() {
 }
 
 /**
- * The windows inside this LocalBooks window (`components/WindowManager.jsx`): `windows`, `activeId`,
+ * The windows inside this Tillhouse window (`components/WindowManager.jsx`): `windows`, `activeId`,
  * `open(view, action, data, { forceNew })`, `focus(id)`, `close(id)`, `windowMode`.
  */
 export const WindowManagerContext = createContext({ windows: [], activeId: null, open: () => {}, focus: () => {}, close: () => {}, windowMode: 'multiple' });
 
-/** The window inside LocalBooks a screen is showing in: `{ id, setContent }`. */
+/** The window inside Tillhouse a screen is showing in: `{ id, setContent }`. */
 export const ChildContext = createContext({ id: 'page', setContent: () => {} });
 
 /**
@@ -208,7 +208,7 @@ export async function confirmClose(windowId, name) {
 }
 
 /**
- * Asks before this LocalBooks window closes while a form in any window inside it has unsaved
+ * Asks before this Tillhouse window closes while a form in any window inside it has unsaved
  * entries. Returns the function that stops listening.
  */
 export function guardWindowClose() {
@@ -220,7 +220,7 @@ export function guardWindowClose() {
       .onCloseRequested(async (event) => {
         if (!hasUnsaved()) return;
         event.preventDefault();
-        if (await askConfirm('A window in LocalBooks has entries that are not saved. Close LocalBooks and lose them?', { confirmLabel: 'Close without saving', danger: true })) {
+        if (await askConfirm('A window in Tillhouse has entries that are not saved. Close Tillhouse and lose them?', { confirmLabel: 'Close without saving', danger: true })) {
           unsaved.clear();
           await win.destroy();
         }

@@ -275,7 +275,7 @@ export default function AllSales({ accounts, intent }) {
       {printPortal}
       <MoneyBar
         items={[
-          { label: 'Open invoices', icon: '○', color: '#0077c5', cents: sum(openInvoices, 'homeBalanceCents'), count: openInvoices.length },
+          { label: 'Open invoices', icon: '○', color: '#22609e', cents: sum(openInvoices, 'homeBalanceCents'), count: openInvoices.length },
           { label: 'Overdue', icon: '⚠', color: '#d03b3b', cents: sum(overdue, 'homeBalanceCents'), count: overdue.length },
           { label: 'Paid last 30 days', icon: '✓', color: '#0ca30c', cents: sum(paidRecent, 'homeTotalCents'), count: paidRecent.length },
         ]}

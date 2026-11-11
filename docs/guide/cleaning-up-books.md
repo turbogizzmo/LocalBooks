@@ -28,7 +28,7 @@ A credit with nothing open to apply it to can be refunded instead, from **Sales 
 
 ### Unapplied payments
 
-In LocalBooks a payment is always recorded against its invoice or bill, so a payment itself is
+In Tillhouse a payment is always recorded against its invoice or bill, so a payment itself is
 never left unapplied. An import can still bring in money that QuickBooks held as unapplied. It
 arrives as a journal entry that credits Accounts Receivable (or debits Accounts Payable) with no
 invoice or bill behind it. Those entries appear under **Unapplied payments from journal entries**
@@ -89,13 +89,13 @@ already reported on a written-off invoice isn't given back automatically. Adjust
 inactive or made active again during the dates you choose. Pick a list to narrow it down.
 
 - **Added** comes from the date each record was created.
-- Edits come from the audit log. Account changes have been recorded since LocalBooks first had an
+- Edits come from the audit log. Account changes have been recorded since Tillhouse first had an
   audit log. Customer, vendor and item edits are recorded from the release that added Clean Up Books
   on, so earlier edits to them aren't shown.
 - For customers and vendors, **Details** names the fields that changed without their values, so
   sensitive details such as tax IDs never enter the audit log. Renames show the old and new name,
   and item edits show the old and new price.
-- LocalBooks can't merge two list entries, so there are no merges to review.
+- Tillhouse can't merge two list entries, so there are no merges to review.
 
 ## Compare the Balance Sheet with inventory
 
@@ -115,4 +115,4 @@ journal entry.
 - [Bank deposits and transfers](deposits-and-transfers.md)
 - [Record customer payments](customer-payments.md)
 - [Track inventory](inventory.md)
-- [How LocalBooks keeps the books accurate](ledger-integrity.md)
+- [How Tillhouse keeps the books accurate](ledger-integrity.md)

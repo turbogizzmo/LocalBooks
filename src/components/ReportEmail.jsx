@@ -103,12 +103,12 @@ export default function ReportEmailDialog({ sheet, onClose, onNotice }) {
               />
             )}
           </div>
-          {protect && <p className="text-2xs text-qb-ink-muted">Tell the recipient the password another way (by phone or text), not in this email. LocalBooks doesn’t keep it.</p>}
+          {protect && <p className="text-2xs text-qb-ink-muted">Tell the recipient the password another way (by phone or text), not in this email. Tillhouse doesn’t keep it.</p>}
           {smtp && (
             <div className="flex gap-3 text-xs" role="radiogroup" aria-label="How to send">
               <label className="flex items-center gap-1">
                 <input type="radio" name="report-send-method" checked={method === 'SMTP'} onChange={() => setMethod('SMTP')} />
-                Send from LocalBooks
+                Send from Tillhouse
               </label>
               <label className="flex items-center gap-1">
                 <input type="radio" name="report-send-method" checked={method === 'MAIL_APP'} onChange={() => setMethod('MAIL_APP')} />

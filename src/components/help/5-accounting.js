@@ -58,7 +58,7 @@ export const screens = {
 };
 
 /**
- * Topics: two sentences each, describing what LocalBooks actually does. `views` lists the
+ * Topics: two sentences each, describing what Tillhouse actually does. `views` lists the
  * screens a topic is about (shown under "On this screen"); `go` opens the place to do it, with an
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
@@ -128,7 +128,7 @@ export const topics = [
   {
     id: 'journal-entry', area: 'accounting', views: ['accounting/journal'],
     title: 'Post a manual journal entry',
-    body: 'Choose New journal entry and enter at least two lines whose debits equal credits; LocalBooks will not post an entry that does not balance. Use it for adjustments such as depreciation or opening balances.',
+    body: 'Choose New journal entry and enter at least two lines whose debits equal credits; Tillhouse will not post an entry that does not balance. Use it for adjustments such as depreciation or opening balances.',
     keywords: 'journal entry adjust adjustment debit credit manual opening balance',
     go: { label: 'New journal entry', view: 'accounting/journal', action: 'journal-entry' },
     guide: 'journal-entries-and-voids',

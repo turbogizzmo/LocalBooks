@@ -78,8 +78,8 @@ fn osascript(script: &str, language: &str, args: &[&str], app: &str) -> Result<S
     let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
     Err(if err.contains("-1743") {
         format!(
-            "QB_AUTOMATION_DENIED: macOS did not let LocalBooks ask {app} for your data. Open System Settings › Privacy & Security › Automation, \
-             turn on {app} under LocalBooks, then try again"
+            "QB_AUTOMATION_DENIED: macOS did not let Tillhouse ask {app} for your data. Open System Settings › Privacy & Security › Automation, \
+             turn on {app} under Tillhouse, then try again"
         )
     } else if err.contains("-600") {
         format!("QB_NOT_RUNNING: {app} is not running. Open it and your company file, then try again")
@@ -87,7 +87,7 @@ fn osascript(script: &str, language: &str, args: &[&str], app: &str) -> Result<S
         format!("QB_TIMEOUT: {app} did not answer in time. Close any window or message waiting in {app}, then try again")
     } else if err.contains("-1708") || err.contains("-1728") || err.contains("understand") {
         format!(
-            "QB_NO_SCRIPTING: this version of {app} does not answer LocalBooks' requests (QuickBooks Desktop for Mac 2024 does). \
+            "QB_NO_SCRIPTING: this version of {app} does not answer Tillhouse's requests (QuickBooks Desktop for Mac 2024 does). \
              Export the Journal and lists from its Reports menu instead, and choose the files in step 1 ({err})"
         )
     } else {

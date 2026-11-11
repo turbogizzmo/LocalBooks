@@ -3,14 +3,14 @@
 
 const LOOK = {
   UNBILLED: { icon: '◔', color: '#8d5bd1' },
-  ESTIMATES: { icon: '✎', color: '#6b6c72' },
+  ESTIMATES: { icon: '✎', color: '#56615f' },
   PURCHASE_ORDERS: { icon: '▤', color: '#c46a00' },
-  CARDS: { icon: '▭', color: '#393a3d' },
+  CARDS: { icon: '▭', color: '#1c2426' },
 };
 
 /** A segment from `get_money_bar_segments` as a bar cell: label, icon, color, total, count and its rows. */
 export function segmentItem(segment) {
-  const look = LOOK[segment.key] ?? { icon: '•', color: '#6b6c72' };
+  const look = LOOK[segment.key] ?? { icon: '•', color: '#56615f' };
   return { label: segment.label, icon: look.icon, color: look.color, cents: segment.cents, count: segment.count, list: segment.items };
 }
 

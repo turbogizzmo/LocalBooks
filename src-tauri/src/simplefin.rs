@@ -122,7 +122,7 @@ impl std::fmt::Debug for Access {
 
 impl Access {
     fn parse(text: &str) -> Result<Access, String> {
-        let bad = || "SFIN_ACCESS_INVALID: SimpleFIN returned an access address LocalBooks cannot use".to_string();
+        let bad = || "SFIN_ACCESS_INVALID: SimpleFIN returned an access address Tillhouse cannot use".to_string();
         let mut base = Url::parse(text.trim()).map_err(|_| bad())?;
         check_secure(&base)?;
         let username = percent_decode(base.username());
@@ -402,7 +402,7 @@ fn now_text(now: DateTime<Utc>) -> String {
 impl SimpleFin {
     pub fn new(secrets: SecretStore) -> Result<Self, String> {
         let client = reqwest::Client::builder()
-            .user_agent(concat!("LocalBooks/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("Tillhouse/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(20))
             .timeout(Duration::from_secs(90))
             // A redirect could carry the credentials elsewhere; SimpleFIN servers do not redirect.
@@ -465,7 +465,7 @@ impl SimpleFin {
         match response.status() {
             StatusCode::OK => {
                 let bytes = response.bytes().await.map_err(network_error)?;
-                serde_json::from_slice(&bytes).map_err(|e| format!("SFIN_BAD_RESPONSE: SimpleFIN sent data LocalBooks could not read ({e})"))
+                serde_json::from_slice(&bytes).map_err(|e| format!("SFIN_BAD_RESPONSE: SimpleFIN sent data Tillhouse could not read ({e})"))
             }
             StatusCode::PAYMENT_REQUIRED => Err("SFIN_PAYMENT: SimpleFIN says this connection's subscription needs payment. Renew it at SimpleFIN Bridge, then sync again.".into()),
             StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => Err("SFIN_REVOKED: SimpleFIN no longer accepts this connection (its access was disabled or revoked). \
@@ -581,7 +581,7 @@ impl SimpleFin {
         .await
         .map_err(db_err)?;
         if linked.is_empty() {
-            return Err("SFIN_NOTHING_LINKED: link at least one SimpleFIN account to a LocalBooks bank account first".into());
+            return Err("SFIN_NOTHING_LINKED: link at least one SimpleFIN account to a Tillhouse bank account first".into());
         }
 
         let access = self.access_for(&connection).await?;
@@ -802,7 +802,7 @@ pub async fn link_account(pool: &SqlitePool, account_id: i64, bank_account_id: i
         .map_err(db_err)?;
     if !currency.eq_ignore_ascii_case(&home) {
         return Err(format!(
-            "SFIN_CURRENCY: this account is in {currency}, but LocalBooks bank accounts are kept in {home}. Import its statements as files instead."
+            "SFIN_CURRENCY: this account is in {currency}, but Tillhouse bank accounts are kept in {home}. Import its statements as files instead."
         ));
     }
     let target: Option<(String, i64)> = sqlx::query_as("SELECT account_type, is_active FROM chart_of_accounts WHERE id = ?1")

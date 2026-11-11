@@ -13,7 +13,7 @@ const ROLES = [
   ['chargebackAccountId', 'Chargebacks', (a) => a.accountType !== 'BANK'],
 ];
 const STATUS = { NEW: 'New', RECORDED: 'Recorded', IGNORED: 'Ignored' };
-/** How often a feed is fetched while LocalBooks is open; '' is only by hand. */
+/** How often a feed is fetched while Tillhouse is open; '' is only by hand. */
 const AUTO = [
   ['', 'Only when I click Get payouts'],
   ['1', 'Every hour'],
@@ -69,7 +69,7 @@ function FeedForm({ accounts, feed, processor = feed?.processor ?? 'STRIPE', onD
       {!feed && paypal && (
         <p className="text-xs text-qb-ink-muted">
           At developer.paypal.com, create a REST app for your business account with <span className="font-semibold">Transaction search</span> turned on, and paste its client id and
-          secret here. LocalBooks only reads your transactions with them, keeps them in this computer’s credential store, calls PayPal only when you get payouts, and sends
+          secret here. Tillhouse only reads your transactions with them, keeps them in this computer’s credential store, calls PayPal only when you get payouts, and sends
           nothing anywhere else.
         </p>
       )}
@@ -77,13 +77,13 @@ function FeedForm({ accounts, feed, processor = feed?.processor ?? 'STRIPE', onD
         <p className="text-xs text-qb-ink-muted">
           In your Shopify admin, under Settings › Apps and sales channels › Develop apps, create an app, give its Admin API only the{' '}
           <span className="font-semibold">read_shopify_payments_payouts</span> and <span className="font-semibold">read_shopify_payments_accounts</span> scopes, install it, and paste
-          its Admin API access token with your store’s address. LocalBooks keeps the token in this computer’s credential store, calls only your store’s Admin API when you get
+          its Admin API access token with your store’s address. Tillhouse keeps the token in this computer’s credential store, calls only your store’s Admin API when you get
           payouts, and sends nothing anywhere else.
         </p>
       )}
       {!feed && !paypal && !shopify && (
         <p className="text-xs text-qb-ink-muted">
-          In your Stripe Dashboard, create a <span className="font-semibold">restricted key</span> with read access to Balance and Payouts, and paste it here. LocalBooks keeps it in this
+          In your Stripe Dashboard, create a <span className="font-semibold">restricted key</span> with read access to Balance and Payouts, and paste it here. Tillhouse keeps it in this
           computer’s credential store, calls Stripe only when you click Get payouts, and sends nothing anywhere else.
         </p>
       )}
@@ -215,7 +215,7 @@ function FeedPanel({ feed, accounts, isAdmin, onChanged }) {
             className="qb-input h-row"
             value={feed.autoFetchHours ? String(feed.autoFetchHours) : ''}
             disabled={!isAdmin || busy}
-            title={isAdmin ? 'While LocalBooks is open and someone who can change the books is signed in. Payouts still wait for you to record them.' : 'An Admin chooses this'}
+            title={isAdmin ? 'While Tillhouse is open and someone who can change the books is signed in. Payouts still wait for you to record them.' : 'An Admin chooses this'}
             onChange={(e) => act(() => api.setPayoutAutoFetch(feed.id, e.target.value ? Number(e.target.value) : null))}
           >
             {AUTO.map(([v, label]) => (

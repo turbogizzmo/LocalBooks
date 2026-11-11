@@ -1,6 +1,6 @@
 // Reports › Scheduled Reports (report_schedules.rs): chosen reports run daily to quarterly and are
 // emailed through the company's email server, or saved to a folder, as PDF or Excel. They run only
-// while LocalBooks is open; a run missed while it was closed happens once when it opens.
+// while Tillhouse is open; a run missed while it was closed happens once when it opens.
 import { useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import Notice from './Notice.jsx';
@@ -197,7 +197,7 @@ function ScheduleDialog({ schedule, onClose, onSaved }) {
           <input type="checkbox" checked={draft.isActive} onChange={(e) => set('isActive')(e.target.checked)} />
           On (untick to pause it)
         </label>
-        <p className="text-2xs text-qb-ink-faint">Schedules run only while LocalBooks is open. A run missed while it was closed happens once, soon after LocalBooks opens.</p>
+        <p className="text-2xs text-qb-ink-faint">Schedules run only while Tillhouse is open. A run missed while it was closed happens once, soon after Tillhouse opens.</p>
         {error && <Notice kind="error" text={error} />}
         <div className="flex justify-end gap-2">
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>
@@ -250,7 +250,7 @@ export default function ScheduledReports() {
       )}
       <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
         <h2 className="text-md font-semibold">Scheduled Reports</h2>
-        <span className="text-xs text-qb-ink-muted">Runs only while LocalBooks is open; a missed run happens when it next opens.</span>
+        <span className="text-xs text-qb-ink-muted">Runs only while Tillhouse is open; a missed run happens when it next opens.</span>
         <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" onClick={() => setEditing({ schedule: null })}>
           New schedule
         </button>

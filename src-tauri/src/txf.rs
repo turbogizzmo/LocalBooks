@@ -150,7 +150,7 @@ pub async fn export(pool: &SqlitePool, start: NaiveDate, end: NaiveDate, today: 
         let Some(line) = line else {
             let reason = match &r.tax_line {
                 None => "No tax line: assign one under Tax lines…".to_string(),
-                Some(text) => format!("'{text}' is not a LocalBooks tax line"),
+                Some(text) => format!("'{text}' is not a Tillhouse tax line"),
             };
             left_out.push(TxfLeftOut { account_name: r.account_name.clone(), reason, amount_cents: r.net_cents });
             continue;
@@ -181,7 +181,7 @@ pub async fn export(pool: &SqlitePool, start: NaiveDate, end: NaiveDate, today: 
 
     let mut lines: Vec<String> = vec![
         "V042".into(),
-        format!("ALocalBooks {}", env!("CARGO_PKG_VERSION")),
+        format!("ATillhouse {}", env!("CARGO_PKG_VERSION")),
         format!("D{}", today.format("%m/%d/%Y")),
         "^".into(),
     ];

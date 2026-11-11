@@ -39,7 +39,7 @@ Amounts are entered in your home currency. An amount that isn't a number is outl
 **Save** stays off until you fix it. Clearing a box, or entering 0, removes that month's amount.
 
 While there are unsaved changes, you can't switch to another budget: save them first. If you
-click **New budget…**, close the window or quit LocalBooks with amounts not saved, LocalBooks asks
+click **New budget…**, close the window or quit Tillhouse with amounts not saved, Tillhouse asks
 before they are lost.
 
 ## Delete a budget

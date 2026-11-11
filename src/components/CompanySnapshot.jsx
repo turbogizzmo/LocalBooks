@@ -31,8 +31,8 @@ const PERIODS = [
   ['LAST_12_MONTHS', 'Last 12 months'],
 ];
 
-const GREEN = '#2ca01c';
-const BLUE = '#0077c5';
+const GREEN = '#0b5d57';
+const BLUE = '#22609e';
 
 /** Income and expense columns by month, with the month's net under each pair in the tooltip. */
 export function Trend({ points }) {
@@ -52,7 +52,7 @@ export function Trend({ points }) {
             <title>{`${p.month}: income ${formatCents(p.incomeCents)}, expense ${formatCents(p.expenseCents)}, net ${formatCents(p.netCents)}`}</title>
             <rect x={x - bar - 1} y={h - ih} width={bar} height={ih} fill={GREEN} />
             <rect x={x + 1} y={h - eh} width={bar} height={eh} fill={BLUE} />
-            <text x={x} y={h + 11} fontSize="9" textAnchor="middle" fill="#6b6c72">{p.month.slice(5)}</text>
+            <text x={x} y={h + 11} fontSize="9" textAnchor="middle" fill="#56615f">{p.month.slice(5)}</text>
           </g>
         );
       })}

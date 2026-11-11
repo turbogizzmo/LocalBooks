@@ -71,7 +71,7 @@ const ACCOUNT_TYPES: [&str; 15] = [
     "OTHER_EXPENSE",
 ];
 
-pub const ENCRYPTED: &str = "QBMAC_ENCRYPTED: this QuickBooks for Mac company file is encrypted, so LocalBooks can't read it. \
+pub const ENCRYPTED: &str = "QBMAC_ENCRYPTED: this QuickBooks for Mac company file is encrypted, so Tillhouse can't read it. \
 In QuickBooks for Mac, choose File › Export › To QuickBooks for Windows, leave the password fields blank, and choose the .qbb file it saves here instead";
 
 /// Whether a file extension is a QuickBooks for Mac company file's: `qb` and a year (`qb2012`).
@@ -142,7 +142,7 @@ pub async fn read(path: &Path) -> Result<Ledger, String> {
         Some(Format::Sqlite) => {}
         Some(Format::Encrypted) => return Err(ENCRYPTED.into()),
         None => {
-            return Err("QBMAC_OLD_FORMAT: this isn't a company file LocalBooks can read. QuickBooks for Mac 2009 and earlier use an older format: \
+            return Err("QBMAC_OLD_FORMAT: this isn't a company file Tillhouse can read. QuickBooks for Mac 2009 and earlier use an older format: \
 open the file in QuickBooks and choose File › Export › To QuickBooks for Windows, then choose the .qbb file it saves"
                 .into())
         }

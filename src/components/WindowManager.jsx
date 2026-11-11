@@ -10,7 +10,7 @@ import { NORMAL_TEXT_SIZE, textSizeFor, windowKind } from '../lib/textSize.js';
 import { trapTab } from '../lib/tabTrap.js';
 
 /**
- * Windows inside the LocalBooks window, the way QuickBooks Desktop for Windows shows forms,
+ * Windows inside the Tillhouse window, the way QuickBooks Desktop for Windows shows forms,
  * registers and reports: each in a window of its own within the program's window (not a separate
  * program window), with a title bar, Minimize, Maximize/Restore and Close. Minimized windows wait
  * along the bottom of the work area; a maximized window fills it and its buttons move up to the
@@ -22,16 +22,16 @@ import { trapTab } from '../lib/tabTrap.js';
 /** The row the minimized windows take along the bottom of the work area. */
 const DOCK_HEIGHT = 34;
 
-/** The work area's size before it is measured: the LocalBooks window less the sidebar and toolbar. */
+/** The work area's size before it is measured: the Tillhouse window less the sidebar and toolbar. */
 const guessArea = () => ({ x: 0, y: 0, width: Math.max(window.innerWidth - 220, 480), height: Math.max(window.innerHeight - 48, 320) });
 
 /** What a window is called: what its screen names, else its page's name. */
 export function windowName(w) {
-  return w.content?.name || findNav(w.view)?.item.label || 'LocalBooks';
+  return w.content?.name || findNav(w.view)?.item.label || 'Tillhouse';
 }
 
 /**
- * The windows inside this LocalBooks window: their state, and the commands on them (open, focus,
+ * The windows inside this Tillhouse window: their state, and the commands on them (open, focus,
  * close, minimize, maximize, move, Close All, Cascade, Tile, Arrange Icons, next window).
  * `initial(area)` gives the windows to start with.
  */
@@ -89,7 +89,7 @@ export function useChildWindows(windowMode, initial) {
     [area],
   );
 
-  // The work area changed size (the LocalBooks window was resized, the sidebar hidden): every window
+  // The work area changed size (the Tillhouse window was resized, the sidebar hidden): every window
   // stays reachable inside it.
   useEffect(() => {
     const el = areaRef.current;
@@ -165,7 +165,7 @@ export function useChildWindows(windowMode, initial) {
     return () => window.removeEventListener('keydown', onKey);
   }, [close, cycle]);
 
-  // Each change is reported, so the LocalBooks window is titled after the active window, the Window
+  // Each change is reported, so the Tillhouse window is titled after the active window, the Window
   // menu lists them, and they are what the desktop saves.
   const report = useCallback(
     (s) =>
@@ -211,7 +211,7 @@ export function useChildWindows(windowMode, initial) {
 }
 
 /**
- * The work area: every window inside LocalBooks, drawn by `renderScreen(window)`, with the minimized
+ * The work area: every window inside Tillhouse, drawn by `renderScreen(window)`, with the minimized
  * ones docked along the bottom and `background` shown where no window covers it.
  */
 export default function WindowManager({ manager, windowMode, renderScreen, background }) {
@@ -289,7 +289,7 @@ function dragged(start, edges, dx, dy) {
 }
 
 /**
- * One window inside LocalBooks: its frame, title bar and buttons around a screen. While it is the
+ * One window inside Tillhouse: its frame, title bar and buttons around a screen. While it is the
  * active window, Tab and Shift+Tab stay inside it (wrapping round at its ends, as in the desktop
  * program); a window that is hidden or covered by a maximized one is `inert`, out of the Tab order.
  */

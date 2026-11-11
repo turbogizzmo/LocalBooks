@@ -546,7 +546,7 @@ pub fn install(app: &AppHandle, menu: &Menu<Wry>) -> tauri::Result<()> {
     }
     // Windows and Linux: Help opens with the app's own help (F1, which the page handles).
     if let Some(help) = menu.get(HELP_SUBMENU_ID).and_then(|item| item.as_submenu().cloned()) {
-        help.insert(&MenuItem::with_id(app, format!("{CMD_PREFIX}help"), "LocalBooks Help", true, None::<&str>)?, 0)?;
+        help.insert(&MenuItem::with_id(app, format!("{CMD_PREFIX}help"), "Tillhouse Help", true, None::<&str>)?, 0)?;
         help.insert(&PredefinedMenuItem::separator(app)?, 1)?;
         for (at, item) in (1..).zip(build(app, HELP, &mut n)?) {
             help.insert(&item, at)?;

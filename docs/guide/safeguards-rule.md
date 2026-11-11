@@ -1,10 +1,10 @@
-# The FTC Safeguards Rule and LocalBooks
+# The FTC Safeguards Rule and Tillhouse
 
 Tax preparers, and many bookkeepers and accountants, must keep a written information security
 program under the US Federal Trade Commission's **Safeguards Rule**. This guide goes through the
-rule's duties one by one and says, for each, what LocalBooks does to help and what stays your job.
+rule's duties one by one and says, for each, what Tillhouse does to help and what stays your job.
 
-> **Note:** This is a map, not legal advice. LocalBooks is one tool inside your security program;
+> **Note:** This is a map, not legal advice. Tillhouse is one tool inside your security program;
 > using it doesn't make a business compliant. Read the rule itself and talk to a professional if
 > you're unsure what applies to you.
 
@@ -35,31 +35,31 @@ Section numbers are from § 314.4.
 ### (a) Put one person in charge
 
 You must name a **Qualified Individual** to run the program; it can be you, an employee or an outside
-firm. **LocalBooks:** nothing to set. In practice this person is usually an Admin in
+firm. **Tillhouse:** nothing to set. In practice this person is usually an Admin in
 **Settings › Users & Passwords** and keeps the recovery key.
 
 ### (b) Assess the risks in writing
 
 You must assess the risks to customer information in writing (unless you're under 5,000 consumers)
-and repeat it from time to time. **LocalBooks:** it can't do the assessment, but the list under
-(c)(2) below says where LocalBooks keeps or creates copies of customer information, which is a
+and repeat it from time to time. **Tillhouse:** it can't do the assessment, but the list under
+(c)(2) below says where Tillhouse keeps or creates copies of customer information, which is a
 starting point.
 
 ### (c)(1) Control who gets in, and limit what they see
 
 Only authorized people may get at customer information, and each only to what their job needs.
-**LocalBooks:** turn on users ([Users, passwords and sensitive data](users-and-passwords.md)).
+**Tillhouse:** turn on users ([Users, passwords and sensitive data](users-and-passwords.md)).
 Everyone signs in with their own password, and the roles Admin, Standard, View only and External Accountant limit what
 each can change. Vendor tax IDs and bank details are shown in full only to users allowed to see
 sensitive data. Everyone is signed out after 15 minutes idle by default; an Admin can change that
 limit or turn it off under **Sign out when idle**, so keep it on.
-**Limits:** roles are enforced by LocalBooks, not by the file. Anyone who can read the company file
+**Limits:** roles are enforced by Tillhouse, not by the file. Anyone who can read the company file
 on disk can read most of it with another program, so control who can sign in to the computer and
 reach the folder the file is in.
 
 ### (c)(2) Know where the data is
 
-You must know what data, devices and systems you have and how much each matters. **LocalBooks**
+You must know what data, devices and systems you have and how much each matters. **Tillhouse**
 keeps or makes copies of customer information in these places:
 
 - **The company file** (`.db` or `.localbooks`), including every attachment: files you attach are
@@ -77,9 +77,9 @@ keeps or makes copies of customer information in these places:
 
 The rule asks for encryption of customer information you hold and send. Where that isn't feasible,
 the Qualified Individual may approve other controls that work as well.
-**LocalBooks, at rest:** with users on, vendor tax IDs and bank details are encrypted in the company
+**Tillhouse, at rest:** with users on, vendor tax IDs and bank details are encrypted in the company
 file (AES-256, key locked by each allowed user's password and the recovery key). Offsite backups are
-encrypted as a whole before they leave LocalBooks.
+encrypted as a whole before they leave Tillhouse.
 An Admin can also **encrypt the whole company file** (Settings › Users & Passwords), which covers
 the file, its attachments and every backup made from it; see
 [Users, passwords and sensitive data](users-and-passwords.md#encrypt-the-whole-company-file).
@@ -97,7 +97,7 @@ share whether it encrypts.
 ### (c)(4) Check the software you use
 
 For software someone else wrote, you must have a way to evaluate or test its security.
-**LocalBooks:** the source code is public, and [SECURITY.md](https://github.com/turbogizzmo/LocalBooks/blob/main/SECURITY.md)
+**Tillhouse:** the source code is public, and [SECURITY.md](https://github.com/turbogizzmo/LocalBooks/blob/main/SECURITY.md)
 lists each security claim with the code and the automated test behind it. Updates install only if
 they carry the project's signature. Report a problem privately through the link in SECURITY.md.
 
@@ -105,12 +105,12 @@ they carry the project's signature. Report a problem privately through the link 
 
 The rule asks for multi-factor authentication for anyone getting into an information system, unless
 the Qualified Individual approves in writing other controls that are as secure.
-**LocalBooks:** optional **two-step sign-in**, off by default. An Admin turns it on in **Settings ›
+**Tillhouse:** optional **two-step sign-in**, off by default. An Admin turns it on in **Settings ›
 Users & Passwords › Two-step sign-in** and can require it for Admins and External Accountants or for
 everyone; each user then signs in with their password and a code from an authenticator app on their
 phone (see [Users and passwords](users-and-passwords.md#two-step-sign-in)). Remembered sign-ins and
 signing in again after an idle sign-out still ask for the code.
-**Limits:** it protects the LocalBooks sign-in, not the company file itself: someone with a copy of
+**Limits:** it protects the Tillhouse sign-in, not the company file itself: someone with a copy of
 the file can read it with another program. Keep full-disk encryption (or whole-file encryption) on,
 and have your Qualified Individual record which setting the business uses.
 
@@ -119,7 +119,7 @@ and have your Qualified Individual record which setting the business uses.
 Customer information must be disposed of no later than two years after you last used it to serve
 that customer, unless you need it for business, the law requires you to keep it, or it can't
 reasonably be pulled out. You must also review your retention policy from time to time.
-**LocalBooks:** posted transactions are never deleted: that's what keeps the books trustworthy, and
+**Tillhouse:** posted transactions are never deleted: that's what keeps the books trustworthy, and
 tax and business records usually have to be kept anyway. What you can remove:
 
 - **Condense data** replaces closed years' transactions with monthly summaries. The detail moves to
@@ -136,39 +136,39 @@ transactions they're part of. Delete exports and old backups yourself.
 
 ### (c)(7) Manage changes
 
-You must have procedures for managing changes. **LocalBooks:** updates ask before installing, save a
+You must have procedures for managing changes. **Tillhouse:** updates ask before installing, save a
 copy of your books first, and list their changes in the release notes (the changelog). Your own
-procedures for changes to computers and networks are outside LocalBooks.
+procedures for changes to computers and networks are outside Tillhouse.
 
 ### (c)(8) Log what users do and catch tampering
 
 You must monitor and log what authorized users do and detect unauthorized access, use or tampering.
-**LocalBooks:** every posted entry records the signed-in user and the computer's user. Turning users
+**Tillhouse:** every posted entry records the signed-in user and the computer's user. Turning users
 on, adding or changing users, password resets and recovery-key use are recorded too. The trail is
 hash-chained and its latest link is kept outside the file, so **Accounting › Audit Log › Verify
-ledger integrity** detects changes made behind LocalBooks' back
+ledger integrity** detects changes made behind Tillhouse's back
 ([Verify and correct the ledger](ledger-integrity.md)).
-**Limits:** LocalBooks logs changes, not reads: it doesn't record who looked at a customer or ran a
+**Limits:** Tillhouse logs changes, not reads: it doesn't record who looked at a customer or ran a
 report. Failed sign-ins aren't recorded.
 
 ### (d) Test and monitor the safeguards
 
 You must test or monitor your safeguards regularly. Without continuous monitoring, that means a
 penetration test every year and vulnerability scans at least every six months (not required under
-5,000 consumers). **LocalBooks** helps you check its own part: **Verify ledger integrity**, the
+5,000 consumers). **Tillhouse** helps you check its own part: **Verify ledger integrity**, the
 **File Dentist** check and offsite **Test restore**.
 **Limits:** testing your computers and network is yours to arrange.
 
 ### (e) Train your people
 
 Staff need security awareness training, and security staff need to stay current.
-**Limits:** outside LocalBooks. The guides in Help can be part of the training on how LocalBooks
+**Limits:** outside Tillhouse. The guides in Help can be part of the training on how Tillhouse
 protects data.
 
 ### (f) Oversee service providers
 
 You must choose service providers who can protect the data, require it by contract, and check on
-them. **LocalBooks** is not a service: there's no LocalBooks server and no account, and nothing is
+them. **Tillhouse** is not a service: there's no Tillhouse server and no account, and nothing is
 sent anywhere unless you turn a feature on. The providers that matter are the ones **you** connect:
 SimpleFIN for bank downloads, your email provider, the cloud service that syncs your offsite backup
 folder (it sees only encrypted copies) and your payroll service.
@@ -176,13 +176,13 @@ folder (it sees only encrypted copies) and your payroll service.
 ### (g) Keep the program up to date
 
 You must adjust the program as testing, changes in your business and new risks show.
-**Limits:** outside LocalBooks. Read the changelog when you update, since a new release can change
-what LocalBooks covers.
+**Limits:** outside Tillhouse. Read the changelog when you update, since a new release can change
+what Tillhouse covers.
 
 ### (h) Have a written incident response plan
 
 You need a written plan for responding to and recovering from a security event (not required under
-5,000 consumers). **LocalBooks** gives your plan these steps:
+5,000 consumers). **Tillhouse** gives your plan these steps:
 
 - **Restore** the books from a backup or an offsite copy.
 - **Reset passwords** and issue a **new recovery key** (the old one stops working) in
@@ -195,14 +195,14 @@ You need a written plan for responding to and recovering from a security event (
 ### (i) Report to your board or owner
 
 At least once a year the Qualified Individual reports in writing to the board, or to a senior
-officer if there's no board (not required under 5,000 consumers). **Limits:** outside LocalBooks.
+officer if there's no board (not required under 5,000 consumers). **Limits:** outside Tillhouse.
 
 ### (j) Tell the FTC about a breach
 
 If unencrypted customer information about **500 or more** consumers is taken without authorization,
 you must notify the FTC through the form on its website as soon as possible and within 30 days of
 finding out. This applies whatever your size. Information counts as unencrypted if the key was taken
-too. **LocalBooks:** encrypted tax IDs and bank details are protected only while the passwords and
+too. **Tillhouse:** encrypted tax IDs and bank details are protected only while the passwords and
 recovery key stay safe. With whole-file encryption on, a stolen copy of the company file or a backup is
 encrypted too. **Limits:** without it (or full-disk encryption), the rest of the company file is
 unencrypted, so a stolen laptop may be a notification event. State laws can add

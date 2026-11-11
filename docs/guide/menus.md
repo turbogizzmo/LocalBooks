@@ -1,6 +1,6 @@
 # The menu bar
 
-Every command on LocalBooks' menu bar, menu by menu, and where it takes you. Most commands open a
+Every command on Tillhouse's menu bar, menu by menu, and where it takes you. Most commands open a
 screen that is also in the sidebar; the guide for that screen explains it step by step. Shortcuts
 are shown for Windows and Linux; on a Mac, use ⌘ for Ctrl unless the row says otherwise. On Windows,
 press **Alt** to reach the menus from the keyboard (for example **Alt+U** for Customers).
@@ -12,7 +12,7 @@ A command for a feature that is turned off in Preferences (estimates, sales orde
 | Command | Shortcut | What it does |
 |---|---|---|
 | **New Company…** | | Starts a new company file with the setup assistant. See [Create a new company](getting-started.md#create-a-new-company). |
-| **Open or Restore Company…** | Ctrl+Shift+O (⌘O on a Mac) | Opens a LocalBooks company file or backup, or a QuickBooks company file, backup or portable file to bring in. See [Open another company file](backups-and-company-files.md#open-another-company-file). |
+| **Open or Restore Company…** | Ctrl+Shift+O (⌘O on a Mac) | Opens a Tillhouse company file or backup, or a QuickBooks company file, backup or portable file to bring in. See [Open another company file](backups-and-company-files.md#open-another-company-file). |
 | **Open Company Without Restoring Windows…** | Ctrl+Alt+O | Opens a company on a plain Home page, without the windows it had open. |
 | **Open Previous Company** | | The company files you opened most recently. **No Recent Companies** shows when there are none. |
 | **Close Company** | | Closes the books and shows the **No Company Open** screen. |
@@ -29,7 +29,7 @@ A command for a feature that is turned off in Preferences (estimates, sales orde
 | **Send Forms…** | | Forms marked Email later, ready to send. See [Email later and Send Forms](custom-forms.md#email-later-and-send-forms). |
 | **Print… (Ctrl+P)** | Ctrl+P | Prints what is in front: the open form, a register's transactions for its dates, or the window. |
 
-On a Mac, **File › Close Window** (⌘W) closes the window that is active inside LocalBooks.
+On a Mac, **File › Close Window** (⌘W) closes the window that is active inside Tillhouse.
 
 ## Edit
 
@@ -56,7 +56,7 @@ Besides Undo, Cut, Copy, Paste and Select All, the Edit menu acts on the form or
 |---|---|
 | **Show or Hide Left Icon Bar** | Shows or hides the left pane. |
 | **Larger Text**, **Smaller Text**, **Actual Text Size** | Changes the text size of the kind of window in front (lists, registers, forms or reports); Ctrl + and Ctrl − do the same. See [Make the text larger or smaller](getting-started.md#make-the-text-larger-or-smaller). |
-| **Open Window List** | Lists the windows open inside LocalBooks, to switch between them. |
+| **Open Window List** | Lists the windows open inside Tillhouse, to switch between them. |
 | **One Window**, **Multiple Windows** | One window at a time, or windows side by side. See [One Window or Multiple Windows](getting-started.md#one-window-or-multiple-windows). |
 
 ## Lists
@@ -177,18 +177,18 @@ Each report also has its own submenu entry, grouped as in the Report Center:
 
 | Command | What it does |
 |---|---|
-| **New Window** | Opens a second LocalBooks window on the same company (Ctrl+Shift+N). |
-| **Close All** | Closes every window inside LocalBooks. |
-| **Cascade**, **Tile Vertically**, **Tile Horizontally**, **Arrange Icons** | Arranges the windows inside LocalBooks, or lines up the minimized ones. |
+| **New Window** | Opens a second Tillhouse window on the same company (Ctrl+Shift+N). |
+| **Close All** | Closes every window inside Tillhouse. |
+| **Cascade**, **Tile Vertically**, **Tile Horizontally**, **Arrange Icons** | Arranges the windows inside Tillhouse, or lines up the minimized ones. |
 | **Workspace › AutoSave**, **Manual**, **Save Workspace** | On a Mac: whether the windows you have open reopen with the company. See [Reopen your windows with the company](getting-started.md#reopen-your-windows-with-the-company-saved-desktop). |
 
-The rest of the Window menu lists the windows open inside LocalBooks.
+The rest of the Window menu lists the windows open inside Tillhouse.
 
 ## Help
 
 | Command | What it does |
 |---|---|
-| **LocalBooks Help** | Opens Help on the screen you are on (also F1). |
+| **Tillhouse Help** | Opens Help on the screen you are on (also F1). |
 | **Check for Updates…** | Settings › Updates. See [Get updates](troubleshooting.md#get-updates). |
 | **Reinstall Previous Version…** | Goes back to the release before this one. See [Go back to the previous version](troubleshooting.md#go-back-to-the-previous-version). |
 | **Save Diagnostics…** | Saves a zip for whoever helps you. See [Save diagnostics](troubleshooting.md#save-diagnostics-for-whoever-is-helping-you). |

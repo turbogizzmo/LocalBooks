@@ -12,7 +12,7 @@ export const screens = {
     guide: 'getting-started',
   },
   'settings/diagnostics': {
-    help: 'Save diagnostics: a zip of LocalBooks’ version, the operating system, the company file’s schema, integrity check and row counts, and LocalBooks’ own log of starts, stops, files opened and crashes. No business data, and nothing is sent anywhere.',
+    help: 'Save diagnostics: a zip of Tillhouse’s version, the operating system, the company file’s schema, integrity check and row counts, and Tillhouse’s own log of starts, stops, files opened and crashes. No business data, and nothing is sent anywhere.',
     guide: 'troubleshooting',
   },
   'settings/import': {
@@ -28,7 +28,7 @@ export const screens = {
     guide: 'custom-forms',
   },
   'settings/email': {
-    help: 'How forms and reports are emailed: through your own mail app, or from LocalBooks through your email provider’s SMTP server. The password stays in this computer’s credential store, never in the company file.',
+    help: 'How forms and reports are emailed: through your own mail app, or from Tillhouse through your email provider’s SMTP server. The password stays in this computer’s credential store, never in the company file.',
     guide: 'custom-forms',
   },
   'settings/data': {
@@ -44,13 +44,13 @@ export const screens = {
     guide: 'users-and-passwords',
   },
   'settings/updates': {
-    help: 'The version you are using, whether LocalBooks checks for a newer one when it starts, Check for updates, and going back to the previous version if a new one has a problem.',
+    help: 'The version you are using, whether Tillhouse checks for a newer one when it starts, Check for updates, and going back to the previous version if a new one has a problem.',
     guide: 'troubleshooting',
   },
 };
 
 /**
- * Topics: two sentences each, describing what LocalBooks actually does. `views` lists the
+ * Topics: two sentences each, describing what Tillhouse actually does. `views` lists the
  * screens a topic is about (shown under "On this screen"); `go` opens the place to do it, with an
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
@@ -58,22 +58,22 @@ export const topics = [
   {
     id: 'previous-version', area: 'company', views: ['settings/updates'],
     title: 'Go back to the previous version',
-    body: 'Help › Reinstall Previous Version… finds the release before this one and checks it can open your company file (a newer version may have changed the file in a way an older one can’t read; then it says so). Back up and reinstall… backs up the books, downloads that version, installs it only if its signature matches LocalBooks’ key, and asks you to restart. Admins only.',
+    body: 'Help › Reinstall Previous Version… finds the release before this one and checks it can open your company file (a newer version may have changed the file in a way an older one can’t read; then it says so). Back up and reinstall… backs up the books, downloads that version, installs it only if its signature matches Tillhouse’s key, and asks you to restart. Admins only.',
     keywords: 'rollback roll back downgrade previous older version reinstall undo update problem',
     go: { label: 'Go to Updates', view: 'settings/updates' },
     guide: 'troubleshooting',
   },
   {
     id: 'opening-company', area: 'company', views: ['settings/diagnostics'],
-    title: 'When LocalBooks says “Opening <company>…”',
-    body: 'While a company file opens (when LocalBooks starts, or with File › Open, the recent list, Restore or New Company), the window names the company and what it is doing. It takes longer the first time a new version opens the file: LocalBooks saves a copy of the file as it was, then updates it. A network or synced folder, or an antivirus check, can slow it too. Let it finish; then the company, the sign-in screen, or the reason it could not open appears.',
+    title: 'When Tillhouse says “Opening <company>…”',
+    body: 'While a company file opens (when Tillhouse starts, or with File › Open, the recent list, Restore or New Company), the window names the company and what it is doing. It takes longer the first time a new version opens the file: Tillhouse saves a copy of the file as it was, then updates it. A network or synced folder, or an antivirus check, can slow it too. Let it finish; then the company, the sign-in screen, or the reason it could not open appears.',
     keywords: 'opening slow startup blank window loading upgrade update company file waiting',
     guide: 'troubleshooting',
   },
   {
     id: 'save-diagnostics', area: 'company', views: ['settings/diagnostics', 'settings/updates'],
     title: 'Save diagnostics for whoever is helping you',
-    body: 'Help › Save Diagnostics… (or Settings › Diagnostics) saves a zip file where you choose: LocalBooks’ version, your operating system, the company file’s size, schema version and integrity check, how many rows each table has, and LocalBooks’ log of when it started, stopped, which file it opened and any crash. It holds no customers, vendors or amounts, and LocalBooks never sends it anywhere. Show what’s in it lets you read it first.',
+    body: 'Help › Save Diagnostics… (or Settings › Diagnostics) saves a zip file where you choose: Tillhouse’s version, your operating system, the company file’s size, schema version and integrity check, how many rows each table has, and Tillhouse’s log of when it started, stopped, which file it opened and any crash. It holds no customers, vendors or amounts, and Tillhouse never sends it anywhere. Show what’s in it lets you read it first.',
     keywords: 'diagnostics crash log support bug report troubleshoot version help send logs',
     go: { label: 'Go to Diagnostics', view: 'settings/diagnostics' },
     guide: 'troubleshooting',
@@ -89,7 +89,7 @@ export const topics = [
   {
     id: 'new-company', area: 'company', views: ['settings/data'],
     title: 'Create a new company with a suggested chart of accounts',
-    body: 'File › New Company… asks for your company details and tax form, then suggests a chart of accounts for your industry from 33 industries, with account numbers; check or uncheck accounts before saving. Skip uses LocalBooks’ standard chart instead, and either way the accounts can be changed later in the Chart of Accounts.',
+    body: 'File › New Company… asks for your company details and tax form, then suggests a chart of accounts for your industry from 33 industries, with account numbers; check or uncheck accounts before saving. Skip uses Tillhouse’s standard chart instead, and either way the accounts can be changed later in the Chart of Accounts.',
     keywords: 'new company setup interview easystep industry chart of accounts starter accounts tax form entity sole proprietor llc partnership corporation s corp nonprofit 990',
     go: { label: 'Go to File & Data Controls', view: 'settings/data' },
     guide: 'getting-started',
@@ -143,7 +143,7 @@ export const topics = [
   },
   {
     id: 'smtp', area: 'company', views: ['settings/email'],
-    title: 'Send emailed forms from LocalBooks (SMTP)',
+    title: 'Send emailed forms from Tillhouse (SMTP)',
     body: 'Settings › Email can send invoices and estimates through your email provider’s SMTP server instead of opening your mail app. Enter the server, security, port, username and password (often an app password), click Test connection (or Send test email), then Save. The password is kept in this computer’s Keychain or Credential Manager.',
     keywords: 'smtp email server gmail outlook app password send mail settings',
     go: { label: 'Email settings', view: 'settings/email' },
@@ -152,7 +152,7 @@ export const topics = [
   {
     id: 'email-form', area: 'sales', views: ['sales/invoices', 'sales/estimates', 'sales/all'],
     title: 'Email an invoice or estimate',
-    body: 'Choose Email… in a row’s Actions menu, check the address, subject and message, and click Open in mail app: a new message opens in your mail app with the PDF attached for you to send. Set the default subject and message in Settings › Custom Forms; to send directly from LocalBooks instead, set up your email server in Settings › Email.',
+    body: 'Choose Email… in a row’s Actions menu, check the address, subject and message, and click Open in mail app: a new message opens in your mail app with the PDF attached for you to send. Set the default subject and message in Settings › Custom Forms; to send directly from Tillhouse instead, set up your email server in Settings › Email.',
     keywords: 'email send mail outlook smtp server attach pdf customer invoice estimate',
     go: { label: 'Email settings', view: 'settings/email' },
     guide: 'custom-forms',
@@ -168,14 +168,14 @@ export const topics = [
   {
     id: 'us-only', area: 'company', views: ['settings/preferences'],
     title: 'Made for US businesses',
-    body: 'LocalBooks follows US rules and formats. Sales tax is a rate and agency on each invoice or receipt, added on top of the price; there is no VAT or GST. 1099-NEC, 1096 and W-9s are the IRS forms, and the tax calendar, tax lines and TXF export cover US federal returns. ACH files use US routing numbers and checks print in US layouts. Dates show as month/day/year and amounts as 1,234.56, with no other formats. LocalBooks runs no payroll in any country: payroll import posts your payroll service\'s journal. A business elsewhere can keep plain double-entry books in another home currency (Settings › Preferences Console › Multiple Currencies), without its own tax rules.',
+    body: 'Tillhouse follows US rules and formats. Sales tax is a rate and agency on each invoice or receipt, added on top of the price; there is no VAT or GST. 1099-NEC, 1096 and W-9s are the IRS forms, and the tax calendar, tax lines and TXF export cover US federal returns. ACH files use US routing numbers and checks print in US layouts. Dates show as month/day/year and amounts as 1,234.56, with no other formats. Tillhouse runs no payroll in any country: payroll import posts your payroll service\'s journal. A business elsewhere can keep plain double-entry books in another home currency (Settings › Preferences Console › Multiple Currencies), without its own tax rules.',
     keywords: 'us usa united states only country international canada uk australia vat gst hst foreign locale date format dd/mm/yyyy decimal comma language english',
     guide: 'getting-started',
   },
   {
     id: 'safeguards-rule', area: 'company', views: ['settings/users'],
-    title: 'The FTC Safeguards Rule and LocalBooks',
-    body: 'Tax preparers and many bookkeepers must keep a written security program under the FTC Safeguards Rule. The step-by-step guide goes through each duty and says what LocalBooks does (users and roles, encrypted tax IDs and bank details, encrypted offsite backups, the hash-chained audit trail, optional two-step sign-in with an authenticator app) and what stays your job: full-disk encryption for the rest of the company file and its backups, training, testing and breach notices. It is a map, not legal advice.',
+    title: 'The FTC Safeguards Rule and Tillhouse',
+    body: 'Tax preparers and many bookkeepers must keep a written security program under the FTC Safeguards Rule. The step-by-step guide goes through each duty and says what Tillhouse does (users and roles, encrypted tax IDs and bank details, encrypted offsite backups, the hash-chained audit trail, optional two-step sign-in with an authenticator app) and what stays your job: full-disk encryption for the rest of the company file and its backups, training, testing and breach notices. It is a map, not legal advice.',
     keywords: 'ftc safeguards rule glba gramm leach bliley compliance wisp written information security plan tax preparer bookkeeper cpa irs publication 4557 mfa multi-factor encryption breach notification qualified individual risk assessment',
     guide: 'safeguards-rule',
   },
@@ -190,7 +190,7 @@ export const topics = [
   {
     id: 'users', area: 'company', views: ['settings/users', 'expenses/vendors'],
     title: 'Users, passwords and sensitive data',
-    body: 'Turn on users so everyone signs in with their own password and a role: Admin (everything, including users, settings, imports and restores), Standard (day-to-day bookkeeping), View only (looks and runs reports, changes nothing) or External Accountant (your outside accountant: like Standard, may post in closed periods, never sees sensitive data). LocalBooks checks the role before every action. Vendor tax IDs and bank details are then encrypted and shown in full only to users allowed to see sensitive data. Everyone is signed out after 15 minutes without typing or clicking (an Admin can change this under Sign out when idle). Remember me on this computer skips the sign-in once per opening. An Admin can turn on two-step sign-in (off by default): users then also enter a 6-digit code from an authenticator app on their phone, with backup codes, an Admin reset or the recovery key if the phone is lost. Save the recovery key you are given: it is the only way back in if every Admin forgets their password. An Admin can also encrypt the whole company file and its backups (off unless turned on): then losing every Admin password and the recovery key means losing the books. Otherwise only those sensitive values are encrypted: use FileVault or BitLocker for the rest of the file and its backups.',
+    body: 'Turn on users so everyone signs in with their own password and a role: Admin (everything, including users, settings, imports and restores), Standard (day-to-day bookkeeping), View only (looks and runs reports, changes nothing) or External Accountant (your outside accountant: like Standard, may post in closed periods, never sees sensitive data). Tillhouse checks the role before every action. Vendor tax IDs and bank details are then encrypted and shown in full only to users allowed to see sensitive data. Everyone is signed out after 15 minutes without typing or clicking (an Admin can change this under Sign out when idle). Remember me on this computer skips the sign-in once per opening. An Admin can turn on two-step sign-in (off by default): users then also enter a 6-digit code from an authenticator app on their phone, with backup codes, an Admin reset or the recovery key if the phone is lost. Save the recovery key you are given: it is the only way back in if every Admin forgets their password. An Admin can also encrypt the whole company file and its backups (off unless turned on): then losing every Admin password and the recovery key means losing the books. Otherwise only those sensitive values are encrypted: use FileVault or BitLocker for the rest of the file and its backups.',
     keywords: 'whole file encryption encrypted company file sqlcipher at rest user users password sign in login log in role admin permission security encrypt encryption ssn ein tax id sensitive recovery key forgot lock idle remember two-step two factor 2fa mfa multi-factor authenticator totp one-time code backup codes',
     go: { label: 'Go to Users & Passwords', view: 'settings/users' },
     guide: 'users-and-passwords',
@@ -206,7 +206,7 @@ export const topics = [
   {
     id: 'offsite-backup', area: 'company', views: ['settings/data'],
     title: 'Keep encrypted backups offsite',
-    body: 'Under Offsite backup in File & Data Controls, click Set up…, choose a folder (one your cloud storage keeps in sync, or a USB drive), how many copies to keep, and a backup password: your sign-in password, the recovery key or another password. Each copy is encrypted on this computer before it is saved, so the cloud sees only scrambled data. A copy is made daily while LocalBooks is open. Test restore checks a copy without changing your books; Restore replaces your books with it. A copy can’t be opened without the password.',
+    body: 'Under Offsite backup in File & Data Controls, click Set up…, choose a folder (one your cloud storage keeps in sync, or a USB drive), how many copies to keep, and a backup password: your sign-in password, the recovery key or another password. Each copy is encrypted on this computer before it is saved, so the cloud sees only scrambled data. A copy is made daily while Tillhouse is open. Test restore checks a copy without changing your books; Restore replaces your books with it. A copy can’t be opened without the password.',
     keywords: 'offsite backup encrypted encryption cloud synced drive usb folder password recovery key test restore lbbackup',
     go: { label: 'Go to File & Data Controls', view: 'settings/data' },
     guide: 'backups-and-company-files',
@@ -237,7 +237,7 @@ export const topics = [
   {
     id: 'condense', area: 'company', views: ['settings/data'],
     title: 'Condense data: archive closed years',
-    body: 'Condense data in File & Data Controls replaces closed transactions up to a cut-off with one summary entry per month, keeping anything still open (unpaid invoices and bills, unused credits, undeposited payments, uncleared bank lines). It first saves a verified archive of the full history, which opens read-only for reports, and a Before condense backup to undo with. The condensed file is checked against the archive before LocalBooks switches to it. Set a closing date and reconcile through the cut-off first.',
+    body: 'Condense data in File & Data Controls replaces closed transactions up to a cut-off with one summary entry per month, keeping anything still open (unpaid invoices and bills, unused credits, undeposited payments, uncleared bank lines). It first saves a verified archive of the full history, which opens read-only for reports, and a Before condense backup to undo with. The condensed file is checked against the archive before Tillhouse switches to it. Set a closing date and reconcile through the cut-off first.',
     keywords: 'condense archive shrink smaller file old years history summary summarize clean up purge size',
     go: { label: 'Go to File & Data Controls', view: 'settings/data' },
     guide: 'backups-and-company-files',
@@ -245,7 +245,7 @@ export const topics = [
   {
     id: 'file-location', area: 'company', views: ['settings/data'],
     title: 'Keep the company file on a network or synced drive',
-    body: 'Change Company File Location moves your books to another folder, including a network drive or a synced folder such as Dropbox. Only one person can have the books open at a time, and LocalBooks tells a second computer they are in use.',
+    body: 'Change Company File Location moves your books to another folder, including a network drive or a synced folder such as Dropbox. Only one person can have the books open at a time, and Tillhouse tells a second computer they are in use.',
     keywords: 'network drive share dropbox icloud onedrive location move folder',
     go: { label: 'Go to File & Data Controls', view: 'settings/data' },
     guide: 'backups-and-company-files',
@@ -261,7 +261,7 @@ export const topics = [
   {
     id: 'qbw-import', area: 'company', views: ['settings/import'],
     title: 'Import a desktop company file (.qbw)',
-    body: 'Choose a .qbw company file or .qbb backup: LocalBooks reads it without changing it and brings in its accounts, lists and transactions. Step 2 compares each account’s total with the balance the file stores, and lists any account that does not match with the file’s balance, the imported balance and the difference; the list stays after you post. Choose a LocalBooks account for each, then post. A full import also tracks each inventory item with the quantity on hand and value its purchases, sales, adjustments and assembly builds gave it in the file; step 2 lists any item whose quantity or value does not match the file, and why.',
+    body: 'Choose a .qbw company file or .qbb backup: Tillhouse reads it without changing it and brings in its accounts, lists and transactions. Step 2 compares each account’s total with the balance the file stores, and lists any account that does not match with the file’s balance, the imported balance and the difference; the list stays after you post. Choose a Tillhouse account for each, then post. A full import also tracks each inventory item with the quantity on hand and value its purchases, sales, adjustments and assembly builds gave it in the file; step 2 lists any item whose quantity or value does not match the file, and why.',
     keywords: 'qbw qbb qbm migrate migration wizard desktop company file convert move import extractor balance differs difference match inventory quantity on hand stock assembly build',
     go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
     guide: 'desktop-migration',
@@ -269,7 +269,7 @@ export const topics = [
   {
     id: 'qbmac-import', area: 'company', views: ['settings/import'],
     title: 'Import a QuickBooks for Mac 2012 (or earlier) company file',
-    body: 'Choose the .qb2012, .qb2011 or .qb2010 company file in the Desktop Migration Wizard: LocalBooks reads accounts, customers and jobs, vendors, items and every transaction, with the invoices and bills each payment paid. Files from QuickBooks for Mac 2016 and later are encrypted, so save those with File › Export › To QuickBooks for Windows and choose the .qbb file instead.',
+    body: 'Choose the .qb2012, .qb2011 or .qb2010 company file in the Desktop Migration Wizard: Tillhouse reads accounts, customers and jobs, vendors, items and every transaction, with the invoices and bills each payment paid. Files from QuickBooks for Mac 2016 and later are encrypted, so save those with File › Export › To QuickBooks for Windows and choose the .qbb file instead.',
     keywords: 'quickbooks mac qb2012 qb2011 qb2010 macintosh company file import migrate encrypted qbmac',
     go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
     guide: 'desktop-migration',
@@ -277,7 +277,7 @@ export const topics = [
   {
     id: 'qb-installed-export', area: 'company', views: ['settings/import'],
     title: 'Export from my installed QuickBooks (Preview)',
-    body: 'If QuickBooks Desktop still runs on this computer, open your company file in it, then open "QuickBooks still installed? Export from my installed QuickBooks" under step 1 and click Export from QuickBooks. LocalBooks asks QuickBooks for the chart of accounts, customers, vendors, items and Journal through Intuit\'s own interfaces, sending read-only requests only, and stages them like report exports. On a Mac, first open Reports › Accountant & Taxes › Journal with the dates set to All and leave it in front; the first time, macOS asks whether LocalBooks may control QuickBooks: click OK (or turn it on later in System Settings › Privacy & Security › Automation). On Windows, install Intuit\'s free QuickBooks Desktop SDK, open the file as Admin, and when QuickBooks asks about LocalBooks choose "Yes, whenever this QuickBooks company file is open". Preview: not yet tried against a running QuickBooks; if it fails, export the reports yourself.',
+    body: 'If QuickBooks Desktop still runs on this computer, open your company file in it, then open "QuickBooks still installed? Export from my installed QuickBooks" under step 1 and click Export from QuickBooks. Tillhouse asks QuickBooks for the chart of accounts, customers, vendors, items and Journal through Intuit\'s own interfaces, sending read-only requests only, and stages them like report exports. On a Mac, first open Reports › Accountant & Taxes › Journal with the dates set to All and leave it in front; the first time, macOS asks whether Tillhouse may control QuickBooks: click OK (or turn it on later in System Settings › Privacy & Security › Automation). On Windows, install Intuit\'s free QuickBooks Desktop SDK, open the file as Admin, and when QuickBooks asks about Tillhouse choose "Yes, whenever this QuickBooks company file is open". Preview: not yet tried against a running QuickBooks; if it fails, export the reports yourself.',
     keywords: 'quickbooks installed running export qbxml sdk applescript automation permission certificate mac windows migrate preview',
     go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
     guide: 'desktop-migration',
@@ -293,7 +293,7 @@ export const topics = [
   {
     id: 'payroll-import', area: 'company', views: ['settings/import'],
     title: 'Post payroll from your payroll service',
-    body: 'Export each payroll from your payroll service as a journal (.csv or Excel). Under step 1 of the Desktop Migration Wizard, open "Payroll: a payroll service’s journal export" and choose the file. Match the Date, Account, and Debit and Credit (or Amount) columns, and the Entry column that groups rows into one payroll if the file has one. Match each of the service’s account names to one of yours; LocalBooks remembers them for next time. Every entry is shown with its totals, and nothing posts until each one balances. The same file can’t be posted twice; void its entries to redo it.',
+    body: 'Export each payroll from your payroll service as a journal (.csv or Excel). Under step 1 of the Desktop Migration Wizard, open "Payroll: a payroll service’s journal export" and choose the file. Match the Date, Account, and Debit and Credit (or Amount) columns, and the Entry column that groups rows into one payroll if the file has one. Match each of the service’s account names to one of yours; Tillhouse remembers them for next time. Every entry is shown with its totals, and nothing posts until each one balances. The same file can’t be posted twice; void its entries to redo it.',
     keywords: 'payroll service wages salaries withholding payroll taxes journal export csv import post employees',
     go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
     guide: 'desktop-migration',
@@ -324,9 +324,9 @@ export const topics = [
   },
   {
     id: 'whats-new', area: 'company', views: [],
-    title: 'What’s new in LocalBooks',
-    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently whole-file encryption and two-step sign-in (both optional), the Invoice # box, billable costs on the invoice, purchase orders you can edit and email, sales tax adjustments and editing memorized transactions.',
-    keywords: 'new whats new what’s new release notes changes changelog latest version update features',
+    title: 'What’s new in Tillhouse',
+    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently the new name (LocalBooks is now Tillhouse, with your files and settings unchanged), whole-file encryption and two-step sign-in (both optional), the Invoice # box, billable costs on the invoice, purchase orders you can edit and email, sales tax adjustments and editing memorized transactions.',
+    keywords: 'new whats new what’s new release notes changes changelog latest version update features localbooks rename renamed name tillhouse',
     go: null,
     guide: 'whats-new',
   },
@@ -341,7 +341,7 @@ export const topics = [
   {
     id: 'text-size', area: 'company', views: ['accounting/register', 'reports', 'sales/customers', 'sales/invoices'],
     title: 'Make the text larger or smaller, and color a register',
-    body: 'A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or Cmd/Ctrl + and − change the text size of every window of the kind in front (lists, registers, forms or reports), and LocalBooks keeps each kind’s size on this computer; Cmd/Ctrl 0 goes back to normal. In an account register, Color tints that account’s register so it’s easy to tell apart.',
+    body: 'A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or Cmd/Ctrl + and − change the text size of every window of the kind in front (lists, registers, forms or reports), and Tillhouse keeps each kind’s size on this computer; Cmd/Ctrl 0 goes back to normal. In an account register, Color tints that account’s register so it’s easy to tell apart.',
     keywords: 'text size font larger smaller bigger zoom magnify enlarge readable view register color colour tint',
     go: null,
     guide: 'getting-started',
@@ -387,7 +387,7 @@ export const topics = [
   },
   {
     id: 'save-anyway', area: 'company', views: ['settings/preferences', 'expenses/expenses', 'expenses/bills', 'accounting/journal', 'sales/invoices'],
-    title: 'Why LocalBooks asks before saving (Save anyway)',
+    title: 'Why Tillhouse asks before saving (Save anyway)',
     body: 'Company Preferences can warn before a transaction is saved: a check number already used on that bank account (Checking), a bill number already used for that vendor (Bills), a date more than 90 days before or 30 days after today, a posting to Retained Earnings (Accounting), or a new invoice or sales receipt for a customer with overdue invoices (Sales & Customers, off until an Admin turns it on). Click Save anyway to record it as entered, or Cancel to change it. Admins set the number of days, or turn each warning off, in Settings › Preferences Console. General › Company Preferences also sets four-digit years and whether hours show as 1:30 or 1.50.',
     keywords: 'duplicate check number bill number warning save anyway date past future retained earnings four digit years hours decimal time format overdue customer',
     go: { label: 'Go to Preferences', view: 'settings/preferences' },
@@ -428,7 +428,7 @@ export const topics = [
   {
     id: 'windows', area: 'company', views: [],
     title: 'Work in more than one window',
-    body: 'As in QuickBooks Desktop, forms, registers and reports open as windows inside the LocalBooks window: drag a title bar to move one, drag an edge to resize it, and use Minimize, Maximize and Close on its title bar (a maximized window\'s buttons sit at the end of the toolbar; minimized ones wait along the bottom). Edit… on an invoice, bill or check, or a report chosen in the Reports list, opens it in a window of its own. View › One Window shows one at a time; View › Multiple Windows (the default) lets them sit side by side. The Window menu has Close All, Cascade, Tile Vertically, Tile Horizontally, Arrange Icons and the list of open windows; View › Open Window List shows them beside the sidebar. Ctrl+F6 or Ctrl+Tab goes to the next window; Esc or Ctrl+F4 closes the active one (⌘W on a Mac). Window › New Window opens a second LocalBooks window, for another screen.',
+    body: 'As in QuickBooks Desktop, forms, registers and reports open as windows inside the Tillhouse window: drag a title bar to move one, drag an edge to resize it, and use Minimize, Maximize and Close on its title bar (a maximized window\'s buttons sit at the end of the toolbar; minimized ones wait along the bottom). Edit… on an invoice, bill or check, or a report chosen in the Reports list, opens it in a window of its own. View › One Window shows one at a time; View › Multiple Windows (the default) lets them sit side by side. The Window menu has Close All, Cascade, Tile Vertically, Tile Horizontally, Arrange Icons and the list of open windows; View › Open Window List shows them beside the sidebar. Ctrl+F6 or Ctrl+Tab goes to the next window; Esc or Ctrl+F4 closes the active one (⌘W on a Mac). Window › New Window opens a second Tillhouse window, for another screen.',
     keywords: 'window windows multiple windows one window maximize minimize restore close all cascade tile arrange icons open window list ctrl+f6 ctrl+tab esc ctrl+f4 side by side second monitor new window',
     go: null,
     guide: 'getting-started',
@@ -436,7 +436,7 @@ export const topics = [
   {
     id: 'desktop-view', area: 'company', views: ['settings/preferences'],
     title: 'Reopen your windows with the company (Desktop View)',
-    body: 'When a company opens, LocalBooks reopens the windows you had. Choose how in Edit › Preferences › Desktop View: Save when closing company (the default), Save current desktop, Don\'t save the desktop, or Keep previously saved desktop (on a Mac also Window › Workspace: AutoSave, Manual, Save Workspace). Where each window sat, and whether it was minimized or maximized, comes back too; a saved screen that no longer exists is left out. To open a company once without its windows, hold Alt (Option on a Mac) while clicking Open, or choose File › Open Company Without Restoring Windows….',
+    body: 'When a company opens, Tillhouse reopens the windows you had. Choose how in Edit › Preferences › Desktop View: Save when closing company (the default), Save current desktop, Don\'t save the desktop, or Keep previously saved desktop (on a Mac also Window › Workspace: AutoSave, Manual, Save Workspace). Where each window sat, and whether it was minimized or maximized, comes back too; a saved screen that no longer exists is left out. To open a company once without its windows, hold Alt (Option on a Mac) while clicking Open, or choose File › Open Company Without Restoring Windows….',
     keywords: 'desktop view saved desktop save when closing company save current desktop dont save keep previously saved workspace autosave restore windows reopen preferences',
     go: { label: 'Go to Desktop View', view: 'settings/preferences' },
     guide: 'getting-started',
@@ -444,7 +444,7 @@ export const topics = [
   {
     id: 'left-pane', area: 'company', views: ['settings/preferences'],
     title: 'Show only open windows, or hide the left pane',
-    body: 'In Edit › Preferences › Desktop View, under Left pane, choose Full menu (every page, the default), Open windows only (just the windows open now, as in the Open Window List; open pages from the menu bar or search, and click Menu at the top of the pane to get the full menu back), or Hidden for the most room. View › Show or Hide Left Icon Bar switches between the full menu and hidden, and LocalBooks remembers your choice.',
+    body: 'In Edit › Preferences › Desktop View, under Left pane, choose Full menu (every page, the default), Open windows only (just the windows open now, as in the Open Window List; open pages from the menu bar or search, and click Menu at the top of the pane to get the full menu back), or Hidden for the most room. View › Show or Hide Left Icon Bar switches between the full menu and hidden, and Tillhouse remembers your choice.',
     keywords: 'left pane sidebar icon bar hide show open windows only open window list menu more room',
     go: { label: 'Go to Desktop View', view: 'settings/preferences' },
     guide: 'getting-started',

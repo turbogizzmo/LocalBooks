@@ -83,10 +83,10 @@ Open the row's **Actions** menu and choose **Email…** (invoices, estimates, an
 Statements**: it sends the statement for the period shown. Check the address (it starts as the
 customer's email from **Sales › Customers**; separate several with commas), the subject and the
 message, then click **Open in mail app**. A new message opens in your mail app with the PDF
-attached. Review it there and send it. LocalBooks doesn't send anything itself.
+attached. Review it there and send it. Tillhouse doesn't send anything itself.
 
 - On a Mac, Apple Mail and Microsoft Outlook get the attachment directly. The first time, macOS asks
-  whether LocalBooks may control the mail app: choose **OK**.
+  whether Tillhouse may control the mail app: choose **OK**.
 - On Windows, mail apps that support Simple MAPI (such as Outlook and Thunderbird) get the
   attachment directly.
 - With any other mail app, the message opens with the address, subject and text filled in, and the
@@ -94,11 +94,11 @@ attached. Review it there and send it. LocalBooks doesn't send anything itself.
 
 ## See what was sent
 
-Every time a form is emailed, LocalBooks adds it to the form's sent history: **✉** beside its
+Every time a form is emailed, Tillhouse adds it to the form's sent history: **✉** beside its
 number in the list (point at it to see *Emailed 10/21/2026 to ap@acme.com*), and the latest sends
 in the **Email…** dialog. The history is a permanent record: it can't be edited or deleted, and it
 doesn't change the posted invoice. When a message is opened in your mail app, it's recorded as
-*opened in mail app*, because LocalBooks can't see whether you then sent it.
+*opened in mail app*, because Tillhouse can't see whether you then sent it.
 
 ## Email later and Send Forms
 
@@ -114,19 +114,19 @@ Marked forms show an **Email later** tag, and **Unsent only** above the list sho
 Then go to **Sales › Send Forms**:
 
 1. Check the address for each form (fill in any that are missing) and tick the ones to send.
-2. Click **Send selected**. With sending from LocalBooks turned on (below), they all go out at once.
+2. Click **Send selected**. With sending from Tillhouse turned on (below), they all go out at once.
    Otherwise one new message per form opens in your mail app.
 3. Sent forms leave the list. Any that couldn't be sent stay, with the reason in **Result**.
 
 Use **Review and email…** in a row's menu to check or change one message before it goes.
 
-## Send from LocalBooks instead (SMTP)
+## Send from Tillhouse instead (SMTP)
 
-If you'd rather LocalBooks sent the message itself, go to **Settings › Email**. It has two parts:
+If you'd rather Tillhouse sent the message itself, go to **Settings › Email**. It has two parts:
 **Emailed forms** chooses how messages go (**Open them in my mail app**, the default, or **Send them
-from LocalBooks (SMTP)**), and **Email server (SMTP)** holds the server's details.
+from Tillhouse (SMTP)**), and **Email server (SMTP)** holds the server's details.
 
-1. Under **Emailed forms**, choose **Send them from LocalBooks (SMTP)**.
+1. Under **Emailed forms**, choose **Send them from Tillhouse (SMTP)**.
 2. Under **Email server (SMTP)**, enter your email provider's **Server**, **Security and port**
    (usually STARTTLS on 587, or SSL/TLS on 465; **None** is only for a local relay without a
    password), your **Username** and **Password**, and the **From address** and **From name**. Many

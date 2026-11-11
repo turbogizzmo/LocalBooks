@@ -10,7 +10,7 @@ import DateBox from './DateBox.jsx';
 const KIND = { PURCHASE: 'Purchase', SALE: 'Sale', ADJUSTMENT: 'Adjustment', COST_TRUE_UP: 'Cost true-up', VOID: 'Void' };
 
 /**
- * A record or task dialog (Edit vendor, Track stock, …), over the whole LocalBooks window. It is
+ * A record or task dialog (Edit vendor, Track stock, …), over the whole Tillhouse window. It is
  * drawn on the page body, not inside the window it was opened from: inside, the window's own layer
  * kept the program's toolbar over the dialog's top rows, and the window's edges clipped it.
  */
@@ -53,7 +53,7 @@ export function TrackDialog({ product, onClose, onDone }) {
     <Dialog title={`Track stock for ${product.name}`} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-2 px-3 py-2 text-xs">
         <p className="text-qb-ink-muted">
-          LocalBooks will keep {product.name}’s quantity on hand and its cost at moving average. Buying it on a bill adds stock; selling it on an
+          Tillhouse will keep {product.name}’s quantity on hand and its cost at moving average. Buying it on a bill adds stock; selling it on an
           invoice or sales receipt records its cost in <strong>Cost of Goods Sold</strong>. It starts at zero on hand.
         </p>
         <label className="flex w-[220px] flex-col gap-0.5">

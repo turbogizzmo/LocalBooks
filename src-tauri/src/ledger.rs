@@ -308,7 +308,7 @@ pub(crate) async fn commit_write(mut tx: Transaction<'static, Sqlite>) -> Result
     // A chain that no longer holds the recorded head keeps the old record, as evidence for verify.
     // The record is best effort: if it can't be read, the write still commits and the record stays put.
     let advance = crate::audit_chain::continues_record(&mut tx, &head).await.unwrap_or_else(|err| {
-        eprintln!("LocalBooks: could not read the audit trail record; leaving it unchanged: {err}");
+        eprintln!("Tillhouse: could not read the audit trail record; leaving it unchanged: {err}");
         false
     });
     tx.commit().await?;

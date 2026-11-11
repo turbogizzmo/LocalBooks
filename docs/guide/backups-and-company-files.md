@@ -5,7 +5,7 @@ Controls**.
 
 ## Back up
 
-- **Automatic:** a backup is taken when LocalBooks starts, at most once a day, and listed under
+- **Automatic:** a backup is taken when Tillhouse starts, at most once a day, and listed under
   **Snapshots on this computer**. Set how many to keep in **Settings › Preferences Console ›
   General › Company Preferences**, under **Automatic backups**.
 - **Right now:** click **Back up now**.
@@ -20,17 +20,17 @@ Controls**.
 Backups on the same disk as your books don't help if the computer is lost. **Offsite backup**
 keeps encrypted copies in a folder you choose: a folder your cloud storage keeps in sync, or a USB
 or network drive. Each copy is encrypted on this computer before it is saved, so whatever carries
-the folder elsewhere only ever sees scrambled data. LocalBooks itself sends nothing over the
+the folder elsewhere only ever sees scrambled data. Tillhouse itself sends nothing over the
 internet; it only writes the file.
 
 1. Under **Offsite backup**, click **Set up…** (Admins only).
 2. Choose the folder and how many copies to keep (10 to start).
 3. Enter a **backup password** twice: your sign-in password, the company's recovery key, or
    another password of at least 8 characters. **Keep it safe: a copy can't be opened without it**,
-   by you or by LocalBooks.
+   by you or by Tillhouse.
 4. Click **Save**. The first copy is made straight away.
 
-After that a copy is made when LocalBooks is open and the newest copy is more than 20 hours old (so a copy is made about once a day), and
+After that a copy is made when Tillhouse is open and the newest copy is more than 20 hours old (so a copy is made about once a day), and
 the oldest copies beyond the number to keep are deleted from the folder. **Back up offsite now**
 makes one at any time. The screen shows when the last copy was made and the last test restore
 passed, and any error (for example a drive that isn't plugged in).
@@ -40,7 +40,7 @@ store (the Keychain on a Mac), so copies need no password. On another computer, 
 removed, copies stop until you click **Change…** and enter the password again.
 
 **Test restore** opens a copy with the password and checks it like a restore would (that it's an
-undamaged, balanced LocalBooks file), without changing your books. Do it now and then, so you know
+undamaged, balanced Tillhouse file), without changing your books. Do it now and then, so you know
 your copies work. **Restore** replaces your books with the copy, after saving the current books as
 a snapshot, like any restore. To restore on a new computer, create or open any company, set up
 offsite backup with the same folder and password, and click **Restore** beside the copy, or use
@@ -59,8 +59,8 @@ each of these was last done:
   share or a synced folder, or made by the offsite backup. A copy saved to another folder on the
   same disk doesn't count, and nor does one beside books that already live on a network share.
 - **A test restore**: **Test** beside a snapshot, **Test restore a backup…** for any backup file,
-  or **Test restore** on an offsite copy. LocalBooks opens the backup and checks it as a restore
-  would (that it's an undamaged LocalBooks file, and how many entries it has), without replacing
+  or **Test restore** on an offsite copy. Tillhouse opens the backup and checks it as a restore
+  would (that it's an undamaged Tillhouse file, and how many entries it has), without replacing
   your books. Only a backup of these books (the same company name) counts here.
 
 **Reminders** lists **Copy a backup off this computer** or **Test-restore a backup** when either
@@ -71,7 +71,7 @@ hasn't been done in 30 days. Change the days, or turn it off, under **Backup saf
 
 1. Click **Restore from Backup…** and choose the backup, or click **Restore** beside a snapshot in
    the list.
-2. LocalBooks checks the file first: that it's a LocalBooks file, undamaged, balanced, and not from
+2. Tillhouse checks the file first: that it's a Tillhouse file, undamaged, balanced, and not from
    a newer version.
 3. Read the summary, then click **Replace current books**. Your current books are saved as a
    "Before restore" snapshot first.
@@ -104,7 +104,7 @@ turned on.
    indexes, then compacts the file. The check-up runs again when it's done.
 
 Rebuild never changes your transactions. When a problem is in the data itself (broken links,
-unbalanced or changed entries, totals that disagree), the file was edited outside LocalBooks. Fix it
+unbalanced or changed entries, totals that disagree), the file was edited outside Tillhouse. Fix it
 with a reviewed correction on the Audit Log (see [Verify and correct the ledger](ledger-integrity.md)),
 or restore a backup taken before it happened. If the file structure is damaged, Rebuild is turned
 off: restore the most recent backup that passes the check-up.
@@ -125,7 +125,7 @@ Before you start:
 1. Open **File › Utilities › Condense Data…** (or Settings › File & Data Controls). In **Condense data**, choose the cut-off date (it starts at your closing date) and click
    **Preview**. It reads only, and shows how many transactions would be summarized, how many monthly
    entries replace them, and how many are kept, and why.
-2. Click **Condense…**, then **Condense**. LocalBooks then:
+2. Click **Condense…**, then **Condense**. Tillhouse then:
    - saves a verified **archive** of the books as they are (Archive (read-only) in the snapshot
      list) and a plain **Before condense** backup;
    - builds the condensed file off to the side;
@@ -169,7 +169,7 @@ to their summaries. You can condense again later with a later cut-off.
 **File › Utilities › Export** saves the company's lists for use somewhere else:
 
 - **Lists to IIF Files…** writes the chart of accounts, customers and jobs, vendors, items and
-  classes to an `.iif` file, the tab-delimited list format that LocalBooks' **Import / Convert**
+  classes to an `.iif` file, the tab-delimited list format that Tillhouse's **Import / Convert**
   reads and that the QuickBooks Desktop products import. Use it to start another company file with
   the same lists. Sub-accounts, jobs and subclasses keep their full names (`Utilities:Electric`);
   inactive entries are marked hidden. Transactions aren't included; to copy a whole company, make a
@@ -187,7 +187,7 @@ Both ask where to save the file and write nothing anywhere else.
   opened most recently first, with when you last opened each one. Select a file to see where it is
   and when it last changed.
 - Don't know where it is? On the **No Company Open** screen, click **Find a company file**.
-  LocalBooks searches your home folder, synced folders and connected drives and lists every company
+  Tillhouse searches your home folder, synced folders and connected drives and lists every company
   file it finds with its **Location** and when it was **Last modified**. Double-click one to open
   it.
 - It opens in place for this session. The window title and the top bar show which file is open, and
@@ -203,7 +203,7 @@ Both ask where to save the file and write nothing anywhere else.
 QuickBooks `.qbw` company files, `.qbb` backups and `.qbm` portable files.
 
 1. Choose the QuickBooks file.
-2. Pick where to save the new LocalBooks company file. It's named after the QuickBooks file.
+2. Pick where to save the new Tillhouse company file. It's named after the QuickBooks file.
 3. The new company opens on the **Desktop Migration Wizard**, which starts reading the QuickBooks
    file. Review and post what it finds as described in
    [Desktop Migration Wizard](desktop-migration.md).
@@ -224,5 +224,5 @@ are and whether that folder is on this computer, a network drive or a synced (cl
 2. Choose **Move books here**, **Open this company file** (if one is already there) or **Create
    company file here** for a new, empty one.
 
-Only one person can have the books open at a time. LocalBooks tells another computer that they're
+Only one person can have the books open at a time. Tillhouse tells another computer that they're
 in use.

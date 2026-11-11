@@ -108,7 +108,7 @@ async fn sends_the_pdf_through_the_server() {
     save_settings(&pool, &secrets, relay.clone(), None).await.unwrap();
     test_connection(relay.clone(), &secrets, None).await.unwrap();
     assert_eq!(send_test(relay, &secrets, None, "Acme").await.unwrap(), "billing@example.com");
-    assert!(received.lock().unwrap().contains("Subject: LocalBooks test email from Acme"));
+    assert!(received.lock().unwrap().contains("Subject: Tillhouse test email from Acme"));
     received.lock().unwrap().clear();
 
     send(

@@ -19,7 +19,7 @@ function Field({ label, htmlFor, hint, children }) {
 }
 
 /**
- * Settings › Email: how emailed forms leave LocalBooks. By default they open in the user's mail
+ * Settings › Email: how emailed forms leave Tillhouse. By default they open in the user's mail
  * app; optionally they are sent directly through the company's SMTP server.
  */
 export default function EmailSettings() {
@@ -100,9 +100,9 @@ export default function EmailSettings() {
           <label className="flex items-start gap-2">
             <input type="radio" name="email-method" className="mt-1" checked={draft.enabled} onChange={() => set('enabled')(true)} />
             <span>
-              <span className="font-semibold">Send them from LocalBooks (SMTP)</span>
+              <span className="font-semibold">Send them from Tillhouse (SMTP)</span>
               <span className="block text-xs text-qb-ink-muted">
-                LocalBooks sends the message through your email provider’s server. Use the SMTP settings your provider publishes; many need an app
+                Tillhouse sends the message through your email provider’s server. Use the SMTP settings your provider publishes; many need an app
                 password rather than your usual one.
               </span>
             </span>

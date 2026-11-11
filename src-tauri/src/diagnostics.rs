@@ -99,7 +99,7 @@ pub fn first_page_loaded() {
     let ms = launched.elapsed().as_millis();
     let line = format!("first page loaded {ms} ms after launch");
     if ms >= SLOW_STARTUP_MS {
-        eprintln!("LocalBooks: {line}");
+        eprintln!("Tillhouse: {line}");
     }
     log(&line);
 }
@@ -128,7 +128,7 @@ impl StartupSteps {
         let total = self.last.duration_since(self.started).as_millis();
         let line = startup_line(total, &self.steps);
         if total >= SLOW_STARTUP_MS {
-            eprintln!("LocalBooks: {line}");
+            eprintln!("Tillhouse: {line}");
         }
         log(&line);
     }
@@ -159,7 +159,7 @@ fn startup_line(total_ms: u128, steps: &[(&'static str, u128)]) -> String {
 pub async fn bundle(pool: Option<&SqlitePool>, company_file: Option<&Path>, log_dir: Option<&Path>, app_version: &str) -> Result<Vec<(String, String)>, String> {
     let mut files = Vec::new();
     let mut versions = format!(
-        "LocalBooks {app_version}\nOperating system: {} ({})\nProcessor: {}\n",
+        "Tillhouse {app_version}\nOperating system: {} ({})\nProcessor: {}\n",
         std::env::consts::OS,
         std::env::consts::FAMILY,
         std::env::consts::ARCH
@@ -254,7 +254,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("lb-diag-log-{}-{}", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        write_line(&dir, "LocalBooks started", 64);
+        write_line(&dir, "Tillhouse started", 64);
         write_line(&dir, "opened Books.localbooks\nsecond line", 64);
         let text = std::fs::read_to_string(log_path(&dir)).unwrap();
         assert_eq!(text.lines().count(), 2, "one line each: {text}");
@@ -282,7 +282,7 @@ mod tests {
         let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
         assert_eq!(names, ["versions.txt", "database.txt"]);
         let all: String = files.iter().map(|(_, t)| t.as_str()).collect();
-        assert!(all.contains("LocalBooks 9.9.9") && all.contains("SQLite: 3."));
+        assert!(all.contains("Tillhouse 9.9.9") && all.contains("SQLite: 3."));
         assert!(all.contains("Integrity (quick check): ok"));
         assert!(all.contains("  invoices: 1"), "counts per table");
         assert!(all.contains("\n  0001 "), "the schema migrations");

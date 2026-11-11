@@ -106,7 +106,7 @@ pub struct ReqwestHttp {
 impl ReqwestHttp {
     pub fn new() -> Result<Self, String> {
         let client = reqwest::Client::builder()
-            .user_agent(concat!("LocalBooks/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("Tillhouse/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(5))
             .timeout(Duration::from_secs(10))
             .redirect(reqwest::redirect::Policy::limited(3))
@@ -247,7 +247,7 @@ pub async fn suggest<H: RateHttp>(pool: &SqlitePool, http: &H, currency: &str, h
         }
         status => return Err(format!("FX_SERVICE: the exchange-rate service answered with HTTP {status}; enter the rate yourself")),
     }
-    let bad = || "FX_BAD_RESPONSE: the exchange-rate service sent an answer LocalBooks could not read; enter the rate yourself".to_string();
+    let bad = || "FX_BAD_RESPONSE: the exchange-rate service sent an answer Tillhouse could not read; enter the rate yourself".to_string();
     let parsed: ApiResponse = serde_json::from_str(&response.body).map_err(|_| bad())?;
     let raw = parsed.rates.get(&quote).ok_or_else(bad)?;
     if parsed.base != base || parsed.date > requested || parsed.date < first_rate_date() {

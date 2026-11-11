@@ -48,7 +48,7 @@ function useControls() {
 
 /**
  * Preferences › General, the My Preferences part: how typing and the screens behave for you on this
- * computer. Each choice takes effect at once, in every LocalBooks window.
+ * computer. Each choice takes effect at once, in every Tillhouse window.
  */
 export default function GeneralPreferences() {
   const { prefs, check, radio } = useControls();

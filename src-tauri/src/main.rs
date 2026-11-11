@@ -218,7 +218,7 @@ fn main() {
             if let Ok(logs) = app.path().app_log_dir() {
                 diagnostics::install(logs);
             }
-            diagnostics::log(&format!("LocalBooks {} started", app.package_info().version));
+            diagnostics::log(&format!("Tillhouse {} started", app.package_info().version));
             steps.step("settings and logs");
             // Temporary copies an earlier run left (staged mail, an unpacked backup) go now.
             if let Ok(cache) = app.path().app_cache_dir() {
@@ -286,7 +286,7 @@ fn main() {
         })
         .invoke_handler(guarded(commands::handler()))
         .build(tauri::generate_context!())
-        .expect("error while building LocalBooks")
+        .expect("error while building Tillhouse")
         .run(|app, event| match event {
             // macOS hands double-clicked .localbooks files to the running app as an Opened event,
             // including the file that launched it.
@@ -300,7 +300,7 @@ fn main() {
             }
             // Close the database cleanly (checkpoint, release any shared-location lock) on quit.
             tauri::RunEvent::Exit => tauri::async_runtime::block_on(async {
-                diagnostics::log("LocalBooks quit");
+                diagnostics::log("Tillhouse quit");
                 // Quitting closes the company: its desktop is saved while the windows are still known.
                 windows::save_on_close(app).await;
                 if let Some(state) = app.try_state::<std::sync::Mutex<Option<instance::InstanceGuard>>>() {
@@ -336,7 +336,7 @@ async fn open_at_launch(app: tauri::AppHandle, config: db::DbConfig, launch_file
         Err(err) => {
             // The window explains (StartupFailure.jsx); managed before the turn ends, so the window
             // finds it when it reloads.
-            eprintln!("LocalBooks could not open its company file: {err}");
+            eprintln!("Tillhouse could not open its company file: {err}");
             commands::record_startup_failure(&data_dir, &err);
             app.manage(commands::StartupFailure { message: err, company_file: data_dir.join(storage::DB_FILE_NAME) });
             drop(turn);

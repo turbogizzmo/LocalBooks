@@ -46,7 +46,7 @@ export const screens = {
 };
 
 /**
- * Topics: two sentences each, describing what LocalBooks actually does. `views` lists the
+ * Topics: two sentences each, describing what Tillhouse actually does. `views` lists the
  * screens a topic is about (shown under "On this screen"); `go` opens the place to do it, with an
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
@@ -70,7 +70,7 @@ export const topics = [
   {
     id: 'document-inbox', area: 'expenses', views: ['expenses/inbox', 'expenses/bills', 'expenses/expenses'],
     title: 'Enter receipts and bills from the Document Inbox',
-    body: 'Expenses › Document Inbox keeps receipts and vendor bills until you enter them: drop files on the window or click Add files…. Each shows a preview, and for a PDF with text LocalBooks reads the total, the date and the name at the top. Enter as bill, Expense or Check opens that form filled in, and the file is attached to the transaction when it posts. Files stay in the company file; nothing is sent anywhere, and scans are not read (no OCR).',
+    body: 'Expenses › Document Inbox keeps receipts and vendor bills until you enter them: drop files on the window or click Add files…. Each shows a preview, and for a PDF with text Tillhouse reads the total, the date and the name at the top. Enter as bill, Expense or Check opens that form filled in, and the file is attached to the transaction when it posts. Files stay in the company file; nothing is sent anywhere, and scans are not read (no OCR).',
     keywords: 'document inbox receipt bill upload review scan pdf photo drop attach enter receipts receipt management',
     go: { label: 'Go to Document Inbox', view: 'expenses/inbox' },
     guide: 'attachments',
@@ -134,7 +134,7 @@ export const topics = [
   {
     id: 'vendors', area: 'expenses', views: ['expenses/vendors'],
     title: 'Add and review vendors',
-    body: 'Add a vendor with a name and optional email, and see what you still owe each one. Click a vendor to see all of its transactions under the list, and double-click one to open it. On a bill, check, expense, purchase order or vendor credit, or a register’s payee, type a name that isn’t on the list and choose Add as a new vendor. A name is never added without asking: leave the box or save with a name that isn’t on the list and LocalBooks asks first, with Quick add, Set up… (add it and open its record) or Cancel (back to the name box, nothing saved).',
+    body: 'Add a vendor with a name and optional email, and see what you still owe each one. Click a vendor to see all of its transactions under the list, and double-click one to open it. On a bill, check, expense, purchase order or vendor credit, or a register’s payee, type a name that isn’t on the list and choose Add as a new vendor. A name is never added without asking: leave the box or save with a name that isn’t on the list and Tillhouse asks first, with Quick add, Set up… (add it and open its record) or Cancel (back to the name box, nothing saved).',
     keywords: 'vendor supplier payee contact payable balance transactions history add new vendor quick add set up not on list typo center',
     go: { label: 'Go to Vendors', view: 'expenses/vendors' },
     guide: 'customers-and-products',

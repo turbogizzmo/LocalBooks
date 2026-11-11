@@ -125,7 +125,7 @@ async fn deliver(app: &AppHandle, pool: &sqlx::SqlitePool, schedule: &Schedule, 
             let to = mail_app::parse_recipients(&schedule.recipients)?;
             let company = crate::preferences::get(pool, "company_name").await.unwrap_or_default();
             let subject = format!("{} from {}", schedule.name.trim(), company.trim()).trim_end_matches(" from ").to_string();
-            let body = format!("The reports for {} are attached.\n\nSent by LocalBooks: {}, {}.", run.format("%B %-d, %Y"), schedule.name.trim(), schedule_words(schedule));
+            let body = format!("The reports for {} are attached.\n\nSent by Tillhouse: {}, {}.", run.format("%B %-d, %Y"), schedule.name.trim(), schedule_words(schedule));
             smtp::send(pool, &smtp_secrets(app)?, smtp::Outgoing { to: to.clone(), subject, body, file_name: String::new(), pdf: Vec::new(), more: files }).await?;
             Ok(format!("Emailed {count} report{} to {}", if count == 1 { "" } else { "s" }, to.join(", ")))
         }

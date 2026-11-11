@@ -81,7 +81,7 @@ pub async fn unknown_migrations(pool: &SqlitePool, known: &BTreeSet<i64>) -> Res
 pub fn schema_blocker(previous: &PreviousRelease, unknown: &[i64]) -> Option<String> {
     let first = unknown.first()?;
     Some(format!(
-        "ROLLBACK_SCHEMA: LocalBooks {} can't open this company file: this version updated it ({} change{} that version doesn't have, starting with {first:04}). \
+        "ROLLBACK_SCHEMA: Tillhouse {} can't open this company file: this version updated it ({} change{} that version doesn't have, starting with {first:04}). \
          Reinstalling it would leave these books unreadable. To go back, restore a backup taken before this version opened the file (Settings › File & Data), \
          or keep this version.",
         previous.version,
@@ -96,7 +96,7 @@ pub fn schema_blocker(previous: &PreviousRelease, unknown: &[i64]) -> Option<Str
 
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .user_agent(concat!("LocalBooks/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("Tillhouse/", env!("CARGO_PKG_VERSION")))
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("ROLLBACK_NETWORK: {e}"))

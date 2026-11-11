@@ -165,7 +165,7 @@ pub async fn retained_earnings_warning(pool: &SqlitePool, account_ids: &[i64]) -
     Ok(retained.filter(|(id, _)| account_ids.contains(id)).map(|(_, name)| {
         Warning::new(
             "POSTS_TO_RETAINED_EARNINGS",
-            format!("This transaction posts to {name}. LocalBooks moves each year's profit there on its own; posting to it directly is usually a correction of a prior year."),
+            format!("This transaction posts to {name}. Tillhouse moves each year's profit there on its own; posting to it directly is usually a correction of a prior year."),
         )
     }))
 }

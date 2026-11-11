@@ -496,7 +496,7 @@ function ListChanges() {
             .filter(([, n]) => n > 0)
             .map(([k, n]) => `${n} ${CHANGE_LABEL[k].toLowerCase()}`)
             .join(' · ') || 'No changes'}
-          . LocalBooks has no list merge, so there are no merges to review.
+          . Tillhouse has no list merge, so there are no merges to review.
         </span>
       </section>
       {error && <Notice kind="error" text={error} />}

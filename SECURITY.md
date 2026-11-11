@@ -4,7 +4,7 @@
 
 Please report security problems **privately**, not in a public issue:
 [report a vulnerability](https://github.com/turbogizzmo/LocalBooks/security/advisories/new)
-(GitHub's private vulnerability reporting). Include the LocalBooks version, your operating system,
+(GitHub's private vulnerability reporting). Include the Tillhouse version, your operating system,
 and steps to reproduce. You should hear back within a week.
 
 Never attach a real company file or backup to any report: they contain financial records.
@@ -14,13 +14,13 @@ Never attach a real company file or backup to any report: they contain financial
 Only the latest release receives fixes. Installed copies check for updates shortly after they
 start, unless that is turned off (Settings › Updates).
 
-## How LocalBooks is built to be safe
+## How Tillhouse is built to be safe
 
 Each claim below links to the code that does it and, where there is one, the test that checks it.
 `docs_checks::security_claims_point_at_code_that_exists` fails if a link here stops resolving or a
 claim loses its link.
 
-- **Company files stay on the user's computer.** LocalBooks has no server and collects no
+- **Company files stay on the user's computer.** Tillhouse has no server and collects no
   telemetry. It makes network requests only for: the update check (on by default, sends no data
   about the books: [`Updates.jsx`](src/components/Updates.jsx)), exchange rates (off unless turned
   on, sends two currency codes and a date: [`fx_rates.rs`](src-tauri/src/fx_rates.rs)), bank
@@ -45,7 +45,7 @@ claim loses its link.
   [`instance/tests.rs`](src-tauri/src/instance/tests.rs)).
 - **Credentials are kept outside the company file.** On macOS and Windows the installed app uses
   the operating system's credential store (Keychain, Credential Manager). On Linux, and in
-  development builds, they go to a file in LocalBooks' settings folder that only the user's account
+  development builds, they go to a file in Tillhouse's settings folder that only the user's account
   can read ([`secrets.rs`](src-tauri/src/secrets.rs)). This covers the bank connection, the SMTP
   password, the Stripe payout key, remembered sign-ins, the offsite backup key and the audit-trail
   anchor.
@@ -66,7 +66,7 @@ claim loses its link.
 - **A company file from someone else cannot run code.** Every connection turns off
   `trusted_schema`, so views and triggers stored in a file cannot call functions with side effects
   (`open_for` in [`db.rs`](src-tauri/src/db.rs)). A file whose `-wal` log was written for another
-  page size is refused, which blocks RUSTSEC-2026-0459 in the SQLite LocalBooks bundles until it
+  page size is refused, which blocks RUSTSEC-2026-0459 in the SQLite Tillhouse bundles until it
   can be upgraded. It is checked twice: by path just before opening, for a clear message, and again
   by the VFS every company file opens through, as SQLite opens the log, through SQLite's own handle,
   so a log swapped in between is refused too (`a_log_with_another_page_size_is_refused` and
@@ -84,7 +84,7 @@ file can see and change everything, as in earlier versions.
   [`users.rs`](src-tauri/src/users.rs); `signing_in_checks_the_password_and_unlocks_the_key` and
   `turned_off_users_cannot_sign_in` in [`users/tests.rs`](src-tauri/src/users/tests.rs)).
   Passwords need at least 8 characters.
-- **Roles:** Admin, Standard, View only and External Accountant, checked by LocalBooks before every command runs (the
+- **Roles:** Admin, Standard, View only and External Accountant, checked by Tillhouse before every command runs (the
   `guarded` wrapper in [`main.rs`](src-tauri/src/main.rs) and [`permissions.rs`](src-tauri/src/permissions.rs)).
   A command not yet classified is treated as a change, so View-only users cannot run it
   (`commands_are_classified` and `every_role_gets_what_it_should` in
@@ -101,7 +101,7 @@ file can see and change everything, as in earlier versions.
   (`users_without_sensitive_access_get_no_key` in [`users/tests.rs`](src-tauri/src/users/tests.rs),
   `protected_ids_show_only_with_the_key` in [`tax_ids/tests.rs`](src-tauri/src/tax_ids/tests.rs),
   `protected_bank_details_need_the_key` in [`ach/tests.rs`](src-tauri/src/ach/tests.rs)).
-- **Recovery:** the recovery key is shown once when users are turned on, and LocalBooks keeps no
+- **Recovery:** the recovery key is shown once when users are turned on, and Tillhouse keeps no
   copy. There is no reset service. With neither an Admin password nor the recovery key, the only way
   back is removing all users, which erases every encrypted value and keeps the books
   (`the_recovery_key_resets_an_admin_password` and
@@ -134,7 +134,7 @@ file can see and change everything, as in earlier versions.
   `a_stricter_setting_makes_the_right_roles_set_it_up`). Wrong codes wait like wrong passwords
   (four free tries, counted apart from passwords) and are audited past the free tries. An Admin's
   reset, a password reset by an Admin, the recovery key, turning the setting off and removing all
-  users each remove the factor (`every_way_back_removes_the_factor`). It guards the LocalBooks
+  users each remove the factor (`every_way_back_removes_the_factor`). It guards the Tillhouse
   sign-in, not the file: someone with a copy of the file and another program isn't stopped by it.
 - **Remember me on this computer** (optional, off by default) keeps the user's password in the
   credential store above and is used once per opening of the file, never after a sign-out or idle
@@ -188,13 +188,13 @@ What this does not cover:
 - Anyone at the sign-in screen can remove all users (the way back when no Admin password or recovery
   key is left). It erases every encrypted value and is recorded in the audit trail, but it does
   give that person the rest of the books.
-- Roles are enforced by LocalBooks, not by the file: another program can read or change the
+- Roles are enforced by Tillhouse, not by the file: another program can read or change the
   database directly. The ledger audit trail is hash-chained and anchored outside the file, so such
   changes are detected (Accounting › Audit Log › Verify ledger integrity), not prevented.
 - On Linux there is no system credential store in use: saved credentials are protected only by the
   file permissions of the user's account.
 - A tax ID read from a file that is staged for import but not yet imported stays unencrypted until
   the import is carried out or discarded.
-- Newer QuickBooks files encrypt tax IDs with QuickBooks' own key; LocalBooks cannot read those and
-  imports the vendor without one. Files imported before LocalBooks 0.5.1 may hold that unreadable
+- Newer QuickBooks files encrypt tax IDs with QuickBooks' own key; Tillhouse cannot read those and
+  imports the vendor without one. Files imported before Tillhouse 0.5.1 may hold that unreadable
   value; it is cleared when the file is opened (or, if already encrypted, at the next unlock).

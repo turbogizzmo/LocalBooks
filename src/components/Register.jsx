@@ -301,7 +301,7 @@ export default function Register({ accounts, intent }) {
   };
 
   // Double-click (or the row menu) opens the transaction itself: the bill, check or invoice form
-  // where LocalBooks has one, otherwise the journal entry.
+  // where Tillhouse has one, otherwise the journal entry.
   const openTransaction = (r) => {
     const [view, action, data] = transactionTarget(r);
     openChild(view, action, data);

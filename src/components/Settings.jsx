@@ -44,7 +44,7 @@ function StorageBadge({ storage, verified }) {
 }
 
 const SHARED_WARNING =
-  'Shared folders work for one person at a time: LocalBooks locks the company file while it is open and uses a safer journal mode, but never open the same company file on two computers at once, and let a synced folder finish syncing before opening it elsewhere.';
+  'Shared folders work for one person at a time: Tillhouse locks the company file while it is open and uses a safer journal mode, but never open the same company file on two computers at once, and let a synced folder finish syncing before opening it elsewhere.';
 
 function CompanyFileLocation() {
   const status = useLedgerQuery(api.getStorageStatus);
@@ -82,7 +82,7 @@ function CompanyFileLocation() {
     try {
       const next = await api.updateDatabaseDirectory(inspection.directory, inspection.hasCompanyFile ? 'OPEN' : mode);
       setInspection(null);
-      setNotice({ kind: 'success', text: `LocalBooks is now using ${next.path}. Reloading…` });
+      setNotice({ kind: 'success', text: `Tillhouse is now using ${next.path}. Reloading…` });
       setTimeout(() => window.location.reload(), 1200);
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
@@ -116,7 +116,7 @@ function CompanyFileLocation() {
         <label htmlFor="db-dir" className="whitespace-nowrap text-sm font-semibold text-qb-ink-muted">
           Folder
         </label>
-        <input id="db-dir" className="qb-input min-w-0 flex-1 font-mono text-sm" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/Volumes/Accounting/LocalBooks" spellCheck={false} />
+        <input id="db-dir" className="qb-input min-w-0 flex-1 font-mono text-sm" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/Volumes/Accounting/Tillhouse" spellCheck={false} />
         <button type="submit" className="qb-btn qb-btn-secondary h-row-lg" disabled={busy}>
           Check
         </button>
@@ -133,7 +133,7 @@ function CompanyFileLocation() {
           {inspection.problem ? (
             <div className="font-semibold text-qb-negative">{inspection.problem.replace(/^[A-Z_]+: /, '')}</div>
           ) : !changed ? (
-            <div className="text-qb-ink-muted">LocalBooks is already using this folder.</div>
+            <div className="text-qb-ink-muted">Tillhouse is already using this folder.</div>
           ) : (
             <>
               {inspection.storage.kind !== 'LOCAL' && <div className="mb-1 text-xs text-[#a35200]">{SHARED_WARNING}</div>}
@@ -145,7 +145,7 @@ function CompanyFileLocation() {
                 </div>
               ) : (
                 <fieldset className="flex flex-col gap-0.5">
-                  <legend className="mb-0.5 text-qb-ink-muted">This folder has no company file. What should LocalBooks do?</legend>
+                  <legend className="mb-0.5 text-qb-ink-muted">This folder has no company file. What should Tillhouse do?</legend>
                   <label className="flex items-center gap-1.5">
                     <input type="radio" name="relocate-mode" className="accent-qb-green" checked={mode === 'MOVE'} onChange={() => setMode('MOVE')} />
                     Copy my current books there and use the copy (the original stays as a backup)
@@ -204,13 +204,13 @@ function FileAndData({ companyName, isAdmin, navigate }) {
   const [pending, setPending] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  const safeName = (companyName || 'LocalBooks').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-');
+  const safeName = (companyName || 'Tillhouse').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-');
 
   const backupTo = async () => {
     try {
       const path = await save({
         defaultPath: `${safeName}-${todayIso()}.localbooks`,
-        filters: [{ name: 'LocalBooks company file', extensions: ['localbooks', 'db'] }],
+        filters: [{ name: 'Tillhouse company file', extensions: ['localbooks', 'db'] }],
       });
       if (!path) return;
       setBusy(true);
@@ -264,7 +264,7 @@ function FileAndData({ companyName, isAdmin, navigate }) {
     const path = await open({
       multiple: false,
       directory: false,
-      filters: [{ name: 'LocalBooks or QuickBooks backup', extensions: ['localbooks', 'db', ...QUICKBOOKS_FILTER_EXTENSIONS] }],
+      filters: [{ name: 'Tillhouse or QuickBooks backup', extensions: ['localbooks', 'db', ...QUICKBOOKS_FILTER_EXTENSIONS] }],
     });
     if (!path) return;
     // A QuickBooks backup can't replace these books: it becomes a new company through the migration wizard.
@@ -362,7 +362,7 @@ function FileAndData({ companyName, isAdmin, navigate }) {
           </button>
           <span className="text-xs text-qb-ink-muted">
             Backups are taken live: keep working while they run. Restores are checked for integrity, schema version, broken links and
-            unbalanced entries before anything is replaced. Backups are saved as .localbooks files, which open in LocalBooks with a
+            unbalanced entries before anything is replaced. Backups are saved as .localbooks files, which open in Tillhouse with a
             double-click; an opened file is used in place for this session.
           </span>
         </div>
@@ -517,7 +517,7 @@ function LocalAiAccess() {
           Lets an AI assistant on this computer, such as Claude Code or Claude Desktop, read three summaries: the trial balance, a
           profit and loss summary, and overdue receivables aging. It cannot post, void or change anything. The server answers only on
           this computer (127.0.0.1), refuses requests from web pages, and requires the access token below. Your books never leave this
-          computer through LocalBooks, but the assistant you connect may send what it reads to its AI provider.
+          computer through Tillhouse, but the assistant you connect may send what it reads to its AI provider.
         </p>
       </Group>
       {status.error && <Notice kind="error" text={status.error.replace(/^[A-Z_]+: /, '')} />}

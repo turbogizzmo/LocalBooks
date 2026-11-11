@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 64 64">
+  <!-- Tillhouse "Keystone": a capital T under a roof line. Source for every icon in this folder
+       (npx tauri icon src-tauri/icons/icon.svg) and for src/components/BrandMark.jsx. -->
+  <rect width="64" height="64" rx="14" fill="#0b5d57"/>
+  <path d="M14 24 32 11.5 50 24" fill="none" stroke="#e8b44a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="15" y="29" width="34" height="7.5" rx="2" fill="#fff"/>
+  <rect x="28" y="29" width="8" height="24" rx="2" fill="#fff"/>
+</svg>

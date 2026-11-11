@@ -1,4 +1,4 @@
-// Windows inside LocalBooks and the saved desktop: what each LocalBooks window has open, Cascade and Tile, Desktop View preferences.
+// Windows inside Tillhouse and the saved desktop: what each Tillhouse window has open, Cascade and Tile, Desktop View preferences.
 import { invoke } from '@tauri-apps/api/core';
 
 export default {

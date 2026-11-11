@@ -551,7 +551,7 @@ async fn bringing_in_the_lists_brings_the_classes() {
     let lists = import_lists(&pool, batch).await.unwrap();
     assert_eq!(lists.classes, Some(ClassesResult { added: 4, matched: 0, tracking_turned_on: true }));
     let l = batch_summary(&pool, batch).await.unwrap().lists;
-    assert_eq!((l.classes, l.classes_done), (4, 4), "the panel counts them as in LocalBooks");
+    assert_eq!((l.classes, l.classes_done), (4, 4), "the panel counts them as in Tillhouse");
     assert!(!class_active(&pool, "Old Jobs").await);
 
     crate::preferences::set(&pool, "class_tracking", "false").await.unwrap();

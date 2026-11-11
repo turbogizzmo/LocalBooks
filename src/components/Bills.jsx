@@ -1130,7 +1130,7 @@ export default function Bills({ accounts, intent }) {
       )}
       <MoneyBar
         items={[
-          { label: 'Open bills', icon: '○', color: '#0077c5', cents: sum(open, 'balanceCents'), count: open.length },
+          { label: 'Open bills', icon: '○', color: '#22609e', cents: sum(open, 'balanceCents'), count: open.length },
           { label: 'Overdue', icon: '⚠', color: '#d03b3b', cents: sum(overdue, 'balanceCents'), count: overdue.length },
           { label: 'Paid last 30 days', icon: '✓', color: '#0ca30c', cents: sum(paidRecent, 'amountPaidCents'), count: paidRecent.length },
         ]}

@@ -18,8 +18,8 @@ check, expense, purchase order or vendor credit, type the name. If nobody matche
 **＋ Add "…" as a new customer** (or vendor), added straight away, and **Add with details…**, which
 adds the name and opens its record for the address, terms and (for vendors) 1099 status.
 
-LocalBooks never adds a name you didn't ask for, so a typo can't turn into a second customer. If you
-leave the name box, or save the form, with a name that isn't on the list, LocalBooks stops and asks
+Tillhouse never adds a name you didn't ask for, so a typo can't turn into a second customer. If you
+leave the name box, or save the form, with a name that isn't on the list, Tillhouse stops and asks
 "*name* isn't on your customer list." (or vendor list):
 
 - **Quick add** adds the name as you typed it, and the save goes on.
@@ -68,7 +68,7 @@ which keeps its history. A delete is recorded in the audit trail.
 
 To add a name that shares most of another's details (a second location, a sister company), open
 the row menu (▾) on its line in the Customers or Vendors list and choose **Duplicate…**. Type a name for the
-copy, which starts as "… (copy)", and click **OK**. LocalBooks adds the copy and opens it so you can
+copy, which starts as "… (copy)", and click **OK**. Tillhouse adds the copy and opens it so you can
 change what differs. The copy has the original's contact details, addresses, terms, types, sales
 rep, price level, tax settings, credit limit and custom fields, and no transactions. It leaves out
 what belongs to one name only: the account and resale numbers, and a vendor's tax ID. A copy of a
@@ -105,7 +105,7 @@ estimates, sales receipts and statements, with the date, who it went to and the 
 
 Invoices, sales receipts, estimates, credit memos, bills, checks, expenses, vendor credits and
 purchase orders show the same panel beside the form once you choose a customer or vendor on it. Click **Hide info** (or **×** on the panel) to hide it, and **Show info**
-(or the slim **Info** strip beside a form) to bring it back; LocalBooks remembers the choice for
+(or the slim **Info** strip beside a form) to bring it back; Tillhouse remembers the choice for
 each list and for forms.
 
 ### See a customer's or vendor's transactions
@@ -163,7 +163,7 @@ can rename the five statuses in **Preferences › Jobs & Estimates**, for exampl
 
 When the same customer, vendor or item was entered twice (*Acme Co* and *ACME Company*), merge them:
 open the one you don't want with **Edit…**, change its name to the other's, and click **Save**.
-LocalBooks asks whether to merge it into the other one; click **Merge into …**.
+Tillhouse asks whether to merge it into the other one; click **Merge into …**.
 
 - Everything that named it now names the one you kept: invoices, sales receipts, estimates,
   credit memos, payments, bills, checks, expenses and their lines, purchase orders, time and

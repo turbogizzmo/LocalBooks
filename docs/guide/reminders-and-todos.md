@@ -3,7 +3,7 @@
 **Reminders** sum up what needs attention today: overdue invoices, bills coming due, to-dos,
 recurring transactions to enter, forms waiting to be emailed, federal tax dates and a backup that
 is overdue. The **To Do list** holds your own tasks, with due dates, about a customer, vendor or
-employee. Both stay inside LocalBooks: nothing is sent anywhere, and there are no system
+employee. Both stay inside Tillhouse: nothing is sent anywhere, and there are no system
 notifications.
 
 ## See your reminders

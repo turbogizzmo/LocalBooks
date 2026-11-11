@@ -4,8 +4,8 @@ import { monthLabel } from '../lib/dates.js';
 
 // Validated pair (light surface): ΔE 26.7 under protanopia, contrast >= 3:1.
 const SERIES = [
-  { key: 'assetsCents', label: 'Assets', color: '#2ca01c' },
-  { key: 'liabilitiesCents', label: 'Liabilities', color: '#0077c5' },
+  { key: 'assetsCents', label: 'Assets', color: '#0b5d57' },
+  { key: 'liabilitiesCents', label: 'Liabilities', color: '#22609e' },
 ];
 
 const MIN_HEIGHT = 180;
@@ -77,7 +77,7 @@ function Chart({ series, width, height }) {
       <svg width={width} height={chartHeight} role="img" aria-label="Month-end assets and liabilities, last 12 months">
         {ticks.map((t) => (
           <g key={t}>
-            <line x1={MARGIN.left} x2={width - MARGIN.right} y1={y(t)} y2={y(t)} stroke={t === 0 ? '#babec5' : GRID} strokeWidth="1" shapeRendering="crispEdges" />
+            <line x1={MARGIN.left} x2={width - MARGIN.right} y1={y(t)} y2={y(t)} stroke={t === 0 ? '#b9c2bf' : GRID} strokeWidth="1" shapeRendering="crispEdges" />
             <text x={MARGIN.left - 6} y={y(t)} dy="0.32em" textAnchor="end" className="fill-qb-ink-muted text-2xs">
               {formatCompactCents(t)}
             </text>
@@ -89,7 +89,7 @@ function Chart({ series, width, height }) {
           const x0 = gx + (groupW - innerW) / 2;
           return (
             <g key={point.month}>
-              {hover === i && <rect x={gx} y={MARGIN.top} width={groupW} height={plotH} fill="#f4f5f8" />}
+              {hover === i && <rect x={gx} y={MARGIN.top} width={groupW} height={plotH} fill="#f5f6f4" />}
               {SERIES.map((s, j) => {
                 const d = barPath(x0 + j * (barW + BAR_GAP), barW, y0, y(point[s.key]));
                 return d && <path key={s.key} d={d} fill={s.color} />;

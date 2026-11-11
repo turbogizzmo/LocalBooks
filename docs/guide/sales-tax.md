@@ -1,6 +1,6 @@
 # Sales tax
 
-LocalBooks works out sales tax on your sales forms, builds it up in a liability account, and tells
+Tillhouse works out sales tax on your sales forms, builds it up in a liability account, and tells
 you what to file and pay each period. You set it up once in **Sales › Sales Tax**: turn it on, add
 the rates you charge and the agency each is paid to, and mark which products and customers are
 taxed.
@@ -28,10 +28,10 @@ tax on for you and adds a **Sales Tax Payable** account. You still add your rate
    - **Name**: what you'll see on forms and reports, such as "State" or "Harbor County".
    - **Rate (%)**: the percentage, such as `8.25`. Up to four decimal places; 0% to 100%.
    - **Agency (who you pay)**: the tax office, such as "State Department of Revenue". Type a name;
-     LocalBooks uses the vendor of that name, or adds one if there isn't one. Leave it blank if you
+     Tillhouse uses the vendor of that name, or adds one if there isn't one. Leave it blank if you
      don't need the return split by agency.
    - **Liability account**: where the tax builds up until you pay it. Only Other Current Liability
-     accounts are offered. Leave it blank for **Sales Tax Payable**, which LocalBooks adds if the
+     accounts are offered. Leave it blank for **Sales Tax Payable**, which Tillhouse adds if the
      company has none.
 3. Click **Add rate**.
 
@@ -72,7 +72,7 @@ gets its own share and you file with each. Set it up like this:
 You choose a combined rate on sales forms like any other rate. In the list its **Agency** column
 shows the rates it's made of, such as "Combined: State + Harbor County + Harbor City".
 
-**What it posts.** LocalBooks works out the tax at the combined percentage on the form's taxable
+**What it posts.** Tillhouse works out the tax at the combined percentage on the form's taxable
 amount. It then splits that tax into one line per rate: each rate gets its own percentage of the
 taxable amount, and any cent left over from rounding goes to the rate with the largest share. Each
 line is credited to its own rate's liability account, with a memo naming the rate (for example
@@ -85,7 +85,7 @@ its rates is inactive.
 
 ## Mark products and customers taxable or not
 
-LocalBooks has no separate list of tax codes. Whether tax is charged depends on two things: each
+Tillhouse has no separate list of tax codes. Whether tax is charged depends on two things: each
 line's **Tax** box, and the rate in the form's **Sales tax** box.
 
 **Products and services.** Open a product in **Sales › Products & Services**. **Taxable: charge
@@ -216,7 +216,7 @@ greyed, and no longer counts as paid (see [Undo a transaction
 
 ## Adjust what you owe
 
-When what you owe the agency differs from what LocalBooks built up (a discount for filing on time,
+When what you owe the agency differs from what Tillhouse built up (a discount for filing on time,
 a penalty or interest, or a rounding difference), record a sales tax adjustment:
 
 1. On **Sales › Sales Tax**, click **Adjust…** next to **Pay sales tax**.

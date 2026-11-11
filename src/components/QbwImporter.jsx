@@ -72,7 +72,7 @@ function ProgressTrack({ progress, seen }) {
           </li>
         ))}
       </ol>
-      <p className="text-2xs text-qb-ink-faint">Large files can take a few minutes. Keep LocalBooks open.</p>
+      <p className="text-2xs text-qb-ink-faint">Large files can take a few minutes. Keep Tillhouse open.</p>
     </div>
   );
 }
@@ -280,7 +280,7 @@ function MappingGrid({ summary, accounts, onMap, busy }) {
           <th className="qb-grid-head">Found in the .qbw file</th>
           <th className="qb-grid-head text-right">Lines</th>
           <th className="qb-grid-head text-right">Total</th>
-          <th className="qb-grid-head">Post to this LocalBooks income account</th>
+          <th className="qb-grid-head">Post to this Tillhouse income account</th>
         </tr>
       </thead>
       <tbody>
@@ -313,7 +313,7 @@ function MappingGrid({ summary, accounts, onMap, busy }) {
 /** Source accounts the import brings in: those with lines, or every one from a file of lists only. */
 const usedAccounts = (summary) => (summary.listsOnly ? summary.accounts : summary.accounts.filter((a) => a.lineCount > 0));
 
-/** Source accounts of a full-ledger import, each mapped to a LocalBooks account. */
+/** Source accounts of a full-ledger import, each mapped to a Tillhouse account. */
 function LedgerAccountGrid({ summary, accounts, onMap, busy }) {
   const used = usedAccounts(summary);
   return (
@@ -333,7 +333,7 @@ function LedgerAccountGrid({ summary, accounts, onMap, busy }) {
           <th className="qb-grid-head text-right">Lines</th>
           <th className="qb-grid-head text-right">Read</th>
           <th className="qb-grid-head text-right">File’s balance</th>
-          <th className="qb-grid-head">Post to this LocalBooks account</th>
+          <th className="qb-grid-head">Post to this Tillhouse account</th>
         </tr>
       </thead>
       <tbody>
@@ -483,7 +483,7 @@ function classesNote(c) {
   );
 }
 
-/** Customers, vendors, items and classes from the file, brought in as LocalBooks records. */
+/** Customers, vendors, items and classes from the file, brought in as Tillhouse records. */
 function ListsPanel({ summary, busy, accountsReady, run }) {
   const l = summary.lists;
   const classes = l?.classes ?? 0;
@@ -497,7 +497,7 @@ function ListsPanel({ summary, busy, accountsReady, run }) {
       <span className="text-qb-ink-muted">
         {l.customers.toLocaleString()} customers · {l.vendors.toLocaleString()} vendors · {l.items.toLocaleString()} items
         {classes > 0 && ` · ${countOf(classes, ['class', 'classes'])}`} in the file
-        {done > 0 && ` · ${done.toLocaleString()} of ${all.toLocaleString()} in LocalBooks`}
+        {done > 0 && ` · ${done.toLocaleString()} of ${all.toLocaleString()} in Tillhouse`}
       </span>
       {done < all && !summary.listsOnly && (
         <button
@@ -515,7 +515,7 @@ function ListsPanel({ summary, busy, accountsReady, run }) {
               (r) =>
                 `Customers: ${r.customersCreated} added, ${r.customersMatched} already there. Vendors: ${r.vendorsCreated} added, ${r.vendorsMatched} already there. ` +
                 `Items: ${r.itemsCreated} added, ${r.itemsMatched} already there` +
-                (r.itemsOnFallbackAccount ? ` (${r.itemsOnFallbackAccount} post to your first income account: LocalBooks items need an income account; their description names the original account)` : '') +
+                (r.itemsOnFallbackAccount ? ` (${r.itemsOnFallbackAccount} post to your first income account: Tillhouse items need an income account; their description names the original account)` : '') +
                 '.' +
                 groupsNote(r) +
                 classesNote(r.classes),
@@ -525,7 +525,7 @@ function ListsPanel({ summary, busy, accountsReady, run }) {
           Bring in {what}
         </button>
       )}
-      {done === all && <span className="ml-auto text-qb-green-active">✓ All in LocalBooks</span>}
+      {done === all && <span className="ml-auto text-qb-green-active">✓ All in Tillhouse</span>}
     </div>
   );
 }
@@ -590,7 +590,7 @@ function BalanceDifferences({ items, posted }) {
         </strong>
         {posted
           ? '. Your books carry the imported balance: compare these accounts with the original program’s balance sheet and enter what is missing by hand.'
-          : '. A line that could not be read, or a kind of transaction LocalBooks does not read yet (such as inventory cost or payroll), leaves an account short. Check these accounts against the original program’s balance sheet after posting.'}
+          : '. A line that could not be read, or a kind of transaction Tillhouse does not read yet (such as inventory cost or payroll), leaves an account short. Check these accounts against the original program’s balance sheet after posting.'}
       </p>
       <BalanceDifferenceList items={items} />
     </div>
@@ -665,7 +665,7 @@ function FallbackList({ items }) {
           <th className="qb-grid-head">Type</th>
           <th className="qb-grid-head">Number</th>
           <th className="qb-grid-head">Name</th>
-          <th className="qb-grid-head">Why it is not a LocalBooks document</th>
+          <th className="qb-grid-head">Why it is not a Tillhouse document</th>
         </tr>
       </thead>
       <tbody>
@@ -690,7 +690,7 @@ function ModeChoice({ mode, setMode, documents, busy }) {
       'FULL',
       'Full import',
       docs.length
-        ? `${docs.join(', ')} come in as LocalBooks documents, so open invoices and bills, customer and vendor balances, and A/R and A/P aging carry over. Customers, vendors and items are brought in first. Anything that cannot be a document posts as a journal entry and is listed. Undo with Start over.`
+        ? `${docs.join(', ')} come in as Tillhouse documents, so open invoices and bills, customer and vendor balances, and A/R and A/P aging carry over. Customers, vendors and items are brought in first. Anything that cannot be a document posts as a journal entry and is listed. Undo with Start over.`
         : 'No sales documents were found in this file, so a full import posts the same journal entries.',
     ],
     ['JOURNAL', 'Journal import', 'Every transaction becomes one journal entry. Account balances are the same, but invoices and payments are not recreated. Undo with Reverse or Start over.'],
@@ -760,7 +760,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
           (a.reactivated ? `, ${a.reactivated} put back` : '') +
           `. Customers: ${li.customersCreated} added, ${li.customersMatched} already there. Vendors: ${li.vendorsCreated} added, ${li.vendorsMatched} already there. ` +
           `Items: ${li.itemsCreated} added, ${li.itemsMatched} already there` +
-          (li.itemsOnFallbackAccount ? ` (${li.itemsOnFallbackAccount} post to your first income account: LocalBooks items need an income account; their description names the original account)` : '') +
+          (li.itemsOnFallbackAccount ? ` (${li.itemsOnFallbackAccount} post to your first income account: Tillhouse items need an income account; their description names the original account)` : '') +
           '.' +
           groupsNote(li) +
           classesNote(r.classes)
@@ -772,7 +772,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
   const post = async () => {
     const question =
       mode === 'FULL'
-        ? `Bring ${summary.postableCount.toLocaleString()} transactions into your books as a full import?\n\nCustomers, vendors and items are added first, then invoices, credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges, transfers, estimates and purchase orders as LocalBooks documents, and everything else as journal entries. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Start over".`
+        ? `Bring ${summary.postableCount.toLocaleString()} transactions into your books as a full import?\n\nCustomers, vendors and items are added first, then invoices, credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges, transfers, estimates and purchase orders as Tillhouse documents, and everything else as journal entries. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Start over".`
         : `Post ${summary.postableCount.toLocaleString()} journal entries to your books?\n\nEach is one transaction from the file, balanced as it was there. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Reverse posted entries".`;
     if (!(await askConfirm(question, { confirmLabel: mode === 'FULL' ? 'Import' : 'Post' }))) return;
     run(
@@ -838,7 +838,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
             ? `Read from ${summary.decodedPages.toLocaleString()} of ${summary.rowPages.toLocaleString()} data pages`
             : `Read from the ${FORMAT_NAMES[summary.sourceFormat]}`}
           {summary.unreadableLines > 0 && `; ${summary.unreadableLines.toLocaleString()} lines could not be read in full (listed below)`}
-          {summary.sourceFormat === 'QIF' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} investment transactions were skipped (LocalBooks does not track securities)`}
+          {summary.sourceFormat === 'QIF' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} investment transactions were skipped (Tillhouse does not track securities)`}
           {summary.sourceFormat === 'GNUCASH' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} transactions were not imported (investments, amounts that are not whole cents, or another currency with no home-currency amount; their lines are listed below with the reason)`}
           {summary.sourceFormat === 'QBMAC' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} transactions were not imported (amounts that are not whole cents, or no date; their lines are listed below with the reason)`}
           {(summary.fractionalAmounts ?? []).length > 0 && `; ${summary.fractionalAmounts.length.toLocaleString()} amount${summary.fractionalAmounts.length === 1 ? ' was' : 's were'} not whole cents and left out (listed below)`}.
@@ -849,7 +849,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
               <strong>
                 {summary.fractionalAmounts.length} amount{summary.fractionalAmounts.length === 1 ? '' : 's'} not in whole cents
               </strong>
-              {': LocalBooks keeps money in whole cents, so a stored balance like this counts as zero and a line or applied payment like this is left out. Check these in the original books.'}
+              {': Tillhouse keeps money in whole cents, so a stored balance like this counts as zero and a line or applied payment like this is left out. Check these in the original books.'}
             </summary>
             <ul className="max-h-[160px] overflow-auto px-6 pb-2 text-xs">
               {summary.fractionalAmounts.map((text, i) => (
@@ -894,7 +894,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
         <StockDifferences stock={summary.stock} posted={summary.liveEntryCount > 0 && summary.mode === 'FULL'} />
         <div className="flex items-center gap-2 px-3 py-1.5">
           <span className="text-xs text-qb-ink-muted">
-            {unmapped === 0 ? '✓ Every account has a LocalBooks account.' : `Choose an account for ${unmapped} account${unmapped === 1 ? '' : 's'}, or:`}
+            {unmapped === 0 ? '✓ Every account has a Tillhouse account.' : `Choose an account for ${unmapped} account${unmapped === 1 ? '' : 's'}, or:`}
           </span>
           {unmapped > 0 && (
             <button
@@ -970,7 +970,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
           {fallbacks.length > 0 && (
             <details className="rounded border border-qb-border">
               <summary className="cursor-pointer px-3 py-1.5 text-xs">
-                <strong>{countOf(fallbacks.length, ['document', 'documents'])} not brought in as LocalBooks documents.</strong> Those that post are in your
+                <strong>{countOf(fallbacks.length, ['document', 'documents'])} not brought in as Tillhouse documents.</strong> Those that post are in your
                 books as journal entries; estimates and purchase orders post nothing. The reasons are below.
               </summary>
               <FallbackList items={fallbacks} />
@@ -1312,7 +1312,7 @@ export default function QbwImporter({ accounts }) {
           Reads desktop company files (.qbw) and backups (.qbb), QuickBooks for Mac 2012 and earlier company files (.qb2012), QuickBooks .iif exports, Quicken .qif exports, GnuCash books (.gnucash) and QuickBooks report exports (a Journal or
           General Ledger as .csv or .xlsx, from QuickBooks Desktop for Windows or Mac, or QuickBooks Online). Newer company files, GnuCash books and the exports
           come in as the <strong>full ledger</strong>: the chart of accounts and every transaction, each posted as a balanced entry or, in a full import,
-          as LocalBooks invoices, bills, checks, deposits and transfers. Older company files the newer reader does not cover bring in{' '}
+          as Tillhouse invoices, bills, checks, deposits and transfers. Older company files the newer reader does not cover bring in{' '}
           <strong>invoice line amounts only</strong>, posted against an offset account you choose. Compare the totals with your original program’s reports before posting; anything posted can be reversed
           below.
         </p>

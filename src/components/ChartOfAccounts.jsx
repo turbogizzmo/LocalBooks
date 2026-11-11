@@ -103,7 +103,7 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
     <Dialog title={editing ? `Edit ${account.fullName}` : template ? `New account from ${template.fullName}` : 'New account'} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-2 px-3 py-2 text-xs">
         {account?.isSystem && (
-          <p className="text-qb-ink-muted">LocalBooks posts to this account automatically, so its type stays fixed and it cannot be a subaccount. You can rename it or change its number.</p>
+          <p className="text-qb-ink-muted">Tillhouse posts to this account automatically, so its type stays fixed and it cannot be a subaccount. You can rename it or change its number.</p>
         )}
         <div className="grid grid-cols-2 gap-2">
           <label className="flex flex-col gap-0.5">
@@ -379,7 +379,7 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
                             { label: 'Edit…', onSelect: () => setDialog({ account: a }) },
                             { label: 'Duplicate…', onSelect: () => setDialog({ account: null, template: a }) },
                             a.isActive
-                              ? { label: 'Make inactive', disabled: a.isSystem, hint: a.isSystem ? 'LocalBooks posts to this account automatically' : undefined, onSelect: () => setActive(a, false) }
+                              ? { label: 'Make inactive', disabled: a.isSystem, hint: a.isSystem ? 'Tillhouse posts to this account automatically' : undefined, onSelect: () => setActive(a, false) }
                               : { label: 'Make active', onSelect: () => setActive(a, true) },
                           ]}
                         />
