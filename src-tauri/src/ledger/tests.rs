@@ -178,10 +178,10 @@ async fn voiding_reverses_unwinds_documents_and_audits() {
             customer_name: "Acme".into(),
             issue_date: date(),
             due_date: date(),
-            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 50_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: Cents(50_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -189,7 +189,7 @@ async fn voiding_reverses_unwinds_documents_and_audits() {
     .unwrap();
     let paid = record_payment(
         &fx.pool,
-        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: fx.checking, payment_date: date(), amount_cents: 50_000, payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
+        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: fx.checking, payment_date: date(), amount_cents: Cents(50_000), payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .unwrap();

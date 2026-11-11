@@ -111,7 +111,7 @@ async fn sales_tax_is_owed_when_invoiced_or_when_paid() {
     .unwrap();
     crate::sales::post_sales_receipt(&pool, receipt).await.unwrap();
     // August 10: Acme pays $650, half the invoice.
-    let pay = |date: NaiveDate, cents: i64| crate::invoices::PaymentInput { discount_cents: 0, invoice_id: inv.id, deposit_account_id: checking, payment_date: date, amount_cents: cents, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None, payment_method_id: None };
+    let pay = |date: NaiveDate, cents: i64| crate::invoices::PaymentInput { discount_cents: Cents::ZERO, invoice_id: inv.id, deposit_account_id: checking, payment_date: date, amount_cents: Cents(cents), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None, payment_method_id: None };
     crate::invoices::record_payment(&pool, pay(NaiveDate::from_ymd_opt(2026, 8, 10).unwrap(), 65_000)).await.unwrap();
 
     let (july, august) = ((d(1), d(31)), (NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 8, 31).unwrap()));

@@ -2,6 +2,7 @@ use super::*;
 use crate::custom_fields::{create_custom_field, CustomFieldInput, FieldList};
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, invoice_detail, InvoiceInput, InvoiceLineInput};
+use crate::money::Cents;
 
 fn rep(initials: &str, name: Option<&str>) -> SalesRepInput {
     SalesRepInput { initials: initials.into(), name: name.map(Into::into) }
@@ -23,7 +24,7 @@ fn invoice(customer: &str, account: i64, cents: i64, details: SalesDetails) -> I
         lines: vec![InvoiceLineInput {
             description: "Work".into(),
             quantity_e4: 10_000,
-            rate_cents: cents,
+            rate_cents: Cents(cents),
             income_account_id: account,
             product_service_id: None,
             class_id: None,
@@ -31,7 +32,7 @@ fn invoice(customer: &str, account: i64, cents: i64, details: SalesDetails) -> I
         }],
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details,
     }
 }

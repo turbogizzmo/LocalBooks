@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -29,7 +30,7 @@ async fn discounts_statements_and_1099s() {
     let discounts: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Discounts Given'").fetch_one(&pool).await.unwrap();
     assert_eq!(balance(&pool, discounts).await, 3_000);
 
-    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: inv.id, deposit_account_id: checking, payment_date: d(3, 20), amount_cents: 10_000, payment_method: "CHECK".into(), reference: Some("1001".into()), exchange_rate_e6: None }).await.unwrap();
+    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: inv.id, deposit_account_id: checking, payment_date: d(3, 20), amount_cents: Cents(10_000), payment_method: "CHECK".into(), reference: Some("1001".into()), exchange_rate_e6: None }).await.unwrap();
     let acme: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
     let statement = customer_statement(&pool, acme, d(3, 1), d(4, 30)).await.unwrap();
     assert_eq!(statement.rows.len(), 2, "the job's invoice and payment appear on the customer's statement");
@@ -62,7 +63,7 @@ async fn a_voided_payment_comes_off_the_customers_statement() {
     let invoice: InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Birch", "issueDate": "2026-03-01", "dueDate": "2026-03-31",
         "lines": [{ "description": "Pruning", "quantityE4": 10_000, "rateCents": 50_000, "incomeAccountId": services, "isTaxable": false }] })).unwrap();
     let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
-    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: inv.id, deposit_account_id: checking, payment_date: d(3, 20), amount_cents: 20_000, payment_method: "CHECK".into(), reference: Some("77".into()), exchange_rate_e6: None }).await.unwrap();
+    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: inv.id, deposit_account_id: checking, payment_date: d(3, 20), amount_cents: Cents(20_000), payment_method: "CHECK".into(), reference: Some("77".into()), exchange_rate_e6: None }).await.unwrap();
     let birch: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Birch'").fetch_one(&pool).await.unwrap();
     assert_eq!(customer_statement(&pool, birch, d(3, 1), d(3, 31)).await.unwrap().closing_balance_cents, 30_000);
 

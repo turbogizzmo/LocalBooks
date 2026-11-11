@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use chrono::NaiveDate;
+use crate::money::Cents;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -28,7 +29,7 @@ async fn edits_void_and_repost_and_respect_payments() {
     assert_eq!(edits, 1);
 
     // Once paid, the edit can't go below what's paid.
-    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: edited, deposit_account_id: checking, payment_date: NaiveDate::from_ymd_opt(2026, 5, 9).unwrap(), amount_cents: 100, payment_method: "CASH".into(), reference: None, exchange_rate_e6: None }).await.unwrap();
+    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: edited, deposit_account_id: checking, payment_date: NaiveDate::from_ymd_opt(2026, 5, 9).unwrap(), amount_cents: Cents(100), payment_method: "CASH".into(), reference: None, exchange_rate_e6: None }).await.unwrap();
     let err = replace_invoice(&pool, edited, invoice(1)).await.unwrap_err();
     assert!(err.starts_with("EDIT_BELOW_PAID"), "{err}");
     assert_eq!(balance(&pool, ar).await, 12_400, "a refused edit changes nothing");
@@ -105,7 +106,7 @@ async fn editing_a_part_paid_invoice_keeps_its_payment_and_credit() {
         .unwrap()
     };
     let original = crate::invoices::create_and_post_invoice(&pool, invoice("Acme", 100_000)).await.unwrap().id;
-    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: original, deposit_account_id: checking, payment_date: date(5), amount_cents: 30_000, payment_method: "CHECK".into(), reference: Some("1001".into()), exchange_rate_e6: None }).await.unwrap();
+    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: original, deposit_account_id: checking, payment_date: date(5), amount_cents: Cents(30_000), payment_method: "CHECK".into(), reference: Some("1001".into()), exchange_rate_e6: None }).await.unwrap();
     let memo: crate::credits::CreditMemoInput = serde_json::from_value(serde_json::json!({ "customerName": "Acme", "creditDate": "2026-06-06", "memo": null,
         "lines": [{ "productServiceId": null, "description": "Goodwill", "quantityE4": 10_000, "rateCents": 5_000, "incomeAccountId": services }] })).unwrap();
     let memo = crate::credits::create_credit_memo(&pool, memo).await.unwrap().id;
@@ -164,7 +165,7 @@ async fn a_deposited_payment_stays_with_the_edited_invoice() {
         .unwrap()
     };
     let original = crate::invoices::create_and_post_invoice(&pool, invoice(40_000)).await.unwrap().id;
-    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: original, deposit_account_id: undeposited, payment_date: date(5), amount_cents: 10_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None }).await.unwrap();
+    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: original, deposit_account_id: undeposited, payment_date: date(5), amount_cents: Cents(10_000), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None }).await.unwrap();
     let payment_id: i64 = sqlx::query_scalar("SELECT id FROM invoice_payments WHERE invoice_id = ?1").bind(original).fetch_one(&pool).await.unwrap();
     let deposit: crate::banking::DepositInput = serde_json::from_value(serde_json::json!({ "bankAccountId": checking, "depositDate": "2026-06-07", "memo": null,
         "items": [{ "kind": "PAYMENT", "id": payment_id }], "otherLines": [] })).unwrap();
@@ -220,7 +221,7 @@ async fn a_bounced_payment_follows_the_edited_invoice() {
         .unwrap()
     };
     let original = crate::invoices::create_and_post_invoice(&pool, invoice(50_000)).await.unwrap().id;
-    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: original, deposit_account_id: checking, payment_date: date(5), amount_cents: 20_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None }).await.unwrap();
+    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: original, deposit_account_id: checking, payment_date: date(5), amount_cents: Cents(20_000), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None }).await.unwrap();
     let payment: i64 = sqlx::query_scalar("SELECT id FROM invoice_payments WHERE invoice_id = ?1").bind(original).fetch_one(&pool).await.unwrap();
     let bounce = crate::bounced_checks::record(&pool, crate::bounced_checks::BounceInput { kind: "PAYMENT".into(), id: payment, bounce_date: date(10), bank_fee_cents: 0, bank_fee_account_id: None, customer_fee_cents: 0, customer_fee_account_id: None, memo: None }).await.unwrap();
 

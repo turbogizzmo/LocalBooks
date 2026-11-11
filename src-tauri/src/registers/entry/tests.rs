@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 use crate::registers::account_register;
 use crate::registers::history::transaction_history;
 
@@ -183,7 +184,7 @@ async fn transaction_history_links_an_invoice_its_payment_and_the_deposit() {
     .unwrap();
     let invoice = crate::invoices::create_and_post_invoice(&pool, input).await.unwrap();
     let pay = |cents| crate::invoices::PaymentInput {
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         payment_method_id: None,
         invoice_id: invoice.id,
         deposit_account_id: undeposited,
@@ -193,7 +194,7 @@ async fn transaction_history_links_an_invoice_its_payment_and_the_deposit() {
         reference: None,
         exchange_rate_e6: None,
     };
-    crate::invoices::record_payment(&pool, pay(20_000)).await.unwrap();
+    crate::invoices::record_payment(&pool, pay(Cents(20_000))).await.unwrap();
     let waiting = crate::banking::list_undeposited(&pool).await.unwrap();
     let payment_id = waiting[0].id;
     crate::banking::post_bank_deposit(

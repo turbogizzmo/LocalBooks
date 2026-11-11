@@ -18,6 +18,7 @@ use crate::ledger::{
     convert_lines, db_err, format_cents, mul_div_round, post_entry_in_tx, quantity_amount, rollback, to_home_cents,
     EntrySource, ForeignCurrency, JournalEntry, JournalLine, MAX_LINE_CENTS, QUANTITY_SCALE,
 };
+use crate::money::Cents;
 
 /// Largest line quantity (1,000,000,000 units), scaled by 10,000.
 pub const MAX_QUANTITY_E4: i64 = 1_000_000_000 * QUANTITY_SCALE;
@@ -28,7 +29,7 @@ pub struct InvoiceLineInput {
     pub description: String,
     /// Quantity scaled by 10,000 (1.5 → 15_000).
     pub quantity_e4: i64,
-    pub rate_cents: i64,
+    pub rate_cents: Cents,
     pub income_account_id: i64,
     /// The product or service sold; a tracked inventory product also records its cost of goods sold.
     #[serde(default)]
@@ -57,7 +58,7 @@ pub struct InvoiceInput {
     pub tax_rate_id: Option<i64>,
     /// Taken off the subtotal before tax.
     #[serde(default)]
-    pub discount_cents: i64,
+    pub discount_cents: Cents,
     /// Rep, ship date and method, and printed customer fields.
     #[serde(flatten)]
     pub details: crate::sales_lists::SalesDetails,
@@ -71,7 +72,7 @@ pub struct InvoiceInput {
 pub struct PaidNow {
     pub deposit_account_id: i64,
     /// In the invoice's currency; at most its total.
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub payment_method: String,
     #[serde(default)]
     pub payment_method_id: Option<i64>,
@@ -89,7 +90,7 @@ impl PaidNow {
             payment_method_id: self.payment_method_id,
             reference: self.reference.clone(),
             exchange_rate_e6: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
         }
     }
 }
@@ -171,7 +172,7 @@ pub struct PaymentInput {
     pub deposit_account_id: i64,
     pub payment_date: NaiveDate,
     /// In the invoice's currency.
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     /// The kind of payment; taken from `payment_method_id` when that is given.
     pub payment_method: String,
     /// The Payment Method list entry ("Visa").
@@ -184,7 +185,7 @@ pub struct PaymentInput {
     /// Early-payment discount taken with this payment, on top of `amount_cents` (the money
     /// received); at most what the invoice's terms offer on the payment date.
     #[serde(default)]
-    pub discount_cents: i64,
+    pub discount_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -265,7 +266,7 @@ pub fn validate_invoice(input: &InvoiceInput) -> Result<i64, String> {
     }
     let mut total: i64 = 0;
     for (idx, line) in input.lines.iter().enumerate() {
-        let amount = validate_line(line.quantity_e4, line.rate_cents, idx + 1, "INV")?;
+        let amount = validate_line(line.quantity_e4, line.rate_cents.get(), idx + 1, "INV")?;
         total = total
             .checked_add(amount)
             .filter(|t| *t <= MAX_LINE_CENTS)
@@ -343,7 +344,7 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
     let amounts = input
         .lines
         .iter()
-        .map(|l| Ok(crate::item_types::ItemAmount { amount_cents: line_amount(l.quantity_e4, l.rate_cents)?, is_taxable: l.is_taxable }))
+        .map(|l| Ok(crate::item_types::ItemAmount { amount_cents: line_amount(l.quantity_e4, l.rate_cents.get())?, is_taxable: l.is_taxable }))
         .collect::<Result<Vec<_>, String>>()?;
     let form = &input.details.form_lines;
     let layout = crate::item_types::lay_out(&amounts, form, "INV")?;
@@ -351,18 +352,23 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
     let charges = crate::item_types::charge_rows(form, &layout);
     let numbers = layout.item_numbers();
     let (subtotal, taxable) = (layout.lines_cents, layout.taxable_cents);
-    let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "INV").await?;
-    let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, subtotal);
+    let discount = crate::sales_tax::document_discount(tx, input.discount_cents.get(), subtotal, input.lines.iter().map(|l| l.class_id), "INV").await?;
+    let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents.get(), subtotal);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "INV").await?;
     let tax_cents = tax.as_ref().map_or(0, |t| t.cents);
-    let total = (subtotal - input.discount_cents).checked_add(tax_cents).filter(|t| *t > 0 && *t <= MAX_LINE_CENTS).ok_or("INV_AMOUNT_TOO_LARGE: the invoice total must be above zero and in range")?;
+    let total = Cents(subtotal)
+        .checked_sub(input.discount_cents)
+        .and_then(|t| t.checked_add(Cents(tax_cents)))
+        .map(Cents::get)
+        .filter(|t| *t > 0 && *t <= MAX_LINE_CENTS)
+        .ok_or("INV_AMOUNT_TOO_LARGE: the invoice total must be above zero and in range")?;
     let customer = input.customer_name.trim();
     let customer_id = crate::sales::find_or_create_named(tx, crate::sales::Party::Customer, customer).await?;
 
     // Credits aggregated per income account and class, in first-appearance order (in the invoice currency).
     let mut credits: Vec<((i64, Option<i64>), i64)> = Vec::new();
     for line in &input.lines {
-        let amount = line_amount(line.quantity_e4, line.rate_cents)?;
+        let amount = line_amount(line.quantity_e4, line.rate_cents.get())?;
         let key = (line.income_account_id, line.class_id);
         match credits.iter_mut().find(|(k, _)| *k == key) {
             Some((_, sum)) => *sum += amount,
@@ -439,7 +445,7 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
             crate::classes::check_usable(tx, class, &format!("INV: line {n}")).await?;
         }
 
-        let amount = line_amount(line.quantity_e4, line.rate_cents)?;
+        let amount = line_amount(line.quantity_e4, line.rate_cents.get())?;
         sqlx::query(
             "INSERT INTO invoice_items
                 (invoice_id, line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id, is_taxable, service_date)
@@ -539,7 +545,7 @@ pub async fn receive_payment(pool: &SqlitePool, input: ReceivePaymentInput) -> R
     if input.unapplied.is_some() && inputs.iter().any(|i| i.exchange_rate_e6.is_some()) {
         return Err("INV_FOREIGN_UNAPPLIED: a foreign-currency payment can't leave an unapplied amount; apply all of it to invoices".into());
     }
-    let discount_account = if inputs.iter().any(|i| i.discount_cents != 0) {
+    let discount_account = if inputs.iter().any(|i| !i.discount_cents.is_zero()) {
         let account = crate::preferences::get(pool, crate::sales_prefs::PAYMENT_DISCOUNT_ACCOUNT)
             .await?
             .parse::<i64>()
@@ -571,7 +577,7 @@ pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &Paym
         return Err(format!("INV_BAD_METHOD: unknown payment method '{}'", input.payment_method));
     }
     let (method_id, method) = crate::profile_lists::resolve_payment_method(tx, input.payment_method_id, Some(&input.payment_method), "INV").await?;
-    if input.amount_cents <= 0 {
+    if !input.amount_cents.is_positive() {
         return Err("INV_BAD_AMOUNT: payment amount must be greater than zero".into());
     }
 
@@ -596,7 +602,8 @@ pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &Paym
     // The discount must be one the invoice's terms still offer on the payment date (on its open
     // balance, once, on or before its last day); it is applied along with the money. A foreign-
     // currency invoice's is in its currency, and leaves A/R at the invoice's booked rate.
-    let discount = input.discount_cents;
+    let amount = input.amount_cents.get();
+    let discount = input.discount_cents.get();
     if discount != 0 {
         if discount < 0 {
             return Err("INV_BAD_DISCOUNT: a discount can't be negative".into());
@@ -609,13 +616,13 @@ pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &Paym
             return Err(format!("INV_BAD_DISCOUNT: the discount on invoice #{number} is at most {}", format_cents(offered)));
         }
     }
-    let applied = input.amount_cents.checked_add(discount).ok_or("INV_BAD_AMOUNT: amount out of range")?;
+    let applied = amount.checked_add(discount).ok_or("INV_BAD_AMOUNT: amount out of range")?;
     let open_balance = total - paid;
     if applied > open_balance {
         let with = if discount > 0 { format!(" with its {} discount", format_cents(discount)) } else { String::new() };
         return Err(format!(
             "INV_OVERPAYMENT: payment of {}{with} exceeds the open balance of {} on invoice #{number}",
-            format_cents(input.amount_cents),
+            format_cents(amount),
             format_cents(open_balance)
         ));
     }
@@ -645,7 +652,7 @@ pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &Paym
             if rate <= 0 {
                 return Err("FX_BAD_RATE: the exchange rate must be greater than zero".into());
             }
-            let home_amount = to_home_cents(input.amount_cents, rate)
+            let home_amount = to_home_cents(amount, rate)
                 .filter(|h| *h > 0)
                 .ok_or_else(|| "FX_ROUNDS_TO_ZERO: the payment converts to 0.00 in the home currency".to_string())?;
             // Voided payments can leave the A/R already relieved a cent or two off the proportional
@@ -698,14 +705,14 @@ pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &Paym
             // and both off A/R, so the customer's statement shows what the payment settled.
             let account = discount_account.ok_or("INV_NO_DISCOUNT_ACCOUNT: choose the account discounts go to in Preferences › Payments")?;
             let memo = format!("{DISCOUNT_LINE_MEMO}{number}");
-            let settled = format!("{} received + {} early-payment discount", format_cents(input.amount_cents), format_cents(discount));
-            lines.push(JournalLine::debit(input.deposit_account_id, input.amount_cents));
+            let settled = format!("{} received + {} early-payment discount", format_cents(amount), format_cents(discount));
+            lines.push(JournalLine::debit(input.deposit_account_id, amount));
             lines.push(JournalLine::debit(account, discount).with_memo(Some(&memo)));
             lines.push(JournalLine::credit(ar_account, applied).with_memo(Some(&settled)));
         }
         None => {
-            lines.push(JournalLine::debit(input.deposit_account_id, input.amount_cents));
-            lines.push(JournalLine::credit(ar_account, input.amount_cents));
+            lines.push(JournalLine::debit(input.deposit_account_id, amount));
+            lines.push(JournalLine::credit(ar_account, amount));
         }
         Some((_, home_amount, ar_relief)) => {
             lines.push(JournalLine::debit(input.deposit_account_id, home_amount));

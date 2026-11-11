@@ -3,6 +3,7 @@ use crate::banking::{post_bank_deposit, DepositInput, DepositItemRef, DepositOth
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, get_summary, record_payment, PaymentInput};
 use crate::ledger::void_transaction;
+use crate::money::Cents;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.expect("seeded account")
@@ -45,7 +46,7 @@ async fn invoice(pool: &SqlitePool, cents: i64) -> i64 {
             lines: vec![InvoiceLineInput {
                 description: "Work".into(),
                 quantity_e4: QUANTITY_SCALE,
-                rate_cents: cents,
+                rate_cents: Cents(cents),
                 income_account_id: services,
                 product_service_id: None,
                 class_id: None,
@@ -53,7 +54,7 @@ async fn invoice(pool: &SqlitePool, cents: i64) -> i64 {
             }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -66,12 +67,12 @@ async fn pay(pool: &SqlitePool, invoice_id: i64, account: i64, cents: i64) -> i6
     record_payment(
         pool,
         PaymentInput {
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             payment_method_id: None,
             invoice_id,
             deposit_account_id: account,
             payment_date: d(5),
-            amount_cents: cents,
+            amount_cents: Cents(cents),
             payment_method: "CHECK".into(),
             reference: Some("4417".into()),
             exchange_rate_e6: None,
@@ -395,7 +396,7 @@ async fn a_foreign_currency_payment_bounces_at_its_booked_rates() {
     let invoice_id = create_and_post_invoice(&pool, input).await.unwrap().id;
     record_payment(
         &pool,
-        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: d(5), amount_cents: 100_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: Some(1_100_000) },
+        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: d(5), amount_cents: Cents(100_000), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: Some(1_100_000) },
     )
     .await
     .unwrap();
@@ -434,7 +435,7 @@ async fn a_payment_that_took_a_discount_bounces_for_the_whole_invoice_and_revers
     // 490.00 received with the 10.00 discount, straight to the bank.
     record_payment(
         &pool,
-        PaymentInput { discount_cents: 1_000, payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: d(5), amount_cents: 49_000, payment_method: "CHECK".into(), reference: Some("77".into()), exchange_rate_e6: None },
+        PaymentInput { discount_cents: Cents(1_000), payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: d(5), amount_cents: Cents(49_000), payment_method: "CHECK".into(), reference: Some("77".into()), exchange_rate_e6: None },
     )
     .await
     .unwrap();
@@ -481,7 +482,7 @@ async fn a_foreign_currency_invoice_takes_its_discount_at_the_booked_rate_and_it
     // €980.00 received at 1.10 ($1,078.00) with the €20.00 discount at the booked 1.08 ($21.60).
     record_payment(
         &pool,
-        PaymentInput { discount_cents: 2_000, payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: d(5), amount_cents: 98_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: Some(1_100_000) },
+        PaymentInput { discount_cents: Cents(2_000), payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: d(5), amount_cents: Cents(98_000), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: Some(1_100_000) },
     )
     .await
     .unwrap();

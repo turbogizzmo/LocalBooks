@@ -7,6 +7,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::invoices::{validate_line, InvoiceInput, InvoiceLineInput};
 use crate::ledger::{db_err, format_cents, rollback, MAX_LINE_CENTS};
+use crate::money::Cents;
 use crate::sales::{find_or_create_named, Party, SalesLineInput};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -251,7 +252,7 @@ pub async fn convert_to_invoice(
                 .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable, _, _, _)| InvoiceLineInput {
                     description,
                     quantity_e4,
-                    rate_cents,
+                    rate_cents: Cents(rate_cents),
                     income_account_id,
                     product_service_id,
                     class_id,
@@ -260,7 +261,7 @@ pub async fn convert_to_invoice(
                 .collect(),
             currency: None,
             tax_rate_id,
-            discount_cents,
+            discount_cents: Cents(discount_cents),
             details,
         };
         // The estimate's rep, shipping and printed fields carry over to its invoice as they are.
@@ -351,7 +352,7 @@ async fn check_convertible(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64) -
 pub async fn invoice_from_estimate(pool: &SqlitePool, estimate_id: i64, mut input: InvoiceInput) -> Result<crate::invoices::InvoiceSummary, String> {
     let drop_zero = crate::sales_prefs::drop_zero_lines(pool).await?;
     // Zero-amount lines the company leaves off; subtotals and the other form lines keep their places.
-    let amounts: Vec<i64> = input.lines.iter().map(|l| crate::ledger::quantity_amount(l.quantity_e4, l.rate_cents).unwrap_or(1)).collect();
+    let amounts: Vec<i64> = input.lines.iter().map(|l| crate::ledger::quantity_amount(l.quantity_e4, l.rate_cents.get()).unwrap_or(1)).collect();
     let kept = crate::item_types::kept_lines(&amounts, drop_zero);
     input.details.form_lines = crate::item_types::without_items(std::mem::take(&mut input.details.form_lines), &kept);
     let lines = std::mem::take(&mut input.lines);

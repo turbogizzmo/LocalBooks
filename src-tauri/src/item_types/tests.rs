@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, invoice_detail, InvoiceInput, InvoiceLineInput};
+use crate::money::Cents;
 use crate::sales::{post_sales_receipt, SalesLineInput, SalesReceiptInput};
 use crate::sales_lists::SalesDetails;
 use chrono::NaiveDate;
@@ -19,7 +20,7 @@ async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 fn line(account: i64, rate_cents: i64, is_taxable: bool) -> InvoiceLineInput {
-    InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents, income_account_id: account, product_service_id: None, class_id: None, is_taxable, service_date: None }
+    InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(rate_cents), income_account_id: account, product_service_id: None, class_id: None, is_taxable, service_date: None }
 }
 
 fn with_form(form_lines: Vec<FormLineInput>) -> SalesDetails {
@@ -34,7 +35,7 @@ fn invoice(lines: Vec<InvoiceLineInput>, form_lines: Vec<FormLineInput>, tax_rat
         lines,
         currency: None,
         tax_rate_id,
-        discount_cents,
+        discount_cents: Cents(discount_cents),
         details: with_form(form_lines),
     }
 }
@@ -538,7 +539,7 @@ async fn a_group_posts_its_items_and_can_print_as_one_line() {
     let member = |p: &crate::sales::ProductView, quantity_e4| InvoiceLineInput {
         description: p.name.clone(),
         quantity_e4,
-        rate_cents: p.rate_cents,
+        rate_cents: Cents(p.rate_cents),
         income_account_id: services,
         product_service_id: Some(p.id),
         class_id: None,
@@ -618,12 +619,12 @@ async fn editing_a_part_paid_invoice_with_a_group_discount_and_subtotal_keeps_it
     crate::invoices::record_payment(
         &pool,
         crate::invoices::PaymentInput {
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             payment_method_id: None,
             invoice_id: original.id,
             deposit_account_id: checking,
             payment_date: d(5),
-            amount_cents: 4_000,
+            amount_cents: Cents(4_000),
             payment_method: "CHECK".into(),
             reference: None,
             exchange_rate_e6: None,
@@ -689,7 +690,7 @@ async fn a_group_s_tracked_items_go_through_the_stock_guard_each() {
     // A group of 4 widgets and an hour of fitting, with a discount and a subtotal under it.
     let sale = |widgets_e4| {
         let mut input = invoice(
-            vec![InvoiceLineInput { product_service_id: Some(widget.id), quantity_e4: widgets_e4, rate_cents: 2_500, ..line(services, 2_500, false) }, line(services, 5_000, false)],
+            vec![InvoiceLineInput { product_service_id: Some(widget.id), quantity_e4: widgets_e4, rate_cents: Cents(2_500), ..line(services, 2_500, false) }, line(services, 5_000, false)],
             vec![FormLineInput::group(0, 2, true), FormLineInput::discount(2, services, None, Some(1_000), false), FormLineInput::subtotal(2)],
             None,
             0,

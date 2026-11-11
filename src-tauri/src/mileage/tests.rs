@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 use crate::sales::{create_customer, create_product, ProductInput};
 
 fn d(month: u32, day: u32) -> NaiveDate {
@@ -155,7 +156,7 @@ async fn billing_trips_posts_an_invoice_and_marks_them_billed() {
         lines: Vec::new(),
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     edited.lines = detail
@@ -164,7 +165,7 @@ async fn billing_trips_posts_an_invoice_and_marks_them_billed() {
         .map(|i| InvoiceLineInput {
             description: i.description.clone(),
             quantity_e4: i.quantity_e4,
-            rate_cents: i.rate_cents,
+            rate_cents: Cents(i.rate_cents),
             income_account_id: i.income_account_id,
             product_service_id: i.product_service_id,
             class_id: None,
