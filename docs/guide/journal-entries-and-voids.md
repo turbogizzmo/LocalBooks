@@ -19,6 +19,12 @@ to see only them. **Reports › Accountant & Taxes › Adjusting Journal Entries
 lines (see [Accountant & Taxes reports](reports.md#adjusting-journal-entries)). Editing an entry
 keeps its mark unless you untick it.
 
+**Edit…** and **Duplicate** in a row's menu are offered only for entries typed in Make General
+Journal Entries. Other screens also post journal entries: customer refunds and write-offs, vendor
+refunds, bounced checks, sales tax payments, class reclassifications, item receipts and currency
+revaluations. Those are changed or voided from the screen that made them (their row offers only
+**Void**), and the **Manual journal entries** filter leaves them out.
+
 ## Undo a transaction (void)
 
 Posted transactions are never deleted or edited. Voiding posts an exact reversing entry instead, so

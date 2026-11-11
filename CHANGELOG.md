@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Journal Entries offers Edit… and Duplicate only on entries typed there.** Refunds, write-offs,
+  bounced checks, sales tax payments, class reclassifications and other entries made by another
+  screen now offer only Void. Before, Edit… was refused at save, and Duplicate posted an unlinked
+  copy that, for a reclassification, moved the class a second time.
+
 ## [0.14.1]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a

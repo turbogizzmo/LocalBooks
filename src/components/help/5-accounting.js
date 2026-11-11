@@ -21,7 +21,7 @@ export const screens = {
     guide: 'cleaning-up-books',
   },
   'accounting/journal': {
-    help: 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
+    help: 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments. Edit… and Duplicate are offered on entries typed here; entries other screens made (refunds, write-offs, bounced checks, tax payments, reclassifications) are changed or voided from their own screens.',
     guide: 'journal-entries-and-voids',
   },
   'accounting/find': {
