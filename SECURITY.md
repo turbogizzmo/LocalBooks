@@ -136,12 +136,29 @@ file can see and change everything, as in earlier versions.
   reset, a password reset by an Admin, the recovery key, turning the setting off and removing all
   users each remove the factor (`every_way_back_removes_the_factor`). It guards the LocalBooks
   sign-in, not the file: someone with a copy of the file and another program isn't stopped by it.
+- **Touch ID or Windows Hello in place of the code** (optional, only beside an authenticator app,
+  macOS and Windows only; design and research in
+  [`docs/plans/passkeys.md`](docs/plans/passkeys.md)): adding a computer saves a random 256-bit
+  secret in that computer's credential store under a random id; the company file keeps only a
+  SHA-256 hash bound to the user and the id ([`mfa/device.rs`](src-tauri/src/mfa/device.rs)). At
+  the code step the operating system confirms the person
+  ([`platform_auth.rs`](src-tauri/src/platform_auth.rs): LocalAuthentication on macOS,
+  `UserConsentVerifier` on Windows), then the secret is read and its hash compared; no biometric
+  data reaches LocalBooks. A copy of the file on another computer has no secret, a secret that
+  doesn't match the file's hash or a row moved to another user signs nobody in, and the secret is
+  never in the file or the audit trail
+  (`a_computer_is_added_beside_the_app_and_signs_in_only_where_its_secret_is` in
+  [`mfa/device/tests.rs`](src-tauri/src/mfa/device/tests.rs)). The schema refuses a computer
+  without an authenticator app, and everything that removes the app removes the computers
+  (`every_way_back_removes_the_computers_too`; triggers in migration 0177). The system's check
+  accepts the computer's own password or PIN as a fallback, so on that computer the second step is
+  as strong as the computer's sign-in.
 - **Remember me on this computer** (optional, off by default) keeps the user's password in the
   credential store above and is used once per opening of the file, never after a sign-out or idle
   sign-out (`sign_in_remembered` in [`commands/users.rs`](src-tauri/src/commands/users.rs)).
 - **Audit trail:** ledger entries record the signed-in user together with the computer's user.
   Turning users on, adding or changing a user, password resets, using or replacing the recovery key,
-  two-step sign-in changes and resets, used backup codes, repeated wrong codes and removing all
+  two-step sign-in changes and resets, computers added or removed for it, used backup codes, repeated wrong codes and removing all
   users are recorded in the same hash-chained trail (never with a password or key).
   The newest link is also recorded outside the file, so a rebuilt or shortened trail is detected
   ([`audit_chain.rs`](src-tauri/src/audit_chain.rs);

@@ -21,6 +21,9 @@
 //! - **The order** on an encrypted company file: the password unlocks the file first (its key
 //!   slots), then the factor is checked on the opened books. The code never feeds any key.
 //!
+//! - **This computer** (gap R29, [`device`]): beside the app, a user may let one computer sign them
+//!   in with Touch ID or Windows Hello instead of typing a code.
+//!
 //! Nothing here writes a secret, a code or a password to the audit trail, a log or an error.
 
 use hmac::{Hmac, Mac};
@@ -274,6 +277,17 @@ async fn password_verifier(conn: &mut SqliteConnection, user_id: i64) -> Result<
         .ok_or_else(|| format!("USER_NOT_FOUND: no user {user_id}"))
 }
 
+/// The signed-in user's password again, before a change to their own sign-in (adding this computer,
+/// gap R29). `PASSWORD_WRONG` when it isn't theirs.
+pub async fn check_own_password(pool: &SqlitePool, user_id: i64, password: &str) -> Result<(), String> {
+    let mut conn = pool.acquire().await.map_err(db_err)?;
+    if crypto::verify_password(password, &password_verifier(&mut conn, user_id).await?).await? {
+        Ok(())
+    } else {
+        Err("PASSWORD_WRONG: your password is not correct".into())
+    }
+}
+
 /// Starts setting up an authenticator for the signed-in user, after their password again.
 /// Setting up again replaces the old authenticator and backup codes once the new one is confirmed.
 pub async fn begin_setup(pool: &SqlitePool, session: &Session, password: &str) -> Result<(PendingSetup, SetupView), String> {
@@ -317,11 +331,17 @@ pub async fn finish_setup(pool: &SqlitePool, setup: &PendingSetup, code: &str, n
         return Err("MFA_OFF: an Admin turned two-step sign-in off for this company".into());
     }
     let replaced = has_factor(&mut tx, setup.user_id).await?;
-    remove(&mut tx, setup.user_id).await?;
+    // A new app replaces the old one in place (an update, not a delete), so the computers set up
+    // to sign this user in (gap R29) stay; the old backup codes go.
+    sqlx::query("DELETE FROM user_backup_codes WHERE user_id = ?1").bind(setup.user_id).execute(&mut *tx).await.map_err(db_err)?;
     let s = &setup.sealed;
     sqlx::query(
         "INSERT INTO user_factors (user_id, kind, memory_kib, iterations, parallelism, salt, nonce, sealed_secret, last_step)
-         VALUES (?1, 'TOTP', ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+         VALUES (?1, 'TOTP', ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+         ON CONFLICT (user_id) DO UPDATE SET memory_kib = excluded.memory_kib, iterations = excluded.iterations,
+             parallelism = excluded.parallelism, salt = excluded.salt, nonce = excluded.nonce,
+             sealed_secret = excluded.sealed_secret, last_step = excluded.last_step,
+             enrolled_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
     )
     .bind(setup.user_id)
     .bind(s.memory_kib)
@@ -442,7 +462,8 @@ pub async fn record_failed(pool: &SqlitePool, user_id: i64, username: &str) -> R
     crate::ledger::commit_write(tx).await.map_err(db_err)
 }
 
-/// Removes `user_id`'s authenticator and backup codes, inside the caller's transaction.
+/// Removes `user_id`'s authenticator and backup codes, inside the caller's transaction (and, by a
+/// trigger, the computers set up to sign them in).
 pub async fn remove(conn: &mut SqliteConnection, user_id: i64) -> Result<bool, String> {
     let had = has_factor(&mut *conn, user_id).await?;
     sqlx::query("DELETE FROM user_factors WHERE user_id = ?1").bind(user_id).execute(&mut *conn).await.map_err(db_err)?;
@@ -512,6 +533,8 @@ pub async fn backup_codes_left(conn: &mut SqliteConnection, user_id: i64) -> Res
 pub(crate) fn test_code(secret: &Secret, unix_seconds: u64) -> String {
     code_for(secret, step_at(unix_seconds))
 }
+
+pub mod device;
 
 #[cfg(test)]
 mod tests;

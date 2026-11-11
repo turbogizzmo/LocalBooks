@@ -211,6 +211,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "todos",
     "two_step_policy",
     "user_backup_codes",
+    "user_device_factors",
     "user_factors",
     "user_reset_in_progress",
     "users",

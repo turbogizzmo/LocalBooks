@@ -48,6 +48,9 @@ const OPEN: &[&str] = &[
     "cancel_two_step_sign_in",
     "begin_two_step_setup",
     "finish_two_step_setup",
+    // Two-step sign-in on this computer (gap R29): Touch ID or Windows Hello in place of the code.
+    "get_two_step_computer_sign_in",
+    "finish_two_step_sign_in_with_computer",
     // An Admin held at set-up by a stricter setting can still make it optional again; the command
     // checks for an Admin itself.
     "set_two_step_policy",
@@ -222,6 +225,10 @@ const READ: &[&str] = &[
     "save_reminder_settings",
     // Personal: turning off your own two-step sign-in, after your password (gap R26).
     "remove_my_two_step",
+    // Personal: adding or removing a computer that signs you in with Touch ID or Windows Hello
+    // (gap R29); adding one asks for your password again.
+    "add_this_computer_two_step",
+    "remove_two_step_computer",
     "set_todo_done",
 ];
 

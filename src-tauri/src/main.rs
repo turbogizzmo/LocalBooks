@@ -89,6 +89,7 @@ mod payroll_import;
 mod payout_feeds;
 mod permissions;
 mod pdf;
+mod platform_auth;
 mod mcp_server;
 mod merges;
 mod mileage;

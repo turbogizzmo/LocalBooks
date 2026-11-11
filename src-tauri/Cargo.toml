@@ -61,7 +61,16 @@ libsqlite3-sys = { version = "=0.30.1", features = ["bundled-sqlcipher"] }
 libsqlite3-sys = { version = "=0.30.1", features = ["bundled-sqlcipher-vendored-openssl"] }
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_NetworkManagement_WNet", "Win32_System_LibraryLoader", "Win32_System_Mapi"] }
 # Export from an installed QuickBooks: the QuickBooks SDK's request processor is a COM object.
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Variant"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Variant", "Win32_System_WinRT", "Security_Credentials_UI", "Foundation"] }
+# Two-step sign-in with Windows Hello (gap R29, platform_auth.rs): the prompt's asynchronous result.
+windows-future = "=0.3.2"
+
+# Two-step sign-in with Touch ID (gap R29, platform_auth.rs): the LocalAuthentication framework.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSError"] }
+objc2-local-authentication = { version = "0.3", default-features = false, features = ["std", "LAContext", "block2"] }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
