@@ -8,6 +8,7 @@ import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
+import DocNumberBox, { useDocNumber } from './DocNumberBox.jsx';
 import DateBox from './DateBox.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
@@ -48,6 +49,8 @@ function SalesOrderForm({ accounts, order, onSaved, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const customerRef = useRef(null);
+  // Order #: the next number, shown before saving; the person may type another. A saved order keeps its number.
+  const docNumber = useDocNumber('SALES_ORDER', 'Order');
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
   const sales = useSalesDetails(customer, customers.data);
@@ -81,7 +84,11 @@ function SalesOrderForm({ accounts, order, onSaved, onCancel }) {
     setBusy(true);
     setError(null);
     try {
+      const chosen = order ? { value: null } : await docNumber.resolve();
+      if (chosen.cancelled) return;
+      if (chosen.error) return setError(chosen.error);
       const input = {
+        orderNumber: chosen.value,
         customerName: customer.trim(),
         orderDate: date,
         expectedDate: expected || null,
@@ -113,6 +120,7 @@ function SalesOrderForm({ accounts, order, onSaved, onCancel }) {
             <span className="qb-label">Order date</span>
             <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
+          <DocNumberBox number={docNumber} fixed={order ? String(order.orderNumber) : null} />
           <label>
             <span className="qb-label">Expected</span>
             <DateBox className="qb-input w-[132px]" value={expected} onChange={(e) => setExpected(e.target.value)} />

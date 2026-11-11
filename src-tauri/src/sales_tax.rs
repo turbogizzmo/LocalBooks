@@ -15,6 +15,10 @@ use crate::ledger::{db_err, mul_div_round, post_entry_in_tx, rollback, Cents, En
 pub mod adjustments;
 pub mod combined;
 
+/// Preference: the rate a sales form starts with for a customer set to "Company default" (a rate id,
+/// or blank). The forms fall back to the company's only active rate when it is blank.
+pub const DEFAULT_RATE_PREF: &str = "sales_tax_default_rate_id";
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct TaxRateView {
@@ -515,6 +519,17 @@ fn add(sums: &mut Sums, rate_id: Option<i64>, sign: i64, tax: i64, taxable: i64,
     Ok(())
 }
 
+/// A document's taxable and non-taxable sales once a discount taken off its whole subtotal is
+/// spread over them as it was when the tax was worked out ([`taxable_after_discount`]).
+pub(crate) fn after_discount(taxable: i64, other: i64, discount: i64) -> Result<(i64, i64), String> {
+    let overflow = || "TAX_OVERFLOW: the sales tax report is out of range".to_string();
+    let subtotal = taxable.checked_add(other).ok_or_else(overflow)?;
+    let taxed = taxable_after_discount(taxable, discount, subtotal);
+    let off_taxable = taxable.checked_sub(taxed).ok_or_else(overflow)?;
+    let other = discount.checked_sub(off_taxable).and_then(|off| other.checked_sub(off)).ok_or_else(overflow)?;
+    Ok((taxed, other))
+}
+
 /// The part of `amount` that `settled` of `total` covers, rounded half away from zero.
 fn share(amount: i64, settled: i64, total: i64) -> Result<i64, String> {
     if total == 0 {
@@ -524,7 +539,7 @@ fn share(amount: i64, settled: i64, total: i64) -> Result<i64, String> {
 }
 
 /// An invoice and how much of it was settled (paid or credited, less bounced checks) in a window.
-type InvoiceRow = (Option<i64>, i64, i64, i64, i64, i64);
+type InvoiceRow = (Option<i64>, i64, i64, i64, i64, i64, i64);
 
 /// Home-currency posted invoices with their tax, taxable and non-taxable amounts, total, and the
 /// amount settled between `from` and `to`: payments and credits applied, less checks that bounced.
@@ -538,7 +553,8 @@ async fn invoices_settled(pool: &SqlitePool, from: NaiveDate, to: NaiveDate) -> 
                 i.total_cents,
                 COALESCE((SELECT SUM(p.amount_cents) FROM invoice_payments p WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date BETWEEN ?1 AND ?2), 0)
               + COALESCE((SELECT SUM(a.amount_cents) FROM credit_applications a WHERE a.invoice_id = i.id AND a.is_voided = 0 AND a.applied_date BETWEEN ?1 AND ?2), 0)
-              - COALESCE((SELECT SUM(b.amount_cents) FROM bounced_checks b WHERE b.invoice_id = i.id AND b.is_voided = 0 AND b.bounce_date BETWEEN ?1 AND ?2), 0)
+              - COALESCE((SELECT SUM(b.amount_cents) FROM bounced_checks b WHERE b.invoice_id = i.id AND b.is_voided = 0 AND b.bounce_date BETWEEN ?1 AND ?2), 0),
+                i.discount_cents
          FROM invoices i
          WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.currency_code IS NULL AND i.total_cents > 0 AND i.issue_date <= ?2",
     )
@@ -559,20 +575,22 @@ async fn invoices_settled(pool: &SqlitePool, from: NaiveDate, to: NaiveDate) -> 
 ///
 /// Sales with no rate are non-taxable. Foreign-currency invoices are left out, as before.
 pub async fn tax_liability_on(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate, basis: Basis) -> Result<TaxLiabilityReport, String> {
-    type DocRow = (Option<i64>, i64, i64, i64, i64);
+    type DocRow = (Option<i64>, i64, i64, i64, i64, i64);
     let others: Vec<DocRow> = sqlx::query_as(
         "SELECT r.tax_rate_id, 1, r.tax_cents,
                 (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 1)
                 + (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_form_lines WHERE sales_receipt_id = r.id AND kind = 'DISCOUNT' AND is_taxable = 1),
                 (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 0)
-                + (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_form_lines WHERE sales_receipt_id = r.id AND kind = 'DISCOUNT' AND is_taxable = 0)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_form_lines WHERE sales_receipt_id = r.id AND kind = 'DISCOUNT' AND is_taxable = 0),
+                r.discount_cents
          FROM sales_receipts r WHERE r.is_voided = 0 AND r.journal_entry_id IS NOT NULL AND r.receipt_date BETWEEN ?1 AND ?2
          UNION ALL
          SELECT m.tax_rate_id, -1, m.tax_cents,
                 (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_lines WHERE credit_memo_id = m.id AND is_taxable = 1)
                 + (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_form_lines WHERE credit_memo_id = m.id AND kind = 'DISCOUNT' AND is_taxable = 1),
                 (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_lines WHERE credit_memo_id = m.id AND is_taxable = 0)
-                + (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_form_lines WHERE credit_memo_id = m.id AND kind = 'DISCOUNT' AND is_taxable = 0)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_form_lines WHERE credit_memo_id = m.id AND kind = 'DISCOUNT' AND is_taxable = 0),
+                0
          FROM credit_memos m WHERE m.is_voided = 0 AND m.journal_entry_id IS NOT NULL AND m.credit_date BETWEEN ?1 AND ?2",
     )
     .bind(start_date)
@@ -581,17 +599,19 @@ pub async fn tax_liability_on(pool: &SqlitePool, start_date: NaiveDate, end_date
     .await
     .map_err(db_err)?;
     let mut sums = Sums::new();
-    for (rate_id, sign, tax, taxable, other) in others {
+    for (rate_id, sign, tax, taxable, other, discount) in others {
+        let (taxable, other) = after_discount(taxable, other, discount)?;
         add(&mut sums, rate_id, sign, tax, taxable, other)?;
     }
     match basis {
         Basis::Accrual => {
-            let invoices: Vec<(Option<i64>, i64, i64, i64)> = sqlx::query_as(
+            let invoices: Vec<(Option<i64>, i64, i64, i64, i64)> = sqlx::query_as(
                 "SELECT i.tax_rate_id, i.tax_cents,
                         (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 1)
                 + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 1),
                         (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 0)
-                + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 0)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 0),
+                        i.discount_cents
                  FROM invoices i WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.currency_code IS NULL AND i.issue_date BETWEEN ?1 AND ?2",
             )
             .bind(start_date)
@@ -599,13 +619,15 @@ pub async fn tax_liability_on(pool: &SqlitePool, start_date: NaiveDate, end_date
             .fetch_all(pool)
             .await
             .map_err(db_err)?;
-            for (rate_id, tax, taxable, other) in invoices {
+            for (rate_id, tax, taxable, other, discount) in invoices {
+                let (taxable, other) = after_discount(taxable, other, discount)?;
                 add(&mut sums, rate_id, 1, tax, taxable, other)?;
             }
         }
         Basis::Cash => {
-            for (rate_id, tax, taxable, other, total, settled) in invoices_settled(pool, start_date, end_date).await? {
+            for (rate_id, tax, taxable, other, total, settled, discount) in invoices_settled(pool, start_date, end_date).await? {
                 if settled != 0 {
+                    let (taxable, other) = after_discount(taxable, other, discount)?;
                     add(&mut sums, rate_id, 1, share(tax, settled, total)?, share(taxable, settled, total)?, share(other, settled, total)?)?;
                 }
             }
@@ -656,7 +678,7 @@ pub async fn tax_liability_on(pool: &SqlitePool, start_date: NaiveDate, end_date
     if basis == Basis::Cash {
         // The ledger credits the tax when an invoice is made; on cash basis the unpaid part isn't owed yet.
         let since_ever = NaiveDate::from_ymd_opt(1, 1, 1).expect("valid date");
-        for (rate_id, tax, _, _, total, settled) in invoices_settled(pool, since_ever, end_date).await? {
+        for (rate_id, tax, _, _, total, settled, _) in invoices_settled(pool, since_ever, end_date).await? {
             if rate_id.is_some() && tax != 0 {
                 let unpaid = share(tax, total - settled, total)?;
                 owed = owed.checked_sub(unpaid).ok_or("TAX_OVERFLOW: the sales tax report is out of range")?;

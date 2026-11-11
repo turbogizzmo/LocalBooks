@@ -2,6 +2,7 @@ use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, record_payment, InvoiceInput, InvoiceLineInput, PaymentInput};
 use crate::ledger::void_transaction;
+use crate::money::Cents;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
@@ -31,20 +32,21 @@ async fn deposit_sweeps_undeposited_funds_and_other_lines() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Acme".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 80_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: Cents(80_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
     .await
     .unwrap();
     let pay = |cents| PaymentInput {
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         payment_method_id: None,
         invoice_id: invoice.id,
         deposit_account_id: undeposited,
@@ -54,8 +56,8 @@ async fn deposit_sweeps_undeposited_funds_and_other_lines() {
         reference: None,
         exchange_rate_e6: None,
     };
-    record_payment(&pool, pay(50_000)).await.unwrap();
-    record_payment(&pool, pay(30_000)).await.unwrap();
+    record_payment(&pool, pay(Cents(50_000))).await.unwrap();
+    record_payment(&pool, pay(Cents(30_000))).await.unwrap();
     let waiting = list_undeposited(&pool).await.unwrap();
     assert_eq!(waiting.len(), 2);
     assert_eq!(balance(&pool, undeposited).await, 80_000);

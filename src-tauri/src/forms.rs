@@ -676,7 +676,8 @@ struct Customer {
 async fn customer(pool: &SqlitePool, id: Option<i64>, name: &str, statement: bool) -> Result<Customer, String> {
     let recipient = crate::party_contacts::recipient_sql(if statement { "statements" } else { "invoices" });
     let contact = if statement { "(SELECT pc.name FROM party_contacts pc WHERE pc.customer_id = c.id AND pc.for_statements = 1)" } else { "NULL" };
-    let row: Option<(Option<String>, Option<String>, Option<String>, Option<String>)> = match id {
+    type AddressRow = (Option<String>, Option<String>, Option<String>, Option<String>);
+    let row: Option<AddressRow> = match id {
         Some(id) => sqlx::query_as(&format!("SELECT c.company_name, c.billing_address, {recipient}, {contact} FROM customers c WHERE c.id = ?1"))
             .bind(id)
             .fetch_optional(pool)

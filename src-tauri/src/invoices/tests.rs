@@ -23,12 +23,12 @@ fn d(day: u32) -> NaiveDate {
 
 fn payment(invoice_id: i64, account: i64, day: u32, cents: i64) -> PaymentInput {
     PaymentInput {
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         payment_method_id: None,
         invoice_id,
         deposit_account_id: account,
         payment_date: d(day),
-        amount_cents: cents,
+        amount_cents: Cents(cents),
         payment_method: "CHECK".into(),
         reference: Some("1042".into()),
         exchange_rate_e6: None,
@@ -40,13 +40,14 @@ async fn simple_invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, due
     create_and_post_invoice(
         pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: customer.into(),
             issue_date: issue,
             due_date: due,
-            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: cents, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: Cents(cents), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -65,17 +66,18 @@ async fn invoice_posts_to_ar_and_income_then_payment_clears_ar() {
     );
 
     let input = InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme Corp".into(),
         issue_date: d(1),
         due_date: d(31),
         lines: vec![
-            InvoiceLineInput{ description: "Consulting".into(), quantity_e4: 30000, rate_cents: 15_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
-            InvoiceLineInput{ description: "Widget".into(), quantity_e4: 10000, rate_cents: 2_500, income_account_id: sales, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
-            InvoiceLineInput{ description: "Support".into(), quantity_e4: 20000, rate_cents: 1_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
+            InvoiceLineInput{ description: "Consulting".into(), quantity_e4: 30000, rate_cents: Cents(15_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
+            InvoiceLineInput{ description: "Widget".into(), quantity_e4: 10000, rate_cents: Cents(2_500), income_account_id: sales, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
+            InvoiceLineInput{ description: "Support".into(), quantity_e4: 20000, rate_cents: Cents(1_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
         ],
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     let invoice = create_and_post_invoice(&pool, input).await.expect("invoice posts");
@@ -180,16 +182,17 @@ async fn non_income_account_rolls_back_everything() {
     let services = account_id(&pool, "4100").await;
     let rent = account_id(&pool, "6300").await;
     let input = InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme Corp".into(),
         issue_date: d(1),
         due_date: d(31),
         lines: vec![
-            InvoiceLineInput{ description: "Consulting".into(), quantity_e4: 10000, rate_cents: 10_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
-            InvoiceLineInput{ description: "Oops".into(), quantity_e4: 10000, rate_cents: 10_000, income_account_id: rent, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
+            InvoiceLineInput{ description: "Consulting".into(), quantity_e4: 10000, rate_cents: Cents(10_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
+            InvoiceLineInput{ description: "Oops".into(), quantity_e4: 10000, rate_cents: Cents(10_000), income_account_id: rent, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
         ],
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
 
@@ -237,16 +240,17 @@ async fn fractional_quantities_post_rounded_amounts() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Hourly Client".into(),
             issue_date: d(1),
             due_date: d(31),
             lines: vec![
-                InvoiceLineInput{ description: "Consulting".into(), quantity_e4: 15_000, rate_cents: 12_500, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
-                InvoiceLineInput{ description: "Review".into(), quantity_e4: 27_500, rate_cents: 3_333, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
+                InvoiceLineInput{ description: "Consulting".into(), quantity_e4: 15_000, rate_cents: Cents(12_500), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
+                InvoiceLineInput{ description: "Review".into(), quantity_e4: 27_500, rate_cents: Cents(3_333), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None },
             ],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -278,13 +282,14 @@ async fn foreign_invoice_books_home_ar_and_payments_realize_fx() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Berlin GmbH".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput{ description: "Project".into(), quantity_e4: 10_000, rate_cents: 100_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput{ description: "Project".into(), quantity_e4: 10_000, rate_cents: Cents(100_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: Some(ForeignCurrency { code: "EUR".into(), exchange_rate_e6: 1_080_000 }),
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -294,7 +299,7 @@ async fn foreign_invoice_books_home_ar_and_payments_realize_fx() {
     assert_eq!((balance(&pool, ar).await, balance(&pool, services).await), (108_000, 108_000));
 
     let pay = |day, cents, rate| PaymentInput {
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         payment_method_id: None,
         invoice_id: invoice.id,
         deposit_account_id: checking,
@@ -305,12 +310,12 @@ async fn foreign_invoice_books_home_ar_and_payments_realize_fx() {
         exchange_rate_e6: Some(rate),
     };
     // EUR 400 at 1.10 → $440 received; A/R relieved 40% of $1,080 = $432; $8 gain.
-    let partial = record_payment(&pool, pay(10, 40_000, 1_100_000)).await.unwrap();
+    let partial = record_payment(&pool, pay(10, Cents(40_000), 1_100_000)).await.unwrap();
     assert_eq!((partial.status.as_str(), partial.balance_cents, partial.home_balance_cents), ("PARTIAL", 60_000, 64_800));
     assert_eq!((balance(&pool, checking).await, balance(&pool, ar).await, balance(&pool, fx_account).await), (44_000, 64_800, -800));
 
     // EUR 600 at 1.05 → $630 received; final payment relieves the remaining $648 exactly; $18 loss.
-    let paid = record_payment(&pool, pay(20, 60_000, 1_050_000)).await.unwrap();
+    let paid = record_payment(&pool, pay(20, Cents(60_000), 1_050_000)).await.unwrap();
     assert_eq!((paid.status.as_str(), paid.home_balance_cents), ("PAID", 0));
     assert_eq!((balance(&pool, ar).await, balance(&pool, checking).await, balance(&pool, fx_account).await), (0, 107_000, 1_000));
     assert_eq!(ar_aging(&pool, d(31)).await.unwrap().total_cents, 0);
@@ -322,7 +327,7 @@ async fn foreign_invoice_books_home_ar_and_payments_realize_fx() {
     assert_eq!((reopened.status.as_str(), reopened.balance_cents, reopened.home_balance_cents), ("PARTIAL", 60_000, 64_800));
     assert_eq!((balance(&pool, ar).await, balance(&pool, fx_account).await), (64_800, -800));
 
-    let err = record_payment(&pool, PaymentInput { exchange_rate_e6: Some(1_000_000), ..pay(21, 100, 1) }).await;
+    let err = record_payment(&pool, PaymentInput { exchange_rate_e6: Some(1_000_000), ..pay(21, Cents(100), 1) }).await;
     assert!(err.is_ok(), "a foreign invoice accepts an explicit rate");
     let tb = crate::reports::trial_balance(&pool).await.unwrap();
     assert_eq!(tb.total_debit_cents, tb.total_credit_cents);
@@ -340,13 +345,14 @@ async fn foreign_payment_after_voided_partial_payments_is_accepted() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Lyon SARL".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput{ description: "Sample".into(), quantity_e4: 10_000, rate_cents: 27, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput{ description: "Sample".into(), quantity_e4: 10_000, rate_cents: Cents(27), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: Some(ForeignCurrency { code: "EUR".into(), exchange_rate_e6: rate }),
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -379,13 +385,14 @@ async fn foreign_payment_deposits_its_home_amount() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "London Ltd".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10_000, rate_cents: 50_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(50_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: Some(ForeignCurrency { code: "GBP".into(), exchange_rate_e6: 1_270_000 }),
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -393,13 +400,13 @@ async fn foreign_payment_deposits_its_home_amount() {
     .unwrap();
     record_payment(
         &pool,
-        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: undeposited, payment_date: d(5), amount_cents: 50_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: undeposited, payment_date: d(5), amount_cents: Cents(50_000), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .expect_err("a foreign payment needs its own rate");
     record_payment(
         &pool,
-        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: undeposited, payment_date: d(5), amount_cents: 50_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: Some(1_270_000) },
+        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: undeposited, payment_date: d(5), amount_cents: Cents(50_000), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: Some(1_270_000) },
     )
     .await
     .unwrap();
@@ -420,4 +427,30 @@ async fn foreign_payment_deposits_its_home_amount() {
     .await
     .expect("home amount deposits");
     assert_eq!((balance(&pool, checking).await, balance(&pool, undeposited).await), (63_500, 0));
+}
+
+#[test]
+fn invoice_and_payment_amounts_arrive_as_bare_integers() {
+    let invoice: InvoiceInput = serde_json::from_str(
+        r#"{"customerName":"Acme","issueDate":"2025-07-01","dueDate":"2025-07-31","discountCents":250,
+            "lines":[{"description":"Work","quantityE4":10000,"rateCents":12345,"incomeAccountId":4}]}"#,
+    )
+    .unwrap();
+    assert_eq!((invoice.lines[0].rate_cents, invoice.discount_cents), (Cents(12_345), Cents(250)));
+    let no_discount: InvoiceInput = serde_json::from_str(r#"{"customerName":"Acme","issueDate":"2025-07-01","dueDate":"2025-07-31","lines":[]}"#).unwrap();
+    assert_eq!(no_discount.discount_cents, Cents::ZERO, "the discount is optional");
+
+    let payment: PaymentInput = serde_json::from_str(
+        r#"{"invoiceId":1,"depositAccountId":2,"paymentDate":"2025-07-10","amountCents":49000,"paymentMethod":"CHECK","reference":null,"discountCents":1000}"#,
+    )
+    .unwrap();
+    assert_eq!((payment.amount_cents, payment.discount_cents), (Cents(49_000), Cents(1_000)));
+    let paid_now: PaidNow = serde_json::from_str(r#"{"depositAccountId":2,"amountCents":5000,"paymentMethod":"CASH","reference":null}"#).unwrap();
+    assert_eq!(paid_now.amount_cents, Cents(5_000));
+
+    assert!(serde_json::from_str::<PaymentInput>(
+        r#"{"invoiceId":1,"depositAccountId":2,"paymentDate":"2025-07-10","amountCents":490.5,"paymentMethod":"CHECK","reference":null}"#
+    )
+    .is_err(), "a fractional amount is refused");
+    assert!(serde_json::from_str::<InvoiceLineInput>(r#"{"description":"Work","quantityE4":10000,"rateCents":"12345","incomeAccountId":4}"#).is_err(), "a string is refused");
 }

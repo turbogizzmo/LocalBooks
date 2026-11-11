@@ -5,6 +5,7 @@
 export const screens = {
   'expenses/credits': {
     help: 'Credit a vendor gave you, for returns or overcharges: apply it to their open bills, or record the refund they send.',
+    guide: 'bills',
   },
   'expenses/expenses': {
     help: 'Money paid straight away: expenses (card, cash or bank) and checks, each split across one or more expense accounts.',
@@ -31,10 +32,15 @@ export const screens = {
     guide: 'expenses-and-checks',
   },
   'expenses/purchase-orders': {
-    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines (and each line’s Customer:Job) in one step, or receive the goods first with Receive Items.',
+    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines (and each line’s Customer:Job) in one step, or receive the goods first with Receive Items. A bill made from a purchase order takes the vendor’s terms and due date, and is checked like one entered in Enter Bills: a repeated bill number or an unusual date asks first, and approval rules for bills apply. An order received in full closes and can’t be reopened (void a receipt to receive again). Purchase orders are offered only while inventory and purchase orders are on in Preferences › Items & Inventory.',
+    guide: 'purchase-orders',
   },
   'expenses/item-receipts': {
     help: 'Goods received from a purchase order before the vendor’s bill: the stock is on hand, and its cost waits in Items Received Not Billed until you enter the bill here.',
+    guide: 'bills',
+  },
+  'expenses/approvals': {
+    help: 'Rules that hold bills and purchase orders over an amount, or from vendors you choose, until an Admin approves them, and the list of what is waiting. A waiting bill isn’t posted or in Pay Bills; approving records it as entered, and rejecting keeps it with a note.',
     guide: 'bills',
   },
 };
@@ -128,9 +134,16 @@ export const topics = [
   {
     id: 'vendors', area: 'expenses', views: ['expenses/vendors'],
     title: 'Add and review vendors',
-    body: 'Add a vendor with a name and optional email, and see what you still owe each one. Click a vendor to see all of its transactions under the list, and double-click one to open it. On a bill, check or expense, type a name that isn’t on the list and choose Add as a new vendor.',
-    keywords: 'vendor supplier payee contact payable balance transactions history add new vendor quick add center',
+    body: 'Add a vendor with a name and optional email, and see what you still owe each one. Click a vendor to see all of its transactions under the list, and double-click one to open it. On a bill, check, expense, purchase order or vendor credit, or a register’s payee, type a name that isn’t on the list and choose Add as a new vendor. A name is never added without asking: leave the box or save with a name that isn’t on the list and LocalBooks asks first, with Quick add, Set up… (add it and open its record) or Cancel (back to the name box, nothing saved).',
+    keywords: 'vendor supplier payee contact payable balance transactions history add new vendor quick add set up not on list typo center',
     go: { label: 'Go to Vendors', view: 'expenses/vendors' },
     guide: 'customers-and-products',
+  },
+  {
+    id: 'pay-bills-set', area: 'expenses', views: ['expenses/bills'],
+    title: 'Set the discount or credits on one bill in Pay Bills',
+    body: 'Click a bill in Pay Bills to see its terms, discount and credits under the list. Set Discount chooses the early-payment discount to take on it (up to what its terms offer; it needs a discount account in Preferences › Bills), and Set Credits how much of each open vendor credit to use. What you set replaces the automatic preferences for that bill.',
+    keywords: 'pay bills set discount set credits early payment discount vendor credit apply one bill go to bill',
+    guide: 'bills',
   },
 ];

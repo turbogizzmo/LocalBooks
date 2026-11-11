@@ -355,7 +355,8 @@ async fn write_reclassification(tx: &mut Transaction<'_, Sqlite>, line_ids: &[i6
     };
 
     // (date, lines to post, (line id, from class)) per entry date, in first-appearance order.
-    let mut by_date: Vec<(NaiveDate, Vec<JournalLine>, Vec<(i64, Option<i64>)>)> = Vec::new();
+    type DatedLines = (NaiveDate, Vec<JournalLine>, Vec<(i64, Option<i64>)>);
+    let mut by_date: Vec<DatedLines> = Vec::new();
     for &line_id in line_ids {
         let row: Option<(NaiveDate, i64, i64, i64, Option<i64>, bool)> = sqlx::query_as(
             "SELECT e.entry_date, l.account_id, l.debit_cents, l.credit_cents, x.class_id,

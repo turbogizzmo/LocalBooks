@@ -183,6 +183,7 @@ pub async fn unreconciled_lines(pool: &SqlitePool, account_id: i64) -> Result<Ve
 }
 
 /// Starts a reconciliation, or updates the statement details of the one already in progress.
+#[cfg(test)]
 pub async fn start(
     pool: &SqlitePool,
     account_id: i64,
