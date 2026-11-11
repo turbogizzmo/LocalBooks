@@ -9,7 +9,7 @@
   <meta property="og:title" content="Tillhouse: your books, kept at home">
   <meta property="og:description" content="Local-first, double-entry accounting for US small businesses. One file on your computer, no subscription.">
   <meta property="og:url" content="https://tillhouse.app/">
-  <meta property="og:image" content="https://tillhouse.app/icon.png">
+  <meta property="og:image" content="https://tillhouse.app/shots/home.jpg">
   <meta name="theme-color" content="#14211f">
   <link rel="icon" type="image/png" href="favicon.png">
   <style>
@@ -118,29 +118,14 @@
     .other-downloads { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; }
     .other-downloads a { color: #9fddd3; }
 
-    /* The illustration: drawn in HTML with a made-up company, not a screenshot. */
-    .shot { background: #0a1211; border: 1px solid #2b3b38; border-radius: 14px; padding: 10px; box-shadow: 0 30px 60px rgba(0,0,0,.35); }
-    .shot .bar { display: flex; gap: 6px; padding: 2px 4px 10px; }
-    .shot .bar i { width: 10px; height: 10px; border-radius: 50%; background: #2b3b38; }
-    .win { background: #f5f6f4; color: #1c2426; border-radius: 8px; overflow: hidden; display: grid; grid-template-columns: 96px minmax(0, 1fr); font-size: 11.5px; }
-    .win .side { background: #14211f; color: #b8c7c3; padding: 10px 8px; display: grid; gap: 2px; align-content: start; }
-    .win .side b { color: #fff; font-size: 12px; padding: 0 6px 8px; display: flex; gap: 6px; align-items: center; }
-    .win .side b svg { width: 16px; height: 16px; }
-    .win .side span { padding: 4px 6px; border-radius: 4px; }
-    .win .side span.on { background: #213531; color: #fff; box-shadow: inset 2px 0 0 #e8b44a; }
-    .win .main { padding: 12px; display: grid; gap: 10px; }
-    .win .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-    .win .tile { background: #fff; border: 1px solid #dce1df; border-radius: 6px; padding: 7px 8px; color: #56615f; font-size: 11px; }
-    .win .tile b { display: block; color: #1c2426; font-size: 15px; font-variant-numeric: tabular-nums; margin-top: 2px; }
-    .win .tile .neg { color: #b42318; font-size: 10.5px; }
-    .win table { width: 100%; table-layout: fixed; border-collapse: collapse; background: #fff; border: 1px solid #dce1df; border-radius: 6px; font-variant-numeric: tabular-nums; }
-    .win th { text-align: left; font-weight: 600; color: #56615f; padding: 5px 6px; border-bottom: 1px solid #dce1df; font-size: 11px; }
-    .win td { padding: 5px 6px; border-bottom: 1px solid #eef1f0; }
-    .win td.r, .win th.r { text-align: right; width: 90px; }
-    .win td, .win th { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .win caption { text-align: left; font-weight: 700; padding: 0 0 6px; font-size: 12px; }
-    .win tr.tot td { font-weight: 700; border-top: 3px double #1c2426; border-bottom: 0; }
-    .win .pill { font-size: 10.5px; font-weight: 700; background: #e6f2f0; color: #0a4f4a; border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
+    /* Screenshots: Tillhouse on the seeded "Five Years Test Co" (synthetic test data). */
+    .hero-shot { margin: 0; }
+    .hero-shot img, .screens img { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid #2b3b38; background: #f5f6f4; }
+    .hero-shot img { box-shadow: 0 30px 60px rgba(0,0,0,.35); }
+    .screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 28px; }
+    .screens figure { margin: 0; display: grid; gap: 8px; }
+    .screens img { border-color: var(--line); box-shadow: 0 10px 30px rgba(20,33,31,.10); }
+    .screens figcaption { color: var(--muted); text-align: left; margin: 0; font-size: 14px; }
     figcaption { font-size: 13px; color: var(--night-text); margin-top: 10px; text-align: center; }
 
     /* Bands */
@@ -221,10 +206,6 @@
       .top nav a:not(.gh):not(.dl) { display: none; }
     }
     @media (max-width: 480px) {
-      .win { grid-template-columns: 1fr; }
-      .win .side { display: none; }
-      .win .tiles { grid-template-columns: 1fr 1fr; }
-      .win .tile:nth-child(3) { display: none; }
       .band { padding: 48px 0; }
     }
   </style>
@@ -277,36 +258,10 @@
             <div class="other-downloads" id="other-downloads"></div>
           </div>
         </div>
-        <figure style="margin:0">
-          <div class="shot" aria-hidden="true">
-            <div class="bar"><i></i><i></i><i></i></div>
-            <div class="win">
-              <div class="side">
-                <b><svg><use href="#mark"/></svg>Acme Plumbing</b>
-                <span class="on">Home</span><span>Sales</span><span>Expenses</span><span>Banking</span><span>Accounting</span><span>Reports</span>
-              </div>
-              <div class="main">
-                <div class="tiles">
-                  <div class="tile">Cash in bank<b>48,210.17</b></div>
-                  <div class="tile">To collect<b>12,480.00</b><span class="neg">4,230.00 overdue</span></div>
-                  <div class="tile">To pay<b>6,905.40</b></div>
-                </div>
-                <table>
-                  <caption>Trial balance <span class="pill">✓ In balance</span></caption>
-                  <thead><tr><th>Account</th><th class="r">Debit</th><th class="r">Credit</th></tr></thead>
-                  <tbody>
-                    <tr><td>1000 · Checking</td><td class="r">48,210.17</td><td class="r"></td></tr>
-                    <tr><td>1200 · Accounts receivable</td><td class="r">12,480.00</td><td class="r"></td></tr>
-                    <tr><td>2000 · Accounts payable</td><td class="r"></td><td class="r">6,905.40</td></tr>
-                    <tr><td>4000 · Service income</td><td class="r"></td><td class="r">402,118.00</td></tr>
-                    <tr><td>18 more accounts</td><td class="r">541,639.98</td><td class="r">193,306.75</td></tr>
-                    <tr class="tot"><td>Total</td><td class="r">602,330.15</td><td class="r">602,330.15</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          <figcaption>An illustration of Home with a made-up company.</figcaption>
+        <figure class="hero-shot">
+          <img src="shots/home.jpg" width="1600" height="1000" fetchpriority="high"
+               alt="Tillhouse's Home dashboard: workflow icons for customers, vendors and employees, shortcuts for banking and the company, and the bank, card, receivable and payable balances of a sample company.">
+          <figcaption>Tillhouse on a sample company.</figcaption>
         </figure>
       </div>
     </section>
@@ -318,6 +273,18 @@
           <h2>Everything a small business keeps books for</h2>
           <p class="lead">A classic desktop accounting layout, fast with the keyboard, for sales, purchases, banking and reports. For US businesses: sales tax, 1099s, ACH files and printed checks follow US rules. There is no VAT or GST, and no payroll.</p>
         </header>
+        <div class="screens">
+          <figure>
+            <img src="shots/invoices.jpg" width="1600" height="1000" loading="lazy"
+                 alt="The Invoice form with customer, invoice date, Invoice number, terms and due date, and below it the list of invoices with their totals, open balances and overdue status.">
+            <figcaption>An invoice and the invoice list.</figcaption>
+          </figure>
+          <figure>
+            <img src="shots/report.jpg" width="1600" height="1000" loading="lazy"
+                 alt="The Balance Sheet in the Reports center: assets, liabilities and equity with their totals, a check that assets equal liabilities plus equity, and the list of reports beside it.">
+            <figcaption>The Balance Sheet in the Reports center.</figcaption>
+          </figure>
+        </div>
         <div class="features">
           <div class="feature"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span><h3>Invoices, estimates and sales orders</h3><p>Design your own forms, then print them, save them as PDF or email them, one at a time or in a batch. Credit memos, statements, finance charges and price levels too.</p></div>
           <div class="feature"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg></span><h3>Bills, checks and purchase orders</h3><p>Enter and pay bills, print checks, make ACH payment files, receive items before the bill, route bills for approval and enter receipts from a PDF.</p></div>

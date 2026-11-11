@@ -1,7 +1,7 @@
 # The website (tillhouse.app)
 
 The public site is one static page, `site/index.html`, with its icon (`site/icon.png`), favicon
-(`site/favicon.png`) and `site/CNAME`. There is no build step, framework or web font: system fonts,
+(`site/favicon.png`), screenshots (`site/shots/`) and `site/CNAME`. There is no build step, framework or web font: system fonts,
 inline CSS and one small script. Open the file in a browser to preview it.
 
 ## What is on the page
@@ -12,9 +12,11 @@ inline CSS and one small script. Open the file in a browser to preview it.
   fixed direct links; if the API can't be reached, the button opens the releases page.
 - Features, Moving from QuickBooks Desktop (the program chooser, with a table as the no-script
   fallback), Install, What's new to test, Updates, Report a problem, Privacy, and the guide list.
-- The illustration in the hero is drawn in HTML with a made-up company. Any real screenshot added
-  later must be of Tillhouse on a synthetic test company (`docs/testing/`), never of a real company
-  file or of another product.
+- Screenshots in `site/shots/` (1600 × 1000 JPEGs): `home.jpg` is the hero, `invoices.jpg` and
+  `report.jpg` sit above the features. They show Tillhouse on the seeded **Five Years Test Co**
+  (`src-tauri/src/test_companies.rs`), synthetic test data. Any new screenshot must be of Tillhouse
+  on a synthetic test company, never of a real company file or of another product. Give each one
+  alt text, `width` and `height`, and `loading="lazy"` unless it is the hero.
 - The trademark notice in the footer. Keep it, as in README.md and About (AGENTS.md rule 11).
 
 `docs_checks` fails a PR if a guide in `docs/guide/` is missing from the guide list, or if the
