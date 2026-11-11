@@ -6,8 +6,6 @@ people using LocalBooks.
 
 ## [Unreleased]
 
-### Fixed
-
 - **Inventory adjustments come in from company files.** Some files had lost part of the
   description of their inventory adjustment lines, so none of the adjustments were read and
   Inventory Asset and Cost of Goods Sold came out wrong. LocalBooks now reads those lines, and the
