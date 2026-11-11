@@ -194,7 +194,7 @@ pub fn read(path: &Path) -> Result<Header, String> {
 }
 
 /// Replaces the header of an encrypted file not open in this process.
-// For files not open in this process; turning encryption on and off (phase 3b) uses it.
+// For files not open in this process (kept for tools and tests; the app writes through `write_open`).
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn write(path: &Path, header: &Header) -> Result<(), String> {
     let mut file = OpenOptions::new().read(true).write(true).open(path).map_err(|e| format!("FILE_HEADER: cannot open {}: {e}", path.display()))?;

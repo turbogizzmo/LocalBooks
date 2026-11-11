@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 
 fn d(m: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, m, day).unwrap()
@@ -27,7 +28,7 @@ async fn aging_is_as_of_a_date_and_summaries_and_ledger_add_up() {
     invoice("Globex", "2026-03-15", "2026-04-14", 5_000).await;
     crate::invoices::record_payment(
         &pool,
-        crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: old, deposit_account_id: checking, payment_date: d(4, 10), amount_cents: 10_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+        crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: old, deposit_account_id: checking, payment_date: d(4, 10), amount_cents: Cents(10_000), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .unwrap();

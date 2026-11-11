@@ -17,18 +17,25 @@ line is a category with the number of items in it, and a total for invoices and 
   **To Do List**, **Recurring Transactions**, **Send Forms**, the **Tax calendar** or **Back up**.
 - Categories with nothing in them are hidden. When nothing needs attention, the panel says so.
 
-| Reminder | What it shows |
-|---|---|
-| Overdue invoices | Posted invoices with an open balance, more than the chosen days past due (0 = any day late) |
-| Bills to pay | Unpaid bills due within the chosen days, including overdue ones |
-| To-dos due | Open to-dos due within the chosen days (0 = due today or earlier). With users on: yours and unassigned ones |
-| Recurring transactions to enter | Active recurring transactions whose next date falls within the chosen days |
-| Forms to email | Invoices, estimates and sales receipts marked **Email later** |
-| Tax dates | Federal return and estimated-tax due dates for your tax form within the chosen days |
-| Backup | Shown when the newest backup in the backups folder is older than the chosen days, or there is none |
+| Reminder | What it shows | Days at first |
+|---|---|---|
+| Overdue invoices | Posted invoices with an open balance, more than the chosen days past due (0 = any day late) | 0 |
+| Bills to pay | Unpaid bills due within the chosen days, including overdue ones | 10 |
+| To-dos due | Open to-dos due within the chosen days (0 = due today or earlier). With users on: yours and unassigned ones | 0 |
+| Recurring transactions to enter | Active recurring transactions whose next date falls within the chosen days | 0 |
+| Forms to email | Invoices, estimates and sales receipts marked **Email later** | |
+| Tax dates | Federal return and estimated-tax due dates for your tax form within the chosen days | 30 |
+| Inventory to reorder | Tracked items at or below their reorder point, with what is already on order (see [Reorder point and preferred vendor](inventory.md#reorder-point-and-preferred-vendor)) | |
+| Backup | Shown when the newest backup in the backups folder is older than the chosen days, or there is none | 7 |
+| Backup safety | When a backup was last copied off this computer, or last test-restored, more than the chosen days ago (see [Backup safety](backups-and-company-files.md#backup-safety-a-copy-off-this-computer-and-a-test-restore)) | 30 |
+| Statements to send | Customer groups whose statement schedule is due (see [Statement reminders](customers-and-products.md#statement-reminders)) | |
+| Payment reminders to send | Customer groups with overdue invoices whose payment-reminder schedule is due (see [Payment reminders](customers-and-products.md#payment-reminders)) | |
 
-QuickBooks also offers "Forms to print" and "Inventory to reorder". LocalBooks has no print queue
-and no reorder points yet, so these reminders aren't available.
+Every reminder in **Customize** is shown at first, with the days above. Statements to send and
+Payment reminders to send aren't in Customize: they show whenever a group's own schedule is due.
+
+Checks waiting to print are in **File › Print Forms › Checks…** and invoices waiting to print in
+**File › Print Forms › Invoices…**; they aren't a reminder.
 
 ## Choose your reminders
 

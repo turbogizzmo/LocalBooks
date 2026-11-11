@@ -1,8 +1,8 @@
 # Encryption at rest for the whole company file (R1)
 
-Status: **being built.** Phases 1 (SQLCipher build), 2 (key header and VFS) and 3a (unlock before
-open) are in; 3b (turning it on, and every copy path) is next. Gap R1 in
-[`docs/gaps.md`](../gaps.md) stays `partial` until 3b lands. Where this note and the code disagree,
+Status: **built.** Phases 1 (SQLCipher build), 2 (key header and VFS), 3a (unlock before open)
+and 3b (the opt-in setting and every copy path) are in; gap R1 in [`docs/gaps.md`](../gaps.md) is
+done. Where this note and the code disagree,
 the code (`src-tauri/src/file_cipher*`) and its tests win; the sections below were updated as each
 phase landed.
 
@@ -275,8 +275,13 @@ restore path and the build chain on three platforms, and it changes what users c
      sign-out close it again; slots follow users. Only tests can make an encrypted file
      (`encrypt_into` and the key generator are `#[cfg(test)]`), and plain files behave exactly as
      before (tested).
-   - **3b:** the opt-in setting (off by default) with its warning, as decided above, together with
-     step 4, because the setting can't ship before every copy of an encrypted file can be restored.
+   - **3b (built):** the opt-in setting (off by default) with its warning, as decided above, together
+     with step 4, because the setting can't ship before every copy of an encrypted file can be
+     restored. Copies find their key through an in-process **keyring** (the page keys of the files
+     unlocked here, by file id): a backup, restore or Condense staging file, or a moved file, opens
+     by its path with the key of the company it came from, and a copy of another encrypted company
+     says to open it and sign in. Turning it on exports, checks (integrity and row counts), applies
+     the other users' temporary passwords and a new recovery key in the copy, then swaps.
 4. **Turning it on and off; copies.** Export, check and swap; encrypted snapshots, restore, Condense,
    File Repair, offsite; offering to delete plain backups; a test that restores each kind of
    snapshot (automatic, pre-upgrade, pre-restore, Before condense, offsite) made from an encrypted

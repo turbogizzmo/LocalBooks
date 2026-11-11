@@ -115,6 +115,7 @@ async fn a_credit_memo_copy_keeps_its_discounts_and_charges_so_it_totals_the_sam
     let original = crate::credits::create_credit_memo(
         &pool,
         crate::credits::CreditMemoInput {
+            credit_number: None,
             customer_name: "Walk-in".into(),
             credit_date: chrono::NaiveDate::from_ymd_opt(2025, 6, 2).unwrap(),
             memo: None,
@@ -155,6 +156,7 @@ async fn a_credit_memo_copy_keeps_its_discounts_and_charges_so_it_totals_the_sam
     let again = crate::credits::create_credit_memo(
         &pool,
         crate::credits::CreditMemoInput {
+            credit_number: None,
             customer_name: copy.name.clone().unwrap(),
             credit_date: chrono::NaiveDate::from_ymd_opt(2025, 6, 3).unwrap(),
             memo: None,

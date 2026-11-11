@@ -373,10 +373,10 @@ export default function JournalEntries({ accounts, intent }) {
   };
   // Previous / Next on the form step through the manual entries it can open (not voided ones).
   const savedEntries = useMemo(
-    () => byDateThenNumber((data ?? []).filter((e) => e.sourceType === 'JOURNAL' && !e.isVoided && e.reversesEntryId === null), (e) => e.entryDate, (e) => e.entryNumber),
+    () => byDateThenNumber((data ?? []).filter((e) => e.isManual && !e.isVoided), (e) => e.entryDate, (e) => e.entryNumber),
     [data],
   );
-  const filtered = (data ?? []).filter((e) => filter === 'ALL' || (filter === 'MANUAL' ? e.sourceType === 'JOURNAL' : filter === 'VOIDS' ? e.isVoided || e.reversesEntryId !== null : filter === 'ADJUSTING' ? e.isAdjusting : true));
+  const filtered = (data ?? []).filter((e) => filter === 'ALL' || (filter === 'MANUAL' ? e.isManual : filter === 'VOIDS' ? e.isVoided || e.reversesEntryId !== null : filter === 'ADJUSTING' ? e.isAdjusting : true));
   const sorter = useSort(filtered, {
     date: (e) => e.entryDate,
     number: (e) => e.entryNumber,
@@ -492,7 +492,9 @@ export default function JournalEntries({ accounts, intent }) {
                       {e.reversesEntryId === null && (
                         <RowMenu
                           items={[
-                            ...(e.sourceType === 'JOURNAL'
+                            // Only entries typed here: refunds, write-offs, bounced checks, tax
+                            // payments, reclassifications and the like belong to their own screens.
+                            ...(e.sourceType === 'JOURNAL' && e.isManual
                               ? [
                                   { label: 'Edit…', disabled: e.isVoided, onSelect: () => startEdit(e) },
                                   { label: 'Duplicate', hint: 'A new journal entry copied from this one, dated today', onSelect: () => duplicateRow(e) },

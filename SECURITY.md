@@ -84,7 +84,7 @@ file can see and change everything, as in earlier versions.
   [`users.rs`](src-tauri/src/users.rs); `signing_in_checks_the_password_and_unlocks_the_key` and
   `turned_off_users_cannot_sign_in` in [`users/tests.rs`](src-tauri/src/users/tests.rs)).
   Passwords need at least 8 characters.
-- **Roles:** Admin, Standard and View only, checked by LocalBooks before every command runs (the
+- **Roles:** Admin, Standard, View only and External Accountant, checked by LocalBooks before every command runs (the
   `guarded` wrapper in [`main.rs`](src-tauri/src/main.rs) and [`permissions.rs`](src-tauri/src/permissions.rs)).
   A command not yet classified is treated as a change, so View-only users cannot run it
   (`commands_are_classified` and `every_role_gets_what_it_should` in
@@ -130,6 +130,17 @@ file can see and change everything, as in earlier versions.
   [`tax_ids/tests.rs`](src-tauri/src/tax_ids/tests.rs)).
 - **The local AI access (MCP) sees no books** while a file with users has nobody signed in
   (`Db::readable_pool` in [`db.rs`](src-tauri/src/db.rs)).
+- **Whole-file encryption** (optional, off by default, Admins turn it on): the whole company file,
+  its attachments and every backup made from it are encrypted page by page (SQLCipher, AES-256)
+  under a random page key. A key header in front of the database seals that key once per user
+  (their password, Argon2id) and once for the recovery key. The file opens locked, and nothing in it
+  is read until a password unlocks it; sign-out and idle sign-out close it again
+  ([`file_cipher.rs`](src-tauri/src/file_cipher.rs), [`whole_file.rs`](src-tauri/src/file_cipher/whole_file.rs),
+  [`user_slots.rs`](src-tauri/src/file_cipher/user_slots.rs); `turning_encryption_on_and_off` and
+  `every_kind_of_snapshot_restores_from_an_encrypted_file` in
+  [`whole_file/tests.rs`](src-tauri/src/file_cipher/whole_file/tests.rs),
+  `a_locked_file_refuses_every_command_except_unlock` in
+  [`user_slots/tests.rs`](src-tauri/src/file_cipher/user_slots/tests.rs)).
 - **Offsite backups are encrypted** on this computer (AES-256-GCM, key from a backup password by
   Argon2id) before they are written to the folder the user picks
   ([`offsite.rs`](src-tauri/src/offsite.rs) and its tests in
@@ -137,11 +148,16 @@ file can see and change everything, as in earlier versions.
 
 What this does not cover:
 
-- Only vendor tax IDs and vendors' bank details are encrypted inside the company file. The rest of
-  the file, its local backups (Settings › File & Data Controls), attachments and anything exported
-  (CSV, Excel, PDF) are readable by anyone who has the file. Use full-disk encryption (FileVault,
-  BitLocker, LUKS) on every computer that holds them. Offsite copies are the exception: they are
-  encrypted as a whole.
+- Unless whole-file encryption is on, only vendor tax IDs and vendors' bank details are encrypted
+  inside the company file; the rest of the file, its local backups (Settings › File & Data
+  Controls) and attachments are readable by anyone who has the file. Use full-disk encryption
+  (FileVault, BitLocker, LUKS) on every computer that holds them. Offsite copies are always
+  encrypted as a whole. Anything exported (CSV, Excel, PDF) is a plain file either way.
+- With whole-file encryption on, losing every Admin password and the recovery key loses the books
+  and every backup of them: there is no **Remove all users** way back for an encrypted file.
+  Backups made before it was turned on stay unencrypted until deleted (Settings › Users &
+  Passwords lists them). While the books are open, the key is in memory, and anyone using the
+  computer sees what the signed-in user sees.
 - Backups made *before* users were turned on still hold tax IDs in plain text. Delete them, or keep
   them somewhere as safe as the books themselves.
 - Anyone at the sign-in screen can remove all users (the way back when no Admin password or recovery

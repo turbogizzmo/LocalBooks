@@ -141,6 +141,67 @@ To undo a receipt, click **Void** beside it: its stock leaves inventory. A bille
 voided; void its bill first, which makes the receipt wait for a bill again. A bill entered for a
 receipt isn't edited like other bills: void it and enter it again from the receipt.
 
+## Vendor credits
+
+A vendor credit records money a vendor owes you back: returned goods, an overcharge, a rebate. It
+lowers what you owe that vendor, and you use it on their bills or record the refund they send.
+
+### Enter a vendor credit
+
+1. Go to **Expenses › Vendor Credits** and click **New vendor credit**, or choose **Vendors › Enter
+   Vendor Credits** (or **+ New › Vendor Credit**).
+2. Choose the **Vendor** and enter the vendor's **Ref no.** (their credit memo number), the
+   **Date** and a **Memo** such as "Returned goods".
+3. Add one line per account being credited: the **Category** (an expense or asset account; it
+   starts at your first expense account), a **Description** and the **Amount**. A line can name a
+   **Customer:Job** and a **Class**, as on a bill.
+4. To add a discount or a charge after a line, click **Add a discount or charge** (see [Discounts
+   and charges](#discounts-and-charges-on-bills-checks-credits-and-orders)). On a credit they post
+   the other way round from a bill.
+5. To keep the vendor's credit memo with it, click **Attach File** in the toolbar and pick the file;
+   it is attached when the credit posts.
+6. Check the **Credit** total and click **Save & Close** or **Save & New**.
+
+The credit posts at once: **Accounts Payable** is debited for the total, and each line's account is
+credited. The vendor's balance goes down by that much.
+
+### Use the credit on bills
+
+- **In Pay Bills**, open credits can be used on the bills you pay, automatically or bill by bill.
+  See [Use vendor credits when paying](#use-vendor-credits-when-paying) and [Set the discount or
+  credits on one bill](#set-the-discount-or-credits-on-one-bill).
+- **From the credit**, choose **Apply to bills…** in its **▾** menu, or open it and click
+  **Apply**. Every open bill from that vendor is listed, and the credit is spread over them, the
+  earliest due first. Change any **Apply** amount, set the **Date applied**, and click **Apply**.
+  Credits already used on bills are listed under the bills; **Remove** takes one back off its bill.
+
+Applying a credit posts nothing new: it marks the bill as paid by that much, and the bill's open
+balance and the credit's **Credit left** go down.
+
+### Record the vendor's refund
+
+If the vendor sends you money for the credit instead, choose **Record vendor refund…** in its **▾**
+menu (or **Refund** on the open credit). Choose the account it went into (**Deposit to**), the
+**Date**, the **Amount** (up to the credit left) and a **Reference (check no.)**, then click
+**Record refund**. This debits the bank account and credits Accounts Payable.
+
+### See, print and void credits
+
+The list shows each credit's **Date**, **Vendor**, **Ref no.**, **Total**, **Credit left** and
+**Status**: **Open**, **Partly used**, **Used** or **Voided**. Double-click one (or **▾ › Open**)
+to see what it posted; **Previous** and **Next** step through the others.
+
+- **Print** prints the credit as a voucher, or saves it as a PDF; **Email** sends that PDF to the
+  vendor.
+- **Duplicate** (in the **▾** menu or the toolbar) starts a new credit with the same vendor, lines
+  and memo, dated today. Enter the vendor's reference for the new one.
+- **Void** posts a reversing entry on the same date; the original stays in the journal and the
+  audit trail (see [Undo a transaction](journal-entries-and-voids.md#undo-a-transaction-void)). A
+  credit that has been used on a bill or refunded can't be voided: remove it from the bills, or
+  void the refund, first.
+
+A saved credit can't be edited. Void it and enter it again.
+
 ## Pay one or more bills
 
 1. On **Expenses › Bills**, click **Pay bills** (or **+ New › Pay Bills**). Every open bill is

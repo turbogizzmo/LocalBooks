@@ -74,8 +74,8 @@ fn describe(path: &Path, kind: &str) -> Result<BackupFile, String> {
 
 async fn open_read_only(path: &Path) -> Result<SqlitePool, String> {
     crate::wal_guard::check(path)?;
-    // Through the VFS, which checks the file's log as SQLite opens it (gap R24).
-    let options = crate::file_cipher::open_options(path, None)?.read_only(true).create_if_missing(false);
+    // A copy of an encrypted company (gap R1) opens with its key, if those books are unlocked here.
+    let options = crate::file_cipher::options_for(path)?.0.read_only(true).create_if_missing(false);
     SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(options)
@@ -151,7 +151,7 @@ pub async fn inspect(path: &Path) -> Result<CompanyFileInfo, String> {
         let mut file = std::fs::File::open(path).map_err(|e| format!("RESTORE_UNREADABLE: {}: {e}", path.display()))?;
         file.read_exact(&mut header).map_err(|_| "RESTORE_NOT_SQLITE: this is not a LocalBooks company file".to_string())?;
     }
-    if &header != SQLITE_HEADER {
+    if &header != SQLITE_HEADER && &header != crate::file_cipher::vfs::SIGNATURE {
         return Err("RESTORE_NOT_SQLITE: this is not a LocalBooks company file".into());
     }
 
@@ -258,6 +258,10 @@ fn stamp() -> String {
 
 /// Replaces the live company file with a verified, upgraded copy of `source`.
 pub async fn restore(db: &Db, source: &Path) -> Result<RestoreResult, String> {
+    // A plain backup over encrypted books would quietly turn encryption off (gap R1).
+    if db.is_encrypted().await && !crate::file_cipher::header::is_encrypted(source) {
+        return Err("RESTORE_UNENCRYPTED: this backup isn't encrypted, and restoring it would turn off encryption of these books. Turn off encryption first (Settings › Users & Passwords), or restore a backup made since it was turned on".into());
+    }
     let info = inspect(source).await?;
     let dir = db.backups_dir().to_path_buf();
     let live_path = db.path().await?;
@@ -271,7 +275,8 @@ pub async fn restore(db: &Db, source: &Path) -> Result<RestoreResult, String> {
     let staged = dir.join(format!(".restore-staging-{}.db", std::process::id()));
     let _ = std::fs::remove_file(&staged);
     let source_pool = open_read_only(source).await?;
-    let copied = sqlx::query("VACUUM INTO ?1").bind(staged.to_string_lossy().into_owned()).execute(&source_pool).await;
+    // The snapshot code keeps an encrypted backup encrypted, key header and all, and checks the copy.
+    let copied = snapshot(&source_pool, source, &staged).await;
     db::close_pool(&source_pool).await;
     copied.map_err(|e| format!("RESTORE_COPY: {e}"))?;
     let upgraded = db::open(&staged).await;
@@ -302,6 +307,10 @@ fn kind_of(file_name: &str) -> &'static str {
         "PRE_REBUILD"
     } else if file_name.starts_with("pre-condense-") {
         "PRE_CONDENSE"
+    } else if file_name.starts_with("pre-encryption-") {
+        "PRE_ENCRYPTION"
+    } else if file_name.starts_with("pre-decryption-") {
+        "PRE_DECRYPTION"
     } else if file_name.starts_with("archive-") {
         "ARCHIVE"
     } else {

@@ -493,6 +493,26 @@ installed? Export from my installed QuickBooks** below the file box instead: see
    confirmation, and confirm.
 3. Compare the account balances with a trial balance from the original program.
 
+### What a company file brings over
+
+A QuickBooks Desktop company file (`.qbw`), backup (`.qbb`) or portable file (`.qbm`) read as a
+full ledger brings, besides accounts, customers, vendors, items and classes:
+
+- **Payroll.** Paychecks and payroll liability payments come in, so your payroll expense and
+  liability accounts match the original books. LocalBooks doesn't run payroll itself.
+- **Cost of goods sold.** An invoice or sales receipt that sold inventory brings the cost of what it
+  sold, moved from Inventory Asset to Cost of Goods Sold as the original program recorded it.
+- **Discounts and subtotals.** The file's discount items become LocalBooks discount items (a percent
+  discount keeps its percent). In a full import, an invoice's or sales receipt's subtotal and
+  discount lines stay where they were on the form, rather than one amount off the whole form.
+  Subtotal, group, payment and sales tax items are not added to your item list as things to sell.
+- **Deposits split between accounts.** A deposit that went partly into one bank account and partly
+  into another comes in as a deposit into the account that got the most, with the rest shown as
+  taken out of it. Its payments are marked deposited, so Make Deposits doesn't list them again.
+
+If an account's imported balance still differs from the balance the file stored, step 2 lists it
+with the file's balance, the imported balance and the difference, before and after you post.
+
 ### Classes
 
 When the file has classes, posting brings them in, in either kind of import. A QuickBooks Desktop
@@ -505,8 +525,8 @@ files, report exports with a **Class** column, and QuickBooks still installed on
 - Every line keeps its class, on the journal entry and, in a full import, on the invoice, bill,
   check or deposit line too. **Profit & Loss by Class** then shows the same split as before.
 - Classes hidden in the original program come in inactive. They stay on the lines that use them.
-- **Track classes on transactions** (Settings › Preferences › Class tracking) turns on, and the
-  message after posting says so. Step 2 shows how many classes the file has.
+- **Track classes on transactions** (Settings › Preferences Console › Accounting › Class tracking)
+  turns on, and the message after posting says so. Step 2 shows how many classes the file has.
 
 **Reverse posted entries…** or **Reverse added lists…** makes the classes the import created
 inactive. **Start over…** removes them with everything else.

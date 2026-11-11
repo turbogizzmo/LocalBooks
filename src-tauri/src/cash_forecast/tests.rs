@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 
 fn d(text: &str) -> NaiveDate {
     text.parse().unwrap()
@@ -43,7 +44,7 @@ async fn money_due_in_and_out_lands_in_its_week_and_ties_out_to_the_agings() {
     let partly = invoice(&pool, "Initech", 30_000, "2026-11-20").await; // week 2, 100.00 paid
     crate::invoices::record_payment(
         &pool,
-        crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: partly, deposit_account_id: checking, payment_date: d("2026-11-02"), amount_cents: 10_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+        crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: partly, deposit_account_id: checking, payment_date: d("2026-11-02"), amount_cents: Cents(10_000), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .unwrap();
