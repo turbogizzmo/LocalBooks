@@ -215,6 +215,7 @@ pub async fn render_labels(pool: &SqlitePool, names: LabelNames, ids: &[i64], sk
 mod tests {
     use super::*;
     use crate::db::test_pool;
+    use crate::money::Cents;
 
     fn day(s: &str) -> NaiveDate {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
@@ -282,7 +283,7 @@ mod tests {
             bill_id,
             payment_account_id: checking,
             payment_date: day(date),
-            amount_cents: cents,
+            amount_cents: Cents(cents),
             reference: check.map(String::from),
             to_be_printed: false,
         };

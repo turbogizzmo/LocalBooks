@@ -287,7 +287,7 @@ pub async fn post(pool: &SqlitePool, kind: SheetKind, sheet: &Sheet, mapping: &M
                 bill_id: x.document_id,
                 payment_account_id: x.account_id,
                 payment_date: r.date,
-                amount_cents: r.amount_cents,
+                amount_cents: Cents(r.amount_cents),
                 reference: r.reference.clone(),
                 to_be_printed: false,
             };

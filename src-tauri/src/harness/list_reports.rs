@@ -126,7 +126,7 @@ async fn company() -> SqlitePool {
     .await
     .unwrap()
     .id;
-    crate::expenses::pay_vendor_bill(p, BillPaymentInput { bill_id: bill, payment_account_id: account(p, "1010").await, payment_date: d(2025, 12, 10), amount_cents: 5_000, reference: None, to_be_printed: false })
+    crate::expenses::pay_vendor_bill(p, BillPaymentInput { bill_id: bill, payment_account_id: account(p, "1010").await, payment_date: d(2025, 12, 10), amount_cents: Cents(5_000), reference: None, to_be_printed: false })
         .await
         .unwrap();
 

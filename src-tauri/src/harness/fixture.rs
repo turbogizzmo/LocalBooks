@@ -125,7 +125,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, te
 }
 
 async fn pay_bill(pool: &SqlitePool, bill_id: i64, date: NaiveDate, amount_cents: i64, from: i64) {
-    crate::expenses::pay_vendor_bill(pool, BillPaymentInput { bill_id, payment_account_id: from, payment_date: date, amount_cents, reference: None, to_be_printed: false })
+    crate::expenses::pay_vendor_bill(pool, BillPaymentInput { bill_id, payment_account_id: from, payment_date: date, amount_cents: Cents(amount_cents), reference: None, to_be_printed: false })
         .await
         .unwrap_or_else(|e| panic!("payment of bill {bill_id} on {date}: {e}"));
 }

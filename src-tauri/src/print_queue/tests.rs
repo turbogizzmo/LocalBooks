@@ -212,7 +212,7 @@ async fn pay_bills_checks_wait_in_the_queue_one_per_vendor_and_take_their_number
     for (vendor, number, cents) in [("Landlord", "L-1", 100_000), ("Landlord", "L-2", 20_000), ("Plumber", "P-9", 7_500)] {
         ids.push(crate::expenses::post_vendor_bill(&pool, bill(vendor, number, cents)).await.unwrap().id);
     }
-    let pay = |bill_id: i64, cents: i64| BillPaymentInput { bill_id, payment_account_id: checking, payment_date: d(10), amount_cents: cents, reference: Some("777".into()), to_be_printed: true };
+    let pay = |bill_id: i64, cents: i64| BillPaymentInput { bill_id, payment_account_id: checking, payment_date: d(10), amount_cents: Cents(cents), reference: Some("777".into()), to_be_printed: true };
     crate::expenses::pay_vendor_bills(&pool, vec![pay(ids[0], 100_000), pay(ids[1], 20_000), pay(ids[2], 7_500)]).await.unwrap();
 
     // Posted already, with no number yet; one check per vendor.
