@@ -685,7 +685,8 @@ fn check_balances(rows: &mut [BankRow], table: &CsvTable, printed: &StatementBal
 
 /// Saved column layouts for CSV files, keyed by their headers.
 async fn saved_mapping(pool: &SqlitePool, signature: &str) -> Result<Option<ColumnMapping>, String> {
-    let row: Option<(String, String, Option<String>, Option<String>, Option<String>, String)> = sqlx::query_as(
+    type FeedRow = (String, String, Option<String>, Option<String>, Option<String>, String);
+    let row: Option<FeedRow> = sqlx::query_as(
         "SELECT date_column, description_column, amount_column, money_in_column, money_out_column, date_order
          FROM bank_format_templates WHERE header_signature = ?1",
     )

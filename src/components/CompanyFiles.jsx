@@ -345,7 +345,7 @@ export function NewCompanyDialog({ onClose }) {
                 </select>
               </label>
               <label className="block">
-                <span className="qb-label">First month in fiscal year</span>
+                <span className="qb-label">First month of fiscal year</span>
                 <select className="qb-input w-full" value={info.fiscalYearStart} onChange={set('fiscalYearStart')} disabled={busy}>
                   {MONTHS.map((m, i) => (
                     <option key={m} value={`${String(i + 1).padStart(2, '0')}-01`}>{m}</option>

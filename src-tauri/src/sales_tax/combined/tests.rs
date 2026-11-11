@@ -80,7 +80,7 @@ async fn a_combined_rate_posts_by_agency_and_files_a_return_per_agency() {
     // On cash, half paid in August counts half of each part in August, nothing in July.
     let cash_july = sales_tax_return(&pool, d(7, 1), d(7, 31), Basis::Cash).await.unwrap();
     assert_eq!(cash_july.tax_cents, 0);
-    let pay = crate::invoices::PaymentInput { discount_cents: 0, invoice_id: inv.id, deposit_account_id: checking, payment_date: d(8, 10), amount_cents: 54_250, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None, payment_method_id: None };
+    let pay = crate::invoices::PaymentInput { discount_cents: Cents::ZERO, invoice_id: inv.id, deposit_account_id: checking, payment_date: d(8, 10), amount_cents: Cents(54_250), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None, payment_method_id: None };
     crate::invoices::record_payment(&pool, pay).await.unwrap();
     let cash_aug = sales_tax_return(&pool, d(8, 1), d(8, 31), Basis::Cash).await.unwrap();
     let parts: Vec<(&str, i64)> = cash_aug.agencies.iter().map(|a| (a.agency_name.as_str(), a.tax_cents)).collect();
@@ -100,6 +100,7 @@ async fn a_credit_memo_at_a_combined_rate_takes_back_each_part() {
     crate::credits::create_credit_memo(
         &pool,
         crate::credits::CreditMemoInput {
+            credit_number: None,
             customer_name: "Acme".into(),
             credit_date: d(7, 3),
             memo: None,

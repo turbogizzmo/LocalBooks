@@ -521,7 +521,8 @@ pub async fn overdue_invoices(pool: &SqlitePool, as_of: NaiveDate, days: i64) ->
 
 /// Posted, unvoided bills still owed that are due on or before `as_of` + `days` (overdue ones included).
 pub async fn bills_due(pool: &SqlitePool, as_of: NaiveDate, days: i64) -> Result<Vec<ReminderItem>, String> {
-    let rows: Vec<(i64, Option<String>, String, String, i64, Option<i64>)> = sqlx::query_as(
+    type ReminderRow = (i64, Option<String>, String, String, i64, Option<i64>);
+    let rows: Vec<ReminderRow> = sqlx::query_as(
         "SELECT b.id, b.bill_number, v.name, b.due_date, b.total_cents - b.amount_paid_cents, b.journal_entry_id
          FROM bills b JOIN vendors v ON v.id = b.vendor_id
          WHERE b.is_voided = 0 AND b.status IN ('UNPAID', 'PARTIAL') AND b.due_date <= ?1

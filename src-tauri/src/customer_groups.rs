@@ -43,7 +43,6 @@ pub enum Rule {
 #[derive(Debug, Clone, Default, sqlx::FromRow)]
 pub struct CustomerFacts {
     pub id: i64,
-    pub name: String,
     pub balance_cents: i64,
     pub customer_type_id: Option<i64>,
     pub terms_id: Option<i64>,
@@ -180,7 +179,7 @@ pub struct CustomerGroupInput {
 /// Every customer's details, for the rules.
 pub async fn customer_facts(pool: &SqlitePool) -> Result<Vec<CustomerFacts>, String> {
     sqlx::query_as(
-        "SELECT c.id, c.name,
+        "SELECT c.id,
                 COALESCE((SELECT SUM(b.home_open_cents) FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
                           WHERE i.customer_id = c.id AND i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0), 0)
                 - COALESCE((SELECT SUM(remaining_cents) FROM v_credit_memo_balances WHERE customer_id = c.id), 0) AS balance_cents,

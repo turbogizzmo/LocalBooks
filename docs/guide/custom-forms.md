@@ -54,7 +54,8 @@ saved design, so the PDF matches the printout.
 
 For statements, go to **Sales › Customer Statements**, pick the period, and click a customer to
 preview their statement; **Print…** and **Save as PDF…** are above the preview. Tick several
-customers and click **Print statements** to print them all at once.
+customers and click **Print *n* statements** to print them all at once. See
+[Customer statements](customer-statements.md).
 
 ## Print an envelope
 
@@ -121,12 +122,16 @@ Use **Review and email…** in a row's menu to check or change one message befor
 
 ## Send from LocalBooks instead (SMTP)
 
-If you'd rather LocalBooks sent the message itself, go to **Settings › Email**:
+If you'd rather LocalBooks sent the message itself, go to **Settings › Email**. It has two parts:
+**Emailed forms** chooses how messages go (**Open them in my mail app**, the default, or **Send them
+from LocalBooks (SMTP)**), and **Email server (SMTP)** holds the server's details.
 
-1. Choose **Send them from LocalBooks (SMTP)**.
-2. Enter your email provider's SMTP server, security and port (usually STARTTLS on 587, or SSL/TLS
-   on 465), your username and password, and the from address and name. Many providers (Gmail,
-   iCloud, Outlook.com) require an *app password* created in your account's security settings.
+1. Under **Emailed forms**, choose **Send them from LocalBooks (SMTP)**.
+2. Under **Email server (SMTP)**, enter your email provider's **Server**, **Security and port**
+   (usually STARTTLS on 587, or SSL/TLS on 465; **None** is only for a local relay without a
+   password), your **Username** and **Password**, and the **From address** and **From name**. Many
+   providers (Gmail, iCloud, Outlook.com) require an *app password* created in your account's
+   security settings.
 3. Click **Test connection** to check the sign-in, or **Send test email** to send yourself a short
    message, then **Save**.
 

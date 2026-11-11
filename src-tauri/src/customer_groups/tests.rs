@@ -6,7 +6,7 @@ fn d(m: u32, day: u32) -> NaiveDate {
 }
 
 fn facts(f: impl FnOnce(&mut CustomerFacts)) -> CustomerFacts {
-    let mut c = CustomerFacts { id: 1, name: "Acme".into(), is_active: true, ..Default::default() };
+    let mut c = CustomerFacts { id: 1, is_active: true, ..Default::default() };
     f(&mut c);
     c
 }

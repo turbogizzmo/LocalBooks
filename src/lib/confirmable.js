@@ -5,10 +5,16 @@
 // off, and so on. `recordTransaction` shows those warnings with "Save anyway" and saves again with
 // their codes in `confirmed`. Every transaction wrapper in lib/api/ goes through it, so each form
 // gets the same behaviour without handling it itself.
+//
+// The backend also refuses a customer or vendor name that is not on its list
+// (`NAME_NOT_ON_LIST`): forms never add a name on their own. The save then asks "<name> isn't on
+// your customer list." (Quick add, Set up… or Cancel; components/NewNamePrompt.jsx) and saves again
+// once the name is added. Cancel saves nothing and puts the cursor back in the name box.
 
 import { invoke } from '@tauri-apps/api/core';
 import { askConfirm } from './dialogs.jsx';
 import { myPreferences } from './myPreferences.js';
+import { notOnList } from './notOnList.js';
 
 const PREFIX = 'NEEDS_CONFIRMATION: ';
 
@@ -26,6 +32,35 @@ export function confirmationWarnings(err) {
 
 /** Thrown when the person chose not to save; forms show it like any other error. */
 export const NOT_SAVED = 'NOT_SAVED: Not saved.';
+
+/**
+ * When `err` refused a name that is not on the list, asks to add it. Resolves true once it is
+ * added (save again), false for any other error; throws {@link NOT_SAVED} on Cancel.
+ */
+async function addedMissingName(err) {
+  const missing = notOnList(err);
+  if (!missing) return false;
+  // Loaded when needed: the prompt's record dialog uses the api modules that load this one.
+  const { askNewName, focusNameBox } = await import('../components/NewNamePrompt.jsx');
+  const answer = await askNewName(missing.kind, missing.name);
+  if (!answer) {
+    focusNameBox(missing.name);
+    throw NOT_SAVED;
+  }
+  return true;
+}
+
+/** Runs a save command that takes a customer or vendor name, asking to add a name not on the list. */
+export async function saveNamed(command, args) {
+  // Each round adds the name it was refused for, so a second refusal is for another name.
+  for (let round = 0; ; round++) {
+    try {
+      return await invoke(command, args);
+    } catch (err) {
+      if (round > 2 || !(await addedMissingName(err))) throw err;
+    }
+  }
+}
 
 let audio = null;
 /** A short, quiet tone (My Preferences › General › Beep when recording a transaction). */
@@ -60,13 +95,19 @@ export async function recordTransaction(command, args, { editing = false, applie
     if (!ok) throw NOT_SAVED;
   }
   let confirmed = [];
-  // Each round can only add warnings the person has not answered yet, so this ends.
+  let namesAdded = 0;
+  // Each round can only add warnings the person has not answered yet, or a name not yet on the
+  // list, so this ends.
   for (;;) {
     try {
       const result = await invoke(command, { ...args, confirmed });
       if (myPreferences().beepWhenRecorded) beep();
       return result;
     } catch (err) {
+      if (namesAdded < 3 && (await addedMissingName(err))) {
+        namesAdded += 1;
+        continue;
+      }
       const warnings = confirmationWarnings(err);
       const fresh = warnings?.filter((w) => !confirmed.includes(w.code));
       if (!fresh?.length) throw err;

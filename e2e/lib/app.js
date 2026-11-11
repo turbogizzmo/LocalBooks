@@ -31,6 +31,13 @@ export function appConfigDir(env = process.env) {
   return path.join(base, IDENTIFIER, 'dev-builds');
 }
 
+/** The app's log folder (Tauri's `app_log_dir`), under `env`: the diagnostics log is there. */
+export function appLogDir(env = process.env) {
+  if (process.platform === 'win32') return path.join(env.LOCALAPPDATA, IDENTIFIER, 'logs');
+  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Logs', IDENTIFIER);
+  return path.join(env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), IDENTIFIER, 'logs');
+}
+
 /** Writes fresh test companies into `.work/seeds` with the test-only seeder (needs the built screens). */
 export function seedCompanies() {
   fs.rmSync(SEEDS, { recursive: true, force: true });

@@ -18,7 +18,9 @@ pub async fn list_statement_charges(db: State<'_, Db>, customer_id: i64) -> Resu
 /// Records a statement charge: posted to A/R, billed on the customer's next statement.
 #[tauri::command]
 pub async fn create_statement_charge(app: AppHandle, db: State<'_, Db>, input: StatementChargeInput) -> Result<InvoiceSummary, String> {
-    let charge = statement_charges::create(&db.pool().await, input).await?;
+    let pool = db.pool().await;
+    crate::sales::require_listed(&pool, crate::sales::Party::Customer, &input.customer_name).await?;
+    let charge = statement_charges::create(&pool, input).await?;
     notify(&app);
     Ok(charge)
 }

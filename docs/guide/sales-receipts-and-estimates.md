@@ -5,7 +5,8 @@
 Use a sales receipt when the customer pays at the time of sale, so no invoice is needed.
 
 1. Go to **Sales › All Sales** and click **New sales receipt** (or **+ New › Sales Receipt**).
-2. Optionally enter **Customer (optional)**, then set **Sales receipt date** and **Reference
+2. Optionally enter **Customer (optional)**, then set **Sales receipt date**, **Sale #** (the next
+   number is filled in; see [Invoice numbers](invoices.md#invoice-numbers)) and **Reference
    no.**, and click the **Payment method** tile: **Cash**, **Check**, **Card**, **Bank / ACH**, or
    **More** for Wire and Other.
 3. Choose **Deposit to**: a bank account, or **Undeposited Funds** to deposit it later with other
@@ -23,7 +24,9 @@ Use a sales receipt when the customer pays at the time of sale, so no invoice is
 An estimate doesn't affect your books until it becomes an invoice.
 
 1. Go to **Sales › Estimates** and click **New estimate** (or **+ New › Estimate**).
-2. Enter the **Customer**, **Estimate date** and **Expiration date**, then add the line items. A
+2. Enter the **Customer**, **Estimate date** and **Expiration date**, then add the line items.
+   **Estimate #** shows the next number; type another to use it (see
+   [Invoice numbers](invoices.md#invoice-numbers)). A
    line can be priced at 0.00 to show something included at no charge; the estimate's total must
    still be above zero.
 3. Click **Save Estimate**.

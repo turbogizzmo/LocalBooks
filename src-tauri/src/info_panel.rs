@@ -101,7 +101,8 @@ pub struct ItemSummary {
 /// The summary for product or service `product_id`, as of `today`.
 pub async fn item_summary(pool: &SqlitePool, product_id: i64, today: NaiveDate) -> Result<ItemSummary, String> {
     let item: Option<i64> = sqlx::query_scalar("SELECT id FROM inventory_items WHERE product_id = ?1").bind(product_id).fetch_optional(pool).await.map_err(db_err)?;
-    let record: Option<(i64, Option<i64>, Option<i64>, Option<String>)> = sqlx::query_as(
+    type RecordRow = (i64, Option<i64>, Option<i64>, Option<String>);
+    let record: Option<RecordRow> = sqlx::query_as(
         "SELECT p.rate_cents, p.reorder_point_e4, p.preferred_vendor_id, v.name
          FROM products_services p LEFT JOIN vendors v ON v.id = p.preferred_vendor_id WHERE p.id = ?1",
     )

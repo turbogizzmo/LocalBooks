@@ -35,11 +35,19 @@ describe('From no users to a View only user', () => {
     await waitForApp();
     await goTo('Invoices');
     await type(field('Customer'), 'E2E Customer');
+    // The customer is new: the name box offers to add it, and choosing that adds it without a
+    // further question (leaving the box with a new name, or saving, would ask first).
+    await click($('//li[@role="option"][contains(normalize-space(), "as a new customer")]'));
+    await $('//li[@role="option"][contains(normalize-space(), "as a new customer")]').waitForExist({ reverse: true });
     // A line becomes editable when its row is clicked.
     await click($('[data-row="0"] [data-cell="description"]'));
     await type($('[data-row="0"] [data-col="description"]'), 'End-to-end consulting');
     await type($('[data-row="0"] [data-col="qty"]'), '2');
     await type($('[data-row="0"] [data-col="rate"]'), '150');
+    // The customer's information panel opens now that it is on the list; on a narrow window it
+    // pushes Save & New out of view, so hide it.
+    const hidePanel = $('//button[@aria-label="Hide the information panel"]');
+    if (await hidePanel.isDisplayed()) await click(hidePanel);
     await click(button('Save & New'));
     await notice('success', 'for E2E Customer posted').waitForDisplayed();
     // Listed with its total: 2 × 150.00.

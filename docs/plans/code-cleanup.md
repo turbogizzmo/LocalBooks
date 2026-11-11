@@ -11,10 +11,16 @@ and the order.
   warnings it skipped (`Some(x).filter` → `bool::then`, a `matches!`, two literal patterns, a doc
   list) and lopdf's deprecated `load_mem_with_password` in two tests. **53** warnings are left, all for
   A6b: 45 `type_complexity`, `enum_variant_names` (custom_reports), `too_many_arguments`
-  (inventory), and 6 dead-code items (`bank::payee_rules::suggested_pattern`,
-  `party_contacts::statement_contact`, `reconcile::start`, `report_pdf::to_pdf`, used only by tests;
+  (inventory), and 6 dead-code items (`bank::payee_rules::suggested_pattern`, `reconcile::start` and
+  `report_pdf::to_pdf`, used only by tests; `party_contacts::statement_contact`, used nowhere;
   `CustomerFacts::name`; a Shopify constant). Each dead item is either connected to the screen
   it was written for or kept as test-only with `#[cfg(test)]`. That is a decision, not a mechanical fix.
+- **A6b and A6c, done** in one PR (#343): the 45 complex types became local `type` aliases next to
+  their query, `record_movement` takes a `Movement` struct, `Cleared::Cleared` keeps its name (it is
+  the JSON value) with the lint allowed on that enum, and the dead code went: three test-only
+  helpers (`suggested_pattern`, `reconcile::start`, `report_pdf::to_pdf`) are `#[cfg(test)]`, and
+  `statement_contact`, `CustomerFacts::name` and Shopify's `PAGE` were removed, as nothing read
+  them. `lint.yml` and `AGENTS.md` now run `cargo clippy --all-targets --locked -- -D warnings`.
 
 ## A6: Clippy warnings
 
@@ -60,6 +66,14 @@ report_schedules tests), 4 `dead_code` (one is `CustomerFacts::name`) and 1 `unu
 Each step is re-measured just before it opens, since feature PRs will have added warnings.
 
 ## A7: `Cents` in documents and commands
+
+**Status.** Stage 1 (#335): the sales tax payment input. Stage 2a (#346): the invoice inputs
+(`InvoiceLineInput.rate_cents`, `InvoiceInput.discount_cents`, `PaidNow.amount_cents`,
+`PaymentInput.amount_cents` and `discount_cents`). Each input is read once with `.get()` where it
+enters the ledger code; the invoice total and the memorized-invoice summary now use checked
+arithmetic. Most of the diff is call sites that build these structs, rewritten from the compiler's
+error spans. Next: sales receipts, estimates and credits (`sales`, `estimates`, `credits`,
+`item_types`).
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:

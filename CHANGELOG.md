@@ -11,6 +11,36 @@ people using LocalBooks.
   each line's Customer:Job and Class, and its look is set in Settings › Custom Forms › Purchase
   order. File › Print Forms › Purchase Orders uses the same design.
 
+- **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
+  "Company default" start at it on new sales forms. Before, once a company had two or more rates,
+  those customers got no tax unless someone picked a rate on each form.
+- **Discounts on the sales tax reports.** A discount taken off a whole invoice or sales receipt,
+  and a discount line on a credit memo, now lower the taxable sales on the Sales Tax Liability
+  report and the sales tax return, matching the tax that was charged. The tax amounts were already
+  right.
+- The message after **Pay sales tax** names the account actually paid down.
+- **Month-end schedules stay at month end.** A recurring transaction that repeats monthly,
+  quarterly or yearly from the 29th, 30th or 31st now falls on the last day of shorter months and
+  goes back to its own day after them (January 31, February 28, March 31). Before, it moved to the
+  28th for good after February. Schedules already set up pick this up from their next date on.
+- In Memorize, changing **Repeat every** now moves the **Next date** too.
+- **Bills from purchase orders use the vendor's terms.** Create Bill on a purchase order now gives
+  the bill the vendor's terms, so its due date follows them and Pay Bills offers the early-payment
+  discount. It also gets the same checks as Enter Bills: a repeated vendor bill number or an
+  unusual date asks before saving, and approval rules for bills hold it for approval.
+- **Journal Entries offers Edit… and Duplicate only on entries typed there.** Refunds, write-offs,
+  bounced checks, sales tax payments, class reclassifications and other entries made by another
+  screen now offer only Void. Before, Edit… was refused at save, and Duplicate posted an unlinked
+  copy that, for a reclassification, moved the class a second time.
+- **A purchase order received in full stays closed.** Reopening it is refused, so Receive Items
+  can't take more than was ordered. Voiding a receipt still reopens the order.
+- **Vendor credits, credit memos and credit refunds get the usual save checks.** An unusual date
+  or a posting to Retained Earnings now asks before saving, as on other forms.
+- **Purchase orders follow the inventory preference.** With inventory and purchase orders turned
+  off, Create Purchase Orders is greyed out in the menu and left off the side bar and + New.
+- The vendor credit grid no longer shows a Bill? box. A credit can't be billed to a customer, and
+  the tick was never saved.
+- New company setup says "First month of fiscal year", as Preferences does.
 - **Customer Statements marks what was sent for this period.** The ✉ beside a customer now means
   their statement for the period on screen was emailed. Before, emailing one month's statement
   marked every period as sent. Statements emailed before this update show no mark.
@@ -18,6 +48,22 @@ people using LocalBooks.
   prints only that group.
 
 ## [0.14.1]
+- **Help for every screen, setting and menu command.** F1 now explains every page in the sidebar,
+  including Approvals, Payout Feeds, the Attachments Library, Reps, Ship Via & Fields and each
+  Settings tab. New step-by-step guides cover credit memos and refunds, customer statements,
+  purchase orders, vendor credits, sales tax, memorized transactions, budgets and reclassifying, and
+  two references list every Preferences setting with its default and every menu-bar command. Several
+  out-of-date statements in Help and the guides are corrected.
+- **Profit and Loss columns by class or customer.** On the Profit and Loss, **Columns** now also
+  offers **Class** and **Customer:Job**: a column for each class, or for each customer and job,
+  beside the total.
+- **Budgets keep what you type.** Closing Budgets, quitting LocalBooks or choosing New budget…
+  with amounts not yet saved now asks first, instead of losing them.
+- **Clearer fiscal years for new budgets.** New budget… lists each fiscal year by its months (for
+  example "Jul 2026 – Jun 2027") and marks the current one. Before, a bare year could create the
+  budget for the wrong fiscal year when it doesn't start in January.
+
+## [0.14.0]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a
   state rate plus a city rate, say) now splits the payment among its rates, in proportion to their
@@ -29,9 +75,30 @@ people using LocalBooks.
   now copies its subtotals, discount lines, percentage charges and groups, so the copy credits the
   same amount as the original. Before, the copy left them out and credited the full amount of the
   item lines.
+- **Diagnostics say why starting was slow.** The log in Help › Save Diagnostics now records how
+  long LocalBooks took to start and which steps were slow, such as opening the company file.
+- **No more surprise customers and vendors.** A name typed on a form that isn't on your list is no
+  longer added silently when you save. LocalBooks stops and asks "*name* isn't on your customer
+  list." with **Quick add**, **Set up…** (add it and open its record) and **Cancel** (back to the
+  name box, nothing saved), when you leave the name box or save. This covers invoices, sales
+  receipts, estimates, credit memos, sales orders, bills, checks, expenses, purchase orders, vendor
+  credits and payees typed in a register. Imports still add the names they bring in.
+- **Invoice # on the invoice form.** A new invoice shows the number it will get before you save,
+  and you can type another. If that number is already used, LocalBooks says which invoice has it
+  and offers the next free number. Estimates, sales receipts, credit memos and sales orders have
+  the same box (Estimate #, Sale #, Credit #, Order #). Duplicate still gives the copy the next
+  number.
+- **An edited invoice keeps its number.** Saving changes to a posted invoice used to post the
+  corrected invoice under a new number; it now keeps the original's number, so customers,
+  statements, payments and reports go on showing the same one.
 
 ## [0.14.0]
-
+- **Encrypt the whole company file.** An Admin can now encrypt the whole company file, its
+  attachments and every backup made from it (Settings › Users & Passwords). It is off unless you turn
+  it on. With it on, a copy that leaves your computer shows nothing readable without a password or
+  the recovery key, the file opens on the sign-in screen, and signing out closes it again. **Read the
+  warning first:** if every Admin forgets their password and the recovery key is lost, nobody can
+  open those books or their backups.
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
   job carries over to the bill, and Open Purchase Orders by Job lists what is still on order for
   each job.

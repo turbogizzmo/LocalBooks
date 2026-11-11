@@ -19,7 +19,7 @@ posted lives in Rust and in the schema; the screens only display and collect inp
 | Rust tests (the gate) | `cd src-tauri && cargo test --locked` |
 | JS unit tests (pure helpers in `src/**/*.test.js`) | `npm test` |
 | JS lint (a name or component used but never defined; accessibility: labels, ARIA, focusable menus) | `npm run lint` |
-| Lint gate | `cd src-tauri && cargo clippy --all-targets --locked -- -D clippy::correctness -D clippy::suspicious -D clippy::perf` |
+| Lint gate (any warning fails) | `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings` |
 | End-to-end tests | see `docs/testing/end-to-end.md` |
 | Run the app on test companies | the `run-localbooks` skill in `.claude/skills/` |
 | Release build (macOS) | `npm run build:mac` |
@@ -104,6 +104,10 @@ uncommitted work alone.
 - [ ] Docs travel with the feature: user guide (`docs/guide/`), in-app Help
       (`src/components/help/`), README feature row, and `site/index.html` where relevant
       (`docs_checks.rs` enforces the links).
+- [ ] Every new screen, setting and menu command is explained: a new page in `NAV` has its own
+      entry in a Help file's `screens` (`help` text and a `guide`), a new Preferences setting is in
+      `docs/guide/preferences.md` with its default, a new Settings section is in the guide, and a
+      new menu command is in `docs/guide/menus.md`. `docs_checks.rs` fails CI for each of these.
 - [ ] A change people will notice has an entry in `CHANGELOG.md` under the next version, written
       for the people using LocalBooks (it becomes the release notes).
 - [ ] `docs/gaps.md` is updated: the row you finished is marked `done` with the PR, and any new
