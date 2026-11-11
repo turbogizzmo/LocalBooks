@@ -10,6 +10,9 @@ people using LocalBooks.
   to the vendor like the other forms, with Email later too. It shows the vendor's address and
   each line's Customer:Job and Class, and its look is set in Settings › Custom Forms › Purchase
   order. File › Print Forms › Purchase Orders uses the same design.
+- **Edit and delete purchase orders.** An open purchase order can be changed with Edit… (from its
+  row or the saved order) and keeps its number. Delete removes one nothing was received or billed
+  against. Neither changes the books, as a purchase order posts nothing.
 
 - **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
   "Company default" start at it on new sales forms. Before, once a company had two or more rates,

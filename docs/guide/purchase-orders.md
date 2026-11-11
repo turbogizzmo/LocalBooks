@@ -65,8 +65,8 @@ heading picks which orders appear: **Open** (the default), **Billed**, **Closed*
 - **Billed**: turned into a bill with **Create Bill**.
 - **Closed**: closed by hand, or closed by LocalBooks once every line has been received.
 
-Double-click an order (or choose **Open** in its **▾** menu) to see it as it prints. A saved order
-can't be changed. The toolbar above it has:
+Double-click an order (or choose **Open** in its **▾** menu) to see it as it prints. The toolbar
+above it has:
 
 - **Previous** and **Next** to step through your orders by date, and **Find** to search all
   transactions. **New** goes back to a blank order.
@@ -77,6 +77,7 @@ can't be changed. The toolbar above it has:
   (see [Attach receipts and documents](attachments.md#what-you-can-attach)).
 - **Create Bill** to turn it into a bill (see [Turn an order into a bill](#turn-an-order-into-a-bill)).
 - **Close PO** to close it without billing, or **Reopen** on a closed order.
+- **Edit** and **Delete** (see [Change or delete an order](#change-or-delete-an-order)).
 
 While a new order has unsaved entries, **Previous** and **Next** are greyed out: save or clear it
 first.
@@ -137,7 +138,18 @@ choose **Close without billing** in its **▾** menu, or open it and click **Clo
 order leaves the open-order reports and can't be received or billed. **Reopen** brings it back as
 an open order.
 
-Purchase orders can't be deleted or voided. Close the ones you don't need.
+## Change or delete an order
+
+**Edit…** in an open order's **▾** menu (or **Edit** on the open order) puts it back on the form:
+change the vendor, dates, lines, discounts and charges, and save. It keeps its PO number, and
+nothing posts, because a purchase order never touches your books. A closed order must be reopened
+first.
+
+**Delete…** removes an order after you confirm. Delete any files attached to it first.
+
+An order that has been billed, or that items were received against (even on a receipt that was
+voided later), can't be changed or deleted: close it, or make a new order. Purchase orders are never
+voided.
 
 ## Duplicate an order
 
