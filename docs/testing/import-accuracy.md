@@ -68,7 +68,7 @@ after posting with a notice in step 3. What is left on the files above:
 - **Inventory cost lines.** Cost of goods sold and the matching inventory-asset lines are kept in
   separate inventory record tables, linked to invoice, sales receipt, credit memo and bill lines by
   line id rather than by transaction. The reader joins them to their form (R3a, #327; bills in
-  #PR_R3A). A pair whose form line itself can't be read is left out and counted as rejected.
+  #380). A pair whose form line itself can't be read is left out and counted as rejected.
 - **Inventory adjustments.** Some files lost one column definition of the adjustment line table
   from their catalog, so every adjustment row read out of step and none was imported. When the
   catalog skips a column id, the reader now tries the row with that column left out first (as
