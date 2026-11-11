@@ -37,9 +37,9 @@ describe('From no users to a View only user', () => {
     await type(field('Customer'), 'E2E Customer');
     // The customer is new, so LocalBooks asks before adding it: when the box is left, or (with no
     // customers on the list yet) when the invoice is saved. Quick add puts it on the list.
-    const quickAdd = async () => {
+    const quickAdd = async (timeout = 10000) => {
       const add = button('Quick add');
-      if (await add.waitForDisplayed({ timeout: 5000 }).catch(() => false)) {
+      if (await add.waitForDisplayed({ timeout }).catch(() => false)) {
         await add.click();
         await add.waitForExist({ reverse: true });
       }
@@ -53,6 +53,8 @@ describe('From no users to a View only user', () => {
     await type($('[data-row="0"] [data-col="description"]'), 'End-to-end consulting');
     await type($('[data-row="0"] [data-col="qty"]'), '2');
     await type($('[data-row="0"] [data-col="rate"]'), '150');
+    // A question still open (a slow machine shows it late) is answered before saving.
+    await quickAdd(1000);
     await click(button('Save & New'));
     await quickAdd();
     await notice('success', 'for E2E Customer posted').waitForDisplayed();
