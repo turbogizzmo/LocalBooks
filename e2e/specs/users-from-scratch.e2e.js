@@ -35,28 +35,16 @@ describe('From no users to a View only user', () => {
     await waitForApp();
     await goTo('Invoices');
     await type(field('Customer'), 'E2E Customer');
-    // The customer is new, so LocalBooks asks before adding it: when the box is left, or (with no
-    // customers on the list yet) when the invoice is saved. Quick add puts it on the list.
-    const quickAdd = async (timeout = 10000) => {
-      const add = button('Quick add');
-      if (await add.waitForDisplayed({ timeout }).catch(() => false)) {
-        await add.click();
-        await add.waitForExist({ reverse: true });
-      }
-    };
+    // The customer is new: the name box offers to add it, and choosing that adds it without a
+    // further question (leaving the box with a new name, or saving, would ask first).
+    await click($('//li[@role="option"][contains(normalize-space(), "as a new customer")]'));
+    await $('//li[@role="option"][contains(normalize-space(), "as a new customer")]').waitForExist({ reverse: true });
     // A line becomes editable when its row is clicked.
     await click($('[data-row="0"] [data-cell="description"]'));
-    await quickAdd();
-    // When the question took that click, click the line again.
-    const description = $('[data-row="0"] [data-col="description"]');
-    if (!(await description.isDisplayed())) await click($('[data-row="0"] [data-cell="description"]'));
     await type($('[data-row="0"] [data-col="description"]'), 'End-to-end consulting');
     await type($('[data-row="0"] [data-col="qty"]'), '2');
     await type($('[data-row="0"] [data-col="rate"]'), '150');
-    // A question still open (a slow machine shows it late) is answered before saving.
-    await quickAdd(1000);
     await click(button('Save & New'));
-    await quickAdd();
     await notice('success', 'for E2E Customer posted').waitForDisplayed();
     // Listed with its total: 2 × 150.00.
     const [, customer, , , total] = await tableRow('E2E Customer');
