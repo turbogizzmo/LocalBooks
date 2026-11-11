@@ -47,7 +47,9 @@ describe('From no users to a View only user', () => {
     // A line becomes editable when its row is clicked.
     await click($('[data-row="0"] [data-cell="description"]'));
     await quickAdd();
-    await click($('[data-row="0"] [data-cell="description"]'));
+    // When the question took that click, click the line again.
+    const description = $('[data-row="0"] [data-col="description"]');
+    if (!(await description.isDisplayed())) await click($('[data-row="0"] [data-cell="description"]'));
     await type($('[data-row="0"] [data-col="description"]'), 'End-to-end consulting');
     await type($('[data-row="0"] [data-col="qty"]'), '2');
     await type($('[data-row="0"] [data-col="rate"]'), '150');
