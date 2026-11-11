@@ -69,9 +69,12 @@ is on or before the [closing date](closing-the-books.md#close-the-books), nothin
 the message says why. Move the next date past the closing date by memorizing it again, or delete
 it.
 
-When a date falls past the end of a shorter month, the copy is dated the last day of that month,
-and the schedule carries on from that day. A transaction due on January 31 is entered on
-February 28, then March 28. Use a day from 1 to 28 to keep the same day every month.
+Monthly, quarterly and yearly schedules keep their day of the month. When that day falls past the
+end of a shorter month, the copy is dated the last day of that month, and the next one goes back
+to the schedule's day: a transaction due on January 31 is entered on January 31, February 28,
+March 31, April 30 and so on. Memorizing a transaction dated the 31st keeps the 31st even though
+its first repeat falls on the 28th. Schedules saved before 0.15 that had already slipped to an
+earlier day keep their own day from their next date on.
 
 When the next date passes the end date, the transaction is paused for good: it stays in the list
 for reference.
