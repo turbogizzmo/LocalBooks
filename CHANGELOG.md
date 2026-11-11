@@ -21,6 +21,9 @@ people using LocalBooks.
   for example a discount for filing on time, a penalty or a rounding difference, against an income
   or expense account. The sales tax return shows it under the rate's agency. Before, this took a
   journal entry, which changed what was owed but not the return.
+- **Edit and delete purchase orders.** An open purchase order can be changed with Edit… (from its
+  row or the saved order) and keeps its number. Delete removes one nothing was received or billed
+  against. Neither changes the books, as a purchase order posts nothing.
 - **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
   "Company default" start at it on new sales forms. Before, once a company had two or more rates,
   those customers got no tax unless someone picked a rate on each form.

@@ -185,6 +185,36 @@ async fn the_1099_report_follows_the_account_mapping_and_the_threshold_by_year()
 }
 
 #[tokio::test]
+async fn an_open_purchase_order_can_be_changed_or_deleted_until_something_is_received_or_billed() {
+    let pool = test_pool().await;
+    let supplies = account(&pool, "6250").await;
+    let line = |cents: i64| PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: Some("Paper".into()), quantity_e4: None, rate_cents: None, amount_cents: cents, class_id: None, customer_id: None };
+    let input = |vendor: &str, lines: Vec<PurchaseOrderLineInput>| PurchaseOrderInput { form_lines: Vec::new(), vendor_name: vendor.into(), po_date: d(5, 1), expected_date: None, memo: None, lines };
+    let po = create_purchase_order(&pool, input("Staples", vec![line(5_000)])).await.unwrap();
+    let number = |pool: SqlitePool| async move { list_purchase_orders(&pool).await.unwrap()[0].po_number };
+    let before = number(pool.clone()).await;
+
+    // Changed in place: another vendor and two lines, the same number, nothing posted.
+    update_purchase_order(&pool, po, input("Office Depot", vec![line(2_000), line(3_500)])).await.unwrap();
+    let order = &list_purchase_orders(&pool).await.unwrap()[0];
+    assert_eq!((order.po_number, order.vendor_name.as_str(), order.total_cents), (before, "Office Depot", 5_500));
+    assert_eq!(purchase_order_lines(&pool, po).await.unwrap().len(), 2);
+    assert_eq!(balance(&pool, supplies).await, 0);
+
+    // Billed, it can be neither changed nor deleted.
+    bill_purchase_order(&pool, po, d(5, 9), d(6, 8), None).await.unwrap();
+    assert!(update_purchase_order(&pool, po, input("Staples", vec![line(1_000)])).await.unwrap_err().starts_with("PO_BILLED"));
+    assert!(delete_purchase_order(&pool, po).await.unwrap_err().starts_with("PO_BILLED"));
+
+    // Another, deleted with its lines.
+    let other = create_purchase_order(&pool, input("Staples", vec![line(1_000)])).await.unwrap();
+    delete_purchase_order(&pool, other).await.unwrap();
+    assert_eq!(list_purchase_orders(&pool).await.unwrap().len(), 1);
+    let lines: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM purchase_order_lines WHERE purchase_order_id = ?1").bind(other).fetch_one(&pool).await.unwrap();
+    assert_eq!(lines, 0);
+}
+
+#[tokio::test]
 async fn a_monthly_schedule_from_the_31st_keeps_to_month_end_after_a_short_month() {
     use chrono::Datelike;
     let pool = test_pool().await;
