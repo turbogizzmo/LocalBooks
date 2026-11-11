@@ -137,7 +137,7 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
     }
     let mut amounts = Vec::with_capacity(input.lines.len());
     for (idx, line) in input.lines.iter().enumerate() {
-        let amount = validate_line(line.quantity_e4, line.rate_cents, idx + 1, "CM")?;
+        let amount = validate_line(line.quantity_e4, line.rate_cents.get(), idx + 1, "CM")?;
         amounts.push(crate::item_types::ItemAmount { amount_cents: amount, is_taxable: line.is_taxable });
     }
     // Subtotals, discounts, percent charges and groups among the lines, as on an invoice.
@@ -207,7 +207,7 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
         if let Some(class) = line.class_id {
             crate::classes::check_usable(tx, class, &format!("CM: line {n}")).await?;
         }
-        let amount = line_amount(line.quantity_e4, line.rate_cents)?;
+        let amount = line_amount(line.quantity_e4, line.rate_cents.get())?;
         sqlx::query(
             "INSERT INTO credit_memo_lines
                 (credit_memo_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id, class_id, is_taxable)

@@ -151,7 +151,7 @@ Harbor Lane, OR 97001' WHERE id = (SELECT id FROM invoices WHERE customer_id = ?
     // order reports, with part of it backordered.
     let so_line = |item, description: &str, qty: i64, rate: i64| crate::sales_orders::SalesOrderLineInput {
         id: None,
-        line: crate::sales::SalesLineInput { product_service_id: Some(item), description: description.into(), quantity_e4: qty, rate_cents: rate, income_account_id: sales, class_id: None, is_taxable: false, service_date: None },
+        line: crate::sales::SalesLineInput { product_service_id: Some(item), description: description.into(), quantity_e4: qty, rate_cents: Cents(rate), income_account_id: sales, class_id: None, is_taxable: false, service_date: None },
     };
     crate::sales_orders::create(
         p,

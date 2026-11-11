@@ -18,6 +18,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::invoices::{validate_line, InvoiceInput};
 use crate::ledger::{db_err, format_cents, rollback, MAX_LINE_CENTS};
+use crate::money::Cents;
 use crate::sales::{find_or_create_named, Party, SalesLineInput};
 use crate::sales_header::SalesHeader;
 
@@ -307,7 +308,7 @@ async fn write_from_estimate(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64,
         }
         lines.push(SalesOrderLineInput {
             id: None,
-            line: SalesLineInput { product_service_id, description, quantity_e4, rate_cents, income_account_id, class_id, is_taxable, service_date: None },
+            line: SalesLineInput { product_service_id, description, quantity_e4, rate_cents: Cents(rate_cents), income_account_id, class_id, is_taxable, service_date: None },
         });
     }
     let form = crate::item_types::form_lines_of(&mut **tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
@@ -402,7 +403,7 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, id: i64, input: &SalesOrderInpu
     for (idx, l) in input.lines.iter().enumerate() {
         let line = &l.line;
         // Priced above zero, as on invoices: every order line has to be invoiceable.
-        let amount = validate_line(line.quantity_e4, line.rate_cents, idx + 1, "SO")?;
+        let amount = validate_line(line.quantity_e4, line.rate_cents.get(), idx + 1, "SO")?;
         total = total
             .checked_add(amount)
             .filter(|t| *t <= MAX_LINE_CENTS)

@@ -24,7 +24,7 @@ fn d(day: u32) -> NaiveDate {
 }
 
 fn line(product: Option<i64>, qty: i64, rate: i64, account: i64) -> SalesLineInput {
-    SalesLineInput { product_service_id: product, description: "Item".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: account, class_id: None, is_taxable: false, service_date: None }
+    SalesLineInput { product_service_id: product, description: "Item".into(), quantity_e4: qty * 10_000, rate_cents: Cents(rate), income_account_id: account, class_id: None, is_taxable: false, service_date: None }
 }
 
 #[tokio::test]
@@ -51,7 +51,7 @@ async fn sales_receipt_debits_cash_and_credits_revenue() {
             memo: Some("Counter sale".into()),
             lines: vec![line(Some(widget.id), 3, 1_999, sales), line(None, 1, 5_000, services)],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -83,7 +83,7 @@ async fn sales_receipt_rejects_non_income_lines_and_rolls_back() {
             memo: None,
             lines: vec![line(None, 1, 5_000, rent)],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -144,7 +144,7 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
             memo: None,
             lines: vec![line(None, 2, 2_500, services)],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -188,4 +188,18 @@ async fn forms_may_post_only_names_on_the_list() {
     assert!(require_listed(&pool, Party::Customer, "Paper Supply Co").await.is_err());
     let customers: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM customers").fetch_one(&pool).await.unwrap();
     assert_eq!(customers, 2);
+}
+
+#[test]
+fn sales_receipt_and_estimate_amounts_arrive_as_bare_integers() {
+    let receipt: SalesReceiptInput = serde_json::from_str(
+        r#"{"customerName":null,"receiptDate":"2025-07-01","depositAccountId":2,"paymentMethod":"CASH","reference":null,"memo":null,"discountCents":250,
+            "lines":[{"productServiceId":null,"description":"Work","quantityE4":10000,"rateCents":12345,"incomeAccountId":4}]}"#,
+    )
+    .unwrap();
+    assert_eq!((receipt.lines[0].rate_cents, receipt.discount_cents), (Cents(12_345), Cents(250)));
+    let estimate: crate::estimates::EstimateInput =
+        serde_json::from_str(r#"{"customerName":"Acme","estimateDate":"2025-07-01","expirationDate":null,"memo":null,"lines":[]}"#).unwrap();
+    assert_eq!(estimate.discount_cents, Cents::ZERO, "the discount is optional");
+    assert!(serde_json::from_str::<SalesLineInput>(r#"{"productServiceId":null,"description":"Work","quantityE4":10000,"rateCents":123.45,"incomeAccountId":4}"#).is_err(), "a fractional rate is refused");
 }

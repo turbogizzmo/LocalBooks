@@ -24,7 +24,7 @@ pub struct EstimateInput {
     #[serde(default)]
     pub tax_rate_id: Option<i64>,
     #[serde(default)]
-    pub discount_cents: i64,
+    pub discount_cents: Cents,
     #[serde(flatten)]
     pub details: crate::sales_lists::SalesDetails,
 }
@@ -96,9 +96,9 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
     let mut amounts = Vec::with_capacity(input.lines.len());
     for (idx, line) in input.lines.iter().enumerate() {
         // A line may be priced at nothing (an included extra); the estimate as a whole may not.
-        let amount = match line.rate_cents {
+        let amount = match line.rate_cents.get() {
             0 if (1..=crate::invoices::MAX_QUANTITY_E4).contains(&line.quantity_e4) => 0,
-            _ => validate_line(line.quantity_e4, line.rate_cents, idx + 1, "EST")?,
+            _ => validate_line(line.quantity_e4, line.rate_cents.get(), idx + 1, "EST")?,
         };
         total = total
             .checked_add(amount)
@@ -113,14 +113,19 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
     crate::item_types::check_form_lines(tx, form, &layout, "EST").await?;
     let numbers = layout.item_numbers();
     let total = layout.lines_cents;
-    if input.discount_cents < 0 || input.discount_cents > total {
+    if input.discount_cents.is_negative() || input.discount_cents > Cents(total) {
         return Err("EST_BAD_DISCOUNT: a discount is between zero and the subtotal".into());
     }
     let taxable = layout.taxable_cents;
-    let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, total);
+    let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents.get(), total);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "EST").await?;
     let tax_cents = tax.as_ref().map_or(0, |t| t.cents);
-    let total = (total - input.discount_cents).checked_add(tax_cents).filter(|t| *t > 0 && *t <= MAX_LINE_CENTS).ok_or("EST_AMOUNT_TOO_LARGE: the estimate total must be above zero and in range")?;
+    let total = Cents(total)
+        .checked_sub(input.discount_cents)
+        .and_then(|t| t.checked_add(Cents(tax_cents)))
+        .map(Cents::get)
+        .filter(|t| *t > 0 && *t <= MAX_LINE_CENTS)
+        .ok_or("EST_AMOUNT_TOO_LARGE: the estimate total must be above zero and in range")?;
     let customer_id = find_or_create_named(tx, Party::Customer, &input.customer_name).await?;
 
     let number = crate::doc_numbers::take_number(tx, crate::doc_numbers::DocKind::Estimate, input.estimate_number).await?;

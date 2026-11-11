@@ -32,6 +32,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::credits::{apply_customer_credit_in_tx, apply_vendor_credit_in_tx, write_credit_memo, ApplyCreditInput, CreditMemoInput};
 use crate::ledger::{db_err, format_cents, post_entry_in_tx, rollback, EntrySource, JournalEntry, JournalLine};
+use crate::money::Cents;
 use crate::sales::SalesLineInput;
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
@@ -644,7 +645,7 @@ pub async fn write_off(pool: &SqlitePool, input: &WriteOffInput) -> Result<Write
                     product_service_id: None,
                     description,
                     quantity_e4: crate::ledger::QUANTITY_SCALE,
-                    rate_cents: open,
+                    rate_cents: Cents(open),
                     income_account_id: input.account_id,
                     class_id: None,
                     is_taxable: false, service_date: None,

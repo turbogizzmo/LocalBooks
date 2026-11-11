@@ -131,9 +131,9 @@ async fn a_sales_receipt_with_a_subtotal_posts_balanced() {
             payment_method_id: None,
             reference: None,
             memo: None,
-            lines: vec![sale(4_000), sale(1_000)],
+            lines: vec![sale(Cents(4_000)), sale(Cents(1_000))],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: with_form(vec![FormLineInput::subtotal(2)]),
         },
     )
@@ -162,9 +162,9 @@ async fn an_estimate_carries_its_subtotals_to_its_invoice() {
             estimate_date: d(1),
             expiration_date: None,
             memo: None,
-            lines: vec![est_line(30_000), est_line(20_000)],
+            lines: vec![est_line(Cents(30_000)), est_line(Cents(20_000))],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: with_form(vec![FormLineInput::subtotal(1), FormLineInput::subtotal(2)]),
         },
     )
@@ -349,7 +349,7 @@ async fn a_sales_receipt_with_a_discount_posts_balanced() {
     let pool = test_pool().await;
     let (checking, services) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await);
     let discounts = discounts_given(&pool).await;
-    let sale = SalesLineInput { product_service_id: None, description: "Visit".into(), quantity_e4: 10_000, rate_cents: 8_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
+    let sale = SalesLineInput { product_service_id: None, description: "Visit".into(), quantity_e4: 10_000, rate_cents: Cents(8_000), income_account_id: services, class_id: None, is_taxable: false, service_date: None };
     let receipt = post_sales_receipt(
         &pool,
         SalesReceiptInput {
@@ -363,7 +363,7 @@ async fn a_sales_receipt_with_a_discount_posts_balanced() {
             memo: None,
             lines: vec![sale],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: with_form(vec![FormLineInput::discount(1, discounts, Some(250_000), None, false)]),
         },
     )
@@ -465,9 +465,9 @@ async fn fixed_and_percent_charges_post_balanced_and_carry_from_an_estimate() {
             estimate_date: d(1),
             expiration_date: None,
             memo: None,
-            lines: vec![est_line(12_345, None), est_line(1_500, Some(shipping.id))],
+            lines: vec![est_line(Cents(12_345), None), est_line(Cents(1_500), Some(shipping.id))],
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: with_form(vec![
                 FormLineInput { product_service_id: Some(handling.id), description: "Handling".into(), ..FormLineInput::charge(1, services, 30_000, false) },
                 FormLineInput::subtotal(2),
@@ -731,7 +731,7 @@ async fn a_credit_memo_with_a_discount_a_charge_and_a_subtotal_posts_balanced_an
     )
     .await
     .unwrap();
-    let returned = SalesLineInput { product_service_id: None, description: "Returned work".into(), quantity_e4: 10_000, rate_cents: 10_000, income_account_id: services, class_id: None, is_taxable: true, service_date: None };
+    let returned = SalesLineInput { product_service_id: None, description: "Returned work".into(), quantity_e4: 10_000, rate_cents: Cents(10_000), income_account_id: services, class_id: None, is_taxable: true, service_date: None };
     // 100.00 taxable, 5% handling on it (5.00, taxable), a subtotal, then 10% off (taxable).
     let form_lines = vec![
         FormLineInput { product_service_id: Some(handling.id), description: "Handling".into(), ..FormLineInput::charge(1, services, 50_000, true) },

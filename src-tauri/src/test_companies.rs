@@ -213,7 +213,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
             credit_date: d(2025, 5, 20),
             memo: Some("Damaged goods".into()),
             refund_account_id: None,
-            lines: vec![SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 2_500, income_account_id: sales_acct, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: Cents(2_500), income_account_id: sales_acct, class_id: None, is_taxable: false, service_date: None }],
             tax_rate_id: None,
             header: Default::default(),
         },
