@@ -100,9 +100,9 @@ jobs:
       - name: Test files on the work disk (Windows)
         # The suite ran twice as long on Windows as on Linux (776 s against 407 s for PR #408's
         # tests, both on 4 cores), and most tests write company files to the temp folder. That folder
-        # is on the runner's system disk C:, the workspace on its faster work disk D:. Move the temp
-        # folder next to the workspace, and keep Defender's real-time scan (if it is on) out of
-        # the build and test folders of this throwaway runner.
+        # is on the runner's system disk C:, the workspace on its work disk D:. With the temp folder
+        # next to the workspace and SQLite built optimized (Cargo.toml), PR #409 ran them in 367 s.
+        # (Defender's real-time scan is already off on these runners.)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -110,11 +110,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path $tmp | Out-Null
           "TMP=$tmp" >> $env:GITHUB_ENV
           "TEMP=$tmp" >> $env:GITHUB_ENV
-          $scan = (Get-MpComputerStatus -ErrorAction SilentlyContinue).RealTimeProtectionEnabled
-          Write-Host "Temp folder: $tmp; Defender real-time scan: $scan"
-          if ($scan) {
-            Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE, $env:RUNNER_TEMP, (Join-Path $env:USERPROFILE '.cargo'), (Join-Path $env:USERPROFILE '.rustup')
-          }
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2

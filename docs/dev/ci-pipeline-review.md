@@ -246,8 +246,8 @@ Measured on PR #408 (the 0.16.0 release PR) and the v0.16.0 tag, from the Action
   48 to 39 s. Optimizing every dependency gained almost nothing more and made a cold test build
   three times longer, so only this package is.
 - **On Windows the tests' temp folder is on the work disk** (D:, beside the workspace) instead of
-  the system disk, and the build and test folders are excluded from Defender's real-time scan if it
-  is on (the step logs which).
+  the system disk. (Defender's real-time scan is already off on the runners, so nothing to change
+  there.)
 - **No dead caches.** No `build-*` cache ever existed: the Build job saved only on `main`, where it
   never runs, and a tag's cache can't be read by any later tag. The release check's cache was saved
   under the release tag for the same reason. Both steps are gone. (A cache can't help the macOS
@@ -256,6 +256,21 @@ Measured on PR #408 (the 0.16.0 release PR) and the v0.16.0 tag, from the Action
   `opt-level = 3` but skips the whole-program link.
 - **Dependabot no longer rebases on every push to main** (`rebase-strategy: disabled`). Comment
   `@dependabot rebase` on an update PR before it goes into a batch.
+
+**After** (PR #409, the first run with these changes; its cache was a partial match, as for #408):
+
+| Where | Before | After |
+|---|---|---|
+| `Test (windows-latest)`: test run | 776 s | 367 s |
+| `Test (windows-latest)`: job | 18.0 min | 11.1 min |
+| `Test (ubuntu-latest)`: test run | 407 s | 307 s |
+| Tag pushed → Build jobs start | 19.2 min | at once (after the approval) |
+| Release time, tag → all builds done | tests 19 min + slowest build | slowest build (macOS, 35+ min) |
+
+Thin LTO, measured for the record (aarch64, `-j 3` on an M-series Mac): fat LTO with one codegen
+unit took 8 min 16 s and made a 45 MB binary; thin LTO with 16 codegen units took 4 min 55 s and
+made a 70 MB one. On CI that would save roughly 15 of the macOS build's 35 minutes, at 55 % more
+binary.
 
 Left as is:
 
