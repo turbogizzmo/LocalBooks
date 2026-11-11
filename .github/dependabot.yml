@@ -1,12 +1,18 @@
 # Weekly dependency update pull requests. Minor and patch updates are grouped into one PR per
 # ecosystem; major updates arrive separately so they can be reviewed on their own. A new release
 # waits 7 days (cooldown) before it is proposed, so a hijacked release is likely pulled first.
+#
+# rebase-strategy: disabled. With the default, Dependabot rebased every open update PR after each
+# push to main, and each rebase started about six workflows: on 2026-11-11 the release merge
+# rebased nine PRs at once and their runs queued against the v0.16.0 release build. Comment
+# `@dependabot rebase` on a PR to bring it up to date before it goes into a batch.
 version: 2
 updates:
   - package-ecosystem: cargo
     directory: /src-tauri
     schedule:
       interval: weekly
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
@@ -24,6 +30,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
@@ -39,6 +46,7 @@ updates:
     directory: /e2e
     schedule:
       interval: weekly
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
@@ -50,6 +58,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     groups:

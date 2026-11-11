@@ -85,3 +85,11 @@ insta = "1"
 # Opens the password-protected PDFs pdf.rs writes, as a reader would (pdf-extract already uses it).
 lopdf = { version = "=0.42.0", default-features = false }
 proptest = { version = "1", default-features = false, features = ["std"] }
+
+# Tests and `tauri dev` build unoptimized, and so did the C code of SQLite/SQLCipher that every test
+# runs through. Building that one package optimized cut the encrypted-file tests from 13.8 to 8.3 s
+# and the condense tests from 48 to 39 s on an M-series Mac (Nov 2026); CI restores it from the
+# cache, so it costs build time only once. Optimizing every dependency gained almost nothing more
+# and tripled a cold test build. Release builds are optimized anyway.
+[profile.dev.package.libsqlite3-sys]
+opt-level = 3

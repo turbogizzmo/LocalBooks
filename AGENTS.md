@@ -28,8 +28,8 @@ posted lives in Rust and in the schema; the screens only display and collect inp
 
 CI (`.github/workflows/`) runs the Rust tests on Windows and Linux, end-to-end tests on Windows
 and Linux, Clippy, and the JS unit tests and lint, on every pull request. The Rust tests on macOS
-(the slowest, with few runners) and CodeQL run on `batch/*` PRs, pushes to `main` and tags, and on
-a PR labelled `macos` or `codeql`. Feature PRs merge through a batch PR, so every change passes
+(the slowest, with few runners) and CodeQL run on `batch/*` PRs and pushes to `main`, and on a
+PR labelled `macos` or `codeql`. Feature PRs merge through a batch PR, so every change passes
 macOS before it lands. A PR merges only when all of its checks are green. The Claude review labels
 each feature PR `review:clean`, `review:problems` or `review:failed`; read the review comment of a
 `review:problems` PR before it goes into a batch. How the pipeline runs and what it costs:

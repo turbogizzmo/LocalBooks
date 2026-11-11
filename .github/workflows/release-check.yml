@@ -70,8 +70,9 @@ jobs:
     runs-on: ubuntu-latest
     # A few API calls; the only job in the repository that had no timeout.
     timeout-minutes: 5
-    # Lists draft releases; runs no repository code.
+    # Lists draft releases and reads release.yml's runs; runs no repository code.
     permissions:
+      actions: read
       contents: write
     outputs:
       tag: ${{ steps.plan.outputs.tag }}
@@ -96,6 +97,22 @@ jobs:
               | sort -uV | awk -v tag="$TAG" '$0 == tag { print prev; exit } { prev = $0 }')
           fi
           [ -n "$PREVIOUS" ] || { echo "::error::No release before $TAG to upgrade from"; exit 1; }
+          # The tag run doesn't test its commit again; it relies on the commit's push-to-main run of
+          # release.yml (job "Tests passed on main"). Check those three Test jobs passed here too, so
+          # a release whose tag run was ignored still can't pass this gate.
+          sha=$(gh api "repos/$REPO/commits/$TAG" --jq .sha)
+          run=$(gh api "repos/$REPO/actions/workflows/release.yml/runs?head_sha=$sha&event=push&branch=main&per_page=10" \
+            --jq '.workflow_runs | sort_by(.created_at) | last | .id // empty')
+          passed=0
+          if [ -n "$run" ]; then
+            passed=$(gh api "repos/$REPO/actions/runs/$run/jobs?filter=latest&per_page=100" \
+              --jq '[.jobs[] | select((.name | startswith("Test (")) and .conclusion == "success")] | length')
+          fi
+          if [ "$passed" -ne 3 ]; then
+            msg="$TAG ($sha): the Test jobs of its push-to-main run did not all pass (${run:-no run})"
+            # Older releases were tested in their own tag run, and a pull request only exercises this check.
+            if [ "$GITHUB_EVENT_NAME" = release ]; then echo "::error::$msg"; exit 1; else echo "::warning::$msg"; fi
+          fi
           migrations=$(gh api "repos/$REPO/contents/src-tauri/migrations?ref=$TAG" --jq '.[].name')
           app_schema=$(echo "$migrations" | grep -o '^[0-9]*' | sort -n | tail -1 | sed 's/^0*//')
           if gh api "repos/$REPO/contents/src-tauri/src/release_check.rs?ref=$TAG" --silent 2>/dev/null; then check_mode=true; else check_mode=false; fi
@@ -231,12 +248,9 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Cache Rust build
-        if: ${{ !cancelled() }}
-        uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-        with:
-          workspaces: previous-release/src-tauri -> target
-          shared-key: release-check-${{ matrix.os }}
+      # No Rust cache: it would be saved under the release's tag, which no later run can read, and
+      # the next release check builds a different previous release anyway. Restoring and saving it
+      # cost up to a minute a platform for nothing.
 
       - name: Seed the test companies with ${{ needs.plan.outputs.previous }}
         id: seed
@@ -244,6 +258,14 @@ jobs:
         working-directory: previous-release/src-tauri
         env:
           LOCALBOOKS_SEED_DIR: ${{ github.workspace }}/release-check-work/seeded
+          # The seeder is built only to write the test companies: optimized, but without the shipped
+          # build's whole-program link (lto, one codegen unit), which made this step 3.5 to 11 minutes.
+          # `cargo test --release` builds with the bench profile, which inherits these from release.
+          CARGO_PROFILE_RELEASE_LTO: 'false'
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '16'
+          CARGO_PROFILE_BENCH_LTO: 'false'
+          CARGO_PROFILE_BENCH_CODEGEN_UNITS: '16'
+          CARGO_INCREMENTAL: '0'
         run: |
           # Releases from 0.14.0 build OpenSSL (for SQLCipher) from source, which needs a full Perl.
           # This step runs in bash, and on Windows that finds Git Bash's Perl, which lacks modules

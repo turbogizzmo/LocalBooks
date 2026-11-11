@@ -215,6 +215,58 @@ check. After the label is on, `release.yml` runs `Test (macos-latest)` on each l
 | `AGENTS.md` CI paragraph | | Updated for CodeQL and the review labels |
 | `Third-party notices` and `Security audit` failed on Dependabot and release PRs, Nov 2-9 | 34 runs | Not investigated here: they run only when a lockfile changes, aren't required, and cost 200 minutes in all |
 
+## Follow-up: time to ship (2026-11-11, gap A20)
+
+Measured on PR #408 (the 0.16.0 release PR) and the v0.16.0 tag, from the Actions API.
+
+| Where | Before | What it was |
+|---|---|---|
+| PR CI, end to end | 22.7 min (21:34 to 21:56) | `Test (windows-latest)` the long pole: 18 min, of which 4.3 min compiling and 776 s (13 min) running the tests; Linux ran the same tests in 407 s |
+| Tag run before any build | 19.2 min (21:57 to 22:16) | `Test` ×3 again on the commit that main's own run (started the same second) was already testing |
+| `Build (Windows)` | 32.5 min | no Rust cache, ever (below) |
+| `Build (macOS universal)` | 35 to 41 min (v0.14.1, v0.15.0); over 50 for v0.16.0 | compiling the app crate with fat LTO and one codegen unit: 20 min for aarch64, then 14.5 min for x86_64 (v0.14.1) |
+| Release check, per platform | 7 to 14 min | the seeder of the previous release built with fat LTO: 3.5 to 11 min |
+| Dependabot | 9 PRs × 6 workflows, twice on Nov 11 | every push to main rebased every open update PR; at 21:59 that queued about 54 runs beside the v0.16.0 build |
+
+**What changed:**
+
+- **A tag doesn't test its commit a third time.** Its commit passed on the PR and is being tested
+  by its push to main. The tag run's `Tests passed on main` job (one small Linux runner) waits for
+  that run's three `Test` jobs and fails unless they all passed. The `Build` jobs no longer wait on
+  tests: they start once the `release` environment is approved, so the tests run beside the
+  builds instead of 19 minutes before them. Publishing stays gated: the draft is invisible to
+  installed copies, the tag run is red if main's tests failed, and the release check's first job
+  refuses a tag whose commit didn't pass on main.
+- **Pushes to main are no longer cancelled by a newer push** (in `release.yml`), so every commit
+  on main has a complete test run a release can rely on. These runs are still needed: they are the
+  release's test evidence, and they save the Rust caches that pull requests read.
+- **SQLite/SQLCipher is built optimized in tests** (`[profile.dev.package.libsqlite3-sys]` in
+  `Cargo.toml`). It was compiled unoptimized like the rest of the test build, and every test runs
+  through it. Locally the encrypted-file tests went from 13.8 to 8.3 s and the condense tests from
+  48 to 39 s. Optimizing every dependency gained almost nothing more and made a cold test build
+  three times longer, so only this package is.
+- **On Windows the tests' temp folder is on the work disk** (D:, beside the workspace) instead of
+  the system disk, and the build and test folders are excluded from Defender's real-time scan if it
+  is on (the step logs which).
+- **No dead caches.** No `build-*` cache ever existed: the Build job saved only on `main`, where it
+  never runs, and a tag's cache can't be read by any later tag. The release check's cache was saved
+  under the release tag for the same reason. Both steps are gone. (A cache can't help the macOS
+  build anyway: the dependencies take about 3 of its 35 minutes.)
+- **The release check's seeder builds without LTO.** It only writes the test companies, so it keeps
+  `opt-level = 3` but skips the whole-program link.
+- **Dependabot no longer rebases on every push to main** (`rebase-strategy: disabled`). Comment
+  `@dependabot rebase` on an update PR before it goes into a batch.
+
+Left as is:
+
+- **cargo-nextest:** it runs each test in its own process, which would undo the "migrate once per
+  test binary" template (gap A18) and make every test apply all migrations again.
+- **The shipped release profile** (`lto = true`, `codegen-units = 1`), which is what makes the
+  macOS universal build long. Changing it changes the shipped binary, so it is a separate
+  decision; see gap A20's note.
+- **Path filters for the Rust tests:** `docs_checks.rs` reads the docs and the Help screens, so a
+  docs-only PR can still fail them.
+
 ## Needs you
 
 These are repository settings; agents can't change them.
