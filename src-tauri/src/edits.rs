@@ -197,7 +197,8 @@ pub(crate) async fn expense_input_in_tx(tx: &mut Transaction<'_, Sqlite>, expens
     if skip {
         return Ok(None);
     }
-    let lines: Vec<(i64, i64, Option<String>, Option<i64>, Option<i64>, bool)> =
+    type LineRow = (i64, i64, Option<String>, Option<i64>, Option<i64>, bool);
+    let lines: Vec<LineRow> =
         sqlx::query_as("SELECT account_id, amount_cents, memo, class_id, customer_id, is_billable FROM expense_lines WHERE expense_id = ?1 ORDER BY line_number")
             .bind(expense_id)
             .fetch_all(&mut **tx)

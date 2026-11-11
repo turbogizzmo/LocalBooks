@@ -81,7 +81,8 @@ struct Chart {
 
 impl Chart {
     async fn load(pool: &SqlitePool) -> Result<Self, String> {
-        let rows: Vec<(i64, Option<i64>, Option<String>, String, String, String, bool)> = sqlx::query_as(
+        type Row = (i64, Option<i64>, Option<String>, String, String, String, bool);
+        let rows: Vec<Row> = sqlx::query_as(
             "SELECT a.id, a.parent_id, a.account_number, a.name, a.account_type, t.normal_balance, a.is_system
              FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type
              ORDER BY COALESCE(a.account_number, ''), a.name COLLATE NOCASE",

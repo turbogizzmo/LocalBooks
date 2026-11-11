@@ -267,7 +267,8 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
     for (entry, rate_id, cents) in sqlx::query_as::<_, (i64, i64, i64)>("SELECT journal_entry_id, tax_rate_id, cents FROM document_tax_parts").fetch_all(pool).await.map_err(db_err)? {
         parts.entry(entry).or_default().push((rate_id, cents));
     }
-    let rates: Vec<(i64, String, i64, Option<i64>, Option<String>)> =
+    type RateRow = (i64, String, i64, Option<i64>, Option<String>);
+    let rates: Vec<RateRow> =
         sqlx::query_as("SELECT r.id, r.name, r.rate_ppm, r.agency_vendor_id, v.name FROM tax_rates r LEFT JOIN vendors v ON v.id = r.agency_vendor_id").fetch_all(pool).await.map_err(db_err)?;
     let rate = |id: i64| rates.iter().find(|r| r.0 == id);
     let overflow = || "TAX_OVERFLOW: the sales tax return is out of range".to_string();

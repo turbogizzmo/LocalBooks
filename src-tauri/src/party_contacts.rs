@@ -224,14 +224,5 @@ pub(crate) fn recipient_sql(use_: &str) -> String {
     format!("COALESCE((SELECT pc.email FROM party_contacts pc WHERE pc.customer_id = c.id AND pc.{flag} = 1 AND pc.email IS NOT NULL), c.email)")
 }
 
-/// The statement contact's name, printed on the statement under the customer's name.
-pub(crate) async fn statement_contact(pool: &SqlitePool, customer_id: i64) -> Result<Option<String>, String> {
-    sqlx::query_scalar("SELECT name FROM party_contacts WHERE customer_id = ?1 AND for_statements = 1")
-        .bind(customer_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)
-}
-
 #[cfg(test)]
 mod tests;

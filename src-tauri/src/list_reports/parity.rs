@@ -124,7 +124,8 @@ pub(super) async fn unbilled_costs_by_job(pool: &SqlitePool, today: NaiveDate) -
 pub(super) async fn stock_status_by_vendor(pool: &SqlitePool, today: NaiveDate) -> Result<AccountantReport, String> {
     let valuation = crate::report_center::inventory_valuation(pool, today).await?;
     // inventory item id → (product's preferred vendor, reorder point, quantity on open POs)
-    let extra: Vec<(i64, Option<i64>, Option<String>, Option<i64>, i64)> = sqlx::query_as(
+    type ExtraRow = (i64, Option<i64>, Option<String>, Option<i64>, i64);
+    let extra: Vec<ExtraRow> = sqlx::query_as(
         "SELECT i.id, p.preferred_vendor_id, v.name, p.reorder_point_e4,
                 COALESCE((SELECT SUM(COALESCE(l.quantity_e4, 0)) FROM purchase_order_lines l JOIN purchase_orders o ON o.id = l.purchase_order_id
                           WHERE l.product_service_id = p.id AND o.status = 'OPEN' AND o.po_date <= ?1), 0)
@@ -134,7 +135,8 @@ pub(super) async fn stock_status_by_vendor(pool: &SqlitePool, today: NaiveDate) 
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let extra: BTreeMap<i64, (Option<i64>, Option<String>, Option<i64>, i64)> = extra.into_iter().map(|(i, v, n, r, po)| (i, (v, n, r, po))).collect();
+    type Extra = (Option<i64>, Option<String>, Option<i64>, i64);
+    let extra: BTreeMap<i64, Extra> = extra.into_iter().map(|(i, v, n, r, po)| (i, (v, n, r, po))).collect();
     // (no vendor last, vendor name, vendor id) → rows
     let mut vendors: BTreeMap<(bool, String, i64), Vec<ReportItem<'_>>> = BTreeMap::new();
     for item in &valuation.rows {
