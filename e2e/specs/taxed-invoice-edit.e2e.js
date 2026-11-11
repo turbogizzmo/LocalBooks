@@ -30,7 +30,19 @@ describe('A taxed invoice edited with sales tax turned off', () => {
     const saveAnyway = button('Save anyway', '//*[@role="alertdialog"]');
     if (await saveAnyway.waitForDisplayed({ timeout: 3000 }).catch(() => false)) await click(saveAnyway);
     await $('//*[@role="status"][contains(., "replaced")]').waitForDisplayed();
-    // The edited invoice is posted under the next number, for the same total, tax included.
-    expect(await tableRow('1007')).toContain('$134.52');
+    // The edited invoice keeps its number, for the same total, tax included; the voided original
+    // is listed under the same number.
+    const numbered = () =>
+      browser.execute(() =>
+        [...document.querySelectorAll('table tbody tr')]
+          .map((tr) => [...tr.cells].map((td) => td.textContent.replace(/\s+/g, ' ').trim()))
+          .filter((cells) => cells.some((c) => c.startsWith('1003'))),
+      );
+    let rows = [];
+    await browser.waitUntil(async () => (rows = await numbered()).length === 2, { timeoutMsg: 'invoice 1003 is not listed twice (edited and voided)' });
+    const live = rows.filter((cells) => !cells.includes('Voided'));
+    expect(live).toHaveLength(1);
+    expect(live[0]).toContain('$134.52');
+    expect(rows.length - live.length).toBe(1);
   });
 });
