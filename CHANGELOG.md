@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Safer opening of company files from others.** The check that refuses a company file with a
+  mismatched log file next to it now also runs at the moment the file is opened, so the log can't
+  be swapped in between.
 ## [0.14.1]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a

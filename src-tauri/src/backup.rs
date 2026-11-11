@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTime};
 
 use chrono::{DateTime, Local};
 use serde::Serialize;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::SqlitePool;
 
 use crate::db::{self, Db, MIGRATOR};
@@ -74,7 +74,8 @@ fn describe(path: &Path, kind: &str) -> Result<BackupFile, String> {
 
 async fn open_read_only(path: &Path) -> Result<SqlitePool, String> {
     crate::wal_guard::check(path)?;
-    let options = SqliteConnectOptions::new().filename(path).read_only(true).create_if_missing(false);
+    // Through the VFS, which checks the file's log as SQLite opens it (gap R24).
+    let options = crate::file_cipher::open_options(path, None)?.read_only(true).create_if_missing(false);
     SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(options)
