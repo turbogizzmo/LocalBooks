@@ -62,7 +62,7 @@ mod tests {
                 memo: None,
                 refund_account_id: None,
                 tax_rate_id: None,
-                lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 10_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
+                lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: crate::money::Cents::from(10_000), income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
                 header: Default::default(),
                 form_lines: Vec::new(),
             },
