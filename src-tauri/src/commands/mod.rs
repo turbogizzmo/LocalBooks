@@ -67,6 +67,7 @@ features![
     company_files,
     company_snapshot,
     condense,
+    credit_refunds,
     credits,
     custom_fields,
     custom_reports,

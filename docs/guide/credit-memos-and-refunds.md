@@ -128,12 +128,16 @@ It isn't a form, so **Open** and **Duplicate** are greyed out for it.
 2. Choose **Pay from**: a bank or credit card account.
 3. Check the **Date** (today) and the **Amount**. The amount starts at all the credit left; you can
    refund part of it.
-4. Type the check number in **Reference (check no.)** if you paid by check.
-5. Click **Record refund**.
+4. Paying from a bank account, leave **Print a check** ticked to print the refund check: the next
+   check number fills in **Reference (check no.)**. Untick it if you pay another way, and type the
+   check number yourself if you wrote one by hand.
+5. Click **Record refund**. With **Print a check**, the check prints right away, made out to the
+   customer for the amount, on the same check layout as **Write Checks**.
 
 The refund posts its own entry: a debit to Accounts Receivable and a credit to the bank or card
 account. The credit left goes down by the amount; when it reaches zero the credit shows as **Used**.
-Like a refund receipt, it records the payment but doesn't print a check.
+To print the check again later, open the credit memo and choose **Print check** on the refund in
+its **Refunds and write-offs** list.
 
 ## Write off credit that is left
 
@@ -149,10 +153,12 @@ The write-off posts a debit to Accounts Receivable and a credit to the income ac
 
 ### Undo a refund or write-off
 
-A refund or write-off of credit is a journal entry, described as *Refund of credit memo #…* or
-*Write-off of credit memo #…* (or *of unapplied payment*). To undo it, void that entry in
-**Accounting › Journal Entries** (see [Undo a transaction](journal-entries-and-voids.md#undo-a-transaction-void)).
-The credit comes back.
+An open credit memo lists its **Refunds and write-offs** under the toolbar: each with its date,
+account, check number and amount. Choose **Void** in a row's **▾** menu to undo one; the credit
+comes back. (Each is a journal entry, described as *Refund of credit memo #…* or *Write-off of
+credit memo #…*, so voiding it in **Accounting › Journal Entries** does the same; see [Undo a
+transaction](journal-entries-and-voids.md#undo-a-transaction-void).) For an unapplied payment,
+which has no form to open, void it from Journal Entries.
 
 ## Open, print and email a saved credit memo
 

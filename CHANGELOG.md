@@ -33,6 +33,10 @@ people using LocalBooks.
 - **Enter all due enters what it can.** A copy that can't be entered, such as one dated in a
   closed period, is listed with the reason and stays due, and the others are entered. Before,
   one such copy stopped all of them.
+- **Refund checks and a credit's refunds.** Refunding a customer's credit from a bank account can
+  print a check, with the next check number filled in. A credit memo now lists the refunds and
+  write-offs taken from it, each with Print check (for a refund paid by check) and Void, which
+  gives the credit back.
 - **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
   "Company default" start at it on new sales forms. Before, once a company had two or more rates,
   those customers got no tax unless someone picked a rate on each form.

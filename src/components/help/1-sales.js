@@ -24,7 +24,7 @@ export const screens = {
     guide: 'sales-tax',
   },
   'sales/credits': {
-    help: 'Credit memos give a customer credit to apply to their open invoices or refund later; refund receipts pay money back straight away.',
+    help: 'Credit memos give a customer credit to apply to their open invoices or refund later; refund receipts pay money back straight away. Refunding credit from a bank account can print a check, and a credit memo lists its refunds and write-offs with Print check and Void.',
     guide: 'credit-memos-and-refunds',
   },
   'sales/customers': {
