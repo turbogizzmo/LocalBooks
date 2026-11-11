@@ -180,7 +180,13 @@ fn rows_read_when_the_catalog_lost_a_column() {
     assert_eq!((row.get("account_id"), row.get("column_2")), (&Value::Int(30), &Value::Null));
     assert_eq!(row.get("amount_amt").as_cents(), Some(72_000));
 
-    // The leading columns of a damaged row stop at the lost column instead of reading past it.
-    let (prefix, _) = walk_prefix(&stored[..stored.len() - 1], &cols);
-    assert_eq!(prefix.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["target_id"]);
+    // The leading columns of a damaged row read as if the lost column were not stored, as they
+    // always did, so a row that never had it still gives its account.
+    let (prefix, _) = walk_prefix(&without[..without.len() - 1], &cols);
+    assert_eq!(prefix.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["target_id", "account_id"]);
+
+    // A garbled id 0 is not one of the ids from 1 up: the gap at 2 is still filled.
+    let mut zero = vec![column(0, "garbled", 2, true, 4), column(1, "target_id", 2, false, 4), column(3, "account_id", 2, true, 4)];
+    fill_missing_columns(&mut zero);
+    assert!(zero.iter().any(|c| c.id == 2 && c.domain == MISSING_DOMAIN));
 }

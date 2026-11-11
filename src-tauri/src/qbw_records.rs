@@ -29,9 +29,10 @@ const MAX_DROPPED_COLUMNS: usize = 16;
 pub const MISSING_DOMAIN: u16 = 0;
 
 /// What a missing column most often is, tried in this order after "not stored at all": a nullable
-/// 4-byte id, a nullable 2-byte code, a 1-byte flag, a nullable amount or quantity, nullable text,
-/// a nullable date, and a 4-byte id that is never null.
-const MISSING_COLUMN_GUESSES: [(u16, bool, u32); 7] = [(2, true, 4), (1, true, 2), (24, false, 1), (3, true, 20), (9, true, 255), (6, true, 4), (2, false, 4)];
+/// 4-byte id (or date, stored the same way), a nullable 2-byte code, a 1-byte flag, and a 4-byte id
+/// that is never null. Only fixed widths: a text or amount guess takes as many bytes as its length
+/// byte says, so it could make a damaged row read through to its end with every value shifted.
+const MISSING_COLUMN_GUESSES: [(u16, bool, u32); 4] = [(2, true, 4), (1, true, 2), (24, false, 1), (2, false, 4)];
 
 /// A table with more missing columns than this is walked as if they were not stored: guessing
 /// each would multiply the walks per row.
@@ -300,7 +301,7 @@ fn fill_missing_columns(cols: &mut Vec<Column>) {
     cols.sort_by_key(|c| c.id);
     let defined: HashSet<u32> = cols.iter().map(|c| c.id).collect();
     let last = cols.last().map_or(0, |c| c.id);
-    let gaps = (last as usize).saturating_sub(1).saturating_sub(defined.iter().filter(|id| **id < last).count());
+    let gaps = (last as usize).saturating_sub(1).saturating_sub(defined.iter().filter(|id| (1..last).contains(*id)).count());
     if gaps == 0 || gaps > MAX_GUESSED_COLUMNS as usize {
         return;
     }
@@ -400,7 +401,8 @@ pub fn walk_prefix(row: &[u8], cols: &[Column]) -> (Vec<(String, Value)>, usize)
     let bitmap_len = nullable.div_ceil(8);
     let Some(bitmap) = r.get(3..3 + bitmap_len) else { return (Vec::new(), 0) };
     let (mut o, mut bit, mut out) = (3 + bitmap_len, 0, Vec::new());
-    for col in cols {
+    // A column the catalog lost is taken as not stored, as the first reading of `walk_row` does.
+    for col in cols.iter().filter(|c| c.domain != MISSING_DOMAIN) {
         if col.nullable {
             let present = bitmap[bit / 8] >> (7 - bit % 8) & 1 == 1;
             bit += 1;
@@ -426,6 +428,9 @@ pub fn walk_prefix(row: &[u8], cols: &[Column]) -> (Vec<(String, Value)>, usize)
 pub fn walk_row(row: &[u8], cols: &[Column]) -> Option<HashMap<String, Value>> {
     let row = strip_extra(row);
     let missing: Vec<usize> = cols.iter().enumerate().filter(|(_, c)| c.domain == MISSING_DOMAIN).map(|(i, _)| i).collect();
+    if missing.is_empty() {
+        return (0..=MAX_DROPPED_COLUMNS.min(cols.len())).find_map(|drop| walk_columns(&row, &cols[..cols.len() - drop]));
+    }
     let options = MISSING_COLUMN_GUESSES.len() + 1;
     let tries = if missing.len() as u32 > MAX_GUESSED_COLUMNS { 1 } else { options.pow(missing.len() as u32) };
     (0..tries).find_map(|n| {
