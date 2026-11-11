@@ -416,7 +416,7 @@ export const topics = [
   {
     id: 'budgets', area: 'accounting', views: ['accounting/budgets', 'reports'],
     title: 'Set a budget and compare it with actuals',
-    body: 'Accounting › Budgets holds expected income and expenses per account for each month of a fiscal year, and optionally the month-end balance of balance sheet accounts; Copy across repeats the first month. Reports › Profit and Loss Budget vs. Actual and Balance Sheet Budget vs. Actual show actual, budget, the amount over budget and the percent of budget.',
+    body: 'Accounting › Budgets holds expected income and expenses per account for each month of a fiscal year, and optionally the month-end balance of balance sheet accounts; Copy across repeats the first month, and Save keeps the amounts (closing or starting a new budget with amounts not saved asks first). New budget lists each fiscal year by its months. Reports › Profit and Loss Budget vs. Actual and Balance Sheet Budget vs. Actual show actual, budget, the amount over budget and the percent of budget.',
     keywords: 'budget forecast plan budget vs actual variance balance sheet budget',
     go: { label: 'Go to Budgets', view: 'accounting/budgets' },
     guide: 'reports',

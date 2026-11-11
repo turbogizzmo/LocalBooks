@@ -5,6 +5,8 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import { useUnsavedChanges } from '../lib/windows.js';
+import { budgetYearChoices, fiscalStartMonth } from '../lib/budgetYears.js';
 
 const PL_TYPES = new Set(['INCOME', 'COST_OF_GOODS_SOLD', 'EXPENSE', 'OTHER_INCOME', 'OTHER_EXPENSE']);
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -17,6 +19,7 @@ const key = (accountId, period) => `${accountId}:${period}`;
  */
 export default function Budgets({ accounts, navigate }) {
   const budgets = useLedgerQuery(api.listBudgets);
+  const prefs = useLedgerQuery(api.getPreferences).data;
   const [budgetId, setBudgetId] = useState(null);
   const [cells, setCells] = useState({}); // key -> text as typed
   const [saved, setSaved] = useState({}); // key -> cents as stored
@@ -51,6 +54,8 @@ export default function Budgets({ accounts, navigate }) {
   };
   const invalid = Object.keys(cells).filter((k) => cents(k) === null);
   const changed = Object.keys({ ...cells, ...saved }).filter((k) => cents(k) !== null && cents(k) !== (saved[k] ?? 0));
+  // Closing the window (or quitting) with amounts not saved asks first.
+  useUnsavedChanges('budget', changed.length > 0);
   const rowTotal = (id) => MONTHS.reduce((s, m) => s + (cents(key(id, m)) ?? 0), 0);
 
   const save = async () => {
@@ -72,7 +77,8 @@ export default function Budgets({ accounts, navigate }) {
   };
   const create = async () => {
     try {
-      const made = await api.createBudget(creating.name, `${creating.year}-06-30`);
+      // The fiscal year's first day: the year chosen is the one that starts on it.
+      const made = await api.createBudget(creating.name, creating.start);
       setCreating(null);
       await budgets.reload();
       setBudgetId(made.id);
@@ -91,7 +97,12 @@ export default function Budgets({ accounts, navigate }) {
     }
   };
 
-  const thisYear = Number(todayIso().slice(0, 4));
+  const years = budgetYearChoices(todayIso(), fiscalStartMonth(prefs?.fiscal_year_start));
+  const thisYear = years.find((y) => y.current);
+  const startNew = async () => {
+    if (changed.length > 0 && !(await askConfirm(`“${budget.name}” has ${changed.length} amount${changed.length === 1 ? '' : 's'} not saved. Start a new budget and lose them?`, { confirmLabel: 'Discard and continue', danger: true }))) return;
+    setCreating({ name: `FY${thisYear.start.slice(0, 4)} Budget`, start: thisYear.start });
+  };
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       <div className="qb-panel flex flex-none flex-wrap items-end gap-2 px-2 py-1">
@@ -121,10 +132,10 @@ export default function Budgets({ accounts, navigate }) {
               <input className="qb-input w-[200px]" value={creating.name} onChange={(e) => setCreating({ ...creating, name: e.target.value })} autoFocus />
             </label>
             <label>
-              <span className="qb-label">Fiscal year containing</span>
-              <select className="qb-input w-[90px]" value={creating.year} onChange={(e) => setCreating({ ...creating, year: Number(e.target.value) })}>
-                {[thisYear - 1, thisYear, thisYear + 1, thisYear + 2].map((y) => (
-                  <option key={y} value={y}>{y}</option>
+              <span className="qb-label">Fiscal year</span>
+              <select className="qb-input w-[190px]" value={creating.start} onChange={(e) => setCreating({ ...creating, start: e.target.value })}>
+                {years.map((y) => (
+                  <option key={y.start} value={y.start}>{y.label}{y.current ? ' (this year)' : ''}</option>
                 ))}
               </select>
             </label>
@@ -132,7 +143,7 @@ export default function Budgets({ accounts, navigate }) {
             <button type="button" className="qb-btn" onClick={() => setCreating(null)}>Cancel</button>
           </>
         ) : (
-          <button type="button" className="qb-btn" onClick={() => setCreating({ name: `FY${thisYear} Budget`, year: thisYear })}>New budget…</button>
+          <button type="button" className="qb-btn" onClick={startNew}>New budget…</button>
         )}
         {budget && !creating && (
           <div className="ml-auto flex gap-2">
