@@ -6,6 +6,13 @@ becomes its release notes on GitHub and in the app's update window (see
 
 ## [Unreleased]
 
+## [0.16.1]
+
+- **Windows: Tillhouse keeps its place in the Start menu.** Updating from LocalBooks 0.15 now
+  replaces the LocalBooks Start menu and desktop shortcuts with Tillhouse ones. Before this fix the
+  update removed the old shortcut without adding the new one. 0.16.0 never went out to installed
+  copies, so this is the first Tillhouse update; everything listed under 0.16.0 comes with it.
+
 ## [0.16.0]
 
 - **LocalBooks is now Tillhouse.** Same app, new name, new icon and new colors. Another accounting
