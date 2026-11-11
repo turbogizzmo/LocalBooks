@@ -325,7 +325,7 @@ export const topics = [
   {
     id: 'whats-new', area: 'company', views: [],
     title: 'What’s new in LocalBooks',
-    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently sales orders, receiving items before the bill, discounts and charges on purchase forms, Company Snapshot, merging duplicates and working with your accountant.',
+    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently whole-file encryption and two-step sign-in (both optional), the Invoice # box, billable costs on the invoice, purchase orders you can edit and email, sales tax adjustments and editing memorized transactions.',
     keywords: 'new whats new what’s new release notes changes changelog latest version update features',
     go: null,
     guide: 'whats-new',

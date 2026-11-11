@@ -4,6 +4,32 @@ The newest changes first, in plain words, with a link to the steps for each. Loc
 new version when it starts (or check in **Settings › Updates**). The full list, including fixes, is in
 the [release notes](https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md).
 
+## 0.15.0
+
+- **Encrypt the whole company file** (optional, off unless you turn it on). Your books, backups and
+  attachments can't be read without a password or the recovery key.
+  [Encrypt the whole company file](users-and-passwords.md#encrypt-the-whole-company-file)
+- **Two-step sign-in** (optional) with an authenticator app.
+  [Two-step sign-in](users-and-passwords.md#two-step-sign-in)
+- **Invoice # on the form**, and an edited invoice keeps its number.
+  [Fix a mistake](invoices.md#fix-a-mistake)
+- **No more surprise customers and vendors**: a new name asks before it's added.
+- **Billable costs from the invoice**: picking a customer with unbilled costs offers to add them.
+  [Create the invoice](invoices.md#create-the-invoice)
+- **Purchase orders** can be changed, deleted, printed, saved as PDF and emailed, and a bill made
+  from one takes the vendor's terms.
+  [Change or delete an order](purchase-orders.md#change-or-delete-an-order),
+  [Email an order](purchase-orders.md#email-an-order-to-the-vendor)
+- **Sales tax adjustments** and a **default sales tax rate**; discounts now lower taxable sales on
+  the return. [Adjust what you owe](sales-tax.md#adjust-what-you-owe)
+- **Memorized transactions** can be edited, lines included, and month-end schedules stay at month
+  end. [Change, pause, resume or delete](memorized-transactions.md#change-pause-resume-or-delete)
+- **Refund checks** for a customer's leftover credit, and statements that say what each line is.
+  [Refund credit that is left](credit-memos-and-refunds.md#refund-credit-that-is-left)
+- **Company files bring over more**: inventory adjustments and item groups.
+  [What a company file brings over](desktop-migration.md#what-a-company-file-brings-over)
+- **No more blank window** while a company opens, and **Help for every screen** (F1).
+
 ## 0.14.1
 
 Two fixes to amounts posted in 0.14.0:

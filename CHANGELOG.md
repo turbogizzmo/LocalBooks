@@ -6,6 +6,8 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+## [0.15.0]
+
 - **Safer opening of company files from others.** The check that refuses a company file with a
   mismatched log file next to it now also runs at the moment the file is opened, so the log can't
   be swapped in between.
