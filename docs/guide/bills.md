@@ -91,8 +91,12 @@ who decided and when. Approving and rejecting are Admin tasks (see [Users and
 passwords](users-and-passwords.md)); in a company file without users, everyone is an Admin, so
 approval is a second look rather than a control.
 
-Only bills and orders entered on their forms are held. Imports, bills made from an approved
-purchase order, and edits to a bill that was already approved are recorded straight away.
+A bill made from a purchase order with **Create Bill** is held the same way. Approving it posts the
+bill and marks the order **Billed** with it; rejecting it leaves the order open. See [Turn a purchase
+order into a bill](purchase-orders.md).
+
+Only bills and orders entered on their forms (including **Create Bill** on a purchase order) are
+held. Imports and edits to a bill that was already approved are recorded straight away.
 
 ## Fix a mistake on a bill
 

@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Create Bill on a purchase order works with approval rules.** When an approval rule holds the
+  bill, Create Bill now sends it for approval instead of asking you to re-enter it in Enter Bills.
+  The order shows "bill awaiting approval"; approving posts the bill and marks the order billed with
+  it, and rejecting leaves the order open.
 - **More accurate company-file imports.** Memorized transactions (templates) are no longer
   imported as real ones, which doubled some balances. Files whose description of a line table is
   missing several columns now read those lines, and a payment and deposit that a file keeps as two

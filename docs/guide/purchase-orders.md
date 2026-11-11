@@ -121,8 +121,18 @@ Its memo is the order's message, or *PO #* and the number when there is none. Th
 
 Creating the bill runs the same checks as **Enter Bills**: if the vendor's bill number was used
 before, or the date is far from today, LocalBooks asks first and **Save anyway** goes ahead. If an
-approval rule for bills covers it, the bill isn't created: enter it in **Expenses › Enter Bills**
-and choose **Submit for approval**, then close the order once the bill is approved.
+approval rule for bills covers it, the bill isn't posted yet: LocalBooks sends it for approval and
+the order shows **Open · bill awaiting approval** until an Admin decides under **Expenses ›
+Approvals** (the request reads *Bill … (from PO #* and the number*)*).
+
+- **Approve** posts the bill as it was made from the order and marks the order **Billed** with that
+  bill, in one step.
+- **Reject…** posts nothing and leaves the order **Open**, so you can choose **Create Bill** again,
+  corrected.
+
+While the bill waits, the order can't be billed again, changed or deleted. If the order is closed,
+or items on it are received, before the bill is approved, approving is refused and the request
+keeps waiting; reject it instead.
 
 Only an **Open** order can be billed this way. Once any of its items have been received, enter the
 bill from **Vendors › Enter Bill for Received Items** instead.

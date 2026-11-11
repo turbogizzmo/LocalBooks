@@ -32,7 +32,7 @@ export const screens = {
     guide: 'expenses-and-checks',
   },
   'expenses/purchase-orders': {
-    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines (and each line’s Customer:Job) in one step, or receive the goods first with Receive Items. A bill made from a purchase order takes the vendor’s terms and due date, and is checked like one entered in Enter Bills: a repeated bill number or an unusual date asks first, and approval rules for bills apply. An order received in full closes and can’t be reopened (void a receipt to receive again). Purchase orders are offered only while inventory and purchase orders are on in Preferences › Items & Inventory. A saved order prints, saves as PDF and emails to the vendor as its Purchase Order form (designed in Settings › Custom Forms), with the vendor’s address and each line’s Customer:Job and Class. Edit… changes an open order in place under its number, and Delete removes one that nothing was received or billed against (delete its attached files first).',
+    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines (and each line’s Customer:Job) in one step, or receive the goods first with Receive Items. A bill made from a purchase order takes the vendor’s terms and due date, and is checked like one entered in Enter Bills: a repeated bill number or an unusual date asks first, and approval rules for bills apply: a held bill is sent for approval, the order shows “bill awaiting approval”, approving posts the bill and marks the order billed, and rejecting leaves the order open. An order received in full closes and can’t be reopened (void a receipt to receive again). Purchase orders are offered only while inventory and purchase orders are on in Preferences › Items & Inventory. A saved order prints, saves as PDF and emails to the vendor as its Purchase Order form (designed in Settings › Custom Forms), with the vendor’s address and each line’s Customer:Job and Class. Edit… changes an open order in place under its number, and Delete removes one that nothing was received or billed against (delete its attached files first).',
     guide: 'purchase-orders',
   },
   'expenses/item-receipts': {
@@ -40,7 +40,7 @@ export const screens = {
     guide: 'bills',
   },
   'expenses/approvals': {
-    help: 'Rules that hold bills and purchase orders over an amount, or from vendors you choose, until an Admin approves them, and the list of what is waiting. A waiting bill isn’t posted or in Pay Bills; approving records it as entered, and rejecting keeps it with a note.',
+    help: 'Rules that hold bills and purchase orders over an amount, or from vendors you choose, until an Admin approves them, and the list of what is waiting. A waiting bill isn’t posted or in Pay Bills; approving records it as entered (a bill from a purchase order also marks the order billed), and rejecting keeps it with a note (and leaves the order open).',
     guide: 'bills',
   },
 };
@@ -118,7 +118,7 @@ export const topics = [
   {
     id: 'approvals', area: 'expenses', views: ['expenses/approvals', 'expenses/bills', 'expenses/purchase-orders'],
     title: 'Approve bills and purchase orders',
-    body: 'Under Expenses › Approvals an Admin adds rules, such as bills of $1,000 or more, or every bill from one vendor. A bill or purchase order that matches is sent for approval instead of being recorded: a waiting bill isn’t posted and isn’t in Pay Bills, and a waiting order isn’t an open order. An Admin approves it, which records it as entered, or rejects it with a note, which keeps the request and records nothing.',
+    body: 'Under Expenses › Approvals an Admin adds rules, such as bills of $1,000 or more, or every bill from one vendor. A bill or purchase order that matches is sent for approval instead of being recorded: a waiting bill isn’t posted and isn’t in Pay Bills, and a waiting order isn’t an open order. An Admin approves it, which records it as entered, or rejects it with a note, which keeps the request and records nothing. A bill made from a purchase order with Create Bill is held too: approving it posts the bill and marks the order billed, and rejecting it leaves the order open.',
     keywords: 'approval approve reject rule authorize authorise sign off manager bill purchase order po pending waiting threshold',
     go: { label: 'Go to Approvals', view: 'expenses/approvals' },
     guide: 'bills',

@@ -44,11 +44,11 @@ export default function Approvals({ isAdmin = true }) {
       setBusy(false);
     }
   };
-  const approve = (r) => act(() => api.approveRequest(r.id), () => `${KIND[r.kind]} from ${r.vendorName} approved and ${r.kind === 'BILL' ? 'posted' : 'recorded'}: ${formatCents(r.totalCents)}.`);
+  const approve = (r) => act(() => api.approveRequest(r.id), () => `${KIND[r.kind]} from ${r.vendorName} approved and ${r.kind === 'BILL' ? 'posted' : 'recorded'}: ${formatCents(r.totalCents)}.${r.fromPoNumber ? ` PO #${r.fromPoNumber} is marked billed.` : ''}`);
   const reject = () => {
     const r = rejecting;
     // Keep the box and the note open if rejecting failed, so it can be tried again.
-    act(() => api.rejectRequest(r.id, note), () => `${KIND[r.kind]} from ${r.vendorName} rejected. It is kept with your note; nothing was recorded.`).then((done) => {
+    act(() => api.rejectRequest(r.id, note), () => `${KIND[r.kind]} from ${r.vendorName} rejected. It is kept with your note; nothing was recorded.${r.fromPoNumber ? ` PO #${r.fromPoNumber} stays open.` : ''}`).then((done) => {
       if (!done) return;
       setRejecting(null);
       setNote('');
@@ -89,7 +89,7 @@ export default function Approvals({ isAdmin = true }) {
               {(requests ?? []).map((r) => (
                 <tr key={r.id} className="qb-grid-row">
                   <td className="qb-grid-cell tabular-nums">{formatDate(r.documentDate)}</td>
-                  <td className="qb-grid-cell">{KIND[r.kind]}{r.reference ? ` ${r.reference}` : ''}</td>
+                  <td className="qb-grid-cell">{KIND[r.kind]}{r.reference ? ` ${r.reference}` : ''}{r.fromPoNumber ? ` (from PO #${r.fromPoNumber})` : ''}</td>
                   <td className="qb-grid-cell">{r.vendorName}</td>
                   <td className="qb-grid-cell num">{formatCents(r.totalCents)}</td>
                   <td className="qb-grid-cell">{r.requestedBy}</td>
