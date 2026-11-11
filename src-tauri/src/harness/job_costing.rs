@@ -187,7 +187,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
             reference: Some("TS-C9".into()),
             credit_date: d(2025, 11, 25),
             memo: Some("Returned lumber".into()),
-            lines: vec![VendorCreditLineInput { account_id: materials, amount_cents: 20_000, memo: None, class_id: None, customer_id: Some(lakeview) }],
+            lines: vec![VendorCreditLineInput { account_id: materials, amount_cents: Cents(20_000), memo: None, class_id: None, customer_id: Some(lakeview) }],
         },
     )
     .await

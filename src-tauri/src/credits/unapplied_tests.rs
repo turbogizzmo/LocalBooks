@@ -54,7 +54,7 @@ fn extra(customer: &str, account: i64, cents: i64, keep_as: &str, to: Option<i64
         customer_name: customer.into(),
         deposit_account_id: account,
         payment_date: d(10),
-        amount_cents: cents,
+        amount_cents: Cents(cents),
         payment_method: "CHECK".into(),
         payment_method_id: None,
         reference: Some("4471".into()),
@@ -169,7 +169,7 @@ async fn a_prepayment_can_be_refunded_or_written_off_and_bad_choices_post_nothin
         .unwrap()
         .credit_id
         .unwrap();
-    let after = write_off_customer_credit(&pool, RefundCreditInput { credit_id: kept, account_id: interest, refund_date: d(20), amount_cents: 700, reference: None })
+    let after = write_off_customer_credit(&pool, RefundCreditInput { credit_id: kept, account_id: interest, refund_date: d(20), amount_cents: Cents(700), reference: None })
         .await
         .unwrap();
     assert_eq!(after.remaining_cents, 0);

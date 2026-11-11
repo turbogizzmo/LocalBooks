@@ -220,7 +220,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     )
     .await
     .expect("credit memo");
-    credits::apply_customer_credit(&pool, ApplyCreditInput { credit_id: credit.id, document_id: credited.id, amount_cents: 2_500, applied_date: d(2025, 5, 21) }).await.expect("apply the credit");
+    credits::apply_customer_credit(&pool, ApplyCreditInput { credit_id: credit.id, document_id: credited.id, amount_cents: Cents(2_500), applied_date: d(2025, 5, 21) }).await.expect("apply the credit");
 
     // Vendors: 1099 contractors with encrypted tax IDs, bills paid, part paid and open.
     vendor_tax_id(&pool, "Pat Contractor", "123-45-6789", access).await;

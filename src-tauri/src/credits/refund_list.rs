@@ -42,6 +42,7 @@ mod tests {
     use super::*;
     use crate::credits::{create_credit_memo, refund_customer_credit, write_off_customer_credit, CreditMemoInput, RefundCreditInput};
     use crate::db::test_pool;
+    use crate::money::Cents;
     use chrono::NaiveDate;
 
     #[tokio::test]
@@ -69,8 +70,8 @@ mod tests {
         )
         .await
         .unwrap();
-        refund_customer_credit(&pool, RefundCreditInput { credit_id: memo.id, account_id: checking, refund_date: d(5), amount_cents: 6_000, reference: Some("1042".into()) }).await.unwrap();
-        write_off_customer_credit(&pool, RefundCreditInput { credit_id: memo.id, account_id: services, refund_date: d(6), amount_cents: 4_000, reference: None }).await.unwrap();
+        refund_customer_credit(&pool, RefundCreditInput { credit_id: memo.id, account_id: checking, refund_date: d(5), amount_cents: Cents(6_000), reference: Some("1042".into()) }).await.unwrap();
+        write_off_customer_credit(&pool, RefundCreditInput { credit_id: memo.id, account_id: services, refund_date: d(6), amount_cents: Cents(4_000), reference: None }).await.unwrap();
 
         let list = list_customer_credit_refunds(&pool, memo.id).await.unwrap();
         let rows: Vec<(i64, &str, Option<&str>, bool, bool)> = list.iter().map(|r| (r.amount_cents, r.account_type.as_str(), r.reference.as_deref(), r.is_write_off, r.is_voided)).collect();

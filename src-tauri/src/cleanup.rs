@@ -264,7 +264,7 @@ pub async fn apply_credits(pool: &SqlitePool, input: &ApplyCreditsInput) -> Resu
         let mut total: i64 = 0;
         let mut rows = Vec::with_capacity(input.applications.len());
         for a in &input.applications {
-            let apply = ApplyCreditInput { credit_id: a.credit_id, document_id: a.document_id, amount_cents: a.amount_cents, applied_date: input.applied_date };
+            let apply = ApplyCreditInput { credit_id: a.credit_id, document_id: a.document_id, amount_cents: Cents(a.amount_cents), applied_date: input.applied_date };
             match a.kind {
                 PartyKind::Customer => apply_customer_credit_in_tx(tx, &apply).await?,
                 PartyKind::Vendor => apply_vendor_credit_in_tx(tx, &apply).await?,
@@ -654,7 +654,7 @@ pub async fn write_off(pool: &SqlitePool, input: &WriteOffInput) -> Result<Write
                 header: Default::default(),
             };
             let memo_id = write_credit_memo(tx, &credit, true).await?;
-            apply_customer_credit_in_tx(tx, &ApplyCreditInput { credit_id: memo_id, document_id: invoice_id, amount_cents: open, applied_date: input.write_off_date }).await?;
+            apply_customer_credit_in_tx(tx, &ApplyCreditInput { credit_id: memo_id, document_id: invoice_id, amount_cents: Cents(open), applied_date: input.write_off_date }).await?;
             total += open;
             memos.push(memo_id);
             rows.push(serde_json::json!({ "invoiceId": invoice_id, "invoiceNumber": number, "customer": customer, "creditMemoId": memo_id, "amountCents": open }));

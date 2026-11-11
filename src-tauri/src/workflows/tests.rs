@@ -242,7 +242,7 @@ async fn statements_label_payments_refunds_and_write_offs_and_credit_memo_number
     let mut tx = crate::ledger::begin_write(&pool).await.unwrap();
     crate::credits::write_unapplied_payment(
         &mut tx,
-        &UnappliedPaymentInput { customer_name: "Acme".into(), deposit_account_id: checking, payment_date: d(3, 3), amount_cents: 2_500, payment_method: "CHECK".into(), payment_method_id: None, reference: Some("8812".into()), keep_as: None, account_id: None },
+        &UnappliedPaymentInput { customer_name: "Acme".into(), deposit_account_id: checking, payment_date: d(3, 3), amount_cents: Cents(2_500), payment_method: "CHECK".into(), payment_method_id: None, reference: Some("8812".into()), keep_as: None, account_id: None },
     )
     .await
     .unwrap();
@@ -250,8 +250,8 @@ async fn statements_label_payments_refunds_and_write_offs_and_credit_memo_number
     let second = memo(pool.clone(), 4).await;
     assert_eq!((first.credit_number, second.credit_number), (1, 2), "no number taken by the overpayment");
 
-    write_off_customer_credit(&pool, RefundCreditInput { credit_id: first.id, account_id: services, refund_date: d(3, 5), amount_cents: 1_000, reference: None }).await.unwrap();
-    refund_customer_credit(&pool, RefundCreditInput { credit_id: second.id, account_id: checking, refund_date: d(3, 6), amount_cents: 2_000, reference: Some("1042".into()) }).await.unwrap();
+    write_off_customer_credit(&pool, RefundCreditInput { credit_id: first.id, account_id: services, refund_date: d(3, 5), amount_cents: Cents(1_000), reference: None }).await.unwrap();
+    refund_customer_credit(&pool, RefundCreditInput { credit_id: second.id, account_id: checking, refund_date: d(3, 6), amount_cents: Cents(2_000), reference: Some("1042".into()) }).await.unwrap();
 
     let acme: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
     let period = crate::forms::Period { start_date: d(3, 1), end_date: d(3, 31) };
@@ -296,7 +296,7 @@ async fn an_old_low_numbered_overpayment_is_skipped_once_and_payment_credits_sta
     let mut tx = crate::ledger::begin_write(&pool).await.unwrap();
     let paid = crate::credits::write_unapplied_payment(
         &mut tx,
-        &UnappliedPaymentInput { customer_name: "Acme".into(), deposit_account_id: checking, payment_date: d(3, 4), amount_cents: 2_500, payment_method: "CHECK".into(), payment_method_id: None, reference: Some("8812".into()), keep_as: None, account_id: None },
+        &UnappliedPaymentInput { customer_name: "Acme".into(), deposit_account_id: checking, payment_date: d(3, 4), amount_cents: Cents(2_500), payment_method: "CHECK".into(), payment_method_id: None, reference: Some("8812".into()), keep_as: None, account_id: None },
     )
     .await
     .unwrap();
@@ -317,7 +317,7 @@ async fn an_old_low_numbered_overpayment_is_skipped_once_and_payment_credits_sta
     }))
     .unwrap();
     let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
-    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: paid, document_id: inv.id, amount_cents: 1_000, applied_date: d(3, 6) }).await.unwrap();
+    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: paid, document_id: inv.id, amount_cents: Cents(1_000), applied_date: d(3, 6) }).await.unwrap();
     let entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM credit_memos WHERE id = ?1").bind(paid).fetch_one(&pool).await.unwrap();
     let err = crate::ledger::void_transaction(&pool, entry).await.unwrap_err();
     assert!(err.contains("this unapplied payment") && !err.contains("1000000001"), "{err}");

@@ -119,7 +119,7 @@ async fn cash_basis_counts_invoices_as_paid_and_periods_line_up() {
     )
     .await
     .unwrap();
-    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: memo.id, document_id: second, amount_cents: 20_000, applied_date: ymd(2026, 3, 12) }).await.unwrap();
+    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: memo.id, document_id: second, amount_cents: Cents(20_000), applied_date: ymd(2026, 3, 12) }).await.unwrap();
     pay(second, ymd(2026, 3, 20), Cents(30_000)).await.unwrap();
 
     let net = |basis, m: u32, last: u32| profit_and_loss_basis(&pool, ymd(2026, m, 1), ymd(2026, m, last), None, basis);

@@ -110,7 +110,7 @@ async fn editing_a_part_paid_invoice_keeps_its_payment_and_credit() {
     let memo: crate::credits::CreditMemoInput = serde_json::from_value(serde_json::json!({ "customerName": "Acme", "creditDate": "2026-06-06", "memo": null,
         "lines": [{ "productServiceId": null, "description": "Goodwill", "quantityE4": 10_000, "rateCents": 5_000, "incomeAccountId": services }] })).unwrap();
     let memo = crate::credits::create_credit_memo(&pool, memo).await.unwrap().id;
-    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: memo, document_id: original, amount_cents: 5_000, applied_date: date(6) }).await.unwrap();
+    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: memo, document_id: original, amount_cents: Cents(5_000), applied_date: date(6) }).await.unwrap();
     let (gl, aging) = control_and_aging(&pool, false).await;
     assert_eq!((gl, aging), (65_000, 65_000));
 
@@ -193,7 +193,7 @@ async fn editing_a_part_paid_bill_keeps_its_payment_and_vendor_credit() {
     let credit: crate::credits::VendorCreditInput = serde_json::from_value(serde_json::json!({ "vendorName": "Landlord", "reference": "CR-1", "creditDate": "2026-06-04", "memo": null,
         "lines": [{ "accountId": rent, "amountCents": 10_000, "memo": null }] })).unwrap();
     let credit = crate::credits::create_vendor_credit(&pool, credit).await.unwrap().id;
-    crate::credits::apply_vendor_credit(&pool, crate::credits::ApplyCreditInput { credit_id: credit, document_id: original, amount_cents: 10_000, applied_date: date(4) }).await.unwrap();
+    crate::credits::apply_vendor_credit(&pool, crate::credits::ApplyCreditInput { credit_id: credit, document_id: original, amount_cents: Cents(10_000), applied_date: date(4) }).await.unwrap();
     assert_eq!(control_and_aging(&pool, true).await, (140_000, 140_000));
 
     let edited = replace_bill(&pool, original, bill("Landlord", 180_000)).await.unwrap();
@@ -263,7 +263,7 @@ async fn a_bill_paid_with_auto_applied_credits_and_discount_keeps_them_when_edit
 
     let plan = pay_bills_plan(&pool, &[original], date(5)).await.unwrap();
     assert_eq!((plan.discounts.len(), plan.credits.len()), (1, 1), "{plan:?}");
-    let credits = plan.credits.iter().map(|u| crate::credits::ApplyCreditInput { credit_id: u.credit_id, document_id: u.bill_id, amount_cents: u.amount_cents, applied_date: date(5) }).collect();
+    let credits = plan.credits.iter().map(|u| crate::credits::ApplyCreditInput { credit_id: u.credit_id, document_id: u.bill_id, amount_cents: Cents(u.amount_cents), applied_date: date(5) }).collect();
     let pay = crate::expenses::BillPaymentInput { bill_id: original, payment_account_id: checking, payment_date: date(5), amount_cents: 20_000, reference: None, to_be_printed: false };
     pay_bills_with_credits(&pool, vec![pay], credits, plan.discounts, date(5)).await.unwrap();
     // 200.00 paid, 50.00 vendor credit and a 10.00 discount (2% of 500.00).
