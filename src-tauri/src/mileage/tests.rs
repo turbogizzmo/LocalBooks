@@ -34,7 +34,7 @@ fn trip(vehicle_id: i64, date: NaiveDate, miles_e4: i64, customer_id: Option<i64
 
 async fn mileage_item(pool: &SqlitePool) -> i64 {
     let income: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(pool).await.unwrap();
-    create_product(pool, ProductInput { name: "Mileage".into(), description: None, rate_cents: 75, income_account_id: income, is_taxable: false })
+    create_product(pool, ProductInput { name: "Mileage".into(), description: None, rate_cents: Cents(75), income_account_id: income, is_taxable: false })
         .await
         .unwrap()
         .id

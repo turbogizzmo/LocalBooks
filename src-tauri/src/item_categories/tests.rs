@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 use crate::sales::{create_product, list_products, ProductInput};
 
 fn input(name: &str, parent_id: Option<i64>) -> CategoryInput {
@@ -8,7 +9,7 @@ fn input(name: &str, parent_id: Option<i64>) -> CategoryInput {
 
 async fn item(pool: &SqlitePool, name: &str) -> i64 {
     let income: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(pool).await.unwrap();
-    create_product(pool, ProductInput { name: name.into(), description: None, rate_cents: 1_000, income_account_id: income, is_taxable: true }).await.unwrap().id
+    create_product(pool, ProductInput { name: name.into(), description: None, rate_cents: Cents(1_000), income_account_id: income, is_taxable: true }).await.unwrap().id
 }
 
 async fn category_of(pool: &SqlitePool, id: i64) -> Option<i64> {

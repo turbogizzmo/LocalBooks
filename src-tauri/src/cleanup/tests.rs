@@ -312,7 +312,7 @@ async fn list_changes_come_from_creation_dates_and_the_audit_trail() {
     let customer = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
     let vendor = crate::expenses::create_vendor(&pool, "Paper Co", None).await.unwrap().id;
     let services = account(&pool, "4100").await;
-    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Consulting".into(), description: None, rate_cents: 10_000, income_account_id: services, is_taxable: false })
+    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Consulting".into(), description: None, rate_cents: Cents(10_000), income_account_id: services, is_taxable: false })
         .await
         .unwrap()
         .id;
@@ -347,7 +347,7 @@ async fn list_changes_come_from_creation_dates_and_the_audit_trail() {
 async fn inventory_comparison_finds_entries_that_post_to_inventory_without_stock() {
     let pool = test_pool().await;
     let (sales, obe, checking) = (account(&pool, "4000").await, account(&pool, "3000").await, account(&pool, "1010").await);
-    let widget = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: 2_500, income_account_id: sales, is_taxable: false })
+    let widget = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false })
         .await
         .unwrap()
         .id;

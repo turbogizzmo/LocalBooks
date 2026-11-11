@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 
 fn day() -> NaiveDate {
     "2026-11-09".parse().unwrap()
@@ -158,7 +159,7 @@ async fn merging_vendors_and_items_moves_bills_checks_and_lines() {
     assert_eq!(theirs, 1);
 
     let income = account(&pool, "4100").await;
-    let item = |name: &str| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: 1_000, income_account_id: income, is_taxable: false };
+    let item = |name: &str| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: Cents(1_000), income_account_id: income, is_taxable: false };
     let a = crate::sales::create_product(&pool, item("Consulting")).await.unwrap().id;
     let b = crate::sales::create_product(&pool, item("Consulting hours")).await.unwrap().id;
     let inv = invoice(&pool, "Acme", 2_000, Some(b)).await;

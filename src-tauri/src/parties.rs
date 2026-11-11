@@ -482,7 +482,7 @@ pub async fn update_item(pool: &SqlitePool, id: i64, input: ProductInput, kind: 
     if name.is_empty() {
         return Err("PRODUCT_NO_NAME: enter a product or service name".into());
     }
-    if input.rate_cents < 0 {
+    if input.rate_cents.is_negative() {
         return Err("PRODUCT_BAD_RATE: the rate cannot be negative".into());
     }
     let income: Option<String> = sqlx::query_scalar(

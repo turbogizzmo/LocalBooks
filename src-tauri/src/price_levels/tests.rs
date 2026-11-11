@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::inventory::{adjust, track_product, AdjustInput, TrackInput};
+use crate::money::Cents;
 use crate::sales::{create_product, ProductInput};
 
 fn item(id: i64, rate_cents: i64, unit_cost_cents: Option<i64>) -> PriceItem {
@@ -122,8 +123,8 @@ async fn books() -> Books {
     };
     let (sales, services, obe) = (account("4000").await, account("4100").await, account("3000").await);
     let product = |name: &str, rate_cents, income_account_id| ProductInput { name: name.into(), description: None, rate_cents, income_account_id, is_taxable: true };
-    let consulting = create_product(&pool, product("Consulting", 15_000, services)).await.unwrap().id;
-    let widget = create_product(&pool, product("Widget", 2_500, sales)).await.unwrap().id;
+    let consulting = create_product(&pool, product("Consulting", Cents(15_000), services)).await.unwrap().id;
+    let widget = create_product(&pool, product("Widget", Cents(2_500), sales)).await.unwrap().id;
     let item = track_product(&pool, &TrackInput { product_id: widget, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap().id;
     adjust(&pool, &AdjustInput { item_id: item, date: "2026-10-01".parse().unwrap(), qty_change_e4: 100_000, total_cost_cents: Some(5_250), offset_account_id: obe, memo: None })
         .await

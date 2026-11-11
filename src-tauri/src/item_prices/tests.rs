@@ -79,9 +79,9 @@ async fn catalog() -> Catalog {
     };
     let (sales, services, obe) = (account("4000").await, account("4100").await, account("3000").await);
     let product = |name: &str, rate_cents, income_account_id| ProductInput { name: name.into(), description: None, rate_cents, income_account_id, is_taxable: true };
-    let consulting = create_product(&pool, product("Consulting", 15_000, services)).await.unwrap().id;
-    let widget = create_product(&pool, product("Widget", 2_500, sales)).await.unwrap().id;
-    let gadget = create_product(&pool, product("Gadget", 999, sales)).await.unwrap().id;
+    let consulting = create_product(&pool, product("Consulting", Cents(15_000), services)).await.unwrap().id;
+    let widget = create_product(&pool, product("Widget", Cents(2_500), sales)).await.unwrap().id;
+    let gadget = create_product(&pool, product("Gadget", Cents(999), sales)).await.unwrap().id;
     let track = |product_id| TrackInput { product_id, sku: None, asset_account_id: None, cogs_account_id: None };
     let item = track_product(&pool, &track(widget)).await.unwrap().id;
     track_product(&pool, &track(gadget)).await.unwrap();

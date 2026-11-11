@@ -1,6 +1,7 @@
 use super::*;
 use crate::closing::ClosingInput;
 use crate::db::{test_config, Db};
+use crate::money::Cents;
 use crate::permissions::Need;
 use serde_json::json;
 
@@ -282,7 +283,7 @@ async fn inventory_is_carried_at_quantity_and_cost() {
     let tmp = TempDir::new("stock");
     let pool = crate::db::open(&tmp.company()).await.unwrap();
     let (sales, checking) = (account(&pool, "4000").await, account(&pool, "1010").await);
-    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: 2_500, income_account_id: sales, is_taxable: false })
+    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false })
         .await
         .unwrap()
         .id;

@@ -49,7 +49,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     let materials = new_account(p, "5100", "Job Materials", "COST_OF_GOODS_SOLD").await;
     let rental = new_account(p, "5200", "Equipment Rental", "COST_OF_GOODS_SOLD").await;
 
-    let product = |name: &str, rate: i64, income: i64| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: rate, income_account_id: income, is_taxable: false };
+    let product = |name: &str, rate: i64, income: i64| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: Cents(rate), income_account_id: income, is_taxable: false };
     let labor = crate::sales::create_product(p, product("Framing Labor", 8_500, services)).await.expect("product").id;
     let survey = crate::sales::create_product(p, product("Site Survey", 60_000, services)).await.expect("product").id;
     let oak = crate::sales::create_product(p, product("Oak Panels", 30_000, sales)).await.expect("product").id;

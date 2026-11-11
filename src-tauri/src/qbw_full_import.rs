@@ -26,6 +26,7 @@ use sqlx::{Sqlite, Transaction};
 use crate::invoices::line_amount;
 use crate::item_types::{FormLineInput, ItemAmount, Layout};
 use crate::ledger::{self, db_err, EntrySource, JournalEntry, JournalLine};
+use crate::money::Cents;
 use crate::qbw_documents::{DocumentLine, SourceDocument, SourceSales};
 use crate::sales_lists::SalesDoc;
 
@@ -279,7 +280,7 @@ fn form(lines: &[DocumentLine], map: &HashMap<i64, i64>, books: &Books, sign: i6
             Ok(layout) => out.layout = Some(layout),
             // Not a form LocalBooks can show: the discounts come off the whole document instead.
             Err(_) => {
-                out.discount += out.form_lines.iter().filter_map(|f| f.amount_cents).sum::<i64>();
+                out.discount += out.form_lines.iter().filter_map(|f| f.amount_cents.map(Cents::get)).sum::<i64>();
                 out.form_lines.clear();
             }
         }

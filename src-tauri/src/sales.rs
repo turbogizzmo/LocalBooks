@@ -7,6 +7,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::invoices::{line_amount, validate_line, PAYMENT_METHODS};
 use crate::ledger::{db_err, format_cents, post_entry_in_tx, rollback, EntrySource, JournalEntry, JournalLine, MAX_LINE_CENTS};
+use crate::money::Cents;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Party {
@@ -245,7 +246,7 @@ impl ItemKind {
 pub struct ProductInput {
     pub name: String,
     pub description: Option<String>,
-    pub rate_cents: i64,
+    pub rate_cents: Cents,
     pub income_account_id: i64,
     /// Charged sales tax when sold (on by default).
     #[serde(default = "taxable_by_default")]
@@ -428,7 +429,7 @@ pub async fn create_item(pool: &SqlitePool, input: ProductInput, kind: ItemKind)
     if name.is_empty() {
         return Err("PRODUCT_NO_NAME: enter a product or service name".into());
     }
-    if !(0..=MAX_LINE_CENTS).contains(&input.rate_cents) {
+    if !(0..=MAX_LINE_CENTS).contains(&input.rate_cents.get()) {
         return Err("PRODUCT_BAD_RATE: rate must be zero or more".into());
     }
     sqlx::query_as::<_, ProductView>(
