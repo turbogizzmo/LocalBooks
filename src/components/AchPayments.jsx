@@ -111,7 +111,7 @@ export function AchFilesPanel({ onClose }) {
     <section className="qb-panel flex-none">
       <div className="flex h-row-lg items-center gap-2 border-b border-qb-border px-2">
         <h2 className="text-md font-semibold">ACH files</h2>
-        <span className="text-xs text-qb-ink-muted">Saving a file again gives the identical file; it pays nothing more in LocalBooks.</span>
+        <span className="text-xs text-qb-ink-muted">Saving a file again gives the identical file; it pays nothing more in Tillhouse.</span>
         <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row" onClick={onClose}>
           Close
         </button>

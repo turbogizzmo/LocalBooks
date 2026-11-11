@@ -41,7 +41,7 @@ function BalanceCheck({ check }) {
   let text;
   if (check.status === 'NOT_PRINTED') {
     kind = 'info';
-    text = 'This statement prints no opening and closing balance, so LocalBooks cannot check that every transaction was read.';
+    text = 'This statement prints no opening and closing balance, so Tillhouse cannot check that every transaction was read.';
   } else if (check.status === 'MATCHES') {
     const owed = check.owed ? ' owed' : '';
     const change = `${check.changeCents < 0 ? '−' : '+'} ${formatCents(Math.abs(check.changeCents))}`;
@@ -61,7 +61,7 @@ function BalanceCheck({ check }) {
 }
 
 /**
- * Lets the user say which columns hold the date, description and amount when LocalBooks cannot
+ * Lets the user say which columns hold the date, description and amount when Tillhouse cannot
  * tell (or cannot tell the day/month order), and confirm the table read from a PDF statement. The
  * preview re-reads the file with each choice, and the layout is remembered for the next file with
  * the same headers.
@@ -126,10 +126,10 @@ export default function BankColumnMapping({ path, inspection, bankAccountId = nu
         </div>
         <p className="border-b border-qb-border px-3 py-1.5 text-xs text-qb-ink-muted">
           {inspection.format === 'PDF'
-            ? 'LocalBooks read this table from the PDF. Check that each column holds what its title says; statements with the same columns will use your choice.'
+            ? 'Tillhouse read this table from the PDF. Check that each column holds what its title says; statements with the same columns will use your choice.'
             : inspection.mapping
               ? 'Check the day/month order: every date in this file could be read either way.'
-              : 'LocalBooks did not recognize these column names. Choose them once; files with the same columns will then import directly.'}
+              : 'Tillhouse did not recognize these column names. Choose them once; files with the same columns will then import directly.'}
         </p>
 
         <div className="grid grid-cols-2 gap-3 px-3 py-2 sm:grid-cols-4">
@@ -227,7 +227,7 @@ export default function BankColumnMapping({ path, inspection, bankAccountId = nu
           </div>
         )}
         <div className="flex items-center gap-2 border-t border-qb-border px-3 py-2">
-          <span className="text-xs text-qb-ink-muted">Money out should show as negative (red). LocalBooks remembers these columns.</span>
+          <span className="text-xs text-qb-ink-muted">Money out should show as negative (red). Tillhouse remembers these columns.</span>
           <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row-lg px-3" onClick={onCancel} disabled={busy}>
             Cancel
           </button>

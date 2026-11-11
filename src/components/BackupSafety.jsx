@@ -37,7 +37,7 @@ export default function BackupSafety() {
   const [notice, setNotice] = useState(null);
   const [test, busy] = useTestRestore(setNotice);
   const choose = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'LocalBooks backup', extensions: ['localbooks', 'db'] }] });
+    const path = await open({ multiple: false, directory: false, filters: [{ name: 'Tillhouse backup', extensions: ['localbooks', 'db'] }] });
     if (typeof path === 'string') await test(path);
   };
   return (

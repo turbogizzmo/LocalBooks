@@ -135,7 +135,7 @@ export default function OffsiteBackup({ isAdmin, onRestored }) {
             </label>
           </div>
           <p className="text-xs text-qb-ink-muted">
-            Use your sign-in password, the company’s recovery key, or another password of at least 8 characters. Restoring a copy, on this or any computer, needs it: LocalBooks
+            Use your sign-in password, the company’s recovery key, or another password of at least 8 characters. Restoring a copy, on this or any computer, needs it: Tillhouse
             can’t open a copy without it. This computer keeps the key in its {navigator.platform.startsWith('Mac') ? 'Keychain' : 'credential store'} so copies need no password.
           </p>
           <div className="flex gap-2">
@@ -178,7 +178,7 @@ export default function OffsiteBackup({ isAdmin, onRestored }) {
             className="qb-btn qb-btn-secondary h-row"
             disabled={busy}
             onClick={async () => {
-              const file = await open({ multiple: false, directory: false, filters: [{ name: 'LocalBooks offsite backup', extensions: ['lbbackup'] }] });
+              const file = await open({ multiple: false, directory: false, filters: [{ name: 'Tillhouse offsite backup', extensions: ['lbbackup'] }] });
               if (typeof file === 'string') setAsk({ kind: 'test', copy: { path: file, fileName: file.split(/[\\/]/).pop() } });
             }}
           >

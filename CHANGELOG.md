@@ -1,11 +1,23 @@
 # Changelog
 
-What changed in each LocalBooks release. A release's section here becomes its release notes on
-GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
-people using LocalBooks.
+What changed in each Tillhouse release (called LocalBooks up to 0.15). A release's section here
+becomes its release notes on GitHub and in the app's update window (see
+`.github/workflows/release.yml`), so write it for the people using Tillhouse.
 
 ## [Unreleased]
 
+- **LocalBooks is now Tillhouse.** Same app, new name, new icon and new colors. Another accounting
+  program already used the LocalBooks name, so we changed ours while the group of testers is small.
+  Nothing moves: your company files (still `.localbooks` files), settings, backups, saved passwords
+  and bank connections stay where they are, and updates keep arriving as before. On Windows the
+  update replaces the LocalBooks shortcut and its entry in Installed apps with Tillhouse ones. On a
+  Mac an updated copy keeps the name LocalBooks.app in the Applications folder until you replace it
+  with a fresh download; it is the same app either way. On Linux, the Tillhouse .deb and .rpm
+  packages replace the LocalBooks package. If you set up Export from QuickBooks on Windows,
+  QuickBooks still lists the app as LocalBooks, which is fine.
+- **Clearer colors.** A deep spruce green and dark sidebar replace the old bright green, and every
+  label and button meets the WCAG AA contrast guideline. Invoice and estimate designs you already
+  made keep their colors; new ones start in spruce.
 - **More accurate company-file imports.** Memorized transactions (templates) are no longer
   imported as real ones, which doubled some balances. Files whose description of a line table is
   missing several columns now read those lines, and a payment and deposit that a file keeps as two

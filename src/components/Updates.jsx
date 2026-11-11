@@ -28,7 +28,7 @@ function setAutoCheck(on) {
 
 /**
  * Downloads and installs `update`, then restarts. The download's signature is verified against the
- * public key built into LocalBooks; an unsigned or tampered download is refused. A company file that
+ * public key built into Tillhouse; an unsigned or tampered download is refused. A company file that
  * needs upgrading is copied to the backups folder the first time the new version opens it.
  */
 async function install(update, onProgress) {
@@ -100,7 +100,7 @@ export function UpdateBanner() {
     <div className="no-print border-b border-qb-info/40 bg-[#eaf4fb] px-3 py-1.5 text-sm" role="status">
       <div className="flex flex-wrap items-center gap-2">
         <span>
-          <strong>LocalBooks {update.version}</strong> is available (you have {update.currentVersion}).
+          <strong>Tillhouse {update.version}</strong> is available (you have {update.currentVersion}).
         </span>
         <div className="ml-auto flex gap-2">
           <InstallButton update={update} onError={setError} />
@@ -140,7 +140,7 @@ export function UpdatesPanel() {
       <h2 className="border-b border-qb-border bg-qb-row-header px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Updates</h2>
       <div className="flex flex-col gap-2 p-3 text-sm">
         <div>
-          You are using <strong>LocalBooks {version || '…'}</strong>.{' '}
+          You are using <strong>Tillhouse {version || '…'}</strong>.{' '}
           <span className="text-qb-ink-muted">
             Release notes and installers: <span className="select-all font-mono text-xs">{RELEASES_URL}</span>
           </span>
@@ -155,19 +155,19 @@ export function UpdatesPanel() {
               setAutoCheck(e.target.checked);
             }}
           />
-          Check for updates when LocalBooks starts
+          Check for updates when Tillhouse starts
         </label>
         <div className="flex items-center gap-2">
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={checkNow} disabled={state.kind === 'checking'}>
             {state.kind === 'checking' ? 'Checking…' : 'Check for updates'}
           </button>
-          {state.kind === 'current' && <span className="text-qb-ink-muted">LocalBooks is up to date.</span>}
+          {state.kind === 'current' && <span className="text-qb-ink-muted">Tillhouse is up to date.</span>}
         </div>
         {state.kind === 'available' && (
           <div className="rounded-xs border border-qb-info/40 bg-[#eaf4fb] p-2">
             <div className="flex flex-wrap items-center gap-2">
               <span>
-                <strong>LocalBooks {state.update.version}</strong> is available.
+                <strong>Tillhouse {state.update.version}</strong> is available.
               </span>
               <span className="ml-auto">
                 <InstallButton update={state.update} onError={(text) => setState({ kind: 'error', text })} />
@@ -179,8 +179,8 @@ export function UpdatesPanel() {
         {state.kind === 'error' && <Notice kind="error" text={`Could not check for updates: ${state.text}`} onDismiss={() => setState({ kind: 'idle' })} />}
         <PreviousVersion />
         <p className="text-xs text-qb-ink-muted">
-          Updates come from LocalBooks’ GitHub releases and are installed only if their signature matches the key built into
-          LocalBooks. Before a new version changes your company file, it saves a copy under Settings › File &amp; Data Controls
+          Updates come from Tillhouse’ GitHub releases and are installed only if their signature matches the key built into
+          Tillhouse. Before a new version changes your company file, it saves a copy under Settings › File &amp; Data Controls
           (“Before upgrade”). Nothing about your books is sent when checking.
         </p>
       </div>
@@ -190,7 +190,7 @@ export function UpdatesPanel() {
 
 /**
  * Go back to the release before this one (Help › Reinstall Previous Version…). The books are backed
- * up first, and LocalBooks refuses when the older version couldn't open them.
+ * up first, and Tillhouse refuses when the older version couldn't open them.
  */
 function PreviousVersion() {
   const [state, setState] = useState({ kind: 'idle' });
@@ -204,7 +204,7 @@ function PreviousVersion() {
   };
   const reinstall = async (previous) => {
     const ok = await askConfirm(
-      `Reinstall LocalBooks ${previous.version}? Your company file is backed up first. LocalBooks ${previous.version} is downloaded from its GitHub release, checked against LocalBooks’ signing key, and installed; restart to use it. To come back to this version later, check for updates.`,
+      `Reinstall Tillhouse ${previous.version}? Your company file is backed up first. Tillhouse ${previous.version} is downloaded from its GitHub release, checked against Tillhouse’s signing key, and installed; restart to use it. To come back to this version later, check for updates.`,
       { confirmLabel: 'Back up and reinstall' },
     );
     if (!ok) return;
@@ -230,7 +230,7 @@ function PreviousVersion() {
       {plan?.previous && !plan.blocked && (
         <div className="mt-1 flex items-center gap-2">
           <span>
-            The previous version is <strong>LocalBooks {plan.previous.version}</strong>
+            The previous version is <strong>Tillhouse {plan.previous.version}</strong>
             {plan.previous.publishedAt ? `, released ${plan.previous.publishedAt.slice(0, 10)}` : ''}. It can open this company file.
           </span>
           <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" onClick={() => reinstall(plan.previous)}>
@@ -238,7 +238,7 @@ function PreviousVersion() {
           </button>
         </div>
       )}
-      {state.kind === 'installing' && <p className="mt-1 text-qb-ink-muted">Backing up and installing LocalBooks {state.previous.version}…</p>}
+      {state.kind === 'installing' && <p className="mt-1 text-qb-ink-muted">Backing up and installing Tillhouse {state.previous.version}…</p>}
       {state.kind === 'done' && (
         <div className="mt-1 flex items-center gap-2">
           <Notice kind="success" text={state.text} />

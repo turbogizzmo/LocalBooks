@@ -27,14 +27,14 @@ Every report, list and register with an **Export** menu has **Email as PDF…** 
 The PDF holds what the Excel export would: the report's heading, columns and rows, page after
 page, with the column headings repeated on each page.
 
-**Email as PDF…** opens a message with the PDF attached. When sending from LocalBooks is set up
+**Email as PDF…** opens a message with the PDF attached. When sending from Tillhouse is set up
 (**Settings › Email**), **Send** sends it from there; otherwise, or if you choose **Open in my mail
 app instead**, a new message opens in your mail app for you to check and send. The **Reminders**
 list has **Email as PDF…** too.
 
 To password-protect the PDF, tick **Password-protect the PDF** and type a password. The PDF then
 opens only with that password (it is encrypted with 256-bit AES, which every current PDF reader
-opens). LocalBooks doesn't keep the password, so give it to the recipient another way, for example
+opens). Tillhouse doesn't keep the password, so give it to the recipient another way, for example
 by phone, never in the same email.
 
 ## Scheduled reports
@@ -62,9 +62,9 @@ Email goes only through the email server set up in **Settings › Email** (it mu
 and only to the addresses on the schedule. **Run now** on a schedule sends it for today without
 changing its next run; the list shows when each runs next and how its last run went.
 
-Schedules run only while LocalBooks is open: it checks shortly after it starts and every few
-minutes after that. If a run fell due while LocalBooks was closed, it happens once, soon after
-LocalBooks next opens, for the latest date that was due; earlier missed dates are not sent one by
+Schedules run only while Tillhouse is open: it checks shortly after it starts and every few
+minutes after that. If a run fell due while Tillhouse was closed, it happens once, soon after
+Tillhouse next opens, for the latest date that was due; earlier missed dates are not sent one by
 one.
 
 ### Password-protect scheduled PDFs
@@ -361,7 +361,7 @@ Things to know:
   credits dated on or before it. Credit not yet used is negative.
 - Voided transactions show with the entry that voids them, so together they come to zero. Choose
   **Leave out voided transactions** under **Customize…** to hide both (the 1099 Detail does).
-- The name filters list customers and vendors. LocalBooks has no payroll, so no transaction names an
+- The name filters list customers and vendors. Tillhouse has no payroll, so no transaction names an
   employee.
 - **Balance Sheet Detail** shows the equity accounts' own lines; this year's net income is not a
   line of its own, as it is on the Balance Sheet.
@@ -406,8 +406,8 @@ Lists cleared transactions that were changed, voided or deleted after their reco
 completed, by account and statement, with the amount when it was reconciled, the amount now and the
 effect on the reconciled balance. Pick one **Account** or all of them.
 
-LocalBooks itself never lets a reconciled transaction change, so in normal use this report is empty.
-Anything it finds means the company file was changed outside LocalBooks (another program, or a file
+Tillhouse itself never lets a reconciled transaction change, so in normal use this report is empty.
+Anything it finds means the company file was changed outside Tillhouse (another program, or a file
 restored from elsewhere). See [Reconcile an account](reconciling.md#check-for-changes-after-reconciling)
 for what is checked, and why reconciliations finished with an earlier version are checked by their
 totals only.
@@ -435,13 +435,13 @@ Then choose the **Tax year** (Last fiscal year to start) or a custom range:
   **Tax line**.
 - **Unassigned** lists the income and expense accounts with activity but no tax line, so nothing is
   missed. **Other tax lines** lists accounts with a line from another form, or a line brought in
-  from QuickBooks that LocalBooks hasn't matched.
+  from QuickBooks that Tillhouse hasn't matched.
 
 Moving from QuickBooks Desktop: an IIF file's account tax lines come across when they are named
 (such as `Sch C: Advertising`). A company file (`.qbw`, `.qbb`) and most IIF files store only
-QuickBooks' own number for the line; LocalBooks keeps it as **QuickBooks tax line** and its number,
+QuickBooks' own number for the line; Tillhouse keeps it as **QuickBooks tax line** and its number,
 so accounts that shared a line stay together under **Other tax lines** until you choose the
-LocalBooks line under **Tax lines…**.
+Tillhouse line under **Tax lines…**.
 
 The amounts come from your books on the accrual basis. They are a starting point for your return,
 not the return itself: your tax preparer may adjust them, for example for meals or depreciation.

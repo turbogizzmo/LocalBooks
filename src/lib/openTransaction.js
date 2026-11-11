@@ -1,4 +1,4 @@
-// Where a posted transaction opens: its own form when LocalBooks has one that opens by id (bills,
+// Where a posted transaction opens: its own form when Tillhouse has one that opens by id (bills,
 // checks and expenses, invoices), otherwise the journal with the entry expanded.
 
 /** Source types whose own form can be opened, with the screen and the id it takes. */

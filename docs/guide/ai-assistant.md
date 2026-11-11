@@ -1,6 +1,6 @@
 # Connect an AI assistant (MCP)
 
-LocalBooks can let an AI assistant on your computer (Claude Code, Claude Desktop, Cursor or any
+Tillhouse can let an AI assistant on your computer (Claude Code, Claude Desktop, Cursor or any
 other MCP client) read three summaries: the trial balance, a profit and loss summary, and overdue
 receivables. The assistant can't post, void or change anything.
 
@@ -29,6 +29,6 @@ Access is off until an Admin turns it on.
 - The server only answers on this computer and refuses requests from web pages.
 - Every request needs the access token. **Show** reveals it; **Regenerate** issues a new one, and
   assistants using the old token stop working until you update them.
-- LocalBooks sends nothing anywhere itself, but the assistant may send what it reads to its AI
+- Tillhouse sends nothing anywhere itself, but the assistant may send what it reads to its AI
   provider.
 - Click **Turn off** to stop it. It stays off until you turn it on again.

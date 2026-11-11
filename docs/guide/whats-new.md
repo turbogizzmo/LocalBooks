@@ -1,8 +1,13 @@
-# What's new in LocalBooks
+# What's new in Tillhouse
 
-The newest changes first, in plain words, with a link to the steps for each. LocalBooks offers each
+The newest changes first, in plain words, with a link to the steps for each. Tillhouse offers each
 new version when it starts (or check in **Settings › Updates**). The full list, including fixes, is in
 the [release notes](https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md).
+
+## Next version
+
+- **LocalBooks is now Tillhouse**: a new name, icon and colors. Your company files, settings,
+  backups and passwords stay where they are, and the update installs over the old copy.
 
 ## 0.15.0
 
@@ -84,7 +89,7 @@ A large release: everything below, plus over a hundred smaller changes in the re
 - **Ctrl+N, Ctrl+P and Page Up / Page Down on forms** start a new form, print it, or open the
   previous and next one. [Save a form and type faster](getting-started.md#save-a-form-and-type-faster-with-the-keyboard)
 - **Fixes:** a customer's or vendor's transactions panel totals one type at a time, the "Saved
-  customer" note clears when you move on, and a damaged company file no longer closes LocalBooks
+  customer" note clears when you move on, and a damaged company file no longer closes Tillhouse
   while unlocking.
 
 ## 0.12.0
@@ -133,7 +138,7 @@ A large release: everything below, plus over a hundred smaller changes in the re
 
 ## 0.10.3
 
-- **Windows inside LocalBooks, as in QuickBooks Desktop.** Invoices, bills, registers and reports
+- **Windows inside Tillhouse, as in QuickBooks Desktop.** Invoices, bills, registers and reports
   open as windows you can move, resize, minimize and line up (**Window › Cascade**, **Tile
   Vertically**). **View › One Window** shows one screen at a time instead, and **View › Open
   Window List** lists what's open. [Work in more than one window](getting-started.md#work-in-more-than-one-window)
@@ -163,8 +168,8 @@ A large release: everything below, plus over a hundred smaller changes in the re
 - **Newest first.** Lists of transactions start with the newest at the top, and each list
   remembers the order you choose. [Sort a list](getting-started.md#sort-a-list)
 - **Clearer help when the books won't open.** If the company file can't be opened at launch,
-  LocalBooks says why in plain words, with **Try again** and **Check for updates**.
-  [Troubleshooting](troubleshooting.md#localbooks-couldnt-open-your-company-file)
+  Tillhouse says why in plain words, with **Try again** and **Check for updates**.
+  [Troubleshooting](troubleshooting.md#tillhouse-couldnt-open-your-company-file)
 
 ## 0.10.1
 

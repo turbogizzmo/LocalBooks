@@ -1,6 +1,6 @@
 # Track inventory
 
-LocalBooks can keep the quantity on hand and cost of the products you stock. Costs use **moving
+Tillhouse can keep the quantity on hand and cost of the products you stock. Costs use **moving
 average**: each purchase updates the average cost, and each sale moves the cost of what was sold
 from **Inventory Asset** to **Cost of Goods Sold**.
 
@@ -32,7 +32,7 @@ accounts.
 Sell it on an invoice or sales receipt as usual, choosing the product on the line (the list shows
 how many are on hand). Posting also records the cost of the units sold in **Cost of Goods Sold**.
 
-- You can sell before the bill is entered (LocalBooks warns first; an Admin can make it stop the
+- You can sell before the bill is entered (Tillhouse warns first; an Admin can make it stop the
   sale, or say nothing, in **Preferences › Items & Inventory**). Stock then shows below zero (in red), and the units are
   costed at the last purchase cost per unit (or nothing, if never bought yet). When the bill
   arrives, the difference between that provisional cost and the real cost goes to **Cost of Goods

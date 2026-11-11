@@ -1,6 +1,8 @@
-# LocalBooks
+# Tillhouse
 
-**Local-first, double-entry accounting for small businesses.** A classic-style desktop accounting app whose
+**Local-first, double-entry accounting for small businesses.** Formerly LocalBooks: the app was renamed
+after 0.15, and the repository, bundle identifier and `.localbooks` company files keep the old name so
+existing installs carry on (see [docs/plans/rebrand.md](docs/plans/rebrand.md)). A classic-style desktop accounting app whose
 books live in a single SQLite file on your own machine: no account, no cloud, no telemetry.
 
 **United States only.** Sales tax, 1099s, the tax calendar, TXF export, ACH files, check printing
@@ -11,17 +13,17 @@ for a high-density, keyboard-friendly interface.
 
 ---
 
-> **Trying LocalBooks?** Download it and follow the install steps on the
+> **Trying Tillhouse?** Download it and follow the install steps on the
 > [**tester page**](https://turbogizzmo.github.io/LocalBooks/). Installed copies update themselves.
 >
-> **Using LocalBooks?** Start with the [**user guide**](docs/guide/README.md): step-by-step guides
+> **Using Tillhouse?** Start with the [**user guide**](docs/guide/README.md): step-by-step guides
 > for invoices, payments, bills, banking, reconciling, reports, closing the books, backups, users and
 > passwords, and more. The same guides are built into the app's Help (press F1). What changed in each
 > release is in the [changelog](CHANGELOG.md).
 
 ## Contents
 
-- [Why LocalBooks](#why-localbooks)
+- [Why Tillhouse](#why-tillhouse)
 - [Technical highlights](#technical-highlights)
 - [Architecture](#architecture)
 - [Feature blueprint](#feature-blueprint)
@@ -37,7 +39,7 @@ for a high-density, keyboard-friendly interface.
 
 ---
 
-## Why LocalBooks
+## Why Tillhouse
 
 - **Your books are a file you own.** Back it up, copy it, archive it; nothing leaves your computer
   unless you send it (an emailed invoice, a bank sync you turn on).
@@ -171,7 +173,7 @@ anything is replaced:
 | Check | Rejects |
 |---|---|
 | SQLite header & `integrity_check` | non-SQLite or damaged files |
-| `_sqlx_migrations` versions & checksums | files from a newer LocalBooks build, or edited schemas |
+| `_sqlx_migrations` versions & checksums | files from a newer Tillhouse build, or edited schemas |
 | `foreign_key_check` | broken links between records |
 | Per-entry `Σ debits = Σ credits` | unbalanced books |
 
@@ -190,7 +192,7 @@ open-source [OpenQBW](https://github.com/Sigilweaver/OpenQBW) parser. The file i
 
 1. **Extract.** Invoice line items (source invoice ID, date, signed cents, source table) go into
    `staging_raw_transactions`. These staging tables have no ties to the ledger.
-2. **Map.** Each source table found in the file is mapped to a LocalBooks income account.
+2. **Map.** Each source table found in the file is mapped to a Tillhouse income account.
    **Auto-Generate Missing Accounts** creates any accounts that are missing, numbered 4500 and up.
 3. **Post.** Each source invoice becomes one balanced journal entry: credits to the mapped income
    accounts, with the balancing debit to an offset account you choose (default: Opening Balance
@@ -203,7 +205,7 @@ The wizard also reads the full ledger (accounts, customers, vendors and every tr
 newer company files, **QuickBooks for Mac 2012 and earlier** company files (`.qb2012`, read
 directly by `qbmac_import.rs`), QuickBooks `.iif` and Quicken `.qif` exports, and **GnuCash books**
 (`.gnucash`, either compressed XML or SQLite). A full import recreates invoices, bills, payments
-and the rest as LocalBooks documents. See [the migration guide](docs/guide/desktop-migration.md).
+and the rest as Tillhouse documents. See [the migration guide](docs/guide/desktop-migration.md).
 
 Without a readable company file, the wizard also takes **QuickBooks report exports** (`.csv` or
 `.xlsx`) from QuickBooks Desktop for Windows or Mac, or QuickBooks Online: the Journal or General
@@ -217,10 +219,10 @@ still run these reports in view-only mode. See
 computer, the wizard can ask it for the data through Intuit's public interfaces instead
 (`installed_qb.rs`): AppleScript's `executeqbxml` and `reportAsText` on a Mac, the QuickBooks
 SDK's `QBXMLRP2.RequestProcessor` over COM on Windows. Only read-only qbXML queries are ever sent;
-an allowlist refuses anything else before it leaves LocalBooks. The answers become the same tables
+an allowlist refuses anything else before it leaves Tillhouse. The answers become the same tables
 as a report export and go through `report_import.rs`. Neither platform has been tried against a
 live QuickBooks yet. See
-[docs/guide/desktop-migration.md](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it).
+[docs/guide/desktop-migration.md](docs/guide/desktop-migration.md#quickbooks-still-installed-let-tillhouse-export-it).
 
 ---
 
@@ -299,7 +301,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Dashboard | Dashboard | Home: a map of the everyday work with waiting counts, banking and company shortcuts, account balances. Insights: assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md#start-from-the-home-page) |
 | Deposits & transfers | Banking › Deposits & Transfers | Bank deposits from Undeposited Funds, transfers between accounts, Pay Down Credit Card | [guide](docs/guide/deposits-and-transfers.md) |
 | Desktop Migration Wizard | Settings › Import & Migration; File › Utilities › Import / Convert… | `.qbw`, QuickBooks for Mac 2012, IIF, QIF, QuickBooks report and GnuCash import, and lists, transactions or journal entries from a spreadsheet you laid out, through a staging sandbox; payroll posted from a payroll service's journal export | [guide](docs/guide/desktop-migration.md) |
-| Export from installed QuickBooks (Preview) | Settings › Import & Migration › step 1 | Asks a running QuickBooks Desktop (Mac or Windows) for its lists and Journal, read-only | [guide](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it) |
+| Export from installed QuickBooks (Preview) | Settings › Import & Migration › step 1 | Asks a running QuickBooks Desktop (Mac or Windows) for its lists and Journal, read-only | [guide](docs/guide/desktop-migration.md#quickbooks-still-installed-let-tillhouse-export-it) |
 | Estimates | Sales › Estimates | Non-posting quotes, converted to an invoice in one step | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Sales orders | Sales › Sales Orders | Non-posting orders invoiced whole or in parts, made from estimates, printed and emailed; backorders, Open Sales Orders by Customer and by Item, Pending Sales | [guide](docs/guide/sales-orders.md) |
 | Expenses & checks | Expenses › Expenses & Checks | Split expenses and checks with auto-numbering | [guide](docs/guide/expenses-and-checks.md) |
@@ -338,8 +340,8 @@ under [`docs/guide/`](docs/guide/README.md).
 | Sortable lists | Any list, account registers, Reconcile | Click a column heading to sort by it; click again to reverse; transactions start newest first and each list remembers its order; double-click a register row to open its transaction | [guide](docs/guide/getting-started.md#sort-a-list) |
 | Time tracking | Employees › Time Tracking | Single activities and weekly timesheets (billable hours, rates) | [guide](docs/guide/time-tracking.md) |
 | Users & passwords | Settings › Users & Passwords | Optional users with roles (including External Accountant), sign-in, optional two-step sign-in with an authenticator app, idle sign-out, recovery key, encrypted vendor tax IDs and bank details, optional whole-file encryption | [guide](docs/guide/users-and-passwords.md) |
-| FTC Safeguards Rule map | Help › The FTC Safeguards Rule and LocalBooks | Each Safeguards Rule duty mapped to a LocalBooks feature or a stated limit, for tax preparers and bookkeepers | [guide](docs/guide/safeguards-rule.md) |
-| Windows & saved desktop | Window and View menus; Edit › Preferences › Desktop View | Windows inside LocalBooks (move, resize, minimize, maximize), One Window or Multiple Windows, Close All, Cascade, Tile, Open Window List, Ctrl+F6, and the windows you had reopening with the company | [guide](docs/guide/getting-started.md#work-in-more-than-one-window) |
+| FTC Safeguards Rule map | Help › The FTC Safeguards Rule and Tillhouse | Each Safeguards Rule duty mapped to a Tillhouse feature or a stated limit, for tax preparers and bookkeepers | [guide](docs/guide/safeguards-rule.md) |
+| Windows & saved desktop | Window and View menus; Edit › Preferences › Desktop View | Windows inside Tillhouse (move, resize, minimize, maximize), One Window or Multiple Windows, Close All, Cascade, Tile, Open Window List, Ctrl+F6, and the windows you had reopening with the company | [guide](docs/guide/getting-started.md#work-in-more-than-one-window) |
 
 ### `+ New` quick-create matrix
 
@@ -437,7 +439,7 @@ produces platform bundles under `src-tauri/target/release/bundle/`:
 
 | Platform | Output |
 |---|---|
-| macOS | `macos/LocalBooks.app`, `dmg/LocalBooks_<version>_<arch>.dmg` |
+| macOS | `macos/Tillhouse.app`, `dmg/Tillhouse_<version>_<arch>.dmg` |
 | Windows | `msi/*.msi`, `nsis/*-setup.exe` |
 | Linux | `deb/*.deb`, `appimage/*.AppImage`, `rpm/*.rpm` |
 
@@ -472,7 +474,7 @@ To ship a release:
 1. In one release PR:
    - bump `version` in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json` (and
      the lockfiles);
-   - add a `## [<version>]` section to `CHANGELOG.md`, written for the people using LocalBooks. It
+   - add a `## [<version>]` section to `CHANGELOG.md`, written for the people using Tillhouse. It
      becomes the release notes on GitHub and in the app's update window;
    - update the tester page (`site/index.html`): **What's new to test in <major.minor>**, the sample
      update bar, and any install, update or **Move your books** steps the release changes;
@@ -525,11 +527,11 @@ Security reports: see [SECURITY.md](SECURITY.md).
   unless an Admin encrypts the whole company file (Settings › Users & Passwords).
   Offsite copies (*Settings › File & Data Controls › Offsite backup*) are encrypted as a whole.
 - **Custom location:** *Settings › File & Data Controls › Change Company File Location…* points
-  LocalBooks at another folder (recorded in `config.json` in the app config directory).
+  Tillhouse at another folder (recorded in `config.json` in the app config directory).
 - **Network drives and synced folders** (SMB/NFS, Dropbox, iCloud Drive, OneDrive, Google Drive)
   are supported for **one user at a time**. On Windows, mapped drive letters (`Z:\Accounting`) are
   resolved to their UNC share (`\\server\share\Accounting`) with `WNetGetConnectionW`.
-  LocalBooks switches SQLite to rollback-journal mode with
+  Tillhouse switches SQLite to rollback-journal mode with
   exclusive locking there and keeps a heartbeat lock file, so a second computer is told the books
   are in use instead of corrupting them. Never open the same company file on two computers at once.
 - **`.localbooks` files:** backups are saved as `.localbooks` files, and installed builds register
@@ -538,7 +540,7 @@ Security reports: see [SECURITY.md](SECURITY.md).
   The window title and toolbar show which file is open, and your usual company file location is
   unchanged. Windows and Linux pass the file as a launch argument; macOS hands it to the running
   app.
-- **One LocalBooks at a time.** If a second launch finds LocalBooks already running, it hands over
+- **One Tillhouse at a time.** If a second launch finds Tillhouse already running, it hands over
   its `.localbooks` file (or just a request to come forward) and exits. The running app opens the
   file and brings its window forward. The handoff uses its own channel: a random loopback port and
   a secret made fresh at each launch, in `instance.json`, readable by the owner only. It is
@@ -573,7 +575,7 @@ Code, Claude Desktop, or any MCP client with Streamable HTTP) can call three **r
   `Host` header (DNS rebinding), as the MCP specification requires.
 - **No write path.** The tools run SELECT queries only; nothing can post, void, or edit.
 
-LocalBooks itself sends nothing anywhere, but the assistant you connect may send what it reads to
+Tillhouse itself sends nothing anywhere, but the assistant you connect may send what it reads to
 its AI provider. Connect with:
 
 ```bash
@@ -652,7 +654,7 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
   Dates show as MM/DD/YYYY and amounts as 1,234.56, with no other formats, and the screens are in
   English. A non-US business can keep plain double-entry books in another home currency, but none of
   its tax rules are built in. See [Made for US businesses](docs/guide/getting-started.md#made-for-us-businesses).
-- **No payroll processing.** Employees exist for time tracking only: LocalBooks doesn't calculate
+- **No payroll processing.** Employees exist for time tracking only: Tillhouse doesn't calculate
   paychecks, withholding or payroll taxes. Paychecks and payroll liability payments already in a
   QuickBooks Desktop company file come in with it, and a payroll service's journal export can be
   posted (see [Payroll from a payroll service](docs/guide/desktop-migration.md#payroll-from-a-payroll-service)).
@@ -674,7 +676,7 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 - **Tax calendar** covers federal due dates for Schedule C, 1065, 1120-S and 1120 only. Weekends roll to
   Monday; holidays, extensions, disaster relief and state deadlines are not applied. Confirm dates
   with the IRS or your tax advisor.
-- **Company-file imports can miss what the file doesn't decode.** LocalBooks reads `.qbw` company
+- **Company-file imports can miss what the file doesn't decode.** Tillhouse reads `.qbw` company
   files, `.qbb` backups and `.qbm` portable files directly, with the full ledger from newer files.
   Amounts it can't decode, or that aren't whole cents, are counted and listed, not guessed, and
   step 2 of the import lists any account whose balance differs from the one the file stored.
@@ -704,25 +706,25 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 
 ---
 
-*LocalBooks stores and computes everything locally. Review your financial statements with a
+*Tillhouse stores and computes everything locally. Review your financial statements with a
 qualified accountant before filing.*
 
 ---
 
 ## License
 
-LocalBooks is released under the [MIT License](LICENSE).
+Tillhouse is released under the [MIT License](LICENSE).
 
 It includes open-source components under their own licenses, among them
 [OpenQBW](https://github.com/Sigilweaver/OpenQBW) and
 [OpenSQLAnywhere](https://github.com/Sigilweaver/OpenSQLAnywhere) (Apache-2.0, by Nathan Riley),
 which read QuickBooks company files. [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) lists every
 shipped Rust crate and npm package with its license, and reproduces their NOTICE files and license
-texts. The installers carry it, and the app shows it under Help › About LocalBooks.
+texts. The installers carry it, and the app shows it under Help › About Tillhouse.
 
 After changing dependencies (`Cargo.lock` or `package-lock.json`), run `npm ci` and then
 `node scripts/third-party-notices.mjs`, and commit the regenerated file; `notices.yml` fails on pull
 requests until it matches. Dependabot pull requests need the same step.
 
-QuickBooks® is a registered trademark of Intuit Inc. LocalBooks is an independent project and is
+QuickBooks® is a registered trademark of Intuit Inc. Tillhouse is an independent project and is
 not affiliated with, endorsed by, or sponsored by Intuit Inc.

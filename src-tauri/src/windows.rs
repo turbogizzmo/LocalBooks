@@ -210,7 +210,7 @@ fn title(registry: &Registry, content: Option<&str>) -> String {
     if registry.company_open {
         desktop::window_title(content, registry.company.as_deref())
     } else {
-        "No Company Open — LocalBooks".to_string()
+        "No Company Open — Tillhouse".to_string()
     }
 }
 
@@ -534,7 +534,7 @@ pub async fn set_desktop_mode(app: &AppHandle, choice: &str) -> Result<DesktopVi
 
 /// View › One Window / Multiple Windows (kept with the open company) and View › Open Window List.
 pub async fn set_window_preferences(app: &AppHandle, change: PreferenceChange) -> Result<DesktopView, String> {
-    let dir = config_dir(app).ok_or_else(|| "DESKTOP_UNAVAILABLE: LocalBooks has not started".to_string())?;
+    let dir = config_dir(app).ok_or_else(|| "DESKTOP_UNAVAILABLE: Tillhouse has not started".to_string())?;
     let key = desktop_key(app).await.map(|(_, k)| k);
     let mut refused = None;
     desktop::update(&dir, |file| {

@@ -58,7 +58,7 @@ impl Drop for PayPalCredentials {
 /// "12.34", "-0.59", "1000" or "7.5" in cents. More than two decimals, or anything else, is refused:
 /// PayPal reports two-decimal currencies, and a home currency without cents isn't fetched.
 pub fn parse_cents(value: &str) -> Result<i64, String> {
-    let bad = || format!("PAYOUT_RESPONSE: PayPal sent an amount LocalBooks can't read ({value})");
+    let bad = || format!("PAYOUT_RESPONSE: PayPal sent an amount Tillhouse can't read ({value})");
     let v = value.trim();
     let (negative, digits) = match v.strip_prefix('-') {
         Some(rest) => (true, rest),
@@ -113,7 +113,7 @@ pub fn read_txn(detail: &Value) -> Result<Option<PayPalTxn>, String> {
     };
     let (amount_cents, currency) = money("transaction_amount")?;
     let (fee_cents, _) = money("fee_amount")?;
-    let at = parse_time(&text(info, "transaction_initiation_date")).ok_or("PAYOUT_RESPONSE: PayPal sent a transaction without a date LocalBooks can read")?;
+    let at = parse_time(&text(info, "transaction_initiation_date")).ok_or("PAYOUT_RESPONSE: PayPal sent a transaction without a date Tillhouse can read")?;
     let subject = text(info, "transaction_subject");
     let note = text(info, "transaction_note");
     let description = [subject, note].into_iter().find(|s| !s.trim().is_empty()).unwrap_or_default();
@@ -264,7 +264,7 @@ async fn transactions(http: &reqwest::Client, api: &str, token: &str, start: Dat
             }
             page += 1;
             if page > MAX_PAGES {
-                return Err("PAYOUT_TOO_MANY: PayPal has more than LocalBooks reads in one go; get payouts more often so each fetch is smaller".into());
+                return Err("PAYOUT_TOO_MANY: PayPal has more than Tillhouse reads in one go; get payouts more often so each fetch is smaller".into());
             }
         }
         from = to;

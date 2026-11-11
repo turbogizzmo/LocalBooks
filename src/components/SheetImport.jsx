@@ -140,7 +140,7 @@ export default function SheetImport({ busy, onStage }) {
       {expanded && (
         <div className="mt-2 flex flex-col gap-2">
           <p className="text-xs text-qb-ink-muted">
-            Choose what the sheet holds, then the .csv or Excel file. Match its columns to LocalBooks’ fields; LocalBooks checks every row and lists the ones that would fail, so
+            Choose what the sheet holds, then the .csv or Excel file. Match its columns to Tillhouse’s fields; Tillhouse checks every row and lists the ones that would fail, so
             you can fix the file before anything is staged. Nothing is added to your books until you post it in the review below. No sheet yet? Download the template: its
             columns match without any changes.
           </p>

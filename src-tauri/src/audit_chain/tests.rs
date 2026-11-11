@@ -28,7 +28,7 @@ async fn every_write_seals_its_audit_rows_with_an_actor() {
     let unsealed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE row_hash IS NULL").fetch_one(&pool).await.unwrap();
     assert_eq!(unsealed, 0, "the commit sealed the migration records and the new POST");
     let actor: String = sqlx::query_scalar("SELECT actor FROM ledger_audit_log WHERE action_type = 'POST'").fetch_one(&pool).await.unwrap();
-    assert!(actor.contains("LocalBooks"), "{actor}");
+    assert!(actor.contains("Tillhouse"), "{actor}");
     let chain = verify(&pool).await.unwrap();
     assert!(chain.problems.is_empty(), "{:?}", chain.problems);
     assert!(chain.records_sealed > 1);

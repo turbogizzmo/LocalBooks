@@ -7,7 +7,7 @@ import { codeReady, POLICIES, qrImageSource } from '../lib/twoStep.js';
 /**
  * Two-step sign-in (gap R26). Optional and off by default: an Admin turns it on for the company,
  * and each user may then add an authenticator app. What it protects is said plainly on screen: it
- * stops someone with a password but not the phone from signing in to LocalBooks; it doesn't stop
+ * stops someone with a password but not the phone from signing in to Tillhouse; it doesn't stop
  * someone who copies the company file.
  */
 
@@ -29,7 +29,7 @@ export function CodeStep({ username, busy, run, onBack }) {
             <span className="font-semibold text-qb-ink">{username}</span> uses two-step sign-in.{' '}
           </>
         ) : null}
-        {backup ? 'Enter one of the backup codes you saved when you set it up. Each works once.' : 'Enter the 6-digit code your authenticator app shows for LocalBooks.'}
+        {backup ? 'Enter one of the backup codes you saved when you set it up. Each works once.' : 'Enter the 6-digit code your authenticator app shows for Tillhouse.'}
       </p>
       <label className="block">
         <span className="qb-label">{backup ? 'Backup code' : 'Code'}</span>
@@ -79,7 +79,7 @@ function BackupCodes({ codes, onDone }) {
   return (
     <div className="flex flex-col gap-2 text-sm">
       <p>
-        Two-step sign-in is on for you. Save these backup codes somewhere apart from your phone: each one signs you in once if your phone is lost. LocalBooks shows them
+        Two-step sign-in is on for you. Save these backup codes somewhere apart from your phone: each one signs you in once if your phone is lost. Tillhouse shows them
         only now.
       </p>
       <ol data-testid="backup-codes" className="grid grid-cols-2 gap-1 rounded-xs border border-qb-border-strong bg-qb-canvas p-2 font-mono tracking-wider">
@@ -170,7 +170,7 @@ export function TwoStepSetup({ onDone, onCancel, required = false }) {
             run(async () => setCodes(await api.finishTwoStepSetup(code)));
           }}
         >
-          <p>Scan this QR code with your authenticator app. LocalBooks drew it on this computer; nothing was sent anywhere.</p>
+          <p>Scan this QR code with your authenticator app. Tillhouse drew it on this computer; nothing was sent anywhere.</p>
           <img src={qrImageSource(view.qrSvg)} alt="QR code to scan into your authenticator app" className="mx-auto h-[200px] w-[200px] bg-white" />
           <p className="text-xs text-qb-ink-muted">
             Can’t scan? Type this key into the app instead (time-based):{' '}
@@ -207,7 +207,7 @@ export function TwoStepSetup({ onDone, onCancel, required = false }) {
 }
 
 const WHAT_IT_PROTECTS =
-  'Two-step sign-in stops someone who has a password but not the phone from signing in to LocalBooks. It does not stop someone who copies the company file: keep full-disk encryption (or whole-file encryption) on.';
+  'Two-step sign-in stops someone who has a password but not the phone from signing in to Tillhouse. It does not stop someone who copies the company file: keep full-disk encryption (or whole-file encryption) on.';
 
 /** Settings › Users & Passwords › Two-step sign-in: your own, and the company setting for an Admin. */
 export function TwoStepSettings({ me }) {

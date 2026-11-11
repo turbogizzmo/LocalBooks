@@ -41,7 +41,7 @@ on in **Preferences › Items & Inventory** (see [Turn purchase orders off](#tur
    print…** in the form's toolbar instead. **Clear** empties the form without saving, and **Close**
    leaves it.
 
-LocalBooks numbers each order with the next PO number when it is saved; you can't type your own.
+Tillhouse numbers each order with the next PO number when it is saved; you can't type your own.
 Saving says what the order totals and reminds you that nothing posted.
 
 The printed order shows your company, the vendor's name with its company name and address (from the
@@ -51,7 +51,7 @@ ship-to address.
 ### If the order needs approval
 
 When an approval rule covers the order (for example, every purchase order of $500.00 or more),
-saving doesn't record it. LocalBooks says it was sent for approval, and it isn't an open order until
+saving doesn't record it. Tillhouse says it was sent for approval, and it isn't an open order until
 an Admin approves it under **Expenses › Approvals**. See [Approvals for bills and purchase
 orders](bills.md#approvals-for-bills-and-purchase-orders).
 
@@ -63,7 +63,7 @@ heading picks which orders appear: **Open** (the default), **Billed**, **Closed*
 
 - **Open**: nothing has been billed yet; it can be received, billed or closed.
 - **Billed**: turned into a bill with **Create Bill**.
-- **Closed**: closed by hand, or closed by LocalBooks once every line has been received.
+- **Closed**: closed by hand, or closed by Tillhouse once every line has been received.
 
 Double-click an order (or choose **Open** in its **▾** menu) to see it as it prints. The toolbar
 above it has:
@@ -112,7 +112,7 @@ When the vendor's bill arrives for an order you haven't received items on:
 3. Enter the **Vendor's bill no.**, if any.
 4. Click **Create bill**.
 
-LocalBooks posts the bill at once, for the order's total: each line keeps its account, item,
+Tillhouse posts the bill at once, for the order's total: each line keeps its account, item,
 description, quantity, rate, class and **Customer:Job**, and the discounts and charges come over
 too. The bill debits the lines' accounts and credits **Accounts Payable**, like a bill you enter by
 hand, and takes the vendor's terms, so **Pay Bills** offers any early-payment discount they give.
@@ -120,7 +120,7 @@ Its memo is the order's message, or *PO #* and the number when there is none. Th
 **Billed** and can't be billed again.
 
 Creating the bill runs the same checks as **Enter Bills**: if the vendor's bill number was used
-before, or the date is far from today, LocalBooks asks first and **Save anyway** goes ahead. If an
+before, or the date is far from today, Tillhouse asks first and **Save anyway** goes ahead. If an
 approval rule for bills covers it, the bill isn't created: enter it in **Expenses › Enter Bills**
 and choose **Submit for approval**, then close the order once the bill is approved.
 
@@ -130,7 +130,7 @@ bill from **Vendors › Enter Bill for Received Items** instead.
 ## Receive items before the bill
 
 When the goods come before the bill, receive them with **Vendors › Receive Items** so the stock is
-on hand. LocalBooks closes the order once every line has come in. How receiving works, and how you
+on hand. Tillhouse closes the order once every line has come in. How receiving works, and how you
 then enter the bill, is in [Receive items before the
 bill](bills.md#receive-items-before-the-bill).
 
@@ -192,5 +192,5 @@ Purchase orders belong with inventory. Turning off **Inventory** in **Preference
 Inventory** (see [Preferences](preferences.md#items--inventory)) takes **Purchase Orders** and
 **Receive Items** out of the side bar and **+ New**, and greys out **Vendors › Create Purchase
 Orders** in the menu bar. Orders you already saved are kept, and you can still open,
-print, bill and close them on **Expenses › Purchase Orders**, but LocalBooks won't save a new one or
+print, bill and close them on **Expenses › Purchase Orders**, but Tillhouse won't save a new one or
 duplicate an old one until inventory is on again.

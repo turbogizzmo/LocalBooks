@@ -536,7 +536,7 @@ function readIds(key) {
     return [];
   }
 }
-// Report windows inside this LocalBooks window share one page, where `storage` events don't fire.
+// Report windows inside this Tillhouse window share one page, where `storage` events don't fire.
 const CENTER_CHANGED = 'localbooks-report-center-changed';
 function keep(key, value) {
   try {
@@ -607,7 +607,7 @@ export default function Reports({ navigate, intent }) {
     setFavorites(next);
     keep(FAVORITES_KEY, next);
   };
-  // Another report window (here or in another LocalBooks window) starred a report, opened one,
+  // Another report window (here or in another Tillhouse window) starred a report, opened one,
   // or turned the dates on or off.
   useEffect(() => {
     const reread = (key) => {

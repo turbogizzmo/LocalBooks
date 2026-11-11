@@ -102,7 +102,7 @@
 }
 
 .doc {
-  color: #393a3d;
+  color: #1c2426;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 10pt;
   line-height: 1.35;
@@ -111,7 +111,7 @@
 
 .doc-header {
   align-items: flex-start;
-  border-bottom: 3px double #393a3d;
+  border-bottom: 3px double #1c2426;
   display: flex;
   gap: 0.3in;
   justify-content: space-between;
@@ -131,7 +131,7 @@
 }
 
 .doc-company-lines {
-  color: #6b6c72;
+  color: #56615f;
   font-size: 8.5pt;
   margin-top: 2pt;
   white-space: pre-line;
@@ -159,7 +159,7 @@
 }
 
 .doc-subtitle {
-  color: #6b6c72;
+  color: #56615f;
   font-size: 9pt;
   margin-top: 2pt;
 }
@@ -172,7 +172,7 @@
 }
 
 .doc-label {
-  color: #6b6c72;
+  color: #56615f;
   font-size: 7.5pt;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -194,7 +194,7 @@
 }
 
 .doc-meta td:first-child {
-  color: #6b6c72;
+  color: #56615f;
   font-size: 8pt;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -217,9 +217,9 @@
 }
 
 .doc-table th {
-  border-bottom: 1px solid #393a3d;
-  border-top: 1px solid #393a3d;
-  color: #6b6c72;
+  border-bottom: 1px solid #1c2426;
+  border-top: 1px solid #1c2426;
+  color: #56615f;
   font-size: 7.5pt;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -229,7 +229,7 @@
 }
 
 .doc-table td {
-  border-bottom: 1px solid #d4d7dc;
+  border-bottom: 1px solid #dce1df;
   padding: 3.5pt 6pt;
   vertical-align: top;
 }
@@ -258,8 +258,8 @@
 }
 
 .doc-totals tr.doc-grand td {
-  border-bottom: 3px double #393a3d;
-  border-top: 1px solid #393a3d;
+  border-bottom: 3px double #1c2426;
+  border-top: 1px solid #1c2426;
   font-size: 11.5pt;
   font-weight: 700;
   padding-bottom: 3pt;
@@ -267,9 +267,9 @@
 }
 
 .doc-note {
-  border-top: 1px solid #d4d7dc;
+  border-top: 1px solid #dce1df;
   break-inside: avoid;
-  color: #6b6c72;
+  color: #56615f;
   font-size: 8.5pt;
   margin-top: 16pt;
   padding-top: 5pt;
@@ -308,7 +308,7 @@
 
 .doc-statement tr.doc-line-subtotal td.doc-num,
 .doc-statement tr.doc-line-total td.doc-num {
-  border-top: 1px solid #393a3d;
+  border-top: 1px solid #1c2426;
 }
 
 .doc-statement tr.doc-line-total td {
@@ -322,8 +322,8 @@
 }
 
 .doc-statement tr.doc-line-net td.doc-num {
-  border-bottom: 3px double #393a3d;
-  border-top: 1px solid #393a3d;
+  border-bottom: 3px double #1c2426;
+  border-top: 1px solid #1c2426;
 }
 
 /* Voucher checks: the check face fills the top third of a letter page; two stubs follow. */
@@ -351,23 +351,23 @@
 }
 
 .check-payee {
-  border-bottom: 1px solid #393a3d;
+  border-bottom: 1px solid #1c2426;
   padding-bottom: 2pt;
 }
 
 .check-amount {
-  border: 1px solid #393a3d;
+  border: 1px solid #1c2426;
   padding: 1pt 6pt;
   font-variant-numeric: tabular-nums;
 }
 
 .check-words {
-  border-bottom: 1px solid #393a3d;
+  border-bottom: 1px solid #1c2426;
   padding-bottom: 2pt;
 }
 
 .check-signature {
-  border-top: 1px solid #393a3d;
+  border-top: 1px solid #1c2426;
   min-width: 2.6in;
   text-align: center;
   padding-top: 2pt;
@@ -378,7 +378,7 @@
   height: 3.3in;
   padding: 0.25in 0.35in;
   box-sizing: border-box;
-  border-top: 1px dashed #8d9096;
+  border-top: 1px dashed #626c6a;
 }
 
 .check-stub-row {
@@ -388,7 +388,7 @@
 }
 
 .check-muted {
-  color: #6b6c72;
+  color: #56615f;
 }
 
 /* A printed register: many columns, so smaller type. */

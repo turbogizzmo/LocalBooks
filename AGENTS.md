@@ -1,11 +1,13 @@
 # AGENTS.md
 
-How coding agents (and people) work on LocalBooks. Read this before changing code. Where this file
+How coding agents (and people) work on Tillhouse. Read this before changing code. Where this file
 and another doc disagree, the code and its tests win; fix the doc in the same PR.
 
 ## The project in one paragraph
 
-LocalBooks is a local-first, double-entry accounting desktop app. The accounting engine is Rust +
+Tillhouse (called LocalBooks until 0.15) is a local-first, double-entry accounting desktop app. The
+repo, the Rust crate, the bundle identifier and the `.localbooks` file extension keep the old name
+on purpose (`docs/plans/rebrand.md`); use Tillhouse in anything people read. The accounting engine is Rust +
 SQLite (`src-tauri/src`, `src-tauri/migrations`); the screens are React + Tailwind in a Tauri v2
 window (`src/`). A company is one SQLite file on the user's disk. Every rule that decides what is
 posted lives in Rust and in the schema; the screens only display and collect input.
@@ -75,8 +77,8 @@ each feature PR `review:clean`, `review:problems` or `review:failed`; read the r
     company files, screenshots, icons or copied sample data. `.gitignore` blocks `*.exe`, `*.dmg`,
     `*.qbw`, `*.qbb` and company databases; never `git add -f` them. Test fixtures are synthetic
     data written for this project.
-11. **Other products' names appear only to say what LocalBooks reads or replaces** (for example,
-    "opens QuickBooks Desktop backups"), never in LocalBooks' own branding, feature names or
+11. **Other products' names appear only to say what Tillhouse reads or replaces** (for example,
+    "opens QuickBooks Desktop backups"), never in Tillhouse's own branding, feature names or
     module names. The trademark notice lives in `README.md`, `site/index.html` and
     `src/components/About.jsx`; keep all three.
 12. **Never paste vendor documentation or code into comments.** Describe file formats in your own
@@ -109,7 +111,7 @@ uncommitted work alone.
       `docs/guide/preferences.md` with its default, a new Settings section is in the guide, and a
       new menu command is in `docs/guide/menus.md`. `docs_checks.rs` fails CI for each of these.
 - [ ] A change people will notice has an entry in `CHANGELOG.md` under the next version, written
-      for the people using LocalBooks (it becomes the release notes).
+      for the people using Tillhouse (it becomes the release notes).
 - [ ] `docs/gaps.md` is updated: the row you finished is marked `done` with the PR, and any new
       gap you found has a row.
 - [ ] The PR description says which migration number it uses, if any.

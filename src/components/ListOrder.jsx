@@ -93,7 +93,7 @@ export function useListOrder(list, rows, { parentOf, dragEnabled = true, onNotic
         setDragging(null);
         setOver(null);
       },
-      style: marked ? { boxShadow: `inset 0 ${over.after ? -2 : 2}px 0 0 #2ca01c` } : undefined,
+      style: marked ? { boxShadow: `inset 0 ${over.after ? -2 : 2}px 0 0 #0b5d57` } : undefined,
       title: 'Drag to move it among the rows under the same parent',
     };
   };

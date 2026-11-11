@@ -78,9 +78,9 @@ fn a_closed_localbooks_window_leaves_the_list_but_the_last_one_stays_to_be_saved
 #[test]
 fn titles_follow_the_company_and_the_active_window() {
     let mut reg = Registry::default();
-    assert_eq!(title(&reg, Some("Checking Register")), "No Company Open — LocalBooks");
+    assert_eq!(title(&reg, Some("Checking Register")), "No Company Open — Tillhouse");
     reg.company_open = true;
     reg.company = Some("Acme Ltd".into());
     assert_eq!(title(&reg, Some("Checking Register")), "Checking Register — Acme Ltd");
-    assert_eq!(title(&reg, None), "Acme Ltd — LocalBooks");
+    assert_eq!(title(&reg, None), "Acme Ltd — Tillhouse");
 }

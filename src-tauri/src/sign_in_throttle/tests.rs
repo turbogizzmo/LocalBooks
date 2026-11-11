@@ -74,7 +74,7 @@ fn counts_survive_a_restart_and_an_unwritable_folder_never_blocks() {
     let saved = std::fs::read_to_string(dir.join(FILE_NAME)).unwrap();
     assert!(!saved.contains("ann") && !saved.contains("secret") && !saved.contains(FILE), "names and file ids are saved only as hashes: {saved}");
     let after_restart = Throttle::new(Some(&dir));
-    assert!(after_restart.check(FILE, Who::User("ann"), SystemTime::now()).is_err(), "restarting LocalBooks doesn't reset the wait");
+    assert!(after_restart.check(FILE, Who::User("ann"), SystemTime::now()).is_err(), "restarting Tillhouse doesn't reset the wait");
     let _ = std::fs::remove_dir_all(&dir);
 
     // A settings "folder" that is really a file: nothing can be saved, the count still works.

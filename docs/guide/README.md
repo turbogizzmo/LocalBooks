@@ -1,6 +1,6 @@
-# LocalBooks user guide
+# Tillhouse user guide
 
-Step-by-step guides for everyday bookkeeping in LocalBooks. The same guides are built into the app:
+Step-by-step guides for everyday bookkeeping in Tillhouse. The same guides are built into the app:
 press **F1** (or click **Help** at the top right), open a topic and choose **Step-by-step guide**.
 
 ## Getting started
@@ -11,7 +11,7 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 - [The menu bar: every command and where it goes](menus.md)
 - [Back up, restore and open company files](backups-and-company-files.md)
 - [Users, passwords and sensitive data](users-and-passwords.md)
-- [The FTC Safeguards Rule and LocalBooks](safeguards-rule.md)
+- [The FTC Safeguards Rule and Tillhouse](safeguards-rule.md)
 - [Reminders and the To Do list](reminders-and-todos.md)
 - [Attach receipts and documents](attachments.md)
 

@@ -27,7 +27,7 @@ made that weren't applied to an invoice.
 9. Check the **Credit** total at the top right, then click **Save & Close** or **Save & New**.
    **Clear** empties the form.
 
-LocalBooks posts the credit memo straight away and gives it the next credit number:
+Tillhouse posts the credit memo straight away and gives it the next credit number:
 
 | Account | Debit | Credit |
 |---|---|---|
@@ -108,7 +108,7 @@ to take one back off its invoice; the invoice's balance goes up again and the cr
 ### When you save an invoice
 
 A new invoice for a customer with credit left says so under **Balance due**, and when you save it
-LocalBooks offers to apply the credits. See [Use the customer's
+Tillhouse offers to apply the credits. See [Use the customer's
 credits](invoices.md#use-the-customers-credits).
 
 ## Payments kept as credit (unapplied payments)
@@ -199,7 +199,7 @@ change what differs, and save.
 ## Void a credit memo or refund receipt
 
 Choose **Void Transaction** in the row's **▾** menu, or **Void** in the toolbar of an open one, and
-confirm. LocalBooks posts a reversing entry dated the same day; the original stays in the books
+confirm. Tillhouse posts a reversing entry dated the same day; the original stays in the books
 and the audit log, and the row shows **Voided**.
 
 A credit memo that has been applied to invoices or refunded can't be voided. Remove its

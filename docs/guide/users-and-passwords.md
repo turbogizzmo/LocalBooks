@@ -1,6 +1,6 @@
 # Users, passwords and sensitive data
 
-A new company file opens for anyone who starts LocalBooks on the computer. Turn on users when more
+A new company file opens for anyone who starts Tillhouse on the computer. Turn on users when more
 than one person keeps the books, or when vendor tax IDs (SSNs and EINs) need protecting: everyone then
 signs in with their own password, and tax IDs and vendors' bank details are encrypted so only the
 people you allow can read them.
@@ -11,7 +11,7 @@ people you allow can read them.
 2. Enter **Your user name**, optionally **Your name**, and **Your password** twice (at least 8
    characters; a short phrase is easier to remember than a code).
 3. Click **Turn On Users**. You become the first **Admin**.
-4. LocalBooks says **Users are on. Save your recovery key** and shows the **recovery key**: eight groups of four letters and digits. Write it down or
+4. Tillhouse says **Users are on. Save your recovery key** and shows the **recovery key**: eight groups of four letters and digits. Write it down or
    store it in a password manager, somewhere apart from this computer, tick **I have saved the
    recovery key somewhere safe** and click **Continue**.
 
@@ -22,7 +22,7 @@ sign-in screen.
 > ones you no longer need, or keep them somewhere as safe as the books themselves.
 
 > **Tip:** The recovery key is the only way back in if every Admin forgets their password.
-> LocalBooks keeps no copy, and nobody (including LocalBooks' authors) can reset it for you.
+> Tillhouse keeps no copy, and nobody (including Tillhouse's authors) can reset it for you.
 
 ## Add a user
 
@@ -54,7 +54,7 @@ Click **Edit…** next to the user.
 - Untick **User is turned on (can sign in)** when someone leaves. Users are never deleted, so the
   audit trail can always show who did what.
 
-LocalBooks always keeps at least one active Admin, and you can't change your own role or turn
+Tillhouse always keeps at least one active Admin, and you can't change your own role or turn
 yourself off: another Admin has to.
 
 ## Sign in and sign out
@@ -67,7 +67,7 @@ yourself off: another Admin has to.
   Linux, in a file only your account can read), never in the company file.
 - **Sign Out** is at the top of **Settings › Users & Passwords**. Your name at the top right of
   every screen leads there.
-- LocalBooks signs everyone out after **15 minutes** without typing or clicking in any of its
+- Tillhouse signs everyone out after **15 minutes** without typing or clicking in any of its
   windows, including time the computer was asleep. An Admin can change this under **Sign out when idle**
   (or choose **Never**). Anything not yet saved is lost when it signs out.
 
@@ -75,7 +75,7 @@ yourself off: another Admin has to.
 
 Two-step sign-in is **optional and off by default**. When it's on for you, signing in asks for your
 password and then a 6-digit code from an authenticator app on your phone (any app that scans a QR
-code for one-time codes). Someone who learns your password still can't sign in to LocalBooks
+code for one-time codes). Someone who learns your password still can't sign in to Tillhouse
 without your phone.
 
 **Turn it on for the company (Admin).** In **Settings › Users & Passwords › Two-step sign-in**,
@@ -93,12 +93,12 @@ optional for this company instead** there.
 
 **Set it up for yourself.** In the same section click **Set Up…**, enter your password, scan the QR
 code with your authenticator app (or type the key shown under it), and enter the code the app now
-shows. LocalBooks draws the QR code on your computer; nothing is sent anywhere. You then get **ten
+shows. Tillhouse draws the QR code on your computer; nothing is sent anywhere. You then get **ten
 backup codes**, shown only once: save them somewhere apart from your phone. Each one signs you in
 once in place of a code. **Set Up Again…** replaces your authenticator and backup codes;
 **Turn Off…** removes it, unless the company requires it for you.
 
-**Signing in.** After your password, enter the code your app shows for LocalBooks, or click **Use a
+**Signing in.** After your password, enter the code your app shows for Tillhouse, or click **Use a
 backup code**. A code works once. A phone clock up to 30 seconds off is fine. **Remember me on this
 computer** fills in your password but still asks for the code, and so does signing in again after
 an idle sign-out. Wrong codes wait the same way as wrong passwords: four free tries, then 30
@@ -116,18 +116,18 @@ trail.
   password and turns off your two-step sign-in.
 
 **What it protects.** Two-step sign-in stops someone who has a password but not the phone from
-signing in to LocalBooks. It doesn't stop someone who copies the company file and reads it with
+signing in to Tillhouse. It doesn't stop someone who copies the company file and reads it with
 another program, so keep full-disk encryption (or whole-file encryption) on. The authenticator's
 secret is kept in the company file locked with your password (AES-256, the key made from your
 password by Argon2id), so the file alone can't produce codes; changing your password re-locks it.
-On an encrypted company file your password opens the file first, then LocalBooks asks for the code.
+On an encrypted company file your password opens the file first, then Tillhouse asks for the code.
 
 Passkeys and Touch ID / Windows Hello as a second step aren't available yet: an authenticator code
 moves with the company file to any computer, which a fingerprint on one computer can't.
 
 ## Forgot your password?
 
-After four wrong passwords for a user name, LocalBooks makes each next try wait: 30 seconds, then 1,
+After four wrong passwords for a user name, Tillhouse makes each next try wait: 30 seconds, then 1,
 2 and at most 5 minutes. It never locks anyone out for longer, so the only Admin can't be shut out by
 someone else's guessing, and other user names aren't affected. Wrong recovery keys wait the same
 way, and so does a wrong current password under **Change Password**. A right password clears the
@@ -155,7 +155,7 @@ working.
   have them in full for people who can see sensitive data, so keep those files safe.
 - Tax IDs brought in by an import are encrypted as soon as the import finishes (or at the next
   sign-in of someone who can see sensitive data).
-- Newer QuickBooks files keep tax IDs encrypted with QuickBooks' own key, which LocalBooks can't
+- Newer QuickBooks files keep tax IDs encrypted with QuickBooks' own key, which Tillhouse can't
   read. Those vendors come in without a tax ID, and an unreadable value left by an earlier import is
   removed automatically. Enter the ID again from the vendor's W-9.
 
@@ -166,7 +166,7 @@ backup made from it are encrypted, so a copy that leaves your computer (a lost l
 drive, a synced folder) shows nothing readable without a user's password or the recovery key.
 
 > **Warning:** With it on, if every Admin forgets their password and the recovery key is lost,
-> nobody can open these books or any backup of them: not you, not LocalBooks' authors. Without it,
+> nobody can open these books or any backup of them: not you, not Tillhouse's authors. Without it,
 > **Remove all users** can still get you back in.
 
 1. Sign in as an Admin and go to **Settings › Users & Passwords**.
@@ -174,7 +174,7 @@ drive, a synced folder) shows nothing readable without a user's password or the 
    and the recovery key means losing these books**.
 3. Enter **Your password** again, and a **temporary password** for each other user. They choose
    their own the next time they sign in.
-4. Click **Encrypt Company File**. LocalBooks makes an encrypted copy, checks it against your books,
+4. Click **Encrypt Company File**. Tillhouse makes an encrypted copy, checks it against your books,
    and switches to it.
 5. Under **The company file is encrypted. Save the new recovery key**, save the key it shows (write
    it down or store it in a password manager), then tick that you've saved it. The recovery key you
@@ -199,8 +199,8 @@ in. Signing out, or being signed out when idle, closes it again.
 - Tax IDs are encrypted (AES-256) with a key that is itself locked by each allowed user's password
   and by the recovery key. Copies of the company file and its backups carry the encrypted values,
   and the file opens on any computer with the right password.
-- Roles are enforced by LocalBooks. The rest of the company file is a regular database that another
-  program could read or change; changes made outside LocalBooks show up in
+- Roles are enforced by Tillhouse. The rest of the company file is a regular database that another
+  program could read or change; changes made outside Tillhouse show up in
   [Verify and correct the ledger](ledger-integrity.md).
 - Unless the whole company file is encrypted (above), vendor tax IDs and bank details are the only
   values encrypted inside it. The rest of the file, its local backups and its attachments are
@@ -214,10 +214,10 @@ in. Signing out, or being signed out when idle, closes it again.
 
 - **Exports are plain copies.** A report, list or register saved as CSV, Excel or PDF, a form or
   voucher saved as PDF, and attachments saved to a folder or zip are ordinary files: the company
-  file's password doesn't protect them. LocalBooks says so each time it saves one. Keep them
+  file's password doesn't protect them. Tillhouse says so each time it saves one. Keep them
   somewhere safe, or delete them when you're done.
-- **Temporary copies are deleted.** A PDF handed to your mail app is kept in LocalBooks' cache
+- **Temporary copies are deleted.** A PDF handed to your mail app is kept in Tillhouse's cache
   folder only long enough for the mail app to read it: it's deleted after an hour, when you next
-  send something, start LocalBooks or quit it. A QuickBooks backup unpacked to be read is deleted
+  send something, start Tillhouse or quit it. A QuickBooks backup unpacked to be read is deleted
   as soon as the import has read it (one left behind by a crash goes at the next start). Imports
   staged for review are kept inside the company file, not beside it.

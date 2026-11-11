@@ -216,7 +216,7 @@ impl Default for FormTemplate {
             title: String::new(),
             paper: Paper::Letter,
             font: FontFamily::Helvetica,
-            accent_color: "#2ca01c".into(),
+            accent_color: "#0b5d57".into(),
             logo: LogoPlacement::Right,
             logo_size: LogoSize::Medium,
             show_company_address: true,
@@ -320,7 +320,7 @@ impl FormTemplate {
         field(&mut self.email_body, &defaults.email_body, 4000, "the email message")?;
         let color = self.accent_color.trim().to_ascii_lowercase();
         if Rgb::parse(&color).is_none() {
-            return Err("FORM_BAD_COLOR: the accent color must be a hex color such as #2ca01c".into());
+            return Err("FORM_BAD_COLOR: the accent color must be a hex color such as #0b5d57".into());
         }
         self.accent_color = color;
         Ok(self)

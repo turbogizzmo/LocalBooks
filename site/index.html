@@ -3,32 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LocalBooks Tester Guide</title>
-  <meta name="description" content="Download and install LocalBooks, move your books over from QuickBooks, Quicken or GnuCash, and report what you find.">
+  <title>Tillhouse Tester Guide</title>
+  <meta name="description" content="Download and install Tillhouse, move your books over from QuickBooks, Quicken or GnuCash, and report what you find.">
   <link rel="icon" type="image/png" href="favicon.png">
   <style>
-    /* The LocalBooks app palette and type (tailwind.config.js), so the page feels like the app. */
+    /* The Tillhouse app palette and type (tailwind.config.js), so the page feels like the app. */
     :root {
-      --green: #2ca01c;
-      --green-hover: #248a17;
-      --green-active: #1d7313;
-      --green-tint: #e9f6e7;
-      --nav: #232733;
-      --nav-hover: #2f3443;
-      --nav-active: #393f50;
-      --nav-text: #babec5;
-      --canvas: #f4f5f8;
+      --green: #0b5d57;
+      --green-hover: #084843;
+      --green-active: #0a4f4a;
+      --green-tint: #e6f2f0;
+      --nav: #14211f;
+      --nav-hover: #1c2d2a;
+      --nav-active: #213531;
+      --nav-text: #b8c7c3;
+      --canvas: #f5f6f4;
       --surface: #ffffff;
-      --ink: #393a3d;
-      --ink-muted: #6b6c72;
-      --ink-faint: #8d9096;
-      --border: #d4d7dc;
-      --border-strong: #babec5;
-      --row-hover: #f5f5f5;
-      --header-bg: #eceef1;
-      --negative: #d52b1e;
-      --warning: #ff8000;
-      --info: #0077c5;
+      --ink: #1c2426;
+      --ink-muted: #56615f;
+      --ink-faint: #626c6a;
+      --border: #dce1df;
+      --border-strong: #b9c2bf;
+      --row-hover: #f2f4f3;
+      --header-bg: #eceeed;
+      --negative: #b42318;
+      --warning: #b54708;
+      --info: #22609e;
       --info-tint: #eaf4fb;
       --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
       --mono: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -91,7 +91,7 @@
       font: 600 13px/1 var(--sans); border-radius: 2px; border: 1px solid transparent; cursor: pointer; white-space: nowrap;
     }
     .btn:hover { text-decoration: none; }
-    .btn:focus-visible { outline: none; box-shadow: 0 0 0 2px #2ca01c40; }
+    .btn:focus-visible { outline: none; box-shadow: 0 0 0 2px #0b5d5740; }
     .btn-primary { background: var(--green); color: #fff; }
     .btn-primary:hover { background: var(--green-hover); }
     .btn-primary:active { background: var(--green-active); }
@@ -113,9 +113,9 @@
 
     /* Notices: the app's Notice component */
     .notice { border: 1px solid; padding: 6px 10px; font-size: 13px; border-radius: 2px; margin: 10px 0; }
-    .notice-info { border-color: #0077c566; background: var(--info-tint); color: #005a96; }
-    .notice-success { border-color: #2ca01c66; background: var(--green-tint); color: var(--green-active); }
-    .notice-warn { border-color: #ff800066; background: #fff8e6; color: #8a4b00; }
+    .notice-info { border-color: #22609e66; background: var(--info-tint); color: #1b4d80; }
+    .notice-success { border-color: #0b5d5766; background: var(--green-tint); color: var(--green-active); }
+    .notice-warn { border-color: #b5470866; background: #fff8e6; color: #8a4b00; }
 
     /* Register-style table: .qb-grid */
     table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -136,7 +136,7 @@
     .mig-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
     .mig-choice { font: inherit; text-align: left; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 2px; padding: 8px 10px; cursor: pointer; }
     .mig-choice:hover { border-color: var(--border-strong); background: var(--row-hover); }
-    .mig-choice:focus-visible { outline: none; box-shadow: 0 0 0 2px #2ca01c40; border-color: var(--green); }
+    .mig-choice:focus-visible { outline: none; box-shadow: 0 0 0 2px #0b5d5740; border-color: var(--green); }
     .mig-choice[aria-pressed="true"] { border-color: var(--green); background: var(--green-tint); box-shadow: inset 3px 0 0 var(--green); }
     .mig-choice .name { display: block; font-weight: 600; }
     .mig-choice .sub { display: block; font-size: 12px; color: var(--ink-muted); }
@@ -155,7 +155,7 @@
   <header class="topbar">
     <div class="topbar-inner">
       <img src="icon.png" alt="">
-      <span class="brand">LocalBooks</span>
+      <span class="brand">Tillhouse</span>
       <span class="tag">Tester preview</span>
       <nav class="topnav" aria-label="Sections">
         <a href="#install">Install</a>
@@ -176,16 +176,17 @@
         <div>
           <h1>Small-business accounting that stays on your computer</h1>
           <p class="lede">
-            LocalBooks keeps your books in a single file on your own machine: invoices, bills, bank feeds, inventory,
+            Tillhouse keeps your books in a single file on your own machine: invoices, bills, bank feeds, inventory,
             reconciliation and financial statements, with every transaction posted as a balanced double-entry journal entry.
             Design your own invoice and estimate forms, save them as PDF, and email them to customers, one at a time or in a batch.
             Thank you for trying it.
           </p>
+          <div class="notice notice-info"><strong>LocalBooks is now Tillhouse.</strong> Same app, same company files: the next update renames it, and your books, settings and saved passwords stay where they are.</div>
           <ul class="facts">
             <li>No account, no subscription, no cloud: your company file never leaves your computer.</li>
             <li>Bring your books with you from QuickBooks Desktop (Windows or Mac), QuickBooks Online, Quicken or GnuCash. <a href="#move">See how</a>.</li>
             <li>Familiar layout for anyone coming from classic desktop accounting software.</li>
-            <li><strong>For US businesses.</strong> Sales tax, 1099s and W-9s, the tax calendar, ACH payment files and printed checks follow US rules, and dates and amounts show the US way (10/13/2026, 1,234.56). There is no VAT or GST, and LocalBooks runs no payroll in any country.</li>
+            <li><strong>For US businesses.</strong> Sales tax, 1099s and W-9s, the tax calendar, ACH payment files and printed checks follow US rules, and dates and amounts show the US way (10/13/2026, 1,234.56). There is no VAT or GST, and Tillhouse runs no payroll in any country.</li>
             <li>Invoices and estimates you design yourself: print them, save them as PDF, or email them with the PDF attached.</li>
             <li>Updates install themselves after you approve them, with a copy of your books saved first.</li>
           </ul>
@@ -193,7 +194,7 @@
         <div class="download" aria-live="polite">
           <div class="label">Newest version</div>
           <div class="version" id="version">Checking…</div>
-          <a class="btn btn-primary btn-block" id="primary-download" href="https://github.com/turbogizzmo/LocalBooks/releases/latest">Download LocalBooks</a>
+          <a class="btn btn-primary btn-block" id="primary-download" href="https://github.com/turbogizzmo/LocalBooks/releases/latest">Download Tillhouse</a>
           <div class="small muted" id="primary-note" style="margin-top:6px">Opens the downloads page.</div>
           <div class="other-downloads" id="other-downloads"></div>
         </div>
@@ -212,10 +213,10 @@
         <div role="tabpanel" id="panel-windows" aria-labelledby="tab-windows">
           <ol class="steps">
             <li>Download the <strong>Windows installer</strong> (the file ending in <code>-setup.exe</code>).</li>
-            <li>Open it. Because LocalBooks is not code-signed yet, Windows may show <em>“Windows protected your PC”</em>.
+            <li>Open it. Because Tillhouse is not code-signed yet, Windows may show <em>“Windows protected your PC”</em>.
               Click <strong>More info</strong>, then <strong>Run anyway</strong>.</li>
             <li>Follow the installer. It installs for your user account only and does not need an administrator.</li>
-            <li>Start <strong>LocalBooks</strong> from the Start menu.</li>
+            <li>Start <strong>Tillhouse</strong> from the Start menu.</li>
           </ol>
           <div class="notice notice-info">Use the <code>-setup.exe</code> installer rather than the <code>.msi</code>: automatic updates use the same kind of installer, so you never end up with two copies.</div>
         </div>
@@ -223,20 +224,20 @@
         <div role="tabpanel" id="panel-mac" aria-labelledby="tab-mac" hidden>
           <ol class="steps">
             <li>Download the <strong>macOS disk image</strong> (<code>.dmg</code>). One download works on Apple silicon and Intel Macs.</li>
-            <li>Open it and drag <strong>LocalBooks</strong> into <strong>Applications</strong>.</li>
-            <li>Open LocalBooks from Applications. Because LocalBooks is not notarized by Apple yet, macOS stops it the first time.</li>
-            <li>Open <strong>System Settings › Privacy &amp; Security</strong>, scroll down to the message about LocalBooks, and click <strong>Open Anyway</strong>. You only need to do this once.</li>
+            <li>Open it and drag <strong>Tillhouse</strong> into <strong>Applications</strong>.</li>
+            <li>Open Tillhouse from Applications. Because Tillhouse is not notarized by Apple yet, macOS stops it the first time.</li>
+            <li>Open <strong>System Settings › Privacy &amp; Security</strong>, scroll down to the message about Tillhouse, and click <strong>Open Anyway</strong>. You only need to do this once.</li>
           </ol>
           <details>
-            <summary>macOS says LocalBooks “is damaged and can’t be opened”</summary>
+            <summary>macOS says Tillhouse “is damaged and can’t be opened”</summary>
             <p class="small">That message means macOS quarantined the download. Open <strong>Terminal</strong> and run
-              <code>xattr -cr /Applications/LocalBooks.app</code>, then open LocalBooks again.</p>
+              <code>xattr -cr /Applications/Tillhouse.app</code>, then open Tillhouse again.</p>
           </details>
         </div>
 
         <div role="tabpanel" id="panel-linux" aria-labelledby="tab-linux" hidden>
           <ol class="steps">
-            <li><strong>Debian or Ubuntu:</strong> download the <code>.deb</code> and install it with <code>sudo apt install ./LocalBooks_*.deb</code>.</li>
+            <li><strong>Debian or Ubuntu:</strong> download the <code>.deb</code> and install it with <code>sudo apt install ./Tillhouse_*.deb</code>.</li>
             <li><strong>Fedora or openSUSE:</strong> download the <code>.rpm</code> and install it with your package manager.</li>
             <li><strong>Any distribution:</strong> download the <code>.AppImage</code>, make it executable (<code>chmod +x</code>), and run it. Only the AppImage updates itself; the <code>.deb</code> and <code>.rpm</code> are updated by installing the new package.</li>
           </ol>
@@ -245,9 +246,9 @@
     </section>
 
     <section class="panel" id="move">
-      <h2>Move your books to LocalBooks</h2>
+      <h2>Move your books to Tillhouse</h2>
       <div class="panel-body">
-        <p>Everything comes in through the Desktop Migration Wizard, in <strong>Settings › Import &amp; Migration</strong> (or <strong>File › Utilities › Import / Convert…</strong>). The wizard only reads your file: nothing changes in your old program, and nothing is added to LocalBooks until you post.</p>
+        <p>Everything comes in through the Desktop Migration Wizard, in <strong>Settings › Import &amp; Migration</strong> (or <strong>File › Utilities › Import / Convert…</strong>). The wizard only reads your file: nothing changes in your old program, and nothing is added to Tillhouse until you post.</p>
         <div id="mig" hidden>
           <p class="mig-label">1. Which program are you leaving?</p>
           <div class="mig-choices" id="mig-sources" role="group" aria-label="Program you're leaving"></div>
@@ -265,7 +266,7 @@
             <tr><td><strong>QuickBooks Desktop for Windows</strong></td><td>Choose your company file (<code>.qbw</code>) or a backup (<code>.qbb</code>) in the wizard.</td></tr>
             <tr><td><strong>QuickBooks for Mac 2012</strong> or earlier</td><td>Choose your company file (<code>.qb2012</code>, <code>.qb2011</code> or <code>.qb2010</code>) in the wizard. QuickBooks doesn’t need to be installed. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-quickbooks-for-mac-2012-and-earlier">Steps</a></td></tr>
             <tr><td><strong>QuickBooks Desktop for Mac</strong> 2016 and later</td><td>In QuickBooks, choose <strong>File › Export › To QuickBooks for Windows</strong>, click <strong>Verify</strong>, and leave the password <strong>blank</strong>. Then choose the <code>.qbb</code> it saves. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-quickbooks-desktop-for-mac">Steps</a></td></tr>
-            <tr><td><strong>QuickBooks still installed</strong> (Windows or Mac)</td><td><em>Preview.</em> Let LocalBooks export it: open your company file in QuickBooks (on a Mac, also open <strong>Reports › Accountant &amp; Taxes › Journal</strong> for all dates), then click <strong>Export from QuickBooks</strong> in the wizard. LocalBooks asks QuickBooks for the data through Intuit’s own interfaces, read-only. Windows needs Intuit’s free QuickBooks SDK. Not yet tried against a running QuickBooks. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it">Steps</a></td></tr>
+            <tr><td><strong>QuickBooks still installed</strong> (Windows or Mac)</td><td><em>Preview.</em> Let Tillhouse export it: open your company file in QuickBooks (on a Mac, also open <strong>Reports › Accountant &amp; Taxes › Journal</strong> for all dates), then click <strong>Export from QuickBooks</strong> in the wizard. Tillhouse asks QuickBooks for the data through Intuit’s own interfaces, read-only. Windows needs Intuit’s free QuickBooks SDK. Not yet tried against a running QuickBooks. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#quickbooks-still-installed-let-tillhouse-export-it">Steps</a></td></tr>
             <tr><td><strong>QuickBooks Online</strong>, or a QuickBooks you <strong>no longer have a license</strong> for</td><td>Export the <strong>Journal</strong> report (dates: <strong>All</strong>), plus the account, customer, vendor and item lists, to Excel or CSV, and choose them all together. An expired QuickBooks still opens in view-only mode, which can run reports. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-quickbooks-reports">Steps for each version</a></td></tr>
             <tr><td><strong>Quicken</strong></td><td>In Quicken, choose <strong>File › File Export › QIF File</strong> with <strong>All accounts</strong> (or one account at a time), and include transactions, the account list and the category list. Then choose the <code>.qif</code>. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-an-iif-or-qif-export">Steps</a></td></tr>
             <tr><td><strong>GnuCash</strong></td><td>Choose your <code>.gnucash</code> book (either the XML or SQLite kind). <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-gnucash">Steps</a></td></tr>
@@ -278,10 +279,10 @@
         <p class="mig-label">Then, whichever program you came from</p>
         <ol class="steps">
           <li><strong>Run a trial balance</strong> in your old program first, so you have something to compare with.</li>
-          <li>In LocalBooks, open <strong>Settings › Import &amp; Migration</strong> and choose your file or files.</li>
-          <li>Check <strong>Balances matching the file</strong>, then match each account to a LocalBooks account (or click <strong>Match existing accounts and create the rest</strong>).</li>
+          <li>In Tillhouse, open <strong>Settings › Import &amp; Migration</strong> and choose your file or files.</li>
+          <li>Check <strong>Balances matching the file</strong>, then match each account to a Tillhouse account (or click <strong>Match existing accounts and create the rest</strong>).</li>
           <li>Choose <strong>Full import</strong> to bring in invoices, bills, payments and deposits as real documents, so open balances and aging carry over. Then post.</li>
-          <li>Compare LocalBooks’ trial balance with your old program’s. Not right? <strong>Start over…</strong> under <em>Your imports</em> puts your books back exactly as they were.</li>
+          <li>Compare Tillhouse’s trial balance with your old program’s. Not right? <strong>Start over…</strong> under <em>Your imports</em> puts your books back exactly as they were.</li>
         </ol>
         <p class="small muted">Full details, including what each format can and can’t carry over: <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md">Moving your books guide</a>.</p>
       </div>
@@ -321,7 +322,7 @@
           <li><strong>New in 0.11.0: Find what a name did</strong>: click a vendor or customer to list its transactions; double-click a row in a register, the Invoices, Bills or Expenses list to open it; click a register or Reconcile heading to sort.</li>
           <li><strong>New in 0.11.0: Enter moves between fields</strong>: turn it on in <strong>Settings › Preferences Console › General</strong>, then fill in a bill with Enter instead of Tab.</li>
           <li><strong>New in 0.11.0: Six more reports</strong>: try <strong>Profit &amp; Loss by Month</strong>, <strong>Transaction List by Vendor</strong> and <strong>Voided Transactions</strong>.</li>
-          <li><strong>New in 0.10.3: Windows inside LocalBooks</strong>: open an invoice, a bill and a report and they float side by side; try <strong>Window › Tile Vertically</strong>, <strong>View › One Window</strong> and <strong>View › Open Window List</strong>. Close the company and reopen it: your windows come back.</li>
+          <li><strong>New in 0.10.3: Windows inside Tillhouse</strong>: open an invoice, a bill and a report and they float side by side; try <strong>Window › Tile Vertically</strong>, <strong>View › One Window</strong> and <strong>View › Open Window List</strong>. Close the company and reopen it: your windows come back.</li>
           <li><strong>New in 0.10.3: Choose the left pane and where you start</strong>: in <strong>Edit › Preferences › Desktop View</strong>, show only the open windows (or no left pane), and start on Home, your last windows or a screen you choose.</li>
           <li><strong>New in 0.10.3: What’s new in Help</strong>: press F1 and search “what’s new” for the newest features, each with a link to its steps.</li>
           <li><strong>New in 0.10.2: Pay Bills writes checks</strong>: <strong>Expenses › Bills › Pay bills</strong> from a bank account, then print the checks. Attach the vendor’s invoice to a new bill too, or a receipt to an expense; a 📎 marks transactions with files.</li>
@@ -345,13 +346,13 @@
       <section class="panel" id="updates">
         <h2>Updates</h2>
         <div class="panel-body">
-          <p>LocalBooks checks for a new version a few seconds after it starts. When one is ready you’ll see a blue bar at the top:</p>
-          <div class="notice notice-info"><strong>LocalBooks <span id="update-new">(new version)</span></strong> is available (you have <span id="update-old">yours</span>). &nbsp;<span class="btn btn-primary" style="min-height:24px;padding:0 10px;font-size:12px">Install and restart</span> <span class="btn" style="min-height:24px;padding:0 10px;font-size:12px">Later</span></div>
+          <p>Tillhouse checks for a new version a few seconds after it starts. When one is ready you’ll see a blue bar at the top:</p>
+          <div class="notice notice-info"><strong>Tillhouse <span id="update-new">(new version)</span></strong> is available (you have <span id="update-old">yours</span>). &nbsp;<span class="btn btn-primary" style="min-height:24px;padding:0 10px;font-size:12px">Install and restart</span> <span class="btn" style="min-height:24px;padding:0 10px;font-size:12px">Later</span></div>
           <ol class="steps">
-            <li>Open <strong>What’s new in …</strong> under the bar to read the release notes if you like, then click <strong>Install and restart</strong>. <strong>Later</strong> hides the bar until LocalBooks next starts.</li>
-            <li>LocalBooks downloads the update, checks its digital signature, installs it and reopens.</li>
+            <li>Open <strong>What’s new in …</strong> under the bar to read the release notes if you like, then click <strong>Install and restart</strong>. <strong>Later</strong> hides the bar until Tillhouse next starts.</li>
+            <li>Tillhouse downloads the update, checks its digital signature, installs it and reopens.</li>
             <li>The first time the new version opens your company file, it saves a copy first (Settings › File &amp; Data Controls, listed as <em>Before upgrade</em>).</li>
-            <li>On a Mac, the first start after an update may ask you to let LocalBooks use its saved passwords in your Keychain, once for each one (until LocalBooks is signed with an Apple Developer ID). Click <strong>Always Allow</strong>.</li>
+            <li>On a Mac, the first start after an update may ask you to let Tillhouse use its saved passwords in your Keychain, once for each one (until Tillhouse is signed with an Apple Developer ID). Click <strong>Always Allow</strong>.</li>
           </ol>
           <p class="small muted">To check yourself, or to turn off automatic checks, go to <strong>Settings › Updates</strong>. Checking sends nothing about your books. If a new version has a problem, <strong>Help › Reinstall Previous Version…</strong> backs up your books and goes back to the one before it.</p>
           <p class="small muted">Previews (shown as <em>preview</em> beside the version at the top of this page) are early versions that are not offered as automatic updates. Download and install them from this page; your company file and settings carry over.</p>
@@ -361,13 +362,13 @@
       <section class="panel" id="data">
         <h2>Your data</h2>
         <div class="panel-body">
-          <div class="notice notice-info">LocalBooks is new. Keep your old program’s books until you’ve compared a month or two in LocalBooks and you’re happy the numbers match.</div>
+          <div class="notice notice-info">Tillhouse is new. Keep your old program’s books until you’ve compared a month or two in Tillhouse and you’re happy the numbers match.</div>
           <ul class="facts">
             <li>Your company file stays on your computer. Nothing is uploaded.</li>
-            <li>LocalBooks makes an automatic backup each day. Make your own any time from <strong>Settings › File &amp; Data Controls › Back up now</strong>.</li>
+            <li>Tillhouse makes an automatic backup each day. Make your own any time from <strong>Settings › File &amp; Data Controls › Back up now</strong>.</li>
             <li>To try things freely, use made-up customers and amounts, or keep a separate test company file: <strong>Settings › File &amp; Data Controls › Change Company File Location…</strong>, pick an empty folder, and choose <em>Start a new, empty company file there</em>.</li>
             <li>Bank connections (SimpleFIN) are optional. For a no-risk trial, SimpleFIN’s demo token gives fake transactions.</li>
-            <li>Emailing an invoice or estimate opens a new message in your own mail app; nothing is sent until you click Send there. Sending from LocalBooks over SMTP is optional (<strong>Settings › Email</strong>), and your email password stays in your computer’s Keychain or Credential Manager. To test emailing, send to your own address first.</li>
+            <li>Emailing an invoice or estimate opens a new message in your own mail app; nothing is sent until you click Send there. Sending from Tillhouse over SMTP is optional (<strong>Settings › Email</strong>), and your email password stays in your computer’s Keychain or Credential Manager. To test emailing, send to your own address first.</li>
           </ul>
         </div>
       </section>
@@ -382,11 +383,11 @@
         <table class="grid" aria-label="What to include">
           <thead><tr><th style="width:34%">Please include</th><th>Where to find it</th></tr></thead>
           <tbody>
-            <tr><td>Your LocalBooks version</td><td><strong>Settings › Updates</strong></td></tr>
+            <tr><td>Your Tillhouse version</td><td><strong>Settings › Updates</strong></td></tr>
             <tr><td>Windows or macOS version</td><td>Windows: <kbd>Win</kbd> + <kbd>R</kbd>, type <code>winver</code>. Mac: Apple menu › About This Mac</td></tr>
             <tr><td>What you did, what you expected, what happened</td><td>Step by step is ideal; a screenshot helps a lot</td></tr>
             <tr><td>The exact error message</td><td>Copy the text from the red message bar</td></tr>
-            <tr><td>A diagnostics file (optional)</td><td><strong>Help › Save Diagnostics…</strong> saves a zip with LocalBooks’ version, your system and its own log, with no business data; attach it to the issue</td></tr>
+            <tr><td>A diagnostics file (optional)</td><td><strong>Help › Save Diagnostics…</strong> saves a zip with Tillhouse’s version, your system and its own log, with no business data; attach it to the issue</td></tr>
           </tbody>
         </table>
         <div class="notice notice-warn small">Never attach your company file or backups to a public issue: they contain your financial records. If a file is needed, say so in the issue and we’ll arrange a private way.</div>
@@ -432,9 +433,9 @@
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/cleaning-up-books.md">Cleaning up the books</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/backups-and-company-files.md">Backups and company files</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/users-and-passwords.md">Users, passwords and sensitive data</a></li>
-          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/safeguards-rule.md">The FTC Safeguards Rule and LocalBooks</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/safeguards-rule.md">The FTC Safeguards Rule and Tillhouse</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md">Moving from QuickBooks, Quicken or GnuCash</a></li>
-          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/ledger-integrity.md">How LocalBooks keeps the books accurate</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/ledger-integrity.md">How Tillhouse keeps the books accurate</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/ai-assistant.md">Read-only AI access</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/troubleshooting.md">Troubleshooting</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/tree/main/docs/guide">All guides</a></li>
@@ -444,11 +445,11 @@
   </main>
 
   <footer>
-    LocalBooks is open source under the <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/LICENSE">MIT License</a> ·
+    Tillhouse is open source under the <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/LICENSE">MIT License</a> ·
     <a href="https://github.com/turbogizzmo/LocalBooks">Source code</a> ·
     <a href="https://github.com/turbogizzmo/LocalBooks/releases">All releases</a> ·
     <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/THIRD-PARTY-NOTICES.txt">Third-party notices</a>
-    <p>QuickBooks® is a registered trademark of Intuit Inc. LocalBooks is an independent project and is not affiliated with, endorsed by, or sponsored by Intuit Inc.</p>
+    <p>QuickBooks® is a registered trademark of Intuit Inc. Tillhouse is an independent project and is not affiliated with, endorsed by, or sponsored by Intuit Inc.</p>
   </footer>
 
   <script>
@@ -456,37 +457,37 @@
     // no-JavaScript fallback. Steps are this page's own HTML strings, not user input.
     (function () {
       const G = 'https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/';
-      const wizard = 'In LocalBooks, open <strong>Settings › Import &amp; Migration</strong> and choose ';
+      const wizard = 'In Tillhouse, open <strong>Settings › Import &amp; Migration</strong> and choose ';
       const reportSteps = (journal) => [
         journal,
         'Also export the <strong>Account Listing</strong>, <strong>Customer Contact List</strong>, <strong>Vendor Contact List</strong> and <strong>Item List</strong>. Only the Journal is required; the lists add types, addresses and balances to check against.',
         wizard + '<strong>all the files together</strong> (hold <kbd>⌘</kbd> or <kbd>Ctrl</kbd>, or drag them in).'
       ];
       // QuickBooks itself exports, through Intuit's interfaces (Preview).
-      const exportStep = 'In LocalBooks, go to <strong>Settings › Import &amp; Migration</strong>, open <strong>QuickBooks still installed? Export from my installed QuickBooks</strong> under step 1, and click <strong>Export from QuickBooks</strong>.';
+      const exportStep = 'In Tillhouse, go to <strong>Settings › Import &amp; Migration</strong>, open <strong>QuickBooks still installed? Export from my installed QuickBooks</strong> under step 1, and click <strong>Export from QuickBooks</strong>.';
       const installedType = (product, steps) => ({
-        name: 'QuickBooks still installed: let LocalBooks export it', sub: 'Preview · QuickBooks runs on this computer',
-        heading: 'Let LocalBooks ask ' + product + ' for your data', steps,
-        note: 'Preview: built from Intuit’s documentation and not yet tried against a running QuickBooks. LocalBooks sends read-only requests only. If it fails, export the reports yourself.',
-        guide: 'desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it' });
+        name: 'QuickBooks still installed: let Tillhouse export it', sub: 'Preview · QuickBooks runs on this computer',
+        heading: 'Let Tillhouse ask ' + product + ' for your data', steps,
+        note: 'Preview: built from Intuit’s documentation and not yet tried against a running QuickBooks. Tillhouse sends read-only requests only. If it fails, export the reports yourself.',
+        guide: 'desktop-migration.md#quickbooks-still-installed-let-tillhouse-export-it' });
       const DATA = [
         { name: 'QuickBooks Desktop for Windows', sub: 'Pro, Premier or Enterprise', types: [
           { name: 'A company file or backup', sub: '.qbw or .qbb', heading: 'Import it directly', direct: true, steps: [
               'Copy your <code>.qbw</code> company file, or a <code>.qbb</code> backup, to this computer.',
               wizard + 'the file.'],
-            note: 'LocalBooks reads Windows company files and backups itself, so this works even if your QuickBooks no longer opens. A few encrypted fields, such as stored tax IDs, don’t come through.',
+            note: 'Tillhouse reads Windows company files and backups itself, so this works even if your QuickBooks no longer opens. A few encrypted fields, such as stored tax IDs, don’t come through.',
             guide: 'desktop-migration.md' },
           installedType('QuickBooks for Windows', [
               'Install Intuit’s free <strong>QuickBooks Desktop SDK</strong> (the guide links to it).',
               'Open your company file in QuickBooks, signed in as the Admin the first time.',
               exportStep,
-              'QuickBooks asks whether to let LocalBooks read the file: choose <strong>Yes, whenever this QuickBooks company file is open</strong>.'])
+              'QuickBooks asks whether to let Tillhouse read the file: choose <strong>Yes, whenever this QuickBooks company file is open</strong>.'])
         ]},
         { name: 'QuickBooks for Mac 2012', sub: 'Or 2011 and 2010', types: [
           { name: 'A company file', sub: '.qb2012, .qb2011 or .qb2010', heading: 'Import it directly', direct: true, steps: [
               'Close the company in QuickBooks, or copy the file to this computer.',
               wizard + 'the <code>.qb2012</code> file (or the folder, if your company is one).'],
-            note: 'These older Mac files aren’t encrypted, so LocalBooks reads them itself, even without QuickBooks. Each account’s total is checked against the balance QuickBooks stored.',
+            note: 'These older Mac files aren’t encrypted, so Tillhouse reads them itself, even without QuickBooks. Each account’s total is checked against the balance QuickBooks stored.',
             guide: 'desktop-migration.md#from-quickbooks-for-mac-2012-and-earlier' }
         ]},
         { name: 'QuickBooks Desktop for Mac', sub: 'Any year, 2016 to 2024', types: [
@@ -494,13 +495,13 @@
               'Open the company in QuickBooks for Mac as the admin. For a <code>.qbmb</code> backup, restore it first. Intuit suggests running <strong>File › Utilities › Verify Data</strong> first.',
               'Choose <strong>File › Export › To QuickBooks for Windows</strong> (older versions: <strong>Back Up to QuickBooks for Windows</strong>). Leave the password <strong>blank</strong>, and save the <code>.qbb</code> somewhere easy to find.',
               wizard + 'that <code>.qbb</code>.'],
-            note: 'Mac company files are in a Mac-only, encrypted format, so QuickBooks itself has to do this conversion. LocalBooks can’t open a password-protected backup.',
+            note: 'Mac company files are in a Mac-only, encrypted format, so QuickBooks itself has to do this conversion. Tillhouse can’t open a password-protected backup.',
             guide: 'desktop-migration.md#from-quickbooks-desktop-for-mac' },
           installedType('QuickBooks for Mac', [
               'Open your company file in QuickBooks for Mac.',
               'Choose <strong>Reports › Accountant &amp; Taxes › Journal</strong>, set the dates to <strong>All</strong>, and leave the report as the front window.',
               exportStep,
-              'macOS asks whether LocalBooks may control QuickBooks: click <strong>OK</strong>. That lets LocalBooks ask QuickBooks for your data; it changes nothing there.']),
+              'macOS asks whether Tillhouse may control QuickBooks: click <strong>OK</strong>. That lets Tillhouse ask QuickBooks for your data; it changes nothing there.']),
           { name: 'QuickBooks won’t open any more', sub: 'Expired subscription or no license', heading: 'Export your reports instead', steps: reportSteps(
               'Open the company in QuickBooks for Mac. An expired copy still opens it in <strong>view-only mode</strong> for about a year; if it won’t open at all, install Intuit’s 30-day trial. Go to <strong>Reports › Accountant &amp; Taxes › Journal</strong>, set the dates to <strong>All</strong>, and export it to Excel or CSV.'),
             note: 'View-only mode can still run and export reports. The guide lists the exact columns to include.',
@@ -516,14 +517,14 @@
               'In Quicken, choose <strong>File › File Export › QIF File</strong>. Pick <strong>All accounts</strong> if your edition offers it (otherwise one account at a time), and include <strong>Transactions</strong>, <strong>Account list</strong> and <strong>Category list</strong>.',
               'Set the end date to today, so future scheduled transactions aren’t exported.',
               wizard + 'the <code>.qif</code> file.'],
-            note: 'Investment accounts are skipped, because LocalBooks doesn’t track securities.',
+            note: 'Investment accounts are skipped, because Tillhouse doesn’t track securities.',
             guide: 'desktop-migration.md#import-an-iif-or-qif-export' }
         ]},
         { name: 'GnuCash', sub: 'XML or SQLite books', types: [
           { name: 'A GnuCash book', sub: '.gnucash', heading: 'Import it directly', direct: true, steps: [
               'Close the book in GnuCash (or copy the file).',
               wizard + 'the <code>.gnucash</code> file.'],
-            note: 'Customers, vendors, invoices and bills come in as LocalBooks documents. Investment accounts are skipped.',
+            note: 'Customers, vendors, invoices and bills come in as Tillhouse documents. Investment accounts are skipped.',
             guide: 'desktop-migration.md#from-gnucash' }
         ]},
         { name: 'Something else', sub: 'Another program, or just your bank', types: [
@@ -532,7 +533,7 @@
               wizard + 'the file.'],
             guide: 'desktop-migration.md#import-an-iif-or-qif-export' },
           { name: 'Only my bank’s records', sub: 'Starting fresh', heading: 'Start a new company and import your bank history', steps: [
-              'Start a new company in LocalBooks and set up your bank and card accounts.',
+              'Start a new company in Tillhouse and set up your bank and card accounts.',
               'In <strong>Banking › Bank Feeds</strong>, import statements as <strong>OFX, QFX, QBO, CSV or PDF</strong>, or connect your bank with SimpleFIN.',
               'Enter opening balances and any open invoices and bills from your last statements or reports.'],
             guide: 'bank-feeds.md' }
@@ -580,7 +581,7 @@
       function show(t) {
         resultEl.innerHTML =
           '<div class="mig-result"><h3></h3><p class="for"></p>' +
-          (t.direct ? '<div class="notice notice-success">LocalBooks reads this directly. No conversion needed.</div>' : '') +
+          (t.direct ? '<div class="notice notice-success">Tillhouse reads this directly. No conversion needed.</div>' : '') +
           '<ol class="steps">' + t.steps.map((s) => '<li>' + s + '</li>').join('') + '</ol>' +
           (t.note ? '<div class="notice notice-info">' + t.note + '</div>' : '') +
           '<p class="small"><a href="' + G + t.guide + '">Full steps in the guide</a></p></div>';

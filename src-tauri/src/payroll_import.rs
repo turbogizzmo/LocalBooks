@@ -258,7 +258,7 @@ pub async fn preview(pool: &SqlitePool, file_name: &str, bytes: &[u8], choices: 
         })
         .collect();
     for s in source_accounts.iter().filter(|s| s.account_id.is_none()) {
-        problems.push(Problem { row: 0, message: format!("Choose the LocalBooks account for '{}'", s.name) });
+        problems.push(Problem { row: 0, message: format!("Choose the Tillhouse account for '{}'", s.name) });
     }
     let account_of = |name: &str| source_accounts.iter().find(|s| s.name == name).and_then(|s| s.account_id);
 
@@ -341,7 +341,7 @@ pub async fn post(pool: &SqlitePool, file_name: &str, bytes: &[u8], choices: &Pa
                 .lines
                 .iter()
                 .map(|l| {
-                    let account_id = l.account_id.ok_or_else(|| format!("PAYROLL_PROBLEMS: row {}: '{}' has no LocalBooks account", l.row, l.source_account))?;
+                    let account_id = l.account_id.ok_or_else(|| format!("PAYROLL_PROBLEMS: row {}: '{}' has no Tillhouse account", l.row, l.source_account))?;
                     Ok(JournalLine { account_id, debit: Cents(l.debit_cents), credit: Cents(l.credit_cents), memo: l.memo.clone(), class_id: None })
                 })
                 .collect::<Result<Vec<_>, String>>()?;

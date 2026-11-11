@@ -154,7 +154,7 @@ pub async fn finish_two_step_sign_in(app: AppHandle, db: State<'_, Db>, code: St
     if let Err(e) = checked {
         if e.starts_with("MFA_CODE_WRONG") && throttle(&app).failures(&file, Who::Code(&username)) >= crate::sign_in_throttle::FREE_TRIES {
             if let Err(audit) = mfa::record_failed(&pool, user_id, &username).await {
-                eprintln!("LocalBooks: could not record failed two-step codes in the audit trail: {audit}");
+                eprintln!("Tillhouse: could not record failed two-step codes in the audit trail: {audit}");
             }
         }
         return Err(e);

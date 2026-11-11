@@ -113,7 +113,7 @@ export default function BankRules({ accounts, onClose }) {
                 {shownRenames.length === 0 && (
                   <tr>
                     <td colSpan={4} className="qb-grid-cell text-qb-ink-muted">
-                      No renaming rules{needle ? ' match' : ' yet'}. Change a payee in the bank feed and LocalBooks offers one.
+                      No renaming rules{needle ? ' match' : ' yet'}. Change a payee in the bank feed and Tillhouse offers one.
                     </td>
                   </tr>
                 )}

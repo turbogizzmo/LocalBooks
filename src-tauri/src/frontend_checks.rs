@@ -127,7 +127,7 @@ fn screen_library_unit_tests_pass() {
         .args(&tests)
         .current_dir(&root)
         .output()
-        .expect("run Node (install Node.js 22 or later to build and test LocalBooks)");
+        .expect("run Node (install Node.js 22 or later to build and test Tillhouse)");
     assert!(
         output.status.success(),
         "src/lib unit tests failed:\n{}{}",

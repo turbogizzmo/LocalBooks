@@ -1,4 +1,4 @@
-# LocalBooks CI/CD
+# Tillhouse CI/CD
 #
 # pull request   → run the Rust test suite on Windows and Linux, and on macOS for batch/* branches
 #                  or a PR labelled `macos` (no secrets, read-only).
@@ -250,9 +250,9 @@ jobs:
         with:
           # Only tag builds create a release; manual branch builds upload workflow artifacts below.
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-          releaseName: LocalBooks v__VERSION__
+          releaseName: Tillhouse v__VERSION__
           releaseBody: |
-            LocalBooks v__VERSION__: local-first, double-entry accounting.
+            Tillhouse v__VERSION__: local-first, double-entry accounting.
 
             **What's new**
             ${{ steps.notes.outputs.body }}
@@ -264,7 +264,7 @@ jobs:
 
             Installation guide: https://turbogizzmo.github.io/LocalBooks/
 
-            Already installed? LocalBooks offers this update on its own (or Settings › Updates ›
+            Already installed? Tillhouse offers this update on its own (or Settings › Updates ›
             Check for updates), and saves a copy of your company file before upgrading it.
 
             These builds are not code-signed yet: macOS may require right-click → Open the first

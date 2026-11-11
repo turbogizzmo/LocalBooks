@@ -252,10 +252,12 @@ def cmd_install(args):
     elif args.platform == "windows":
         setup = only(args.release_dir, "-setup.exe")
         subprocess.run([str(setup), "/S"], check=True)
-        roots = [Path(os.environ["LOCALAPPDATA"]) / "LocalBooks", Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "LocalBooks"]
+        # The installer names the folder after the product: Tillhouse, or LocalBooks before 0.16.
+        local, program_files = Path(os.environ["LOCALAPPDATA"]), Path(os.environ.get("ProgramFiles", "C:/Program Files"))
+        roots = [base / name for name in ("Tillhouse", "LocalBooks") for base in (local, program_files)]
         candidates = [p for root in roots if root.is_dir() for p in root.glob("*.exe") if not p.name.lower().startswith("uninstall")]
         if not candidates:
-            raise SystemExit(f"the installer finished but no LocalBooks executable was found in {roots}")
+            raise SystemExit(f"the installer finished but no Tillhouse executable was found in {roots}")
         exe = candidates[0]
     else:
         deb = only(args.release_dir, ".deb")

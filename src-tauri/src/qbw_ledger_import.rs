@@ -625,7 +625,7 @@ pub async fn pre_post_backup(pool: &SqlitePool, batch_id: i64) -> Result<std::pa
     match path.map(std::path::PathBuf::from) {
         Some(p) if p.is_file() => Ok(p),
         Some(p) => Err(format!("QBW_NO_START_OVER: the copy taken before this import ({}) is no longer in the backups folder", p.display())),
-        None => Err("QBW_NO_START_OVER: this import was posted before LocalBooks kept a copy for Start over; use Reverse posted entries instead".into()),
+        None => Err("QBW_NO_START_OVER: this import was posted before Tillhouse kept a copy for Start over; use Reverse posted entries instead".into()),
     }
 }
 

@@ -496,7 +496,7 @@ impl FileLock {
                 let dead_here = holder.host == me.host && !process_alive(holder.pid);
                 if !mine && !dead_here && heartbeat_age < STALE_AFTER {
                     return Err(format!(
-                        "STORAGE_IN_USE: this company file is open on {} (since {}). Close LocalBooks there first; shared company files can only be open on one computer at a time.",
+                        "STORAGE_IN_USE: this company file is open on {} (since {}). Close Tillhouse there first; shared company files can only be open on one computer at a time.",
                         holder.host, holder.acquired_at
                     ));
                 }

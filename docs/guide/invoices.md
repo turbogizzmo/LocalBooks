@@ -42,7 +42,7 @@ Receivable** (what customers owe you) and to the income account on each line.
 The invoice appears in the list below with status **○ Open**.
 
 If an Admin turned on **Warn before selling to a customer with overdue invoices** (Preferences ›
-Sales & Customers), LocalBooks asks before saving a new invoice or sales receipt for a customer,
+Sales & Customers), Tillhouse asks before saving a new invoice or sales receipt for a customer,
 or one of their jobs, with invoices past their due date, and says how much is overdue. Click
 **Save anyway** to go ahead. When the customer's **Preferred delivery** is Email or Print, **Email
 later** or **Print later** is ticked for you.
@@ -51,7 +51,7 @@ later** or **Print later** is ticked for you.
 
 When a customer has a **Credit limit** (see
 [Add a customer or vendor](customers-and-products.md#add-a-customer-or-vendor)) and an invoice
-would take what they owe over it, LocalBooks says how much they owe now and would owe with this
+would take what they owe over it, Tillhouse says how much they owe now and would owe with this
 invoice, and asks before saving. Click **Save anyway** to post it, or **Cancel** to go back to the
 form. The limit is a warning only; it never stops a sale. What a customer owes includes their
 jobs' invoices, less any unused credits. A job without a limit of its own uses its customer's.
@@ -60,7 +60,7 @@ jobs' invoices, less any unused credits. A job without a limit of its own uses i
 
 When the customer has credit memos with credit left, the invoice says so under **Balance due**
 ("Available credits: $150.00 (2 credit memos)"). Hover over it to see each credit memo. When you save
-the invoice, LocalBooks asks whether to apply the credits to it now. Click **Apply credits** to use
+the invoice, Tillhouse asks whether to apply the credits to it now. Click **Apply credits** to use
 them, oldest first, up to the invoice's total, or **Cancel** to leave them for later. Applying a
 credit posts nothing, because the credit memo already reduced Accounts Receivable; it counts toward
 what's paid on the invoice, the same as applying it from **Sales › Credit Memos & Refunds**. Credits
@@ -71,7 +71,7 @@ are in the home currency, so an invoice in another currency doesn't offer them.
 When the customer pays all or part of the invoice as you write it (a deposit at the counter, or
 payment on delivery), tick **Payment received** next to **Save & Post to Ledger**. Enter the amount
 (it starts at the invoice total), the payment method, a reference number and the account it's
-deposited to. When you save, LocalBooks records the payment together with the invoice, dated the
+deposited to. When you save, Tillhouse records the payment together with the invoice, dated the
 invoice date: both are saved or, if the payment can't be (more than the invoice total, or an account
 money can't be deposited to), neither is. The invoice comes back **Paid** or **Partial**, and the
 payment is an ordinary one: it shows in **Receive Payments** and on the customer's history, goes to
@@ -86,7 +86,7 @@ charge or bill line with a **Customer:Job** and **Bill?** ticked), and billable 
 timesheet, can go on the invoice you are writing:
 
 1. Choose the customer or job in **Customer**. If they have costs or time not yet invoiced,
-   LocalBooks asks whether to add them; click **Add billable costs…**, or **Not now** to carry on
+   Tillhouse asks whether to add them; click **Add billable costs…**, or **Not now** to carry on
    without them.
 2. At any time, click **Add billable costs…** under the lines. The window lists the customer's or
    job's unbilled time and costs, all ticked, with the markup from **Preferences › Time &
@@ -111,7 +111,7 @@ Company Preferences**; the button stays.
 
 - **Service Date**: click **Service dates** beside the Description heading of an invoice or sales
   receipt to add a Service Date box to each line, for when the work was done (a visit, a delivery,
-  a week of work); LocalBooks remembers the choice on this computer, and a saved form whose lines
+  a week of work); Tillhouse remembers the choice on this computer, and a saved form whose lines
   have dates always shows them. Lines with one print it in a **Service
   Date** column; the column is left off a form whose lines have none, and Settings › Custom Forms
   can turn it off altogether.
@@ -143,7 +143,7 @@ Numbering then carries on from the highest number used, so after 5000 the next i
 Each invoice number is used once. If you type a number another invoice already has (voided ones
 included), saving says which invoice has it and offers the next free number: **Use #…** saves the
 invoice under that number, and **Cancel** takes you back to **Invoice #** to type a different one.
-LocalBooks doesn't allow two invoices with the same number, because the number is how you, your
+Tillhouse doesn't allow two invoices with the same number, because the number is how you, your
 customer and your reports tell invoices apart: payments, statements and the Find window all list
 invoices by number.
 
@@ -184,7 +184,7 @@ back, the reverse of the same line on an invoice. The credit has to stay above z
 2. The form shows the amount in your home currency as well. Your books record the home-currency
    amount and keep the original alongside.
 
-When the customer pays at a different rate, LocalBooks posts the difference to **Exchange Gain or
+When the customer pays at a different rate, Tillhouse posts the difference to **Exchange Gain or
 Loss** for you. See [Record customer payments](customer-payments.md).
 
 ## Print or email it
@@ -206,7 +206,7 @@ To email several invoices together, tick **Email later** when you post them, the
 To print several together, tick **Print later** when you post them (or choose **Print later** in a
 posted invoice's **Actions** menu); they show *To print* in the list. Then choose **File › Print
 Forms › Invoices…** (or **Sales › Print Invoices**), untick any to leave for later, and click
-**Print…**. LocalBooks asks **Did they all print?**: the invoices you confirm leave the queue, and
+**Print…**. Tillhouse asks **Did they all print?**: the invoices you confirm leave the queue, and
 the rest wait for the next batch. The invoice form remembers whether you last left Print later on.
 
 ### Print other forms in a batch
@@ -237,7 +237,7 @@ details and custom fields over.
 ## Fix a mistake
 
 Double-click the invoice in the list (or choose **Edit…** in its **Actions** menu) to open it, make
-your changes and save. LocalBooks voids the original and posts the corrected invoice in its place;
+your changes and save. Tillhouse voids the original and posts the corrected invoice in its place;
 both stay in the journal and the audit trail. The corrected invoice keeps the original's number, so
 your customer, statements, payments and reports go on showing the same invoice number; the voided
 original keeps it too, in the audit trail (**Invoice #** can't be changed while you edit). Bills, checks and expenses open the same way from

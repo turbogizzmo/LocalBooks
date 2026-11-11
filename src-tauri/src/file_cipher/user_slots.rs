@@ -57,7 +57,7 @@ where
     };
     if let Err(e) = tidy {
         // Both slots still open the file, and the users table decides who signs in; tidied later.
-        eprintln!("LocalBooks: could not tidy the key header after a password change: {e}");
+        eprintln!("Tillhouse: could not tidy the key header after a password change: {e}");
     }
     result
 }
@@ -96,7 +96,7 @@ pub async fn sign_in(db: &Db, username: &str, password: &str) -> Result<Session,
         Ok(session) => {
             if was_locked {
                 if let Err(e) = keep_slot_that_signed_in(db, session.user.id, password).await {
-                    eprintln!("LocalBooks: could not tidy the key header: {e}");
+                    eprintln!("Tillhouse: could not tidy the key header: {e}");
                 }
             }
             Ok(session)

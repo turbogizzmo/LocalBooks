@@ -39,7 +39,7 @@ export default function AccountantsCopy({ isAdmin = true }) {
 
   const makeCopy = () =>
     act(async () => {
-      const destination = await save({ defaultPath: `Accountant's Copy ${date}.localbooks`, filters: [{ name: 'LocalBooks company file', extensions: ['localbooks'] }] });
+      const destination = await save({ defaultPath: `Accountant's Copy ${date}.localbooks`, filters: [{ name: 'Tillhouse company file', extensions: ['localbooks'] }] });
       if (!destination) return;
       await api.createAccountantsCopy(date, destination);
       setNotice({ kind: 'success', text: `Accountant's Copy saved to ${destination}. Until its changes come back, nothing can be posted on or before ${formatDate(date)}.` });

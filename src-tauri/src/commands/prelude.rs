@@ -83,6 +83,6 @@ pub(super) async fn protect_imported(pool: &sqlx::SqlitePool, db: &Db) {
     let Some(key) = session.as_ref().and_then(|s| s.key.as_ref()) else { return };
     let protected = async { tax_ids::protect_all(&mut *pool.acquire().await.map_err(ledger::db_err)?, key).await };
     if let Err(err) = protected.await {
-        eprintln!("LocalBooks: could not encrypt imported tax IDs: {err}");
+        eprintln!("Tillhouse: could not encrypt imported tax IDs: {err}");
     }
 }

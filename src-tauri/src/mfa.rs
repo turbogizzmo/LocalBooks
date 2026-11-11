@@ -291,7 +291,7 @@ pub async fn begin_setup(pool: &SqlitePool, session: &Session, password: &str) -
     let company = crate::preferences::get(pool, "company_name").await.unwrap_or_default();
     let account = if company.trim().is_empty() { session.user.username.clone() } else { format!("{} ({})", session.user.username, company.trim()) };
     let uri = Zeroizing::new(format!(
-        "otpauth://totp/LocalBooks:{}?secret={}&issuer=LocalBooks&algorithm=SHA1&digits={DIGITS}&period={STEP_SECONDS}",
+        "otpauth://totp/Tillhouse:{}?secret={}&issuer=Tillhouse&algorithm=SHA1&digits={DIGITS}&period={STEP_SECONDS}",
         uri_part(&account),
         text.as_str()
     ));

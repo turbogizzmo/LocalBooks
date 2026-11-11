@@ -4,9 +4,9 @@ import { api } from '../lib/api.js';
 import { Icon } from '../lib/icons.js';
 
 export const INTUIT_DISCLAIMER =
-  'QuickBooks® is a registered trademark of Intuit Inc. LocalBooks is an independent project and is not affiliated with, endorsed by, or sponsored by Intuit Inc.';
+  'QuickBooks® is a registered trademark of Intuit Inc. Tillhouse is an independent project and is not affiliated with, endorsed by, or sponsored by Intuit Inc.';
 
-/** Help › About LocalBooks: version, license, trademark notice and the bundled third-party notices. */
+/** Help › About Tillhouse: version, license, trademark notice and the bundled third-party notices. */
 export default function About() {
   const [version, setVersion] = useState('');
   const [notices, setNotices] = useState(null);
@@ -24,10 +24,10 @@ export default function About() {
   };
 
   return (
-    <section aria-label="About LocalBooks" className="border-t border-qb-border px-3 pb-3 pt-3">
-      <h3 className="pb-1 text-2xs font-semibold uppercase tracking-wide text-qb-ink-muted">About LocalBooks</h3>
+    <section aria-label="About Tillhouse" className="border-t border-qb-border px-3 pb-3 pt-3">
+      <h3 className="pb-1 text-2xs font-semibold uppercase tracking-wide text-qb-ink-muted">About Tillhouse</h3>
       <p className="leading-snug">
-        LocalBooks {version} is open source under the MIT License and includes open-source components under their own licenses.
+        Tillhouse {version} (called LocalBooks until version 0.15) is open source under the MIT License and includes open-source components under their own licenses.
       </p>
       <button type="button" onClick={openNotices} className="mt-1 inline-flex items-center gap-1 font-semibold text-qb-green-active hover:underline">
         Third-party notices

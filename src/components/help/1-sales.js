@@ -74,7 +74,7 @@ export const screens = {
 };
 
 /**
- * Topics: two sentences each, describing what LocalBooks actually does. `views` lists the
+ * Topics: two sentences each, describing what Tillhouse actually does. `views` lists the
  * screens a topic is about (shown under "On this screen"); `go` opens the place to do it, with an
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
@@ -223,7 +223,7 @@ export const topics = [
   {
     id: 'customers', area: 'sales', views: ['sales/customers'],
     title: 'Add and review customers',
-    body: 'Add a customer with a name and optional email, and see each customer’s open receivable balance. Click a customer to see all of their transactions. On an invoice, sales receipt, estimate, credit memo or sales order, type a name that isn’t on the list and choose Add as a new customer. A name is never added without asking: leave the box or save with a name that isn’t on the list and LocalBooks asks first, with Quick add (add it as typed), Set up… (add it and open its record) or Cancel (back to the name box, nothing saved). To merge a duplicate customer (or vendor or item), rename it to the other’s name: LocalBooks offers to merge them, and everything that named it moves to the one kept.',
+    body: 'Add a customer with a name and optional email, and see each customer’s open receivable balance. Click a customer to see all of their transactions. On an invoice, sales receipt, estimate, credit memo or sales order, type a name that isn’t on the list and choose Add as a new customer. A name is never added without asking: leave the box or save with a name that isn’t on the list and Tillhouse asks first, with Quick add (add it as typed), Set up… (add it and open its record) or Cancel (back to the name box, nothing saved). To merge a duplicate customer (or vendor or item), rename it to the other’s name: Tillhouse offers to merge them, and everything that named it moves to the one kept.',
     keywords: 'customer client contact receivable balance transactions add new customer quick add set up not on list typo job merge duplicate combine',
     go: { label: 'Go to Customers', view: 'sales/customers' },
     guide: 'customers-and-products',
@@ -287,7 +287,7 @@ export const topics = [
   {
     id: 'credit-limit', area: 'sales', views: ['sales/invoices', 'sales/customers'],
     title: 'Customer credit limits',
-    body: 'Set a Credit limit on a customer’s record (Edit…). When an invoice would take what they owe, including their jobs’ invoices less unused credits, over the limit, LocalBooks shows the balance now and after, and asks before saving; it never blocks the sale.',
+    body: 'Set a Credit limit on a customer’s record (Edit…). When an invoice would take what they owe, including their jobs’ invoices less unused credits, over the limit, Tillhouse shows the balance now and after, and asks before saving; it never blocks the sale.',
     keywords: 'credit limit over limit customer balance warning account number contact fax website resale number tax id alternate contact',
     go: { label: 'Go to Customers', view: 'sales/customers' },
     guide: 'invoices',
@@ -462,7 +462,7 @@ export const topics = [
   {
     id: 'merge-records', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'sales/products', 'accounting/chart-of-accounts'],
     title: 'Merge duplicate customers, vendors, items or accounts',
-    body: 'Open the one you don’t want with Edit…, change its name to the other’s and save; LocalBooks offers Merge into …. A customer’s, vendor’s or item’s transactions, files and settings move to the one you keep, and an account’s balance moves with one journal entry. Posted amounts never change, the merged one stays as inactive, and each merge is in the audit trail.',
+    body: 'Open the one you don’t want with Edit…, change its name to the other’s and save; Tillhouse offers Merge into …. A customer’s, vendor’s or item’s transactions, files and settings move to the one you keep, and an account’s balance moves with one journal entry. Posted amounts never change, the merged one stays as inactive, and each merge is in the audit trail.',
     keywords: 'merge duplicate combine same name twice customer vendor item account rename',
     guide: 'customers-and-products',
   },

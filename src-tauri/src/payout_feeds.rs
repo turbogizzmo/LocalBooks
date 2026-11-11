@@ -453,7 +453,7 @@ async fn stripe_list(client: &reqwest::Client, api: &str, key: &str, path: &str,
             return Ok(out);
         }
     }
-    Err("PAYOUT_TOO_MANY: Stripe has more than LocalBooks reads in one go; get payouts more often so each fetch is smaller".into())
+    Err("PAYOUT_TOO_MANY: Stripe has more than Tillhouse reads in one go; get payouts more often so each fetch is smaller".into())
 }
 
 /// A payout as listed on the screen.

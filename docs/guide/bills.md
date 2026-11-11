@@ -73,7 +73,7 @@ A company can have bills and purchase orders approved before they count. Under *
 Approvals**, an Admin adds **rules**: for example "Approve bills of $1,000.00 or more", "Approve
 bills from Harbor Leasing" (every one, any amount), or "Approve purchase orders of $500.00 or more".
 
-When you save a bill or purchase order that matches a rule, LocalBooks doesn't record it. It says
+When you save a bill or purchase order that matches a rule, Tillhouse doesn't record it. It says
 **Sent for approval** and the document waits under **Expenses › Approvals**. A waiting bill isn't
 posted: it isn't in Accounts Payable, the aging or **Pay Bills**. A waiting purchase order isn't
 an open order, so it can't be received or billed.
@@ -97,7 +97,7 @@ purchase order, and edits to a bill that was already approved are recorded strai
 ## Fix a mistake on a bill
 
 Double-click the bill in the list (or choose **Edit…** in its **Actions** menu), make your changes
-and click **Save changes**. LocalBooks voids the original and posts the corrected bill in its place;
+and click **Save changes**. Tillhouse voids the original and posts the corrected bill in its place;
 both stay in the journal and the audit trail.
 
 A bill you've already paid part of, or applied a vendor credit to, opens the same way. The form says
@@ -115,7 +115,7 @@ what's still to come on each line, and you can change it for a short or split sh
 date and the packing slip number and click **Receive**.
 
 The receipt posts the goods' cost to the item's Inventory Asset account (or a line's expense account,
-for freight or a service) against **Items Received Not Billed**, a liability LocalBooks adds the first
+for freight or a service) against **Items Received Not Billed**, a liability Tillhouse adds the first
 time you receive items. It doesn't post to Accounts Payable, so **Pay Bills** doesn't offer it and
 the vendor's balance doesn't change until the bill is entered; **A/P Aging Summary** shows the total
 as **Items received, not billed** under its own total. The purchase order shows what has been
@@ -277,9 +277,9 @@ too, and is forgotten if you untick the bill. Neither is offered when paying by 
 
 ## Pay bills by ACH file
 
-Many banks let a business upload a file of payments instead of writing checks. LocalBooks can write
+Many banks let a business upload a file of payments instead of writing checks. Tillhouse can write
 that file, in the NACHA format US banks use, and record the payments at the same time. You upload
-the file to your bank's website yourself: LocalBooks never connects to the bank or moves money.
+the file to your bank's website yourself: Tillhouse never connects to the bank or moves money.
 
 > **Warning: check your first file with your bank.** Before you upload a real payment file, ask your
 > bank to test one (most have a test or "pre-note" process for new ACH originators), and compare
@@ -302,7 +302,7 @@ the file to your bank's website yourself: LocalBooks never connects to the bank 
    Only an Admin can change these.
 3. **Add each vendor's bank details.** Open the vendor (**Expenses › Vendors**), and under **Bank
    details (ACH)** click **Add**. Enter the routing number, account number, checking or savings,
-   and whether you pay them as a **business (CCD)** or a **person (PPD)**. LocalBooks checks the
+   and whether you pay them as a **business (CCD)** or a **person (PPD)**. Tillhouse checks the
    routing number's check digit as you type; take the numbers from the vendor's own form, never
    from an email you weren't expecting.
 
@@ -319,19 +319,19 @@ change them or pay by ACH. See [Users and passwords](users-and-passwords.md).
 3. Tick the bills. Each vendor shows the last four digits of their account, or **No bank details**.
 4. Click **Pay by ACH file…** and choose where to save the file.
 
-LocalBooks records one ordinary bill payment per bill, marked ACH, and writes one file that pays each
+Tillhouse records one ordinary bill payment per bill, marked ACH, and writes one file that pays each
 vendor once, for all their ticked bills together. The vendor's bank statement shows your company
 name and entry description, and the bill numbers. Each payment's reference is the ACH trace number,
 which your bank uses if a payment is returned.
 
-Before saving, LocalBooks reads the file back and checks it: every record 94 characters, routing
+Before saving, Tillhouse reads the file back and checks it: every record 94 characters, routing
 check digits, batch and file totals, entry hash, and the padding banks expect. A file that fails is
 not saved.
 
 ### Save a file again
 
 If the upload failed or you lost the file, click **ACH files** on the Bills page and **Save again…**.
-You get the identical file, and nothing is paid again in LocalBooks. Only upload it if the bank did
+You get the identical file, and nothing is paid again in Tillhouse. Only upload it if the bank did
 not receive the first one. Every file saved is recorded in the audit trail, with amounts and trace
 numbers but no account numbers.
 

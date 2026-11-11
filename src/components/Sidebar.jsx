@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Icon } from '../lib/icons.js';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { hiddenViews, useSalesPrefs } from '../lib/salesPrefs.js';
+import BrandMark from './BrandMark.jsx';
 
 /** Navigation tree: top-level links and accordion groups, in a classic accounting-software layout. */
 export const NAV = [
@@ -167,7 +168,7 @@ export default function Sidebar({ current, onSelect, onNew, companyName, storage
   return (
     <nav className="qb-sidebar no-print flex flex-none flex-col" aria-label="Main">
       <div className="flex h-toolbar items-center gap-2 border-b border-white/10 px-3">
-        <span className="grid h-5 w-5 place-items-center rounded-xs bg-qb-green-active text-2xs font-bold text-white">LB</span>
+        <BrandMark />
         <span className="truncate text-md font-semibold text-white" title={companyName}>{companyName}</span>
       </div>
       <div className="px-2 py-1.5">

@@ -9,7 +9,7 @@ balances.
    Entry**).
 2. Set the **Journal date** and an optional **Memo**.
 3. Add at least two lines. On each, choose the account and enter a debit or a credit.
-4. Total debits must equal total credits. LocalBooks won't post an entry that doesn't balance.
+4. Total debits must equal total credits. Tillhouse won't post an entry that doesn't balance.
 5. Tick **Adjusting entry** if this is a period-end adjustment (depreciation, an accrual, a correction
    from your accountant).
 6. Click **Save & Post**.
@@ -86,7 +86,7 @@ manual journal entry](#post-a-manual-journal-entry)).
    are offered; **＋ Add new class…** adds one.
 5. Click **Reclassify**.
 
-Posted lines are never edited. Instead, LocalBooks posts a reclassifying journal entry for each
+Posted lines are never edited. Instead, Tillhouse posts a reclassifying journal entry for each
 date among the ticked lines, with the memo *Reclassify to* and the class name. For each line it
 takes the amount out of the old class and puts it into the new one, on the same account, so
 account balances and totals don't change; only reports by class do. The list then shows the lines

@@ -67,7 +67,7 @@ pub fn run_from_args() -> Option<i32> {
             if output.ok { 0 } else { 1 }
         }
         Err(message) => {
-            eprintln!("{message}\nusage: LocalBooks --check-file <company file> [--backups-dir <folder>] [--output <file.json>]");
+            eprintln!("{message}\nusage: Tillhouse --check-file <company file> [--backups-dir <folder>] [--output <file.json>]");
             2
         }
     })

@@ -17,13 +17,13 @@ function MacSteps({ status }) {
       <ol className="list-decimal space-y-1 pl-5 text-sm">
         <li>Open {app} and your company file.</li>
         <li>
-          Choose <strong>Reports › Accountant &amp; Taxes › Journal</strong>, set the dates to <strong>All</strong>, and leave the report as the front window. LocalBooks reads the
+          Choose <strong>Reports › Accountant &amp; Taxes › Journal</strong>, set the dates to <strong>All</strong>, and leave the report as the front window. Tillhouse reads the
           ledger from it; the lists come straight from QuickBooks.
         </li>
         <li>
-          Click <strong>Export from QuickBooks</strong>. The first time, macOS asks whether <strong>LocalBooks</strong> may control <strong>{app}</strong>: click{' '}
-          <strong>OK</strong>. That permission lets LocalBooks ask {app} for your data; LocalBooks only sends read-only requests and changes nothing in QuickBooks. If you clicked
-          Don’t Allow, turn LocalBooks’ switch for {app} back on in System Settings › Privacy &amp; Security › Automation.
+          Click <strong>Export from QuickBooks</strong>. The first time, macOS asks whether <strong>Tillhouse</strong> may control <strong>{app}</strong>: click{' '}
+          <strong>OK</strong>. That permission lets Tillhouse ask {app} for your data; Tillhouse only sends read-only requests and changes nothing in QuickBooks. If you clicked
+          Don’t Allow, turn Tillhouse’s switch for {app} back on in System Settings › Privacy &amp; Security › Automation.
         </li>
       </ol>
     </>
@@ -34,7 +34,7 @@ function WindowsSteps({ status }) {
   return (
     <>
       <p className="text-xs text-qb-ink-muted">
-        {status.sdkInstalled ? 'The QuickBooks SDK is installed.' : 'The QuickBooks SDK is not installed. LocalBooks talks to QuickBooks through it.'}
+        {status.sdkInstalled ? 'The QuickBooks SDK is installed.' : 'The QuickBooks SDK is not installed. Tillhouse talks to QuickBooks through it.'}
       </p>
       <ol className="list-decimal space-y-1 pl-5 text-sm">
         <li className={status.sdkInstalled ? 'text-qb-ink-muted' : ''}>
@@ -44,7 +44,7 @@ function WindowsSteps({ status }) {
         <li>Open QuickBooks and your company file, signed in as the Admin user (needed the first time only).</li>
         <li>
           Click <strong>Export from QuickBooks</strong>. QuickBooks asks whether to let <strong>LocalBooks</strong> read this company file: choose{' '}
-          <strong>Yes, whenever this QuickBooks company file is open</strong>, then Continue. LocalBooks only sends read-only requests and changes nothing in QuickBooks.
+          <strong>Yes, whenever this QuickBooks company file is open</strong>, then Continue. Tillhouse only sends read-only requests and changes nothing in QuickBooks.
         </li>
       </ol>
     </>
@@ -80,7 +80,7 @@ export default function InstalledQuickBooks({ busy, onExport }) {
       {open && (
         <div className="mt-2 flex flex-col gap-2">
           <p className="text-xs text-qb-ink-muted">
-            LocalBooks asks the QuickBooks running on this computer for the open company’s chart of accounts, customers, vendors, items and Journal, through Intuit’s
+            Tillhouse asks the QuickBooks running on this computer for the open company’s chart of accounts, customers, vendors, items and Journal, through Intuit’s
             own interfaces, then reads them like report exports. Nothing is added to your books until you post. <strong>Preview:</strong> this was built from Intuit’s
             documentation and has not yet been tried against a running QuickBooks. If it fails, export the reports from QuickBooks and choose them above.
           </p>

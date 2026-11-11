@@ -317,7 +317,7 @@ impl Db {
         }
         let path = storage::resolve_network_path(path);
         if path.exists() {
-            return Err(format!("NEW_COMPANY_EXISTS: {} already exists; choose another name or folder (LocalBooks never replaces a company file)", path.display()));
+            return Err(format!("NEW_COMPANY_EXISTS: {} already exists; choose another name or folder (Tillhouse never replaces a company file)", path.display()));
         }
         let mut next = open_live(&path, None).await?;
         let prepared = async {
@@ -699,7 +699,7 @@ impl Db {
                 // The replacement's audit trail may be behind this computer's record of the old one.
                 // The swap has happened either way, so a failure here must not report it as failed.
                 if let Err(err) = crate::audit_chain::reanchor(&live.pool).await {
-                    eprintln!("LocalBooks: could not record the restored file's audit trail: {err}");
+                    eprintln!("Tillhouse: could not record the restored file's audit trail: {err}");
                 }
                 Ok(())
             }
@@ -729,7 +729,7 @@ impl Db {
         let current = self.path().await?;
         let same = |a: &Path, b: &Path| a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(x, y)| x == y);
         if same(&target, &current) || (target == current) {
-            return Err("STORAGE_UNCHANGED: LocalBooks is already using the company file in that folder".into());
+            return Err("STORAGE_UNCHANGED: Tillhouse is already using the company file in that folder".into());
         }
 
         match mode {
@@ -846,7 +846,7 @@ async fn clear_sidecars(path: &Path) -> Result<(), String> {
         if !harmless {
             return Err(format!("cannot remove {}: {e}", sidecar.display()));
         }
-        eprintln!("LocalBooks: left {} in place ({e}); it holds nothing", sidecar.display());
+        eprintln!("Tillhouse: left {} in place ({e}); it holds nothing", sidecar.display());
     }
     Ok(())
 }
@@ -915,7 +915,7 @@ async fn while_in_use(mut op: impl FnMut() -> std::io::Result<()>) -> std::io::R
             }
             other => {
                 if waited > 0 {
-                    eprintln!("LocalBooks: a file was in use for about {} ms", waited * 50);
+                    eprintln!("Tillhouse: a file was in use for about {} ms", waited * 50);
                 }
                 return other;
             }
@@ -1051,7 +1051,7 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>, pa
         Err(e) => Err(e),
     };
     if let Err(e) = sealed {
-        eprintln!("LocalBooks: could not seal the audit trail of {}: {e}", path.display());
+        eprintln!("Tillhouse: could not seal the audit trail of {}: {e}", path.display());
     }
 
     Ok(pool)
@@ -1074,7 +1074,7 @@ async fn prepare(pool: &SqlitePool, path: &Path, backups: Option<&Path>) -> Resu
     if let (Some(dir), Some(version)) = (backups, pending) {
         crate::opening::note(crate::opening::STEP_SAVING_COPY);
         crate::backup::pre_upgrade_snapshot(pool, path, dir, version).await.map_err(|e| {
-            format!("{e} (LocalBooks did not upgrade {} because it could not save a copy first)", path.display())
+            format!("{e} (Tillhouse did not upgrade {} because it could not save a copy first)", path.display())
         })?;
     }
     if pending.is_some() {
@@ -1129,7 +1129,7 @@ async fn refuse_newer_file(pool: &SqlitePool, path: &Path) -> Result<(), String>
     let latest = MIGRATOR.iter().map(|m| m.version).max().unwrap_or(0);
     match applied_schema(pool).await? {
         Some(applied) if applied > latest => Err(format!(
-            "DB_NEWER_FILE: {} was updated by a newer version of LocalBooks (company file version {applied}; this copy of LocalBooks understands up to {latest}). Install the latest LocalBooks to open it. The file has not been changed.",
+            "DB_NEWER_FILE: {} was updated by a newer version of Tillhouse (company file version {applied}; this copy of Tillhouse understands up to {latest}). Install the latest Tillhouse to open it. The file has not been changed.",
             path.display()
         )),
         _ => Ok(()),

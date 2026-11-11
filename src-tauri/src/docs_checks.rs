@@ -129,7 +129,7 @@ fn guide_links_point_at_guides_and_headings_that_exist() {
 #[test]
 fn heading_anchors_match_github() {
     assert_eq!(heading_anchor("Accountant & Taxes reports"), "accountant--taxes-reports");
-    assert_eq!(heading_anchor("\"LocalBooks couldn't open your company file\""), "localbooks-couldnt-open-your-company-file");
+    assert_eq!(heading_anchor("\"Tillhouse couldn't open your company file\""), "tillhouse-couldnt-open-your-company-file");
     assert_eq!(heading_anchor("See the transactions behind a number (QuickZoom)"), "see-the-transactions-behind-a-number-quickzoom");
 }
 
@@ -157,7 +157,7 @@ fn security_claims_point_at_code_that_exists() {
     }
     let code: String = relative_links(&text).iter().filter(|l| l.ends_with(".rs") || l.ends_with(".jsx") || l.ends_with(".json")).filter_map(|l| std::fs::read_to_string(repo().join(l)).ok()).collect();
 
-    let start = text.find("## How LocalBooks is built to be safe").expect("the built-to-be-safe section");
+    let start = text.find("## How Tillhouse is built to be safe").expect("the built-to-be-safe section");
     let end = text.find("What this does not cover:").expect("the limits list");
     let claims = &text[start..end];
     let mut bullets: Vec<String> = Vec::new();
