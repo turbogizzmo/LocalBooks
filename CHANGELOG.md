@@ -6,6 +6,13 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Inventory adjustments come in from company files.** Some files had lost part of the
+  description of their inventory adjustment lines, so none of the adjustments were read and
+  Inventory Asset and Cost of Goods Sold came out wrong. LocalBooks now reads those lines, and the
+  cost of inventory recorded on bills comes in too.
+
 ## [0.14.1]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a

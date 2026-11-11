@@ -66,11 +66,21 @@ of the import (account, the file's balance, the imported balance, the difference
 after posting with a notice in step 3. What is left on the files above:
 
 - **Inventory cost lines.** Cost of goods sold and the matching inventory-asset lines are kept in
-  separate inventory record tables, linked to invoice and bill lines by line id rather than by
-  transaction. The reader does not read them yet, so Cost of Goods Sold reads as zero and Inventory
-  Asset is off on files with inventory items. Gap R3a.
-- **Payroll.** Paychecks and payroll liability payments keep their payroll-item lines in tables the
-  reader does not read, so payroll expense and liability accounts read as zero. Gap R3a.
+  separate inventory record tables, linked to invoice, sales receipt, credit memo and bill lines by
+  line id rather than by transaction. The reader joins them to their form (R3a, #327; bills in
+  #PR_R3A). A pair whose form line itself can't be read is left out and counted as rejected.
+- **Inventory adjustments.** Some files lost one column definition of the adjustment line table
+  from their catalog, so every adjustment row read out of step and none was imported. When the
+  catalog skips a column id, the reader now tries the row with that column left out first (as
+  before), then as each likely column type, and keeps the reading that ends exactly at the row's
+  end. On the construction sample this brought in its three adjustments, and Inventory Asset and
+  Cost of Goods Sold now differ from the file only by the cost pair of one unreadable invoice line
+  ($180) and the lines of the invoices that can't be posted because a line is damaged.
+- **Assembly builds.** A build moves value from its component items into the assembled item, all
+  within Inventory Asset, so it changes no account balance. LocalBooks does not bring in item
+  quantities from a company file yet, so builds are not imported (gap R3c).
+- **Payroll.** Paychecks and payroll liability payments keep their payroll-item lines in tables of
+  their own; the reader reads them (R3a, #327).
 - **Check lines in upgraded files.** In files upgraded from an older QuickBooks version, the column
   list the reader takes from the file's catalog for the check line table does not match how the rows
   are stored (nine column ids are missing), so those rows don't decode. Gap R3b.
