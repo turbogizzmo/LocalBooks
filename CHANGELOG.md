@@ -18,6 +18,8 @@ people using LocalBooks.
   now copies its subtotals, discount lines, percentage charges and groups, so the copy credits the
   same amount as the original. Before, the copy left them out and credited the full amount of the
   item lines.
+- **Diagnostics say why starting was slow.** The log in Help › Save Diagnostics now records how
+  long LocalBooks took to start and which steps were slow, such as opening the company file.
 
 ## [0.14.0]
 

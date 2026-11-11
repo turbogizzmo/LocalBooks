@@ -84,8 +84,9 @@ diagnostics…**. LocalBooks saves a zip file where you choose. It holds:
 - LocalBooks' version, your operating system and processor, and SQLite's version;
 - the company file's name and size, which schema updates it has, its integrity check, and how many
   rows each table holds (counts only);
-- LocalBooks' own log: when it started and quit, which company file it opened, and any crash with
-  where in the program it happened.
+- LocalBooks' own log: when it started and quit, how long starting took (and which steps were
+  slow, such as opening the company file), which company file it opened, and any crash with where
+  in the program it happened.
 
 It holds no customers, vendors, amounts or other business data. **Show what's in it** lets you read
 everything before you save. LocalBooks never sends it anywhere; send the file yourself to whoever
