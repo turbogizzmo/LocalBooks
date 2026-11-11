@@ -14,7 +14,7 @@ for a high-density, keyboard-friendly interface.
 ---
 
 > **Trying Tillhouse?** Download it and follow the install steps on the
-> [**tester page**](https://turbogizzmo.github.io/LocalBooks/). Installed copies update themselves.
+> [**tillhouse.app**](https://tillhouse.app). Installed copies update themselves.
 >
 > **Using Tillhouse?** Start with the [**user guide**](docs/guide/README.md): step-by-step guides
 > for invoices, payments, bills, banking, reconciling, reports, closing the books, backups, users and
@@ -506,7 +506,7 @@ Windows updates use the per-user `-setup.exe` installer, the one the tester page
 | `codeql.yml` | push, pull request, weekly | Static security analysis of Rust, JavaScript and the workflows |
 | `audit.yml` | lockfile changes, weekly | RustSec and npm advisories for shipped dependencies |
 | `notices.yml` | lockfile changes, weekly | Fails when `THIRD-PARTY-NOTICES.txt` no longer matches the shipped dependencies |
-| `pages.yml` | changes to `site/` | Publishes the [tester page](https://turbogizzmo.github.io/LocalBooks/) |
+| `pages.yml` | changes to `site/` | Publishes the [website](https://tillhouse.app) |
 | Dependabot | weekly | Grouped update PRs for Cargo, npm and GitHub Actions |
 
 Security reports: see [SECURITY.md](SECURITY.md).

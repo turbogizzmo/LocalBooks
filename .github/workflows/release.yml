@@ -262,7 +262,7 @@ jobs:
             - Windows: `.msi` or `-setup.exe`
             - Linux: `.deb`, `.rpm` or `.AppImage`
 
-            Installation guide: https://turbogizzmo.github.io/LocalBooks/
+            Installation guide: https://tillhouse.app
 
             Already installed? Tillhouse offers this update on its own (or Settings › Updates ›
             Check for updates), and saves a copy of your company file before upgrading it.

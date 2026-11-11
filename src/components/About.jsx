@@ -29,6 +29,9 @@ export default function About() {
       <p className="leading-snug">
         Tillhouse {version} (called LocalBooks until version 0.15) is open source under the MIT License and includes open-source components under their own licenses.
       </p>
+      <p className="mt-1 leading-snug">
+        Website: <span className="select-all font-mono text-xs">https://tillhouse.app</span>
+      </p>
       <button type="button" onClick={openNotices} className="mt-1 inline-flex items-center gap-1 font-semibold text-qb-green-active hover:underline">
         Third-party notices
       </button>

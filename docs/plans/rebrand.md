@@ -66,5 +66,5 @@ macOS DMG and from a Linux `.deb`. CI's release check covers a fresh install, no
 ## Later
 
 - Rename the GitHub repo (update `rollback::REPO`, the updater endpoint as a second entry first,
-  the site URL and links), and move the tester site to its own domain.
+  and the GitHub links). The site already moved to https://tillhouse.app (`docs/dev/website.md`).
 - Optionally rename the `qb` Tailwind tokens.
