@@ -79,7 +79,7 @@ export const topics = [
   {
     id: 'cash-basis', area: 'reports', views: ['reports'],
     title: 'See profit on a cash basis, by month, or against last year',
-    body: 'On the Profit and Loss, set Basis to Cash to count invoices and bills only as they are paid, Columns to Months or Quarters to split the period, or Compare with to show the previous period or previous year beside it with the change in dollars and percent.',
+    body: 'On the Profit and Loss, set Basis to Cash to count invoices and bills only as they are paid, Columns to Months or Quarters to split the period (or to Class or Customer:Job for a column per class, or per customer and job, on the accrual basis), or Compare with to show the previous period or previous year beside it with the change in dollars and percent.',
     keywords: 'cash basis accrual monthly quarterly compare previous year prior period comparison columns',
     go: { label: 'Go to Reports', view: 'reports' },
   },

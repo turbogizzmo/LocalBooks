@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, record_payment, PaymentInput};
+use crate::money::Cents;
 
 fn d(m: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, m, day).expect("valid date")
@@ -19,13 +20,14 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, due: Naive
     create_and_post_invoice(
         pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: customer.into(),
             issue_date: issue,
             due_date: due,
             lines: vec![InvoiceLineInput {
                 description: "Work".into(),
                 quantity_e4: QUANTITY_SCALE,
-                rate_cents: cents,
+                rate_cents: Cents(cents),
                 income_account_id: services,
                 product_service_id: None,
                 class_id: None,
@@ -33,7 +35,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, due: Naive
             }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -204,7 +206,7 @@ async fn grace_days_minimum_and_balances_as_of_the_assessment_date() {
     let checking = account_id(&pool, "1010").await;
     let inv = invoice(&pool, "Acme", d(8, 1), d(9, 1), 100_000).await;
     let pay = |day: NaiveDate, cents| PaymentInput {
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         payment_method_id: None,
         invoice_id: inv.id,
         deposit_account_id: checking,
@@ -215,8 +217,8 @@ async fn grace_days_minimum_and_balances_as_of_the_assessment_date() {
         exchange_rate_e6: None,
     };
     // Paid down to $400 on Sept 10; another $400 arrives Oct 20, after the assessment date.
-    record_payment(&pool, pay(d(9, 10), 60_000)).await.unwrap();
-    record_payment(&pool, pay(d(10, 20), 40_000)).await.unwrap();
+    record_payment(&pool, pay(d(9, 10), Cents(60_000))).await.unwrap();
+    record_payment(&pool, pay(d(10, 20), Cents(40_000))).await.unwrap();
     let p = preview(&pool, d(10, 1)).await.unwrap();
     assert_eq!(p.customers[0].overdue_balance_cents, 40_000, "the balance on Oct 1, not today's");
     // 40,000 × 30 × 18,000 / 36,500,000 = 591.78 → $5.92.

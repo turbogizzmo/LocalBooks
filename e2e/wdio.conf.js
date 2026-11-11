@@ -6,7 +6,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
-import { APP, SCREENSHOTS, keepOwnConfig, prepareCompany, seedCompanies, waitForAppExit } from './lib/app.js';
+import { APP, SCREENSHOTS, appLogDir, keepOwnConfig, prepareCompany, seedCompanies, waitForAppExit } from './lib/app.js';
 
 /** The seeded company each spec opens a fresh copy of. */
 const COMPANIES = {
@@ -22,6 +22,7 @@ const DRIVER_PORT = 4444;
 
 let tauriDriver;
 let configDir;
+let appEnv = {};
 let restoreOwnConfig = () => {};
 
 /** Resolves once something accepts connections on `port`. */
@@ -67,6 +68,7 @@ export const config = {
     if (!COMPANIES[name]) throw new Error(`no company is set for ${name} in wdio.conf.js`);
     const prepared = prepareCompany(name, COMPANIES[name]);
     configDir = prepared.configDir;
+    appEnv = prepared.env;
     const args = process.env.NATIVE_DRIVER ? ['--native-driver', process.env.NATIVE_DRIVER] : [];
     tauriDriver = spawn(TAURI_DRIVER, args, {
       env: { ...process.env, ...prepared.env, WEBKIT_DISABLE_DMABUF_RENDERER: '1' },
@@ -80,6 +82,12 @@ export const config = {
     fs.mkdirSync(SCREENSHOTS, { recursive: true });
     const file = `${test.parent} -- ${test.title}`.replace(/[^\w.-]+/g, '_').slice(0, 150);
     await browser.saveScreenshot(path.join(SCREENSHOTS, `${file}.png`)).catch(() => {});
+    // The diagnostics log says how long each startup step took (a slow one is a blank window).
+    try {
+      fs.copyFileSync(path.join(appLogDir({ ...process.env, ...appEnv }), 'diagnostics.log'), path.join(SCREENSHOTS, `${file}.log`));
+    } catch {
+      // No log yet (the app never started): the screenshot is all there is.
+    }
   },
 
   async afterSession() {

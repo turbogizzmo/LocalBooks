@@ -18,6 +18,7 @@ import { centsToInput, formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
+import DocNumberBox, { useDocNumber } from './DocNumberBox.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
@@ -47,6 +48,8 @@ function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep, copyOf = 
   const [emailLater, setEmailLater] = useState(false);
   const [error, setError] = useState(null);
   const customerRef = useRef(null);
+  // Estimate #: the next number, shown before saving; the person may type another.
+  const docNumber = useDocNumber('ESTIMATE', 'Estimate');
   const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
@@ -76,6 +79,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep, copyOf = 
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
 
   const clear = () => {
+    docNumber.reset();
     setCustomer('');
     setMemo('');
     setLines(Array.from({ length: 3 }, () => blankLine(defaultIncome)));
@@ -96,7 +100,11 @@ function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep, copyOf = 
     if (discountCents === null) return setError('Enter the discount as an amount or a percentage such as 10%.');
     setBusy(true);
     try {
+      const chosen = await docNumber.resolve();
+      if (chosen.cancelled) return;
+      if (chosen.error) return setError(chosen.error);
       const estimate = await api.createEstimate({
+        estimateNumber: chosen.value,
         customerName: customer.trim(),
         estimateDate: date,
         expirationDate: expires || null,
@@ -147,6 +155,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep, copyOf = 
           <span className="qb-label">Estimate date</span>
           <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
+        <DocNumberBox number={docNumber} />
         <label>
           <span className="qb-label">Expiration date</span>
           <DateBox className="qb-input w-[132px]" value={expires} onChange={(e) => setExpires(e.target.value)} />

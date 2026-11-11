@@ -99,7 +99,9 @@ Then, from the repository root, the same three commands without `xvfb-run`:
 - One spec: `npm test --prefix e2e -- --spec specs/seeded-users.e2e.js`.
 
 A failing step saves a screenshot to `e2e/.work/screenshots/` (in CI, the
-`e2e-screenshots-<platform>` artifact).
+`e2e-screenshots-<platform>` artifact), with a copy of the app's diagnostics log beside it. The log's
+`startup took … ms` lines say how long each launch took and which steps were slow; the window is
+blank until startup finishes, so a blank screenshot with a slow startup line names the step.
 
 ## Writing specs
 

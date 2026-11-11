@@ -52,6 +52,11 @@ month.
    like the day it **Ends**.
 4. Choose **Email them**, with the addresses to send to, or **Save them in a folder** on this
    computer, and whether they go **As** PDF or Excel spreadsheets.
+5. Leave **On (untick to pause it)** ticked. Untick it to stop a schedule for a while without
+   deleting it.
+
+A new schedule starts as last month's Profit and Loss, monthly from today, emailed as a PDF; change
+any of it before you save.
 
 Email goes only through the email server set up in **Settings › Email** (it must be turned on),
 and only to the addresses on the schedule. **Run now** on a schedule sends it for today without
@@ -126,6 +131,14 @@ or purchase order opens on its form, and a card opens its register.
 
 It shows income, cost of goods sold, gross profit, expenses and net income. Fiscal periods follow
 **First month of fiscal year** in Settings.
+
+**Columns** splits the report: **Months** or **Quarters** give a column for each part of the
+period and a total; **Class** gives a column for each class (when the company has classes), with
+lines that have no class in **Unclassified**; **Customer:Job** gives a column for each customer and
+each job, with lines that name no customer in their own column. Each row's columns add up to the
+total, the plain Profit and Loss amount. Columns by class or customer are on the accrual basis, so
+**Basis** is set to Accrual while they show. For columns by vendor, or by customer with the jobs
+added in, use **Customize…** on a summary report (see [Columns by name](#customize-a-report)).
 
 ## Balance Sheet
 
@@ -210,12 +223,15 @@ These keys use **Ctrl** on a Mac too, since ⌘Q quits and ⌘H hides the app.
 
 Set up a budget first under **Accounting › Budgets**:
 
-1. Choose **New budget…**, name it, and pick the fiscal year.
+1. Choose **New budget…**, name it, and pick the fiscal year. Each year is listed by its months
+   (for example **Jul 2026 – Jun 2027**), starting from the first month of your fiscal year in
+   Preferences › Accounting, and the current one is marked **(this year)**.
 2. With **Accounts** set to **Profit and Loss**, enter what you expect each income and expense
    account to bring in or cost each month. **Copy across** repeats the first month.
 3. For a balance sheet budget, set **Accounts** to **Balance Sheet** and enter the **balance** you
    expect each account to have at the end of each month (not the change).
-4. Choose **Save**.
+4. Choose **Save**. Amounts are kept only once saved: closing Budgets, quitting, or starting a
+   new budget with amounts not saved asks before discarding them.
 
 Then, under **Reports › Budgets**:
 
@@ -399,7 +415,7 @@ totals only.
 ### Income Tax Summary and Income Tax Detail
 
 These total your books by the lines of your income tax return. They use the **Tax form** set in
-**Settings › Preferences › Accounting** (Schedule C, Form 1065, Form 1120-S or Form 1120); you can pick another one
+**Settings › Preferences Console › Accounting** (Schedule C, Form 1065, Form 1120-S or Form 1120); you can pick another one
 on the report.
 
 First give each account its tax line:
@@ -615,7 +631,7 @@ numbers behind the chart.
 3. In the print dialog, choose **Save as PDF** to keep a copy. Your company name and logo are on it.
 
 **Export to Excel** saves an `.xlsx` workbook that opens in Excel, Numbers, Google Sheets or
-LibreOffice, laid out like QuickBooks' *Export to Excel*:
+LibreOffice, laid out like this:
 
 - The company name, report title and date range (and the basis, where there is one) are in the top
   rows. The column headings are bold and stay in view while you scroll.

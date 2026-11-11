@@ -22,6 +22,8 @@ export function salesPrefsOf(prefs) {
     priceLevels: p.price_levels_enabled !== 'false',
     estimates: p.estimates_enabled !== 'false',
     salesOrders: p.sales_orders_enabled !== 'false',
+    // Preferences › Items & Inventory: inventory and purchase orders.
+    inventory: p.inventory_enabled !== 'false',
     defaultShipMethodId: Number.isFinite(shipId) ? shipId : null,
     defaultFob: p.default_fob ?? '',
     defaultMarkup: p.default_markup_percent ?? '0',
@@ -37,7 +39,7 @@ export function salesPrefsOf(prefs) {
 
 /** Screens a company preference turned off, hidden from the side bar and the New menu. */
 export function hiddenViews(sp) {
-  return new Set([...(sp.estimates ? [] : ['sales/estimates']), ...(sp.salesOrders ? [] : ['sales/orders'])]);
+  return new Set([...(sp.estimates ? [] : ['sales/estimates']), ...(sp.salesOrders ? [] : ['sales/orders']), ...(sp.inventory ? [] : ['expenses/purchase-orders'])]);
 }
 
 export function useSalesPrefs() {

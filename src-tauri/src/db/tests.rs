@@ -351,3 +351,17 @@ async fn company_files_open_with_an_untrusted_schema() {
     let trusted: i64 = sqlx::query_scalar("PRAGMA trusted_schema").fetch_one(&db.pool().await).await.unwrap();
     assert_eq!(trusted, 0);
 }
+
+/// The launch builds the empty `Db` in Tauri's setup, on the main thread with no Tokio runtime
+/// entered (gap R28). That must not panic ("this functionality requires a Tokio context").
+#[test]
+fn an_empty_db_can_be_made_outside_a_runtime() {
+    let tmp = std::env::temp_dir().join(format!("lb-closed-{}", std::process::id()));
+    let cfg = test_config(&tmp);
+    let made = std::thread::spawn(move || {
+        let _db = Db::closed(cfg);
+    })
+    .join();
+    assert!(made.is_ok(), "Db::closed panicked outside a Tokio runtime");
+}
+

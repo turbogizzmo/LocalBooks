@@ -19,6 +19,15 @@ describe('A taxed invoice edited with sales tax turned off', () => {
   it('keeps the tax when the invoice is saved again unchanged', async () => {
     await goTo('Invoices');
     expect(await tableRow('1003')).toContain('$134.52');
+    // The invoice list's rows for a number: each has its own Actions button.
+    const listed = (number) =>
+      browser.execute(
+        (label) =>
+          [...document.querySelectorAll(`button[aria-label="${label}"]`)].map((b) =>
+            [...b.closest('tr').cells].map((td) => td.textContent.replace(/\s+/g, ' ').trim()),
+          ),
+        `Actions for invoice ${number}`,
+      );
     await click($('//button[@aria-label="Actions for invoice 1003"]'));
     await click($('//*[@role="menu"]//button[normalize-space()="Edit…"]'));
     // The edited invoice has a window of its own; the Invoices list's window has a blank invoice
@@ -30,7 +39,20 @@ describe('A taxed invoice edited with sales tax turned off', () => {
     const saveAnyway = button('Save anyway', '//*[@role="alertdialog"]');
     if (await saveAnyway.waitForDisplayed({ timeout: 3000 }).catch(() => false)) await click(saveAnyway);
     await $('//*[@role="status"][contains(., "replaced")]').waitForDisplayed();
-    // The edited invoice is posted under the next number, for the same total, tax included.
-    expect(await tableRow('1007')).toContain('$134.52');
+    // The corrected invoice keeps number 1003, for the same total, tax included, and the voided
+    // original stays listed under it; nothing takes the next number (1007). An invoice list open in
+    // more than one window lists each invoice once per window.
+    let rows = [];
+    const voided = (cells) => cells.includes('Voided');
+    await browser.waitUntil(
+      async () => {
+        rows = await listed('1003');
+        const old = rows.filter(voided).length;
+        return old > 0 && rows.length === 2 * old;
+      },
+      { timeoutMsg: 'invoice 1003 is not listed both corrected and voided after the edit' },
+    );
+    for (const live of rows.filter((cells) => !voided(cells))) expect(live).toContain('$134.52');
+    expect(await listed('1007')).toHaveLength(0);
   });
 });

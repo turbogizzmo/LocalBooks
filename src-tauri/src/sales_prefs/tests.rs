@@ -5,6 +5,7 @@ use crate::estimates::{convert_to_invoice, create_estimate, invoice_from_estimat
 use crate::expenses::{post_vendor_bill, BillInput, BillLineInput, BillPaymentInput};
 use crate::guards::{self, warnings_in, WARN_OVERDUE_CUSTOMER};
 use crate::invoices::{create_and_post_invoice, invoice_detail, InvoiceInput, InvoiceLineInput};
+use crate::money::Cents;
 use crate::sales::SalesLineInput;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
@@ -22,13 +23,14 @@ fn open(id: i64, balance_cents: i64) -> Open {
 async fn invoice(pool: &SqlitePool, customer: &str, cents: i64, issued: NaiveDate, due: NaiveDate) -> i64 {
     let income = account(pool, "4100").await;
     let input = InvoiceInput {
+        invoice_number: None,
         customer_name: customer.into(),
         issue_date: issued,
         due_date: due,
-        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(cents), income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     create_and_post_invoice(pool, input).await.expect("invoice posts").id
@@ -190,7 +192,7 @@ async fn zero_amount_estimate_lines_stay_off_the_invoice() {
     let pool = test_pool().await;
     let income = account(&pool, "4100").await;
     let line = |what: &str, rate: i64| SalesLineInput { product_service_id: None, description: what.into(), quantity_e4: 10_000, rate_cents: rate, income_account_id: income, class_id: None, is_taxable: false, service_date: None };
-    let estimate = |lines| EstimateInput { customer_name: "Initech".into(), estimate_date: d(10, 1), expiration_date: None, memo: None, lines, tax_rate_id: None, discount_cents: 0, details: Default::default() };
+    let estimate = |lines| EstimateInput { estimate_number: None, customer_name: "Initech".into(), estimate_date: d(10, 1), expiration_date: None, memo: None, lines, tax_rate_id: None, discount_cents: 0, details: Default::default() };
     let est = create_estimate(&pool, estimate(vec![line("Design", 50_000), line("Site visit (included)", 0), line("Build", 25_000)])).await.expect("a zero line is allowed");
     assert_eq!(est.total_cents, 75_000);
     assert!(create_estimate(&pool, estimate(vec![line("Nothing", 0)])).await.unwrap_err().starts_with("EST_AMOUNT_TOO_LARGE"), "the estimate itself needs an amount");
@@ -208,16 +210,17 @@ async fn zero_amount_estimate_lines_stay_off_the_invoice() {
     // Through the invoice form: with the preference on, a zero line sent along is left off.
     preferences::set(&pool, DROP_ZERO_LINES, "true").await.unwrap();
     let form = InvoiceInput {
+        invoice_number: None,
         customer_name: "Initech".into(),
         issue_date: d(10, 6),
         due_date: d(11, 5),
         lines: [("Design", 50_000), ("Extra", 0)]
             .into_iter()
-            .map(|(what, rate)| InvoiceLineInput { description: what.into(), quantity_e4: 10_000, rate_cents: rate, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None })
+            .map(|(what, rate)| InvoiceLineInput { description: what.into(), quantity_e4: 10_000, rate_cents: Cents(rate), income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None })
             .collect(),
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     let inv = invoice_from_estimate(&pool, second.id, form).await.unwrap();
@@ -331,13 +334,14 @@ async fn pay_bills_takes_early_payment_discounts_through_their_last_day() {
 async fn invoice_on_terms(pool: &SqlitePool, customer: &str, cents: i64, issued: NaiveDate, terms_id: Option<i64>) -> i64 {
     let income = account(pool, "4100").await;
     let input = InvoiceInput {
+        invoice_number: None,
         customer_name: customer.into(),
         issue_date: issued,
         due_date: issued + Duration::days(30),
-        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(cents), income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: crate::sales_lists::SalesDetails { terms_id, ..Default::default() },
     };
     create_and_post_invoice(pool, input).await.expect("invoice posts").id
@@ -389,16 +393,16 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
     let part_paid = invoice_on_terms(&pool, "Acme", 20_000, d(10, 1), Some(terms)).await;
     let no_terms = invoice_on_terms(&pool, "Acme", 10_000, d(10, 1), None).await;
     let customer: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
-    let pay = |invoice_id, amount_cents, discount_cents, day| PaymentInput {
+    let pay = |invoice_id, amount_cents: i64, discount_cents: i64, day| PaymentInput {
         invoice_id,
         deposit_account_id: undeposited,
         payment_date: d(10, day),
-        amount_cents,
+        amount_cents: Cents(amount_cents),
         payment_method: "CHECK".into(),
         payment_method_id: None,
         reference: Some("5150".into()),
         exchange_rate_e6: None,
-        discount_cents,
+        discount_cents: Cents(discount_cents),
     };
     record_payments(&pool, vec![pay(part_paid, 5_000, 0, 2)]).await.unwrap();
     assert_receivables_tie(&pool, customer, 105_000).await;
