@@ -37,22 +37,9 @@ export async function replace(element, value) {
   await element.addValue(value);
 }
 
-/**
- * Waits for `element`, first waiting out the Opening <name>… screen (gap R28) for as long as the
- * company file takes to open: the app is busy then, not stuck, and an upgrade can take a while.
- */
-async function afterOpening(element) {
-  const opening = $('[data-opening]');
-  await browser.waitUntil(async () => (await element.isDisplayed()) || (await opening.isDisplayed()), {
-    timeoutMsg: `neither ${element.selector} nor the opening screen showed`,
-  });
-  await opening.waitForDisplayed({ reverse: true, timeout: 120_000, timeoutMsg: 'the company file was still opening after 2 minutes' });
-  await element.waitForDisplayed();
-}
-
 /** Waits for the app's main screen (past any sign-in screen), on whichever page it remembers. */
 export async function waitForApp() {
-  await afterOpening($('//main//header//h1'));
+  await $('//main//header//h1').waitForDisplayed();
 }
 
 /** Runs `action`, which reloads the window, and waits for the new page to load. */
@@ -71,7 +58,7 @@ export async function waitForPage(title) {
 
 /** Waits for the sign-in screen showing `title` ("Sign in", "Choose your own password", ...). */
 export async function waitForSignIn(title) {
-  await afterOpening($(`//h1[@id="sign-in-title"][normalize-space()=${lit(title)}]`));
+  await $(`//h1[@id="sign-in-title"][normalize-space()=${lit(title)}]`).waitForDisplayed();
 }
 
 /** Opens a page from the sidebar ("Invoices", "Vendors", "Users & Passwords", ...). */

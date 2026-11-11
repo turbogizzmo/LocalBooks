@@ -4,7 +4,6 @@ import App from './App.jsx';
 import StartupFailure from './components/StartupFailure.jsx';
 import NoCompanyOpen from './components/CompanyFiles.jsx';
 import SignIn from './components/Users.jsx';
-import { OpeningOverlay, OpeningScreen } from './components/Opening.jsx';
 import { api } from './lib/api.js';
 import { loadStartPage } from './lib/windows.js';
 import { installMyPreferenceBehaviours } from './lib/myPreferences.js';
@@ -19,7 +18,7 @@ installMyPreferenceBehaviours();
 // Arithmetic in amount and quantity boxes, with a tape of the running total.
 installCalculatorTape();
 
-// While the company file opens at launch, say which and how far it is. If it could not be opened, explain that instead of starting the app; with
+// If the company file could not be opened at launch, explain that instead of starting the app; with
 // no company open (File › Close Company), show the No Company Open screen; with a company that has
 // users, ask who is signing in (and have a temporary password replaced) first. The app itself starts
 // once it knows its page: the saved desktop's, when the company has just opened.
@@ -29,9 +28,6 @@ async function app() {
 }
 
 async function firstScreen() {
-  // The company file is still opening (gap R28): say so, then reload once it is open.
-  const opening = await api.getOpeningState().catch(() => null);
-  if (opening) return <OpeningScreen initial={opening} />;
   const failure = await api.getStartupFailure().catch(() => null);
   if (failure) return <StartupFailure failure={failure} />;
   const status = await api.getStorageStatus().catch(() => undefined);
@@ -45,12 +41,4 @@ async function firstScreen() {
   return app();
 }
 
-// Opens from inside the app show Opening <name>… over whatever screen is up.
-firstScreen().then((screen) =>
-  root.render(
-    <React.StrictMode>
-      {screen}
-      {screen.type !== OpeningScreen && <OpeningOverlay />}
-    </React.StrictMode>,
-  ),
-);
+firstScreen().then((screen) => root.render(<React.StrictMode>{screen}</React.StrictMode>));

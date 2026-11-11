@@ -29,7 +29,6 @@ pub enum Need {
 
 const OPEN: &[&str] = &[
     "get_startup_failure",
-    "get_opening_state",
     "get_third_party_notices",
     "get_storage_status",
     "get_sign_in_state",

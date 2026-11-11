@@ -302,7 +302,7 @@ impl RecentCompany {
 }
 
 /// Whether two paths name the same file (spelled the same, or the same file once resolved).
-pub(crate) fn same_file(a: &Path, b: &Path) -> bool {
+fn same_file(a: &Path, b: &Path) -> bool {
     a == b || a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(x, y)| x == y)
 }
 

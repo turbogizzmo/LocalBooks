@@ -20,8 +20,6 @@ pub async fn preview_condense(db: State<'_, Db>, cutoff: NaiveDate) -> Result<Co
 /// switches to it. The books are left as they were if any step or check fails.
 #[tauri::command]
 pub async fn condense_company_file(app: AppHandle, db: State<'_, Db>, cutoff: NaiveDate) -> Result<CondenseResult, String> {
-    // The condensed file is swapped in at the end: never during another open (gap R28).
-    let _turn = app.state::<crate::opening::Opening>().wait_turn().await;
     let result = condense::condense_live(&db, cutoff).await?;
     company_changed(&app).await;
     notify(&app);
