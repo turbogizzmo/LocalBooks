@@ -13,6 +13,9 @@ people using LocalBooks.
   purchase orders, vendor credits, sales tax, memorized transactions, budgets and reclassifying, and
   two references list every Preferences setting with its default and every menu-bar command. Several
   out-of-date statements in Help and the guides are corrected.
+- **Profit and Loss columns by class or customer.** On the Profit and Loss, **Columns** now also
+  offers **Class** and **Customer:Job**: a column for each class, or for each customer and job,
+  beside the total.
 
 ## [0.14.0]
 
