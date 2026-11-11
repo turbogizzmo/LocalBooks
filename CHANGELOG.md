@@ -36,6 +36,11 @@ people using LocalBooks.
 - The vendor credit grid no longer shows a Bill? box. A credit can't be billed to a customer, and
   the tick was never saved.
 - New company setup says "First month of fiscal year", as Preferences does.
+- **Customer Statements marks what was sent for this period.** The ✉ beside a customer now means
+  their statement for the period on screen was emailed. Before, emailing one month's statement
+  marked every period as sent. Statements emailed before this update show no mark.
+- Choosing **All customers** after a customer group clears the group's ticks, so Print no longer
+  prints only that group.
 ## [0.14.1]
 - **Help for every screen, setting and menu command.** F1 now explains every page in the sidebar,
   including Approvals, Payout Feeds, the Attachments Library, Reps, Ship Via & Fields and each
