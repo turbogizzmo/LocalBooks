@@ -62,6 +62,8 @@ jobs:
             Look for real problems only: bugs, broken logic, wrong accounting results, security
             issues, and data loss. Skip style, naming and formatting nitpicks. Use `gh pr view` and
             `gh pr diff` to read the PR.
+            A new screen, setting or menu command with no in-app Help entry (src/components/help/)
+            or no guide text (docs/guide/) counts as a problem.
 
             Post exactly ONE comment with `gh pr comment`, listing each problem with its file and
             line and why it matters. The comment's first line must be exactly one of these, because

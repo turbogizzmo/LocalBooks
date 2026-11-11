@@ -7,6 +7,14 @@ people using LocalBooks.
 ## [Unreleased]
 
 ## [0.14.1]
+- **Help for every screen, setting and menu command.** F1 now explains every page in the sidebar,
+  including Approvals, Payout Feeds, the Attachments Library, Reps, Ship Via & Fields and each
+  Settings tab. New step-by-step guides cover credit memos and refunds, customer statements,
+  purchase orders, vendor credits, sales tax, memorized transactions, budgets and reclassifying, and
+  two references list every Preferences setting with its default and every menu-bar command. Several
+  out-of-date statements in Help and the guides are corrected.
+
+## [0.14.0]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a
   state rate plus a city rate, say) now splits the payment among its rates, in proportion to their

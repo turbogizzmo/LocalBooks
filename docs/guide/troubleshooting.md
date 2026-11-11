@@ -2,8 +2,12 @@
 
 ## macOS says LocalBooks can't be opened
 
-Downloaded builds aren't signed yet. Right-click **LocalBooks** in Applications and choose **Open**.
-If macOS says the app is damaged, run this once in Terminal, then open it normally:
+LocalBooks isn't notarized by Apple yet, so macOS stops it the first time you open it. Open
+**System Settings › Privacy & Security**, scroll down to the message about LocalBooks, and click
+**Open Anyway**. You only need to do this once.
+
+If macOS says the app is damaged, it has quarantined the download. Run this once in Terminal, then
+open it normally:
 
 `xattr -cr /Applications/LocalBooks.app`
 
@@ -74,6 +78,21 @@ Close LocalBooks on the other computer, or wait a few minutes if it crashed.
 - **"Cannot reach the email server":** check the server name, the security setting and the port
   (STARTTLS on 587 or SSL/TLS on 465 are the usual pairs).
 
+## Get updates
+
+**Settings › Updates** (also **Help › Check for Updates…**) shows the version you are using and
+where to read the release notes.
+
+- **Check for updates when LocalBooks starts** is on at first. Shortly after LocalBooks opens, it
+  asks LocalBooks' GitHub releases page whether there is a newer version and, if there is, shows a
+  bar at the top of the window. Nothing about your company is sent. The choice is kept for this
+  computer.
+- **Check for updates** asks now. When a newer version is available, **Install and restart**
+  downloads it, checks its signature against the key built into LocalBooks (an unsigned or changed
+  download is refused), installs it and restarts LocalBooks.
+- The first time the new version opens a company file that it needs to upgrade, it saves a copy of
+  the file in your backups first (kind *Before upgrade*).
+
 ## Go back to the previous version
 
 If a new version of LocalBooks has a problem, choose **Help › Reinstall Previous Version…** (or
@@ -82,7 +101,7 @@ If a new version of LocalBooks has a problem, choose **Help › Reinstall Previo
 - LocalBooks looks up the release before this one on LocalBooks' GitHub releases page and checks
   that it can open your company file. A new version sometimes changes the company file in a way an
   older one can't read. If so, LocalBooks says it can't go back, and why. To go back anyway, restore
-  the copy saved before this version changed the file (**Settings › File & Data**, kind *Before
+  the copy saved before this version changed the file (**Settings › File & Data Controls**, kind *Before
   upgrade*); anything entered since then is not in that copy.
 - **Back up and reinstall…** saves a backup of your company file first. It then downloads the older
   version and installs it only if its signature matches the key built into LocalBooks, as with any

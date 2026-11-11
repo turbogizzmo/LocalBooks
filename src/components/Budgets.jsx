@@ -148,7 +148,7 @@ export default function Budgets({ accounts, navigate }) {
       {budgets.error && <Notice kind="error" text={budgets.error} />}
       {invalid.length > 0 && <Notice kind="error" text="Some amounts are not valid numbers; they are outlined in red." />}
       {budgets.data && list.length === 0 && !creating && (
-        <Notice kind="info" text="Budgets set expected income and expenses (and, if you like, month-end balances) per account for each month of a fiscal year. Choose New budget to start one, then compare it with your books in Reports › Profit and Loss Budget vs. Actual or Balance Sheet Budget vs. Actual." />
+        <Notice kind="info" text="Budgets set expected income and expenses (and, if you like, month-end balances) per account for each month of a fiscal year. Choose New budget to start one, then compare it with your books in Reports › Budgets & Forecasts › Budget vs. Actual or Balance Sheet Budget vs. Actual." />
       )}
       {budget && side === 'bs' && (
         <Notice kind="info" text="For balance sheet accounts, enter the balance you expect at the end of each month (not the change). The Balance Sheet Budget vs. Actual report compares them with the actual balances." />

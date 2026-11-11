@@ -429,9 +429,10 @@ due date. Choose another term and the due date follows it; you can still type a 
 date. The invoice or bill keeps the term it was entered with, and printed invoices show it.
 
 When a term has a discount, **Receive Payments** and **Pay Bills** show the discount offered on
-each invoice or bill, and the last day to take it. Printed invoices show it too. LocalBooks
-doesn't yet take the discount for you: to give or take it, record the payment for the reduced
-amount and enter the difference as a credit memo or vendor credit.
+each invoice or bill, and the last day to take it. Printed invoices show it too. Receive Payments
+and Pay Bills take the discount on the invoice's or bill's row, or automatically when Preferences
+says so (see [Take a customer's early-payment discount](customer-payments.md#take-a-customers-early-payment-discount)
+and [Take early-payment discounts](bills.md#take-early-payment-discounts)).
 
 Changing a term's days changes the due dates of new invoices and bills only. Ones already entered
 keep their due dates.

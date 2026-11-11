@@ -31,9 +31,9 @@ double-entry books, but these parts follow US rules and formats only:
    (EIN) and address. Choose the **Income tax form used** (sole proprietorship, single- or
    multi-member LLC, partnership, corporation, S corporation, nonprofit, or other) and the
    **First month in fiscal year**.
-2. **Industry and accounts.** Choose the industry closest to yours from the same 33 industries
-   QuickBooks offers. LocalBooks lists the accounts it suggests for that industry, numbered
-   QuickBooks-style (10100 Checking, 11000 Accounts Receivable, 60000 Advertising and Promotion…).
+2. **Industry and accounts.** Choose the industry closest to yours from the 33 listed.
+   LocalBooks lists the accounts it suggests for that industry, with five-digit account numbers
+   (10100 Checking, 11000 Accounts Receivable, 60000 Advertising and Promotion…).
    The ones most businesses like yours need are already checked; check any others you want and
    uncheck the rest. **Default** puts back the suggested set. The equity accounts follow your tax
    form, for example Owners Draw and Owners Equity for a sole proprietor, or Capital Stock and
@@ -106,7 +106,7 @@ Asset, are added the first time you use that feature.
 Classes sort income and expenses by department, location, property or any other division you
 choose, so you can run a Profit and Loss by class. Class tracking is off until you turn it on.
 
-1. In **Settings › Preferences › Accounting › Company Preferences**, under **Class tracking**, tick **Track classes on transactions**.
+1. In **Settings › Preferences Console › Accounting › Company Preferences**, under **Class tracking**, tick **Track classes on transactions**.
 2. Choose **Assign classes**: **One to each line** (a **Class** column on each line), or **One to
    the entire transaction** (one **Class** box at the top of the form).
 3. Optionally tick **Warn me when a transaction is not assigned a class**.
@@ -117,8 +117,8 @@ enter a transaction, choose **＋ Add new class…** at the bottom of the class 
 and press Enter; type `Parent:Name` to add it under an existing class. Manage the whole list in
 **Accounting › Classes**.
 
-A company file moved from QuickBooks doesn't bring its class list over yet: add your classes once,
-here or in **Accounting › Classes**.
+Importing a QuickBooks Desktop company file, an IIF file or a report with a **Class** column
+brings its classes and turns class tracking on (see [Classes](desktop-migration.md#classes)).
 
 ## Find your way around Preferences
 
@@ -225,7 +225,7 @@ years as 4 digits** (turn it off for 10/13/26), and **Time format**, **Minutes (
 
 ## Report and display preferences
 
-**Settings › Preferences › Reports & Graphs** sets how reports open for everyone (Company
+**Settings › Preferences Console › Reports & Graphs** sets how reports open for everyone (Company
 Preferences) and for you (My Preferences). **Accounting › Company Preferences** sets how accounts
 are named in reports.
 
@@ -246,22 +246,10 @@ accounts…** on the report opens the list.
 
 ## Sales tax rates, combined rates and the sales tax return
 
-**Sales › Sales Tax** holds the rates you charge. Each **rate** has a percentage, the **agency** you
-pay it to, and the liability account it builds up in (Sales Tax Payable unless you choose another).
-
-Where one sale is taxed by several agencies (a state, a county and a city, say), add each as its own
-rate with its agency, then **New combined rate…**: name it and tick the rates it adds up. Its
-percentage is theirs added together, and you choose it on sales forms like any rate. When you post a
-sale at a combined rate, LocalBooks works out the tax at the combined percentage, splits it into one
-line per agency's rate (each its own rate's share, any rounding cent going to the largest), and
-credits each to its rate's liability account. If a rate in it changes later, the combined rate
-follows for new sales; sales already posted keep the split they were posted with.
-
-**Sales tax return by agency**, under the liability report on the same dates, is what you file:
-for each agency, each of its rates with the taxable sales and the tax for the period, and what you
-paid that agency in it. Choose **Accrual** (tax owed when you invoice) or **Cash** (when you're
-paid; an invoice counts in proportion to what was paid on it in the period); it starts on the basis
-set in Preferences › Sales Tax. A payment counts for the agency of the rate it was recorded against.
+If you charge sales tax, turn it on in **Sales › Sales Tax** and add each rate you charge with the
+agency you pay it to. Where a state, county and city all tax one sale, a combined rate adds them up
+and posts each agency's share to its own account. The same screen shows what you owe, the sales tax
+return by agency for a period, and records your payments: see [Sales tax](sales-tax.md).
 
 **Pay sales tax** for a combined rate splits the payment among its rates in proportion to their
 percentages (any rounding cent going to the largest) and pays down each rate's liability account,
@@ -544,7 +532,7 @@ Also in **Edit › Preferences › Desktop View**, for this computer:
 
 | Setting | Choices |
 |---|---|
-| **Left pane** | **Full menu** (the default): every page, grouped as Sales, Expenses, Banking and so on. **Open windows only**: just the windows open now, like QuickBooks' Open Window List in the left icon bar; open pages from the menu bar or the search box, and click **Menu** at the top of the pane to bring the full menu back. **Hidden**: no left pane, for the most room. **View › Show or Hide Left Icon Bar** switches between the full menu and hidden. |
+| **Left pane** | **Full menu** (the default): every page, grouped as Sales, Expenses, Banking and so on. **Open windows only**: just the windows open now, as in the Open Window List; open pages from the menu bar or the search box, and click **Menu** at the top of the pane to bring the full menu back. **Hidden**: no left pane, for the most room. **View › Show or Hide Left Icon Bar** switches between the full menu and hidden. |
 | **Start on** | **Last open windows** (the default): the desktop chosen under **Desktop**, or the Home page when none is saved. **Home page**: the Home page alone. **This screen**: one screen you pick, such as Invoices or a register. **No windows**: an empty desktop; choose a page to begin. |
 
 **Start on** takes effect the next time a company opens. Holding **Alt** (**Option** on a Mac) while
@@ -688,8 +676,8 @@ In the **Check no.** box on **Write Checks** and **Pay Bills**, press **+** for 
 
 ## Find things in the menu bar
 
-The menu bar is laid out like QuickBooks Desktop's, so the commands you know are where you expect
-them. Each one opens the screen, and often the form, in a window inside LocalBooks (or brings forward the window that already shows it):
+The menu bar is laid out the way desktop accounting programs usually are, so the commands you know
+are where you expect them. [The menu bar](menus.md) lists every command and where it goes. Each one opens the screen, and often the form, in a window inside LocalBooks (or brings forward the window that already shows it):
 
 | Menu | What's in it |
 |---|---|
@@ -702,7 +690,7 @@ them. Each one opens the screen, and often the form, in a window inside LocalBoo
 | **Vendors** | Vendor Center, enter and pay bills, vendor credits, sales tax, purchase orders, 1099s |
 | **Employees** | Weekly timesheet and single time activity |
 | **Banking** | Write checks, credit card charges, registers, deposits, transfers, reconcile, bank feeds |
-| **Reports** | Report Center and each report, grouped as in QuickBooks: Company & Financial, Customers & Receivables, Sales, Jobs, Vendors & Payables, Purchases, Inventory, Banking, Accountant & Taxes, Budgets, List; **Memorized Reports** (the Report Center's list, and Process Multiple Reports); **QuickReport** for the account, name or item selected in the list or register in front; **Transaction History** and **Transaction Journal** for the transaction open on a form. Every report in the Report Center is on this menu |
+| **Reports** | Report Center and each report, grouped: Company & Financial, Customers & Receivables, Sales, Jobs, Vendors & Payables, Purchases, Inventory, Banking, Accountant & Taxes, Budgets, List; **Memorized Reports** (the Report Center's list, and Process Multiple Reports); **QuickReport** for the account, name or item selected in the list or register in front; **Transaction History** and **Transaction Journal** for the transaction open on a form. Every report in the Report Center is on this menu |
 
 The classic shortcuts work from anywhere:
 

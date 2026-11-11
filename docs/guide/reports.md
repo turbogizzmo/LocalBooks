@@ -52,6 +52,11 @@ month.
    like the day it **Ends**.
 4. Choose **Email them**, with the addresses to send to, or **Save them in a folder** on this
    computer, and whether they go **As** PDF or Excel spreadsheets.
+5. Leave **On (untick to pause it)** ticked. Untick it to stop a schedule for a while without
+   deleting it.
+
+A new schedule starts as last month's Profit and Loss, monthly from today, emailed as a PDF; change
+any of it before you save.
 
 Email goes only through the email server set up in **Settings › Email** (it must be turned on),
 and only to the addresses on the schedule. **Run now** on a schedule sends it for today without
@@ -399,7 +404,7 @@ totals only.
 ### Income Tax Summary and Income Tax Detail
 
 These total your books by the lines of your income tax return. They use the **Tax form** set in
-**Settings › Preferences › Accounting** (Schedule C, Form 1065, Form 1120-S or Form 1120); you can pick another one
+**Settings › Preferences Console › Accounting** (Schedule C, Form 1065, Form 1120-S or Form 1120); you can pick another one
 on the report.
 
 First give each account its tax line:
@@ -615,7 +620,7 @@ numbers behind the chart.
 3. In the print dialog, choose **Save as PDF** to keep a copy. Your company name and logo are on it.
 
 **Export to Excel** saves an `.xlsx` workbook that opens in Excel, Numbers, Google Sheets or
-LibreOffice, laid out like QuickBooks' *Export to Excel*:
+LibreOffice, laid out like this:
 
 - The company name, report title and date range (and the basis, where there is one) are in the top
   rows. The column headings are bold and stay in view while you scroll.
