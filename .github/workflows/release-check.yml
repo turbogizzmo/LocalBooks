@@ -230,6 +230,10 @@ jobs:
         env:
           LOCALBOOKS_SEED_DIR: ${{ github.workspace }}/release-check-work/seeded
         run: |
+          # Releases from 0.14.0 build OpenSSL (for SQLCipher) from source, which needs a full Perl.
+          # This step runs in bash, and on Windows that finds Git Bash's Perl, which lacks modules
+          # OpenSSL's Configure uses (the release build runs in PowerShell and finds Strawberry Perl).
+          if [ "$RUNNER_OS" = Windows ]; then export OPENSSL_SRC_PERL='C:\Strawberry\perl\bin\perl.exe'; fi
           # The seeder never shows a window, but an optimized build embeds the frontend folder.
           [ -f ../dist/index.html ] || { mkdir -p ../dist && echo '<!doctype html>' > ../dist/index.html; }
           cargo test --release --locked -- --ignored seed_test_companies --nocapture

@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 
 fn d(m: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, m, day).unwrap()
@@ -51,7 +52,7 @@ async fn a_statement_charge_posts_to_ar_shows_on_the_statement_ages_and_takes_a_
     // A payment applies to it like an invoice.
     crate::invoices::record_payment(
         &pool,
-        crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: first.id, deposit_account_id: checking, payment_date: d(3, 20), amount_cents: 25_000, payment_method: "CHECK".into(), reference: Some("884".into()), exchange_rate_e6: None },
+        crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: first.id, deposit_account_id: checking, payment_date: d(3, 20), amount_cents: Cents(25_000), payment_method: "CHECK".into(), reference: Some("884".into()), exchange_rate_e6: None },
     )
     .await
     .unwrap();

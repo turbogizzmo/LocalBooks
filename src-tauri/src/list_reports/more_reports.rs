@@ -133,7 +133,8 @@ pub(super) async fn sales_tax_revenue(pool: &SqlitePool, start: NaiveDate, end: 
 
 /// Every memorized (recurring) transaction: name, type, how often, the next date and when it ends.
 pub(super) async fn memorized_transactions(pool: &SqlitePool, today: NaiveDate) -> Result<AccountantReport, String> {
-    let list: Vec<(String, String, String, i64, String, Option<String>, bool)> = sqlx::query_as(
+    type ListRow = (String, String, String, i64, String, Option<String>, bool);
+    let list: Vec<ListRow> = sqlx::query_as(
         "SELECT name, kind, frequency, every, next_date, end_date, is_active FROM recurring_templates ORDER BY name COLLATE NOCASE",
     )
     .fetch_all(pool)
@@ -180,7 +181,8 @@ pub(super) async fn memorized_transactions(pool: &SqlitePool, today: NaiveDate) 
 /// Every to-do, open ones first by due date: done or not, due date, what it says, who or what it is
 /// about, and who it is assigned to.
 pub(super) async fn todo_notes(pool: &SqlitePool, today: NaiveDate) -> Result<AccountantReport, String> {
-    let list: Vec<(bool, Option<String>, String, String, Option<String>, Option<String>)> = sqlx::query_as(
+    type ListRow = (bool, Option<String>, String, String, Option<String>, Option<String>);
+    let list: Vec<ListRow> = sqlx::query_as(
         "SELECT t.is_done, t.due_date, t.title, t.note,
                 COALESCE(c.name, v.name, e.name,
                          CASE t.link_kind WHEN 'INVOICE' THEN 'Invoice ' || (SELECT invoice_number FROM invoices WHERE id = t.link_id)
@@ -223,7 +225,8 @@ pub(super) async fn todo_notes(pool: &SqlitePool, today: NaiveDate) -> Result<Ac
 /// is the income it posted (in home currency, after discounts, before tax), as Profit & Loss
 /// counts it.
 pub(super) async fn sales_by_ship_to(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Result<AccountantReport, String> {
-    let sales: Vec<(Option<String>, String, String, Option<String>, Option<String>, i64, i64)> = sqlx::query_as(&format!(
+    type SaleRow = (Option<String>, String, String, Option<String>, Option<String>, i64, i64);
+    let sales: Vec<SaleRow> = sqlx::query_as(&format!(
         "SELECT ship_to, source_type, entry_date, num, name, journal_entry_id, income FROM (
             SELECT NULLIF(trim(i.ship_to), '') AS ship_to, {DISPLAY_SOURCE_TYPE} AS source_type, e.entry_date, CAST(i.invoice_number AS TEXT) AS num,
                    c.name, e.id AS journal_entry_id,
@@ -288,7 +291,8 @@ pub(super) async fn sales_by_ship_to(pool: &SqlitePool, start: NaiveDate, end: N
 /// adjustments (Accounting › Currency Revaluation) and their reversals post. A gain is positive.
 pub(super) async fn currency_gains(pool: &SqlitePool, start: NaiveDate, end: NaiveDate, unrealized: bool) -> Result<AccountantReport, String> {
     let account = if unrealized { "Unrealized Exchange Gain or Loss" } else { "Exchange Gain or Loss" };
-    let lines: Vec<(i64, String, String, i64, Option<String>, Option<String>, i64)> = sqlx::query_as(&format!(
+    type LineRow = (i64, String, String, i64, Option<String>, Option<String>, i64);
+    let lines: Vec<LineRow> = sqlx::query_as(&format!(
         "SELECT e.id, {DISPLAY_SOURCE_TYPE}, e.entry_date, e.entry_number, MAX(p.party_name), COALESCE(MAX(l.memo), e.memo),
                 SUM(l.credit_cents - l.debit_cents)
          FROM journal_lines l

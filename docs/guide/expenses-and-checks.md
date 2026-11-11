@@ -127,8 +127,7 @@ deposit's memo instead. Deposits and card charges have no number.
   **Ctrl+Y** for its Transaction Journal.
 
 The register shows each document's own number in **No.** (the check, invoice or bill number);
-hover over it for the journal entry number. Printing a register is not in LocalBooks yet: use
-**Export** to save it as a CSV or Excel file.
+hover over it for the journal entry number.
 
 ## Pay in another currency
 

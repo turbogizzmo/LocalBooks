@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, invoice_detail, InvoiceInput, InvoiceLineInput};
+use crate::money::Cents;
 use crate::parties::{get_party, update_party, PartyDetailsInput};
 use crate::sales_lists::SalesDetails;
 use crate::tax_ids::Access;
@@ -16,13 +17,14 @@ async fn services(pool: &SqlitePool) -> i64 {
 
 fn invoice(customer: &str, account: i64, cents: i64, header: SalesHeader) -> InvoiceInput {
     InvoiceInput {
+        invoice_number: None,
         customer_name: customer.into(),
         issue_date: d(1),
         due_date: d(31),
-        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: account, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(cents), income_account_id: account, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: SalesDetails { header, ..Default::default() },
     }
 }
@@ -152,6 +154,7 @@ async fn an_edited_invoice_and_an_estimate_turned_invoice_keep_the_copy() {
     let estimate = crate::estimates::create_estimate(
         &pool,
         crate::estimates::EstimateInput {
+            estimate_number: None,
             customer_name: "Acme".into(),
             estimate_date: d(1),
             expiration_date: None,
@@ -215,12 +218,12 @@ async fn a_paid_invoice_resaved_keeps_its_own_header() {
     crate::invoices::record_payment(
         &pool,
         crate::invoices::PaymentInput {
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             payment_method_id: None,
             invoice_id: original,
             deposit_account_id: checking,
             payment_date: d(5),
-            amount_cents: 4_000,
+            amount_cents: Cents(4_000),
             payment_method: "CHECK".into(),
             reference: None,
             exchange_rate_e6: None,

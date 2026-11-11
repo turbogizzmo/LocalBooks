@@ -7,6 +7,8 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 
 - [What's new](whats-new.md)
 - [Set up your company](getting-started.md)
+- [Preferences reference: every setting, its default and what it does](preferences.md)
+- [The menu bar: every command and where it goes](menus.md)
 - [Back up, restore and open company files](backups-and-company-files.md)
 - [Users, passwords and sensitive data](users-and-passwords.md)
 - [The FTC Safeguards Rule and LocalBooks](safeguards-rule.md)
@@ -19,6 +21,9 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 - [Record customer payments](customer-payments.md) (and charge interest on overdue invoices)
 - [Sales receipts and estimates](sales-receipts-and-estimates.md)
 - [Sales orders](sales-orders.md)
+- [Credit memos and refunds](credit-memos-and-refunds.md)
+- [Customer statements](customer-statements.md)
+- [Sales tax: rates, agencies, the return and paying it](sales-tax.md)
 - [Design your invoices and estimates](custom-forms.md)
 - [Customers, products and services](customers-and-products.md)
 - [Track inventory](inventory.md)
@@ -26,7 +31,8 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 ## Expenses and vendors
 
 - [Record expenses, write checks and record card credits](expenses-and-checks.md)
-- [Enter and pay bills](bills.md)
+- [Enter and pay bills](bills.md) (and vendor credits)
+- [Purchase orders](purchase-orders.md)
 
 ## Employees
 
@@ -41,7 +47,9 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 
 ## Accounting
 
-- [Journal entries and voiding](journal-entries-and-voids.md)
+- [Journal entries, voiding and reclassifying](journal-entries-and-voids.md)
+- [Memorized and recurring transactions](memorized-transactions.md)
+- [Budgets](budgets.md)
 - [Verify and correct the ledger](ledger-integrity.md)
 - [Close a period](closing-the-books.md)
 - [Clean up the books (Client Data Review)](cleaning-up-books.md)

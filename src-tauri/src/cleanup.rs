@@ -635,7 +635,7 @@ pub async fn write_off(pool: &SqlitePool, input: &WriteOffInput) -> Result<Write
                 return Err(format!("WO_FOREIGN: invoice #{number} is in {}; write-offs are in the home currency", currency.unwrap_or_default()));
             }
             let description = format!("Write-off of invoice #{number}");
-            let credit = CreditMemoInput { form_lines: Vec::new(),
+            let credit = CreditMemoInput { credit_number: None, form_lines: Vec::new(),
                 customer_name: customer.clone(),
                 credit_date: input.write_off_date,
                 memo: Some(memo.map_or_else(|| description.clone(), |m| format!("{description}: {m}"))),
@@ -882,7 +882,8 @@ pub async fn compare_inventory(pool: &SqlitePool, as_of: NaiveDate) -> Result<In
     let differing: Vec<(i64, i64, i64, i64)> = pairs.iter().filter(|(_, (l, s))| l != s).map(|(&(e, a), &(l, s))| (e, a, l, s)).collect();
     // Every differing entry's header in one query.
     let ids = serde_json::to_string(&differing.iter().map(|d| d.0).collect::<Vec<_>>()).map_err(|e| e.to_string())?;
-    let headers: HashMap<i64, (i64, String, String, Option<String>, Option<String>)> =
+    type HeaderRow = (i64, String, String, Option<String>, Option<String>);
+    let headers: HashMap<i64, HeaderRow> =
         sqlx::query_as::<_, (i64, i64, String, String, Option<String>, Option<String>)>(
             "SELECT e.id, e.entry_number, e.entry_date, e.source_type, e.memo, p.party_name
              FROM journal_entries e LEFT JOIN v_entry_party p ON p.journal_entry_id = e.id

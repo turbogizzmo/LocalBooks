@@ -269,7 +269,8 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
     let mut sales_lists = SourceSalesLists::default();
     let mut classes: Vec<(String, bool)> = Vec::new();
     // (is a customer, party id, values) and (item index, values), labeled once the dictionaries are read.
-    let mut party_fields: Vec<(bool, i64, Vec<(usize, String)>)> = Vec::new();
+    type PartyFields = (bool, i64, Vec<(usize, String)>);
+    let mut party_fields: Vec<PartyFields> = Vec::new();
     let mut item_fields: Vec<(usize, Vec<(usize, String)>)> = Vec::new();
 
     for (n, line) in text.lines().enumerate() {
