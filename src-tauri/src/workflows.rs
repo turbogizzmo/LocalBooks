@@ -740,6 +740,15 @@ pub(crate) async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, input
 
 /// Closes an open order without billing it, or reopens a closed one.
 pub async fn set_purchase_order_closed(pool: &SqlitePool, id: i64, closed: bool) -> Result<(), String> {
+    // An order closed because everything on it arrived stays closed: reopened, it would show as
+    // open with nothing to receive, and Receive Items would take more than was ordered.
+    if !closed {
+        let mut conn = pool.acquire().await.map_err(db_err)?;
+        if crate::item_receipts::received_in_full(&mut conn, id).await? {
+            let number: i64 = sqlx::query_scalar("SELECT po_number FROM purchase_orders WHERE id = ?1").bind(id).fetch_one(&mut *conn).await.map_err(db_err)?;
+            return Err(format!("PO_RECEIVED_IN_FULL: everything on purchase order #{number} has been received; void a receipt to receive it again"));
+        }
+    }
     let done = sqlx::query("UPDATE purchase_orders SET status = ?1 WHERE id = ?2 AND status = ?3")
         .bind(if closed { "CLOSED" } else { "OPEN" })
         .bind(id)

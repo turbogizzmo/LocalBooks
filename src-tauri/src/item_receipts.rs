@@ -325,6 +325,25 @@ async fn write_receipt(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptInput, t
     Ok(id)
 }
 
+/// Whether every line of an order has been received in full (by quantity, or by amount for a line
+/// without one), on receipts that aren't voided. An order with no lines is not.
+pub(crate) async fn received_in_full(conn: &mut sqlx::SqliteConnection, order: i64) -> Result<bool, String> {
+    sqlx::query_scalar(&format!(
+        "SELECT EXISTS (SELECT 1 FROM {RECEIPT_LINES_OF_ORDER}) AND NOT EXISTS (
+             SELECT 1 FROM purchase_order_lines p LEFT JOIN ({RECEIVED_BY_LINE}) r ON r.po_line_id = p.id
+             WHERE p.purchase_order_id = ?1
+               AND (CASE WHEN p.quantity_e4 IS NOT NULL THEN COALESCE(r.qty, 0) < p.quantity_e4 ELSE COALESCE(r.amount, 0) < p.amount_cents END))"
+    ))
+    .bind(order)
+    .fetch_one(conn)
+    .await
+    .map_err(db_err)
+}
+
+/// The receipt lines received against order `?1` (receipts not voided).
+const RECEIPT_LINES_OF_ORDER: &str = "item_receipt_lines l JOIN item_receipts r ON r.id = l.item_receipt_id JOIN journal_entries e ON e.id = r.journal_entry_id
+    WHERE r.purchase_order_id = ?1 AND e.is_voided = 0";
+
 /// Closes an open order once every line has been received in full (by quantity, or by amount for a
 /// line without one).
 async fn close_if_received(tx: &mut Transaction<'_, Sqlite>, order: i64) -> Result<(), String> {

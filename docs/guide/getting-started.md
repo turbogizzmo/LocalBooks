@@ -30,7 +30,7 @@ double-entry books, but these parts follow US rules and formats only:
 1. **Company information.** Enter the company name, and if you like the legal name, Federal ID
    (EIN) and address. Choose the **Income tax form used** (sole proprietorship, single- or
    multi-member LLC, partnership, corporation, S corporation, nonprofit, or other) and the
-   **First month in fiscal year**.
+   **First month of fiscal year**.
 2. **Industry and accounts.** Choose the industry closest to yours from the 33 listed.
    LocalBooks lists the accounts it suggests for that industry, with five-digit account numbers
    (10100 Checking, 11000 Accounts Receivable, 60000 Advertising and Promotion…).

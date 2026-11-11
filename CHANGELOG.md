@@ -27,6 +27,15 @@ people using LocalBooks.
   bounced checks, sales tax payments, class reclassifications and other entries made by another
   screen now offer only Void. Before, Edit… was refused at save, and Duplicate posted an unlinked
   copy that, for a reclassification, moved the class a second time.
+- **A purchase order received in full stays closed.** Reopening it is refused, so Receive Items
+  can't take more than was ordered. Voiding a receipt still reopens the order.
+- **Vendor credits, credit memos and credit refunds get the usual save checks.** An unusual date
+  or a posting to Retained Earnings now asks before saving, as on other forms.
+- **Purchase orders follow the inventory preference.** With inventory and purchase orders turned
+  off, Create Purchase Orders is greyed out in the menu and left off the side bar and + New.
+- The vendor credit grid no longer shows a Bill? box. A credit can't be billed to a customer, and
+  the tick was never saved.
+- New company setup says "First month of fiscal year", as Preferences does.
 ## [0.14.1]
 - **Help for every screen, setting and menu command.** F1 now explains every page in the sidebar,
   including Approvals, Payout Feeds, the Attachments Library, Reps, Ship Via & Fields and each

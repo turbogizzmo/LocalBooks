@@ -24,9 +24,13 @@ pub async fn list_credit_memos(db: State<'_, Db>) -> Result<Vec<CreditMemoSummar
 }
 
 #[tauri::command]
-pub async fn create_credit_memo(app: AppHandle, db: State<'_, Db>, input: CreditMemoInput) -> Result<CreditMemoSummary, String> {
+pub async fn create_credit_memo(app: AppHandle, db: State<'_, Db>, input: CreditMemoInput, confirmed: Option<Vec<String>>) -> Result<CreditMemoSummary, String> {
     let pool = db.pool().await;
     crate::sales::require_listed(&pool, crate::sales::Party::Customer, &input.customer_name).await?;
+    // The date and retained-earnings warnings every other form gets.
+    let mut accounts: Vec<i64> = input.lines.iter().map(|l| l.income_account_id).collect();
+    accounts.extend(input.refund_account_id);
+    guards::check(&pool, guards::Posting { date: Some(input.credit_date), account_ids: accounts, ..Default::default() }, confirmed.as_deref()).await?;
     let memo = credits::create_credit_memo(&pool, input).await?;
     notify(&app);
     Ok(memo)
@@ -59,8 +63,10 @@ pub async fn remove_customer_credit(app: AppHandle, db: State<'_, Db>, applicati
 }
 
 #[tauri::command]
-pub async fn refund_customer_credit(app: AppHandle, db: State<'_, Db>, input: RefundCreditInput) -> Result<CreditMemoSummary, String> {
-    let memo = credits::refund_customer_credit(&db.pool().await, input).await?;
+pub async fn refund_customer_credit(app: AppHandle, db: State<'_, Db>, input: RefundCreditInput, confirmed: Option<Vec<String>>) -> Result<CreditMemoSummary, String> {
+    let pool = db.pool().await;
+    guards::check(&pool, guards::Posting { date: Some(input.refund_date), account_ids: vec![input.account_id], ..Default::default() }, confirmed.as_deref()).await?;
+    let memo = credits::refund_customer_credit(&pool, input).await?;
     notify(&app);
     Ok(memo)
 }
@@ -71,9 +77,11 @@ pub async fn list_vendor_credits(db: State<'_, Db>) -> Result<Vec<VendorCreditSu
 }
 
 #[tauri::command]
-pub async fn create_vendor_credit(app: AppHandle, db: State<'_, Db>, input: VendorCreditInput) -> Result<VendorCreditSummary, String> {
+pub async fn create_vendor_credit(app: AppHandle, db: State<'_, Db>, input: VendorCreditInput, confirmed: Option<Vec<String>>) -> Result<VendorCreditSummary, String> {
     let pool = db.pool().await;
     crate::sales::require_listed(&pool, crate::sales::Party::Vendor, &input.vendor_name).await?;
+    let accounts = input.lines.iter().map(|l| l.account_id).collect();
+    guards::check(&pool, guards::Posting { date: Some(input.credit_date), account_ids: accounts, ..Default::default() }, confirmed.as_deref()).await?;
     let credit = credits::create_vendor_credit(&pool, input).await?;
     notify(&app);
     Ok(credit)
@@ -99,8 +107,10 @@ pub async fn remove_vendor_credit(app: AppHandle, db: State<'_, Db>, application
 }
 
 #[tauri::command]
-pub async fn refund_vendor_credit(app: AppHandle, db: State<'_, Db>, input: RefundCreditInput) -> Result<VendorCreditSummary, String> {
-    let credit = credits::refund_vendor_credit(&db.pool().await, input).await?;
+pub async fn refund_vendor_credit(app: AppHandle, db: State<'_, Db>, input: RefundCreditInput, confirmed: Option<Vec<String>>) -> Result<VendorCreditSummary, String> {
+    let pool = db.pool().await;
+    guards::check(&pool, guards::Posting { date: Some(input.refund_date), account_ids: vec![input.account_id], ..Default::default() }, confirmed.as_deref()).await?;
+    let credit = credits::refund_vendor_credit(&pool, input).await?;
     notify(&app);
     Ok(credit)
 }
