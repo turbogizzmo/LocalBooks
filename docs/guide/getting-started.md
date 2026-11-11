@@ -286,7 +286,7 @@ These company preferences (Admins only) change how LocalBooks works out tax, tim
 | **Items & Inventory** | **Inventory and purchase orders are active** | Off hides Purchase Orders and **Track stock**; items already tracked keep their stock | On |
 | **Items & Inventory** | **Not enough stock**: warn, don't allow the sale, or say nothing | When an invoice or sales receipt would take a tracked item below zero | Warn |
 | **Checking** | **Print the vendor's account number in the check memo** | A check left without a memo gets "Acct #…" from the vendor's **Account no.** | Off |
-| **Checking** | **Change the check date when a check is printed** | A check waiting in **File › Print Forms › Checks** takes the date it prints | Off |
+| **Checking** | **Change the check date when a check is printed** | A check waiting in **File › Print Forms › Checks**, from Write Checks or Pay Bills, takes the date it prints | Off |
 
 **Checking › My Preferences** sets the account **Write Checks**, **Pay Bills** and **Make
 Deposits** open with, on this computer.
@@ -310,7 +310,9 @@ but not to a bank, asset or liability account.
 A cost on an expense or check in another currency is billed in your home currency, at the
 exchange rate the expense was entered with, so the reimbursement takes off exactly what the expense
 put on. **Bill Costs** shows the original amount under the home amount, and the invoice line says
-it (for example *EUR 200.00*).
+it (for example *EUR 200.00*). The invoice itself is always in the home currency: billing costs on
+an invoice in another currency would convert them again at the invoice's rate, and the
+reimbursement would no longer match what the expense put on.
 
 When reimbursed expenses count as income, each expense account can send its reimbursements to an
 income account of its own: open the expense account in the **Chart of Accounts** and choose it

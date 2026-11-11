@@ -213,7 +213,9 @@ pub(crate) async fn carry_over(tx: &mut Transaction<'_, Sqlite>, form: Form, old
 /// With Preferences › Checking › "Change check date when a check is printed", a check dated other
 /// than `today` is re-dated first. Posted entries never change, so this is an edit: the queued check
 /// is voided and posted again on the print date, both kept in the audit log, and the number goes on
-/// the replacement. Foreign-currency checks keep their date (their rate belongs to it).
+/// the replacement. Foreign-currency checks keep their date (their rate belongs to it). A Pay Bills
+/// check is re-dated the same way, each of its bill payments voided and paid again on the print
+/// date ([`redate_bill_check`]).
 pub async fn mark_checks_printed(pool: &SqlitePool, printed: Vec<PrintedCheck>) -> Result<usize, String> {
     mark_checks_printed_on(pool, printed, chrono::Local::now().date_naive()).await
 }
@@ -236,6 +238,11 @@ pub async fn mark_checks_printed_on(pool: &SqlitePool, mut printed: Vec<PrintedC
                 }
                 if let Some(input) = crate::edits::expense_input_in_tx(tx, check.expense_id, today).await? {
                     check.expense_id = crate::edits::replace_expense_in_tx(tx, check.expense_id, &input).await?;
+                }
+            }
+            for check in printed.iter_mut() {
+                if let Some(group) = check.bill_check_id {
+                    check.bill_check_id = Some(redate_bill_check(tx, group, today).await?);
                 }
             }
         }
@@ -299,6 +306,41 @@ pub async fn mark_checks_printed_on(pool: &SqlitePool, mut printed: Vec<PrintedC
         Ok(printed.len())
     })
     .await
+}
+
+/// Re-dates a queued Pay Bills check to `today`, the way a queued Write Checks check is: each of its
+/// bill payments is voided (a reversing entry on its own date) and paid again on `today`, still
+/// queued, the two linked in `transaction_edits` and the audit log. Returns the check's group id,
+/// which is the new payments' (the first of them). A check already dated `today`, or no longer
+/// waiting to print, is left as it is (printing it then reports why).
+async fn redate_bill_check(tx: &mut Transaction<'_, Sqlite>, group: i64, today: chrono::NaiveDate) -> Result<i64, String> {
+    type Row = (i64, i64, i64, i64, chrono::NaiveDate, Option<i64>);
+    let payments: Vec<Row> = sqlx::query_as(
+        "SELECT id, bill_id, amount_cents, payment_account_id, payment_date, journal_entry_id FROM bill_payments
+         WHERE check_group_id = ?1 AND to_be_printed = 1 AND is_voided = 0 AND reference IS NULL ORDER BY id",
+    )
+    .bind(group)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    if payments.is_empty() || payments.iter().all(|p| p.4 == today) {
+        return Ok(group);
+    }
+    // Void them all first, so each bill is open for its whole amount again before it is re-paid.
+    for &(_, _, _, _, _, entry) in &payments {
+        let entry = entry.ok_or_else(|| format!("PRINT_NOT_QUEUED: bill payment check {group} is not posted"))?;
+        crate::ledger::void_in_tx(tx, entry).await?;
+    }
+    let mut new_ids = Vec::with_capacity(payments.len());
+    for &(old_id, bill_id, amount, account, _, old_entry) in &payments {
+        let input = crate::expenses::BillPaymentInput { bill_id, payment_account_id: account, payment_date: today, amount_cents: crate::money::Cents(amount), reference: None, to_be_printed: true };
+        let new_id = crate::expenses::write_bill_payment(tx, &input, "STANDARD").await?;
+        let new_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM bill_payments WHERE id = ?1").bind(new_id).fetch_one(&mut **tx).await.map_err(db_err)?;
+        crate::edits::record_replacement(tx, "BILL_PAYMENT", (old_id, old_entry.unwrap_or_default()), (new_id, new_entry)).await?;
+        new_ids.push(new_id);
+    }
+    crate::expenses::group_queued_checks(tx, &new_ids).await?;
+    sqlx::query_scalar("SELECT check_group_id FROM bill_payments WHERE id = ?1").bind(new_ids[0]).fetch_one(&mut **tx).await.map_err(db_err)
 }
 
 /// Takes printed invoices out of the queue; returns how many were waiting in it.

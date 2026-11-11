@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Pay Bills checks take the print date.** With **Change the check date when a check is printed**
+  on in Preferences › Checking, a check from Pay Bills waiting in File › Print Forms › Checks is now
+  re-dated to the day it prints, as checks from Write Checks already were. Each bill payment on it
+  is voided and paid again on that date, and both stay in the audit log.
+
 - **More accurate company-file imports.** Memorized transactions (templates) are no longer
   imported as real ones, which doubled some balances. Files whose description of a line table is
   missing several columns now read those lines, and a payment and deposit that a file keeps as two
