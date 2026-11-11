@@ -47,6 +47,9 @@ const OPEN: &[&str] = &[
     "cancel_two_step_sign_in",
     "begin_two_step_setup",
     "finish_two_step_setup",
+    // An Admin held at set-up by a stricter setting can still make it optional again; the command
+    // checks for an Admin itself.
+    "set_two_step_policy",
     "recover_with_recovery_key",
     "remove_all_users",
     "get_start_screen",
@@ -77,7 +80,6 @@ const ADMIN: &[&str] = &[
     "add_user",
     "update_user",
     "replace_recovery_key",
-    "set_two_step_policy",
     "reset_two_step",
     // Company-wide settings.
     "set_preference",

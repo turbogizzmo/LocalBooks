@@ -88,6 +88,9 @@ choose:
   do anything else until they have. Other users may.
 - **Required for everyone**: every user sets it up at their next sign-in.
 
+An Admin held at the set-up step without a phone at hand can click **Make two-step sign-in
+optional for this company instead** there.
+
 **Set it up for yourself.** In the same section click **Set Up…**, enter your password, scan the QR
 code with your authenticator app (or type the key shown under it), and enter the code the app now
 shows. LocalBooks draws the QR code on your computer; nothing is sent anywhere. You then get **ten

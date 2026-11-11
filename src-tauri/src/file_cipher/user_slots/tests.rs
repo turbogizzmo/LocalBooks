@@ -198,7 +198,7 @@ async fn a_locked_file_refuses_every_command_except_unlock() {
     //   screen needs (no business data: the locked file's stand-in database is empty);
     let refused_or_harmless = ["turn_on_users", "remove_all_users", "change_my_password", "sign_out", "sign_out_if_idle", "forget_remembered_sign_in", "get_sign_in_state", "get_storage_status",
         // Two-step sign-in: a code step only exists after a password unlocked the file; set-up needs a signed-in user.
-        "get_two_step_sign_in", "finish_two_step_sign_in", "cancel_two_step_sign_in", "begin_two_step_setup", "finish_two_step_setup"];
+        "get_two_step_sign_in", "finish_two_step_sign_in", "cancel_two_step_sign_in", "begin_two_step_setup", "finish_two_step_setup", "set_two_step_policy"];
     // - and the rest don't touch the open file's books at all (windows, files, the start screen).
     let elsewhere = [
         "get_startup_failure",

@@ -162,7 +162,7 @@ fn parse_recovery_key(text: &str) -> Result<Zeroizing<[u8; RECOVERY_BYTES]>, Str
     Ok(out)
 }
 
-pub(crate) fn encode_base32(bytes: &[u8]) -> String {
+fn encode_base32(bytes: &[u8]) -> String {
     let (mut bits, mut count, mut out) = (0u64, 0u32, String::new());
     for &b in bytes {
         bits = (bits << 8) | b as u64;

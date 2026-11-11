@@ -83,6 +83,38 @@ pub(super) async fn hold_for_code(db: &Db, session: Session, password: &str, rem
     }
 }
 
+/// Ends a held sign-in when its time runs out, even if nobody comes back to the screen: an encrypted
+/// file the password unlocked locks again, so its page key doesn't stay in memory.
+pub(super) fn expire_later(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(CODE_STEP_LIMIT).await;
+        expire_if_stale(&app.state::<Db>(), CODE_STEP_LIMIT).await;
+    });
+}
+
+/// Forgets a held sign-in past its time and locks an encrypted file again when nobody is signed in.
+async fn expire_if_stale(db: &Db, limit: std::time::Duration) {
+    let stale = {
+        let mut pending = PENDING.lock().await;
+        let stale = pending.as_ref().is_some_and(|p| p.started.elapsed() >= limit);
+        if stale {
+            pending.take();
+        }
+        stale
+    };
+    if !stale {
+        return;
+    }
+    let signed_in = match db.pool_and_session().await {
+        Ok((_, slot)) => slot.lock().await.is_some(),
+        Err(_) => true,
+    };
+    if !signed_in {
+        db.relock().await;
+    }
+}
+
 /// The user name a sign-in on this file is waiting on a code for, if any (the sign-in screen
 /// shows the code step for it, also after a remembered sign-in).
 #[tauri::command]
@@ -109,6 +141,11 @@ pub async fn finish_two_step_sign_in(app: AppHandle, db: State<'_, Db>, code: St
         drop(guard);
         db.relock().await;
         return Err("MFA_EXPIRED: that took too long; sign in with your password again".into());
+    }
+    if slot.lock().await.is_some() {
+        // Someone else signed in meanwhile (the recovery key, say): this held sign-in is stale.
+        guard.take();
+        return Err("MFA_NO_SIGN_IN: sign in with your password first".into());
     }
     let (user_id, username) = (pending.session.user.id, pending.session.user.username.clone());
     let checked = throttle(&app)

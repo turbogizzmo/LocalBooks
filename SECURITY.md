@@ -120,8 +120,11 @@ file can see and change everything, as in earlier versions.
   the company file alone can't make codes, and changing the password re-seals it
   (`the_secret_is_sealed_under_the_password_and_never_written_in_clear`,
   `changing_your_password_reseals_the_secret`). Backup codes are kept as salted SHA-256 hashes and
-  work once (`a_backup_code_signs_in_once`). A remembered sign-in still asks for the code
-  (`hold_for_code` in [`commands/mfa.rs`](src-tauri/src/commands/mfa.rs)); until the code is right
+  work once (`a_backup_code_signs_in_once`). On an encrypted file the code is asked after the
+  password unlocks it, and a code step left alone locks the file again
+  (`the_code_is_asked_after_the_password_unlocks_the_file` in
+  [`commands/mfa/tests.rs`](src-tauri/src/commands/mfa/tests.rs)); a remembered sign-in goes
+  through the same step. Until the code is right
   nobody is signed in, so every other command is refused, and a company that requires it holds a
   user without one at the set-up step (`every_role_gets_what_it_should` in
   [`permissions/tests.rs`](src-tauri/src/permissions/tests.rs),

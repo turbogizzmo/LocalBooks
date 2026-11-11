@@ -113,7 +113,10 @@ pub async fn sign_in_remembered(app: AppHandle, db: State<'_, Db>) -> Result<Opt
     match crate::file_cipher::user_slots::sign_in(&db, &saved.username, &saved.password).await {
         Ok(session) if !session.user.must_change_password => {
             // A remembered password never skips two-step sign-in: the sign-in screen asks for the code.
-            let Some(session) = super::mfa::hold_for_code(&db, session, &saved.password, Remember::Keep).await.ok().flatten() else { return Ok(None) };
+            let Some(session) = super::mfa::hold_for_code(&db, session, &saved.password, Remember::Keep).await.ok().flatten() else {
+                super::mfa::expire_later(&app);
+                return Ok(None);
+            };
             let user = session.user.clone();
             *slot.lock().await = Some(session);
             db.refresh_gate().await;
@@ -208,6 +211,7 @@ pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, passwo
     let remember = if remember { Remember::Save(zeroize::Zeroizing::new(password.clone())) } else { Remember::Forget };
     // A user with two-step sign-in (gap R26) isn't signed in yet: the screen asks for their code.
     let Some(session) = super::mfa::hold_for_code(&db, session, &password, remember.clone()).await? else {
+        super::mfa::expire_later(&app);
         return Err(crate::mfa::CODE_REQUIRED.into());
     };
     complete_sign_in(&app, &db, session, remember).await
@@ -316,6 +320,8 @@ pub async fn recover_with_recovery_key(app: AppHandle, db: State<'_, Db>, recove
         .attempt(&file, crate::sign_in_throttle::Who::RecoveryKey, |e| e.starts_with("KEY_WRONG_RECOVERY"), crate::file_cipher::user_slots::recover(&db, &recovery_key, &username, &new_password))
         .await?;
     let (_, slot) = db.pool_and_session().await?;
+    // A sign-in that was waiting for its code ends: this Admin is signed in now.
+    super::mfa::forget_pending().await;
     let user = session.user.clone();
     *slot.lock().await = Some(session);
     db.refresh_gate().await;

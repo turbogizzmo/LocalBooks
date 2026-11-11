@@ -75,10 +75,12 @@ async fn the_code_is_asked_after_the_password_unlocks_the_file() {
         let right = mfa::test_code(&secret, mfa::now_unix() + mfa::STEP_SECONDS);
         let wrong = format!("{:06}", (right.parse::<u32>().unwrap() + 500_000) % 1_000_000);
         assert_eq!(mfa::check_code(&pool, id, &PENDING.lock().await.as_ref().unwrap().secret, &wrong, mfa::now_unix()).await.unwrap_err(), mfa::CODE_WRONG);
-        // Going back locks the file again.
-        PENDING.lock().await.take();
-        db.relock().await;
-        assert!(db.is_locked().await);
+        // Left alone, the held sign-in ends and the file locks again: not before its time runs out.
+        expire_if_stale(&db, CODE_STEP_LIMIT).await;
+        assert!(PENDING.lock().await.is_some() && !db.is_locked().await);
+        expire_if_stale(&db, std::time::Duration::ZERO).await;
+        assert!(PENDING.lock().await.is_none());
+        assert!(db.is_locked().await, "an encrypted file doesn't stay open at the code step");
     }
 
     // Bob has no authenticator: his password signs him in.

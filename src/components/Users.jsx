@@ -366,7 +366,16 @@ export default function SignIn({ companyName, user }) {
         {(error ?? actions.error) && <Notice kind="error" text={error ?? actions.error} onDismiss={() => (setError(null), actions.clearError())} />}
         {mode === 'signin' && <SignInForm busy={busy} run={run} onForgot={() => go('forgot')} />}
         {mode === 'code' && <CodeStep username={codeFor} busy={busy} run={run} onBack={() => run(async () => (await api.cancelTwoStepSignIn(), go('signin')))} />}
-        {mode === 'setup' && <TwoStepSetup required onDone={() => window.location.reload()} />}
+        {mode === 'setup' && (
+          <>
+            <TwoStepSetup required onDone={() => window.location.reload()} />
+            {user?.role === 'ADMIN' && (
+              <button type="button" className="self-start text-xs text-qb-link hover:underline" disabled={busy} onClick={() => run(() => api.setTwoStepPolicy('OPTIONAL'))}>
+                No phone at hand? Make two-step sign-in optional for this company instead
+              </button>
+            )}
+          </>
+        )}
         {mode === 'forgot' && <ForgotChoices onRecover={() => go('recover')} onRemoveAll={() => go('removeAll')} onBack={() => go('signin')} />}
         {mode === 'recover' && <RecoverForm busy={busy} run={run} onBack={() => go('forgot')} />}
         {mode === 'removeAll' && <RemoveAllForm busy={busy} run={run} onBack={() => go('forgot')} />}
