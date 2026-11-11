@@ -19,6 +19,15 @@ describe('A taxed invoice edited with sales tax turned off', () => {
   it('keeps the tax when the invoice is saved again unchanged', async () => {
     await goTo('Invoices');
     expect(await tableRow('1003')).toContain('$134.52');
+    // The invoice list's rows for a number: each has its own Actions button.
+    const listed = (number) =>
+      browser.execute(
+        (label) =>
+          [...document.querySelectorAll(`button[aria-label="${label}"]`)].map((b) =>
+            [...b.closest('tr').cells].map((td) => td.textContent.replace(/\s+/g, ' ').trim()),
+          ),
+        `Actions for invoice ${number}`,
+      );
     await click($('//button[@aria-label="Actions for invoice 1003"]'));
     await click($('//*[@role="menu"]//button[normalize-space()="Edit…"]'));
     // The edited invoice has a window of its own; the Invoices list's window has a blank invoice
@@ -30,19 +39,13 @@ describe('A taxed invoice edited with sales tax turned off', () => {
     const saveAnyway = button('Save anyway', '//*[@role="alertdialog"]');
     if (await saveAnyway.waitForDisplayed({ timeout: 3000 }).catch(() => false)) await click(saveAnyway);
     await $('//*[@role="status"][contains(., "replaced")]').waitForDisplayed();
-    // The edited invoice keeps its number, for the same total, tax included; the voided original
-    // is listed under the same number.
-    const numbered = () =>
-      browser.execute(() =>
-        [...document.querySelectorAll('table tbody tr')]
-          .map((tr) => [...tr.cells].map((td) => td.textContent.replace(/\s+/g, ' ').trim()))
-          .filter((cells) => cells.some((c) => c.startsWith('1003'))),
-      );
+    // The corrected invoice keeps number 1003, for the same total, tax included, and the voided
+    // original stays listed under it; nothing takes the next number (1007).
     let rows = [];
-    await browser.waitUntil(async () => (rows = await numbered()).length === 2, { timeoutMsg: 'invoice 1003 is not listed twice (edited and voided)' });
+    await browser.waitUntil(async () => (rows = await listed('1003')).length === 2, { timeoutMsg: 'invoice 1003 is not listed twice after the edit' });
     const live = rows.filter((cells) => !cells.includes('Voided'));
     expect(live).toHaveLength(1);
     expect(live[0]).toContain('$134.52');
-    expect(rows.length - live.length).toBe(1);
+    expect(await listed('1007')).toHaveLength(0);
   });
 });
