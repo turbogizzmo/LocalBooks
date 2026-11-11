@@ -60,7 +60,7 @@ pub async fn reinstall_previous_release(app: AppHandle) -> Result<String, String
         .check()
         .await
         .map_err(|e| format!("ROLLBACK_UPDATE: {e}"))?
-        .ok_or_else(|| format!("ROLLBACK_UPDATE: LocalBooks {} has no installer for this computer", previous.version))?;
+        .ok_or_else(|| format!("ROLLBACK_UPDATE: Tillhouse {} has no installer for this computer", previous.version))?;
     // The release is there for this computer: back the books up before anything is installed.
     let backup = match pool {
         Some(_) => Some(crate::backup::backup_now(&app.state::<Db>()).await?),
@@ -69,5 +69,5 @@ pub async fn reinstall_previous_release(app: AppHandle) -> Result<String, String
     // Downloads it, checks its signature against the key built into this app, and installs it.
     update.download_and_install(|_, _| {}, || {}).await.map_err(|e| format!("ROLLBACK_UPDATE: the download couldn't be installed ({e}). Nothing was changed"))?;
     let saved = backup.map(|b| format!(" Your books were backed up first as {}.", b.file_name)).unwrap_or_default();
-    Ok(format!("LocalBooks {} is installed and starts when you restart.{saved}", previous.version))
+    Ok(format!("Tillhouse {} is installed and starts when you restart.{saved}", previous.version))
 }

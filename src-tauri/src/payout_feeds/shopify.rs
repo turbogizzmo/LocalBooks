@@ -60,7 +60,7 @@ async fn graphql(http: &reqwest::Client, base: &str, token: &str, query: &str, v
             other => return other,
         }
     }
-    Err("PAYOUT_BUSY: Shopify asked LocalBooks to slow down; try again in a few minutes".into())
+    Err("PAYOUT_BUSY: Shopify asked Tillhouse to slow down; try again in a few minutes".into())
 }
 
 async fn graphql_once(http: &reqwest::Client, base: &str, token: &str, query: &str, variables: Value) -> Result<Value, String> {
@@ -88,7 +88,7 @@ async fn graphql_once(http: &reqwest::Client, base: &str, token: &str, query: &s
         let message = text(&errors[0], "message");
         return Err(match code {
             "ACCESS_DENIED" => format!("PAYOUT_PERMISSION: the app can't read payouts ({message}); give it the read_shopify_payments_payouts and read_shopify_payments_accounts scopes"),
-            "THROTTLED" => "PAYOUT_BUSY: Shopify asked LocalBooks to slow down; try again in a minute".into(),
+            "THROTTLED" => "PAYOUT_BUSY: Shopify asked Tillhouse to slow down; try again in a minute".into(),
             _ => format!("PAYOUT_REFUSED: Shopify said: {message}"),
         });
     }
@@ -101,7 +101,7 @@ fn money(v: &Value, key: &str) -> Result<i64, String> {
 
 /// Shopify's amounts are decimal strings such as "41.9" or "-12.00".
 pub fn parse_shopify_amount(s: &str) -> Result<i64, String> {
-    parse_cents(s).map_err(|_| format!("PAYOUT_RESPONSE: Shopify sent an amount LocalBooks can't read ({s})"))
+    parse_cents(s).map_err(|_| format!("PAYOUT_RESPONSE: Shopify sent an amount Tillhouse can't read ({s})"))
 }
 
 /// One balance transaction, as LocalBooks reads it.
@@ -118,7 +118,7 @@ pub struct ShopifyTxn {
 }
 
 pub fn read_txn(node: &Value) -> Result<ShopifyTxn, String> {
-    let at = DateTime::parse_from_rfc3339(&text(node, "transactionDate")).map(|t| t.with_timezone(&Utc)).map_err(|_| "PAYOUT_RESPONSE: Shopify sent a transaction without a date LocalBooks can read".to_string())?;
+    let at = DateTime::parse_from_rfc3339(&text(node, "transactionDate")).map(|t| t.with_timezone(&Utc)).map_err(|_| "PAYOUT_RESPONSE: Shopify sent a transaction without a date Tillhouse can read".to_string())?;
     Ok(ShopifyTxn {
         kind: text(node, "type"),
         at,
@@ -189,7 +189,7 @@ async fn walk(http: &reqwest::Client, base: &str, token: &str, query: &str, fiel
     let mut after: Option<String> = None;
     for _ in 0..MAX_PAGES {
         let data = graphql(http, base, token, query, json!({ "after": after })).await?;
-        let conn = data.pointer(&format!("/shopifyPaymentsAccount/{field}")).ok_or_else(|| "PAYOUT_PERMISSION: this store has no Shopify Payments account LocalBooks can read".to_string())?;
+        let conn = data.pointer(&format!("/shopifyPaymentsAccount/{field}")).ok_or_else(|| "PAYOUT_PERMISSION: this store has no Shopify Payments account Tillhouse can read".to_string())?;
         let nodes = conn.get("nodes").and_then(Value::as_array).cloned().unwrap_or_default();
         let done = !nodes.is_empty() && nodes.iter().all(&stop);
         out.extend(nodes.into_iter().filter(|n| !stop(n)));
@@ -199,7 +199,7 @@ async fn walk(http: &reqwest::Client, base: &str, token: &str, query: &str, fiel
             return Ok(out);
         }
     }
-    Err("PAYOUT_TOO_MANY: Shopify has more than LocalBooks reads in one go; get payouts more often so each fetch is smaller".into())
+    Err("PAYOUT_TOO_MANY: Shopify has more than Tillhouse reads in one go; get payouts more often so each fetch is smaller".into())
 }
 
 /// A payout's numeric id, which GraphQL may send as a string or a number.
@@ -227,7 +227,7 @@ pub async fn connect_shopify(pool: &SqlitePool, store: &SecretStore, api: Option
     let http = client()?;
     let data = graphql(&http, &endpoint(api, &shop), token, CHECK_QUERY, json!({})).await?;
     if data.pointer("/shopifyPaymentsAccount/id").and_then(Value::as_str).is_none() {
-        return Err("PAYOUT_PERMISSION: this store has no Shopify Payments account LocalBooks can read".into());
+        return Err("PAYOUT_PERMISSION: this store has no Shopify Payments account Tillhouse can read".into());
     }
     let secret_key = format!("shopify-{}", hex(&crate::crypto::random::<8>()?));
     store.put(&secret_key, token).await?;

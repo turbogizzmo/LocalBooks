@@ -17,7 +17,7 @@ export const QUICKBOOKS_EXTENSIONS = ['qbw', 'qbb', 'qbm'];
 /** QuickBooks names its files in capitals (`Company.QBW`), and some file pickers match extensions case by case. */
 export const QUICKBOOKS_FILTER_EXTENSIONS = QUICKBOOKS_EXTENSIONS.flatMap((ext) => [ext, ext.toUpperCase()]);
 const COMPANY_FILTER = {
-  name: 'LocalBooks or QuickBooks company file or backup',
+  name: 'Tillhouse or QuickBooks company file or backup',
   extensions: ['localbooks', 'db', ...QUICKBOOKS_FILTER_EXTENSIONS],
 };
 /** The QuickBooks file to read once the new company it is migrating into has opened (the window reloads in between). */
@@ -104,7 +104,7 @@ function safeFileName(name) {
 
 /**
  * Open or Restore Company: a `.localbooks` file (or a `localbooks.db` kept in a folder) opens in
- * place; any other `.db` is a LocalBooks backup, which is restored to a new company file so the
+ * place; any other `.db` is a Tillhouse backup, which is restored to a new company file so the
  * backup itself stays as it was. A QuickBooks `.qbw`/`.qbb`/`.qbm` file starts a new company file
  * and opens the Desktop Migration Wizard on it; the QuickBooks file is only read. Resolves once the
  * company is open (the window then reloads), or when the user cancels. `windowless` opens it without
@@ -130,7 +130,7 @@ export async function openOrRestoreCompany(windowless = false) {
   const destination = await save({
     title: 'Restore the backup as a new company file',
     defaultPath: `${fileStem(path)}.localbooks`,
-    filters: [{ name: 'LocalBooks company file', extensions: ['localbooks'] }],
+    filters: [{ name: 'Tillhouse company file', extensions: ['localbooks'] }],
   });
   if (destination) await opening(windowless, (w) => api.restoreBackupAs(path, destination, w));
 }
@@ -144,7 +144,7 @@ export async function migrateQuickBooksFile(path) {
   const destination = await save({
     title: 'Save the new company file to migrate the QuickBooks books into',
     defaultPath: `${safeFileName(companyName)}.localbooks`,
-    filters: [{ name: 'LocalBooks company file', extensions: ['localbooks'] }],
+    filters: [{ name: 'Tillhouse company file', extensions: ['localbooks'] }],
   });
   if (!destination) return;
   try {
@@ -257,7 +257,7 @@ export function NewCompanyDialog({ onClose }) {
     const path = await save({
       title: 'Save the new company file',
       defaultPath: `${safeFileName(info.name)}.localbooks`,
-      filters: [{ name: 'LocalBooks company file', extensions: ['localbooks'] }],
+      filters: [{ name: 'Tillhouse company file', extensions: ['localbooks'] }],
     });
     if (!path) return;
     const setup = withSetup
@@ -299,7 +299,7 @@ export function NewCompanyDialog({ onClose }) {
       >
         <h2 className="mb-1 shrink-0 text-md font-semibold">Create a new company</h2>
         <p className="mb-2 shrink-0 text-sm text-qb-ink-muted">
-          Answer a few questions and LocalBooks suggests a chart of accounts for your type of business, like QuickBooks does. The company you have open now is not changed.
+          Answer a few questions and Tillhouse suggests a chart of accounts for your type of business, like QuickBooks does. The company you have open now is not changed.
         </p>
         <div className="mb-2 flex shrink-0 self-start overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist" aria-label="Setup steps">
           {SETUP_TABS.map(([id, label], i) => (
@@ -438,7 +438,7 @@ export function NewCompanyDialog({ onClose }) {
             className="qb-btn qb-btn-secondary"
             onClick={() => create(false)}
             disabled={busy || !info.name.trim()}
-            title="Create the company with LocalBooks' standard chart of accounts and set it up yourself"
+            title="Create the company with Tillhouse's standard chart of accounts and set it up yourself"
           >
             Skip — use the standard chart
           </button>

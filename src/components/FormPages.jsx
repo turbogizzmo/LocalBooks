@@ -131,7 +131,7 @@ function composedText(outcome, fileName) {
 export function EmailFormDialog({ kind, id, period = null, voucher = null, onClose, onNotice }) {
   const [draft, setDraft] = useState(null);
   const [history, setHistory] = useState([]);
-  // Set when sending from LocalBooks (SMTP) is turned on: { fromEmail }.
+  // Set when sending from Tillhouse (SMTP) is turned on: { fromEmail }.
   const [smtp, setSmtp] = useState(null);
   const [method, setMethod] = useState('MAIL_APP');
   const [busy, setBusy] = useState(false);
@@ -215,7 +215,7 @@ export function EmailFormDialog({ kind, id, period = null, voucher = null, onClo
               <div className="flex gap-3 text-xs" role="radiogroup" aria-label="How to send">
                 <label className="flex items-center gap-1">
                   <input type="radio" name="email-send-method" checked={method === 'SMTP'} onChange={() => setMethod('SMTP')} />
-                  Send from LocalBooks
+                  Send from Tillhouse
                 </label>
                 <label className="flex items-center gap-1">
                   <input type="radio" name="email-send-method" checked={method === 'MAIL_APP'} onChange={() => setMethod('MAIL_APP')} />

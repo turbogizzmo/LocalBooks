@@ -189,7 +189,7 @@ pub fn set_preferences(file: &mut DesktopFile, key: Option<&str>, change: Prefer
             let id = id.trim().to_string();
             let valid = !id.is_empty() && id.len() <= MAX_SCREEN_ID && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '/' || c == '-');
             if !valid {
-                return Err(format!("DESKTOP_START: {id:?} is not a screen LocalBooks can open on"));
+                return Err(format!("DESKTOP_START: {id:?} is not a screen Tillhouse can open on"));
             }
             Some(id)
         }
@@ -348,9 +348,9 @@ pub fn window_title(content: Option<&str>, company: Option<&str>) -> String {
     let content = content.map(str::trim).filter(|c| !c.is_empty());
     match (content, company) {
         (Some(content), Some(company)) => format!("{content} — {company}"),
-        (Some(content), None) => format!("{content} — LocalBooks"),
-        (None, Some(company)) => format!("{company} — LocalBooks"),
-        (None, None) => "LocalBooks".to_string(),
+        (Some(content), None) => format!("{content} — Tillhouse"),
+        (None, Some(company)) => format!("{company} — Tillhouse"),
+        (None, None) => "Tillhouse".to_string(),
     }
 }
 

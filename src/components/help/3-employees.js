@@ -14,7 +14,7 @@ export const screens = {
 };
 
 /**
- * Topics: two sentences each, describing what LocalBooks actually does. `views` lists the
+ * Topics: two sentences each, describing what Tillhouse actually does. `views` lists the
  * screens a topic is about (shown under "On this screen"); `go` opens the place to do it, with an
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */

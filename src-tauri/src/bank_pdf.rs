@@ -586,7 +586,7 @@ fn table_from_lines(lines: &[Line]) -> Result<PdfTable, String> {
     }
 
     let Some(columns) = columns else {
-        return Err("BANK_PDF_NO_TABLE: LocalBooks found text in this PDF but no transaction table in it \
+        return Err("BANK_PDF_NO_TABLE: Tillhouse found text in this PDF but no transaction table in it \
                     (a row of column titles such as Date, Description, Amount and Balance). \
                     If this is a bank or card statement, download it as CSV or OFX from your bank instead."
             .into());
@@ -598,7 +598,7 @@ fn table_from_lines(lines: &[Line]) -> Result<PdfTable, String> {
     let date_col = columns.iter().position(|c| c.kind == Kind::Date);
     let missing_year = date_col.is_some_and(|i| rows.iter().any(|r| !parses_as_date(&r.cells[i])));
     if missing_year && period.is_none() {
-        return Err("BANK_PDF_NO_YEAR: the dates in this statement have no year, and LocalBooks could not find the statement period".into());
+        return Err("BANK_PDF_NO_YEAR: the dates in this statement have no year, and Tillhouse could not find the statement period".into());
     }
 
     let markers_used: Vec<(bool, bool)> = (0..columns.len())

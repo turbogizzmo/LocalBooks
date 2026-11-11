@@ -1,4 +1,4 @@
-// Export from an installed QuickBooks (Preview): LocalBooks asks the QuickBooks on this computer for its data.
+// Export from an installed QuickBooks (Preview): Tillhouse asks the QuickBooks on this computer for its data.
 import { invoke } from '@tauri-apps/api/core';
 
 export default {

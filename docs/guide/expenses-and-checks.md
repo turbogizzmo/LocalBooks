@@ -45,7 +45,7 @@ If you print checks on check stock, write them now and print them together later
 3. Pick the **Bank account**. Check that **First check number** matches the number printed on the
    first check in the printer; the checks take numbers in order from it. Untick any you don't
    want to print now, then click **Print…**.
-4. When printing finishes, LocalBooks asks **Did they all print?** Choose **Yes, all printed**, or
+4. When printing finishes, Tillhouse asks **Did they all print?** Choose **Yes, all printed**, or
    **Some didn't** and untick the checks that jammed or printed wrong.
 
 Only the checks you confirm keep their numbers and leave the queue; the rest stay queued without a
@@ -74,7 +74,7 @@ A card credit only goes to a credit card account. A refund into a bank account i
 [deposit](deposits-and-transfers.md) instead.
 
 When you import a QuickBooks company file or IIF file with **Full import**, its credit card credits
-(`CCARD REFUND` in IIF) come in as LocalBooks card credits.
+(`CCARD REFUND` in IIF) come in as Tillhouse card credits.
 
 ## Type a check or deposit into a register
 
@@ -99,7 +99,7 @@ Two accounts make a different transaction:
   card). No check number is used.
 - **Undeposited Funds**, on a bank register's **Deposit** side, deposits payments waiting there: the
   one whose amount matches, or else all of them dated up to the row's date when together they make
-  the amount. If neither matches, LocalBooks says so; choose the payments in **Make Deposits**.
+  the amount. If neither matches, Tillhouse says so; choose the payments in **Make Deposits**.
 
 To spread one row over several accounts, click **Splits…**: a line grid opens under the row, with
 an account, memo, class and (for payments and charges) customer or job on each line. The row's
@@ -117,7 +117,7 @@ deposit's memo instead. Deposits and card charges have no number.
 - **Dates** shows **All**, **This month** or **This year**; type a **From** and **To** date for any
   other range. A register that starts after its first transaction opens with the balance forward.
 - **2-line** shows each transaction on two lines: date, number, payee and amounts on the first;
-  type, account, class and memo on the second. LocalBooks remembers your choice.
+  type, account, class and memo on the second. Tillhouse remembers your choice.
 - **Print…** (or **File › Print…**, or **Ctrl+P** in the register) prints the register for its dates: every
   transaction in date order with the balance forward and the ending balance. **Export** saves the
   same rows to CSV or Excel.

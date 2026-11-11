@@ -1,6 +1,6 @@
 # Verify and correct the ledger
 
-LocalBooks saves a snapshot of every entry at the moment it's posted. The integrity check compares
+Tillhouse saves a snapshot of every entry at the moment it's posted. The integrity check compares
 your books with those snapshots, which catches anything changed or deleted outside the app (for
 example by editing the company file with another tool).
 
@@ -15,7 +15,7 @@ example by editing the company file with another tool).
 ## How the audit trail protects itself
 
 Every audit record is linked to the one before it with a cryptographic fingerprint, and records who
-wrote it (your computer's user name and the LocalBooks version). After each save, LocalBooks also
+wrote it (your computer's user name and the Tillhouse version). After each save, Tillhouse also
 keeps a note of the newest record outside the company file, in your computer's keychain. The check
 recomputes the links and compares them with that note, so rewriting or removing audit records is
 caught even if someone also edited the snapshots.
@@ -23,7 +23,7 @@ caught even if someone also edited the snapshots.
 - "Audit record was changed after it was sealed" or "does not link to the one before it" means the
   audit trail itself was edited outside the app.
 - "Audit record missing" means the file is behind what this computer last recorded: records were
-  removed, or you opened an older copy of the file. Restoring a backup from inside LocalBooks
+  removed, or you opened an older copy of the file. Restoring a backup from inside Tillhouse
   doesn't cause this.
 - The green message says since when this computer has kept its record of the file. The record starts
   the first time the file is opened on this computer, so it can only catch changes made after that

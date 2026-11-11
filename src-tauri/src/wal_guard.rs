@@ -91,7 +91,7 @@ pub fn check(db: &Path) -> Result<(), String> {
     }
     let name = db.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| db.display().to_string());
     Err(format!(
-        "FILE_WAL_MISMATCH: {name} has a log file next to it ({name}-wal) that doesn't belong to it, so LocalBooks won't open it. \
+        "FILE_WAL_MISMATCH: {name} has a log file next to it ({name}-wal) that doesn't belong to it, so Tillhouse won't open it. \
          Move {name}-wal out of that folder, then open {name} again"
     ))
 }

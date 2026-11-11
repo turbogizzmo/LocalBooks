@@ -33,15 +33,15 @@ export const isGraphReport = (id) => GRAPH_REPORTS.some(([g]) => g === id);
 // Chart colours are explicit (not CSS classes) so a saved picture or a printout looks the same.
 // The two series colours are the Dashboard's validated pair (≥ 3:1 on light and dark surfaces,
 // ΔE 26.7 under protanopia); slices take a fixed categorical order, with grey for "Other".
-const INK = '#393a3d';
-const MUTED = '#6b6c72';
+const INK = '#1c2426';
+const MUTED = '#56615f';
 const GRID = '#e4e6ea';
-const AXIS = '#babec5';
-const HOVER = '#f4f5f8';
-const GREEN = '#2ca01c';
-const BLUE = '#0077c5';
+const AXIS = '#b9c2bf';
+const HOVER = '#f5f6f4';
+const GREEN = '#0b5d57';
+const BLUE = '#22609e';
 const SLICES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6'];
-const OTHER = '#8d9096';
+const OTHER = '#626c6a';
 const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif';
 
 const sliceColor = (slice, i) => (slice.other ? OTHER : SLICES[i % SLICES.length]);

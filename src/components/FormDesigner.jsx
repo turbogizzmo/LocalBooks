@@ -21,7 +21,7 @@ const LAYOUTS = [
   ['MODERN', 'Modern', 'The title in a colored band, shaded table header, banded rows'],
   ['COMPACT', 'Compact', 'Smaller type and tighter rows: more lines per page'],
 ];
-const ACCENTS = ['#2ca01c', '#0b6e4f', '#1f4e79', '#2b6cb0', '#6b46c1', '#b83280', '#c05621', '#333333'];
+const ACCENTS = ['#0b5d57', '#0b6e4f', '#1f4e79', '#2b6cb0', '#6b46c1', '#b83280', '#c05621', '#333333'];
 const PLACEHOLDERS = '{number} {customer} {date} {due_date} {total} {balance} {company} {rep} {ship_date} {ship_via} {po_number} (also {invoice_number} {amount} {balance_due})';
 
 function Section({ title, children }) {

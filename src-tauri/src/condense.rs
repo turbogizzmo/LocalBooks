@@ -406,7 +406,7 @@ async fn check_tables_known(conn: &mut SqliteConnection) -> Result<(), String> {
     if unknown.is_empty() {
         Ok(())
     } else {
-        Err(format!("CONDENSE_UNKNOWN_TABLE: this version of LocalBooks does not know how to condense {}", unknown.join(", ")))
+        Err(format!("CONDENSE_UNKNOWN_TABLE: this version of Tillhouse does not know how to condense {}", unknown.join(", ")))
     }
 }
 

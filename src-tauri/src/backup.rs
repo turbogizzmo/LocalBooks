@@ -149,10 +149,10 @@ pub async fn inspect(path: &Path) -> Result<CompanyFileInfo, String> {
     {
         use std::io::Read;
         let mut file = std::fs::File::open(path).map_err(|e| format!("RESTORE_UNREADABLE: {}: {e}", path.display()))?;
-        file.read_exact(&mut header).map_err(|_| "RESTORE_NOT_SQLITE: this is not a LocalBooks company file".to_string())?;
+        file.read_exact(&mut header).map_err(|_| "RESTORE_NOT_SQLITE: this is not a Tillhouse company file".to_string())?;
     }
     if &header != SQLITE_HEADER && &header != crate::file_cipher::vfs::SIGNATURE {
-        return Err("RESTORE_NOT_SQLITE: this is not a LocalBooks company file".into());
+        return Err("RESTORE_NOT_SQLITE: this is not a Tillhouse company file".into());
     }
 
     let pool = open_read_only(path).await?;
@@ -179,7 +179,7 @@ async fn inspect_pool(pool: &SqlitePool, path: &Path) -> Result<CompanyFileInfo,
 
     for table in ["_sqlx_migrations", "chart_of_accounts", "journal_entries", "journal_lines"] {
         if !table_exists(pool, table).await? {
-            return Err("RESTORE_NOT_LOCALBOOKS: this SQLite file is not a LocalBooks company file".into());
+            return Err("RESTORE_NOT_LOCALBOOKS: this SQLite file is not a Tillhouse company file".into());
         }
     }
 
@@ -194,12 +194,12 @@ async fn inspect_pool(pool: &SqlitePool, path: &Path) -> Result<CompanyFileInfo,
         match MIGRATOR.iter().find(|m| m.version == *version) {
             None => {
                 return Err(format!(
-                    "RESTORE_NEWER: this file uses schema version {version}, newer than this LocalBooks build supports ({}); update LocalBooks first",
+                    "RESTORE_NEWER: this file uses schema version {version}, newer than this Tillhouse build supports ({}); update Tillhouse first",
                     latest_app_schema()
                 ))
             }
             Some(m) if m.checksum.as_ref() != checksum.as_slice() => {
-                return Err(format!("RESTORE_TAMPERED: schema step {version} in this file does not match LocalBooks; it may have been edited"))
+                return Err(format!("RESTORE_TAMPERED: schema step {version} in this file does not match Tillhouse; it may have been edited"))
             }
             Some(_) => {}
         }

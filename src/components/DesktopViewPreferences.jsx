@@ -70,7 +70,7 @@ export default function DesktopViewPreferences() {
             view.windowMode === 'multiple',
             () => run(api.setWindowPreferences({ windowMode: 'multiple' })),
             'Multiple Windows',
-            'Windows float inside LocalBooks, so you can keep an invoice, a register and a report side by side, move and resize them, or minimize them to the bottom.',
+            'Windows float inside Tillhouse, so you can keep an invoice, a register and a report side by side, move and resize them, or minimize them to the bottom.',
           )}
           <p className="px-2 pt-1 text-2xs text-qb-ink-faint">Also in the View menu, with Open Window List. Kept with this company, and used for companies with no choice of their own.</p>
         </fieldset>

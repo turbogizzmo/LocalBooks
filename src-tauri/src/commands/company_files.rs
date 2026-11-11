@@ -249,7 +249,7 @@ pub async fn restore_backup_as(app: AppHandle, source_path: String, destination_
     let destination = with_company_extension(storage::resolve_network_path(&PathBuf::from(destination_path)));
     backup::inspect(&source).await?;
     if destination.exists() {
-        return Err(format!("NEW_COMPANY_EXISTS: {} already exists; choose another name or folder (LocalBooks never replaces a company file)", destination.display()));
+        return Err(format!("NEW_COMPANY_EXISTS: {} already exists; choose another name or folder (Tillhouse never replaces a company file)", destination.display()));
     }
     std::fs::copy(&source, &destination).map_err(|e| format!("RESTORE_COPY: cannot copy the backup to {}: {e}", destination.display()))?;
     match mount_company_file(&app, &destination, windowless.unwrap_or(false)).await {
@@ -295,7 +295,7 @@ pub fn record_startup_failure(data_dir: &Path, message: &str) {
     use std::io::Write;
     let _ = std::fs::create_dir_all(data_dir);
     if let Ok(mut log) = std::fs::OpenOptions::new().create(true).append(true).open(data_dir.join("startup-error.log")) {
-        let _ = writeln!(log, "{} LocalBooks {}: {message}", Local::now().format("%Y-%m-%d %H:%M:%S %z"), env!("CARGO_PKG_VERSION"));
+        let _ = writeln!(log, "{} Tillhouse {}: {message}", Local::now().format("%Y-%m-%d %H:%M:%S %z"), env!("CARGO_PKG_VERSION"));
     }
 }
 

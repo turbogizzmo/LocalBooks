@@ -1,4 +1,5 @@
-# Publishes the tester page in site/ to GitHub Pages: https://turbogizzmo.github.io/LocalBooks/
+# Publishes the website in site/ to GitHub Pages at https://tillhouse.app (site/CNAME names the
+# domain; docs/dev/website.md has the go-live checklist).
 name: Tester site
 
 on:

@@ -303,7 +303,7 @@ const choice = (options, width = 'w-[260px]') =>
 /** A number of days (0 turns the warning off). */
 const days = textInput({ inputMode: 'numeric', className: 'qb-input num w-[70px]' });
 
-/** Something LocalBooks always does, shown where people look for the option. */
+/** Something Tillhouse always does, shown where people look for the option. */
 function Always({ label, children }) {
   return (
     <div className="grid grid-cols-[170px_minmax(0,1fr)_140px] items-center gap-2 border-b border-qb-border px-2 py-0.5 last:border-b-0">
@@ -374,7 +374,7 @@ function GeneralCompany({ field }) {
       </Group>
       <CompanyInfo field={field} />
       <Group title="Automatic backups">
-        {field({ label: 'Daily backup', prefKey: 'auto_backup_enabled', hint: 'Taken when LocalBooks starts, at most once a day', children: flag('Back up the company file automatically') })}
+        {field({ label: 'Daily backup', prefKey: 'auto_backup_enabled', hint: 'Taken when Tillhouse starts, at most once a day', children: flag('Back up the company file automatically') })}
         {field({ label: 'Keep', prefKey: 'auto_backup_keep', hint: 'Number of daily backups to keep (1–60)', children: textInput({ inputMode: 'numeric', className: 'qb-input num w-[70px]' }) })}
       </Group>
     </>
@@ -415,7 +415,7 @@ function AccountingCompany({ field, forms }) {
         <Always label="Journal entry numbers">Each entry gets the next number when it is posted; numbers are never reused.</Always>
       </Group>
       <Group title="Warnings" id="date-warnings">
-        {field({ label: 'Retained Earnings', prefKey: 'warn_retained_earnings', hint: 'LocalBooks moves each year’s profit there itself', children: flag('Warn when posting a transaction to Retained Earnings') })}
+        {field({ label: 'Retained Earnings', prefKey: 'warn_retained_earnings', hint: 'Tillhouse moves each year’s profit there itself', children: flag('Warn when posting a transaction to Retained Earnings') })}
         {field({ label: 'Dates in the past', prefKey: 'warn_date_past_days', hint: 'Warn when a date is more than this many days before today (0 = never)', children: days })}
         {field({ label: 'Dates in the future', prefKey: 'warn_date_future_days', hint: 'Warn when a date is more than this many days after today (0 = never)', children: days })}
         <p className="px-2 py-0.5 text-2xs text-qb-ink-faint">A warning asks before saving, and Save anyway records the transaction as entered.</p>
@@ -708,7 +708,7 @@ function SalesCompany({ field }) {
         {field({ label: 'Sales orders', prefKey: 'sales_orders_enabled', hint: 'Off hides Sales Orders from the menus and the side bar; orders already saved are kept, and invoices made from them are unchanged', children: flag('Use sales orders') })}
         <Always label="Sales order numbers">Each sales order gets the next number, so no two share one.</Always>
       </Group>
-      <Nothing>The Collections Center is not part of LocalBooks, so its options are not here.</Nothing>
+      <Nothing>The Collections Center is not part of Tillhouse, so its options are not here.</Nothing>
     </>
   );
 }
@@ -892,7 +892,7 @@ export const CATEGORIES = [
         <Group title="Purchase orders">
           <Always label="Purchase order numbers">Each purchase order gets the next number, so no two share one.</Always>
         </Group>
-        <Nothing>Units of measure (selling by the each, case or pallet) are not in LocalBooks: items have one unit.</Nothing>
+        <Nothing>Units of measure (selling by the each, case or pallet) are not in Tillhouse: items have one unit.</Nothing>
       </>
     ),
     links: [

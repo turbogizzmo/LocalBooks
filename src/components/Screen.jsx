@@ -1,4 +1,4 @@
-// One screen of the app, in a window inside LocalBooks (see WindowManager.jsx): the page `view`,
+// One screen of the app, in a window inside Tillhouse (see WindowManager.jsx): the page `view`,
 // opened with `intent` (a request for an entry form, a record or a report, as `{ action, data, nonce }`).
 import AllSales from './AllSales.jsx';
 import AuditLog from './AuditLog.jsx';

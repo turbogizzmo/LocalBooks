@@ -267,7 +267,7 @@ type Header = ([u8; HEADER_LEN], [u8; SALT_LEN], KdfCost, [u8; PREFIX_LEN]);
 
 fn read_header(file: &mut impl Read) -> Result<Header, String> {
     let mut head = [0u8; HEADER_LEN];
-    let not_ours = || "OFFSITE_NOT_A_BACKUP: this is not a LocalBooks offsite backup".to_string();
+    let not_ours = || "OFFSITE_NOT_A_BACKUP: this is not a Tillhouse offsite backup".to_string();
     file.read_exact(&mut head).map_err(|_| not_ours())?;
     if &head[..8] != MAGIC {
         return Err(not_ours());

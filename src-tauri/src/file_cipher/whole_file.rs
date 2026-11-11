@@ -192,7 +192,7 @@ pub async fn encrypt(db: &Db, admin: &Session, input: EncryptInput) -> Result<(S
     }
     if let Err(e) = std::fs::remove_file(&fallback) {
         // Still this company's, so Settings lists it with the other unencrypted backups to delete.
-        eprintln!("LocalBooks: could not delete the unencrypted copy made before encryption ({}): {e}", fallback.display());
+        eprintln!("Tillhouse: could not delete the unencrypted copy made before encryption ({}): {e}", fallback.display());
     }
     let session = super::user_slots::sign_in(db, &admin.user.username, &input.password).await?;
     Ok((session, recovery))

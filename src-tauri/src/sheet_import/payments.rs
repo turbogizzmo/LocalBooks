@@ -262,7 +262,7 @@ pub async fn post(pool: &SqlitePool, kind: SheetKind, sheet: &Sheet, mapping: &M
     if resolved.len() != rows.len() {
         return Err("SHEET_PROBLEMS: the books changed since the check; check the sheet again".into());
     }
-    let total_cents = rows.iter().try_fold(0i64, |t, r| t.checked_add(r.amount_cents)).ok_or("SHEET_TOO_LARGE: the payments add up to more than LocalBooks can hold")?;
+    let total_cents = rows.iter().try_fold(0i64, |t, r| t.checked_add(r.amount_cents)).ok_or("SHEET_TOO_LARGE: the payments add up to more than Tillhouse can hold")?;
     if kind == SheetKind::CustomerPayments {
         let inputs: Vec<crate::invoices::PaymentInput> = rows
             .iter()

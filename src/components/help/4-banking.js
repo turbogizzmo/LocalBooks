@@ -4,7 +4,7 @@
 /** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
 export const screens = {
   'banking/feeds': {
-    help: 'Import your bank’s CSV, OFX or QFX statement, or connect a bank through SimpleFIN to sync new transactions, then approve each transaction into a category. LocalBooks skips anything already imported and learns from what you approve.',
+    help: 'Import your bank’s CSV, OFX or QFX statement, or connect a bank through SimpleFIN to sync new transactions, then approve each transaction into a category. Tillhouse skips anything already imported and learns from what you approve.',
     guide: 'bank-feeds',
   },
   'banking/transfers': {
@@ -20,13 +20,13 @@ export const screens = {
     guide: 'reconciling',
   },
   'banking/payouts': {
-    help: 'Connect Stripe, PayPal or Shopify Payments and bring each payout to your bank in as one deposit: the sales it carried, less fees, refunds and chargebacks, so it matches the bank line. An Admin can have each feed fetch on a schedule while LocalBooks is open.',
+    help: 'Connect Stripe, PayPal or Shopify Payments and bring each payout to your bank in as one deposit: the sales it carried, less fees, refunds and chargebacks, so it matches the bank line. An Admin can have each feed fetch on a schedule while Tillhouse is open.',
     guide: 'bank-feeds',
   },
 };
 
 /**
- * Topics: two sentences each, describing what LocalBooks actually does. `views` lists the
+ * Topics: two sentences each, describing what Tillhouse actually does. `views` lists the
  * screens a topic is about (shown under "On this screen"); `go` opens the place to do it, with an
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
@@ -34,7 +34,7 @@ export const topics = [
   {
     id: 'bank-feed', area: 'banking', views: ['banking/feeds'],
     title: 'Import and categorize bank transactions',
-    body: 'Import a CSV, OFX or QFX statement from your bank, or click Connect a bank… to fetch transactions through SimpleFIN (overlapping imports and syncs are fine: anything already imported is skipped), then approve each transaction into a category or exclude it. Approved lines become real expenses or deposits, and LocalBooks learns from your choices to suggest a category next time. A downloaded line that is a check, deposit or payment you already entered is matched to it instead (on import when only one agrees, or with Match / Find a match…), and Show matched lists those, with Unmatch. Tick several lines to add them at once. Renaming rules (Rules…) give downloaded payees one name when the description begins with, contains or ends with some text; one is offered when you change a payee, and the same list edits the category rules learned from your approvals.',
+    body: 'Import a CSV, OFX or QFX statement from your bank, or click Connect a bank… to fetch transactions through SimpleFIN (overlapping imports and syncs are fine: anything already imported is skipped), then approve each transaction into a category or exclude it. Approved lines become real expenses or deposits, and Tillhouse learns from your choices to suggest a category next time. A downloaded line that is a check, deposit or payment you already entered is matched to it instead (on import when only one agrees, or with Match / Find a match…), and Show matched lists those, with Unmatch. Tick several lines to add them at once. Renaming rules (Rules…) give downloaded payees one name when the description begins with, contains or ends with some text; one is offered when you change a payee, and the same list edits the category rules learned from your approvals.',
     keywords: 'bank feed csv ofx qfx qbo import statement categorize approve exclude rule download duplicate columns mapping simplefin connect sync automatic setup token match unmatch matched already entered add several batch renaming rules rename payee begins contains ends category rules list',
     go: { label: 'Go to Bank Feeds', view: 'banking/feeds' },
     guide: 'bank-feeds',
@@ -42,7 +42,7 @@ export const topics = [
   {
     id: 'payout-feeds', area: 'banking', views: ['banking/payouts', 'banking/feeds'],
     title: 'Bring in Stripe, PayPal and Shopify Payments payouts with their fees',
-    body: 'Banking › Payout Feeds: an Admin connects a Stripe account with a restricted, read-only key (read access to Balance and Payouts) and chooses the bank, sales, fees, refunds and chargebacks accounts. The key stays in this computer’s credential store. A PayPal business account connects with a REST app’s client id and secret (Transaction search turned on); each withdrawal to the bank is a payout of everything since the one before it. A Shopify store connects with a custom app’s Admin API access token that has only the read_shopify_payments_payouts and read_shopify_payments_accounts scopes. Get payouts fetches paid payouts, and an Admin can set a feed to fetch every hour, 6 or 12 hours, or daily while LocalBooks is open; Record deposit posts each one as a deposit of its gross sales, less fees, refunds and chargebacks, so the bank amount is the payout and the bank line matches it.',
+    body: 'Banking › Payout Feeds: an Admin connects a Stripe account with a restricted, read-only key (read access to Balance and Payouts) and chooses the bank, sales, fees, refunds and chargebacks accounts. The key stays in this computer’s credential store. A PayPal business account connects with a REST app’s client id and secret (Transaction search turned on); each withdrawal to the bank is a payout of everything since the one before it. A Shopify store connects with a custom app’s Admin API access token that has only the read_shopify_payments_payouts and read_shopify_payments_accounts scopes. Get payouts fetches paid payouts, and an Admin can set a feed to fetch every hour, 6 or 12 hours, or daily while Tillhouse is open; Record deposit posts each one as a deposit of its gross sales, less fees, refunds and chargebacks, so the bank amount is the payout and the bank line matches it.',
     keywords: 'stripe paypal shopify withdrawal payout payouts processor card fees merchant refunds chargebacks disputes gross net deposit restricted key',
     go: { label: 'Go to Payout Feeds', view: 'banking/payouts' },
     guide: 'bank-feeds',

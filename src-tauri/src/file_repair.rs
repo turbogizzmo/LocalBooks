@@ -351,7 +351,7 @@ async fn check_stored_totals(pool: &SqlitePool) -> Result<CheckResult, String> {
         check("TOTALS", "Stored totals", CheckStatus::Pass, "Amounts paid on invoices and bills, and stock on hand, agree with their records.", vec![], false)
     } else {
         let summary = format!(
-            "{} disagree with the records behind them. LocalBooks never writes these out of step, so the file was edited elsewhere; restore a backup.",
+            "{} disagree with the records behind them. Tillhouse never writes these out of step, so the file was edited elsewhere; restore a backup.",
             plural(count, "stored total", "stored totals")
         );
         check("TOTALS", "Stored totals", CheckStatus::Fail, summary, details, false)

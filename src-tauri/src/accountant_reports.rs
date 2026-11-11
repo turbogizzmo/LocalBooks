@@ -562,7 +562,7 @@ pub async fn discrepancy(pool: &SqlitePool, account_id: Option<i64>, today: Naiv
     )];
     if totals_only > 0 {
         notes.push(format!(
-            "{totals_only} of them {} completed before LocalBooks kept a copy of each reconciliation's cleared transactions, so {} checked by {} totals only.",
+            "{totals_only} of them {} completed before Tillhouse kept a copy of each reconciliation's cleared transactions, so {} checked by {} totals only.",
             if totals_only == 1 { "was" } else { "were" },
             if totals_only == 1 { "it is" } else { "they are" },
             if totals_only == 1 { "its" } else { "their" },

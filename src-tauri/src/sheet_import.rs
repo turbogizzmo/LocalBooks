@@ -483,7 +483,7 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
             for p in &rows {
                 match total.checked_add(p.amount_cents) {
                     Some(t) => total = t,
-                    None => problems.push(Problem { row: p.row, message: "The payments add up to more than LocalBooks can hold".into() }),
+                    None => problems.push(Problem { row: p.row, message: "The payments add up to more than Tillhouse can hold".into() }),
                 }
             }
         }
@@ -576,7 +576,7 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                         }
                         match (e.1.checked_add(l.amount_cents.max(0)), e.2.checked_add((-l.amount_cents).max(0))) {
                             (Some(dr), Some(cr)) => (e.1, e.2) = (dr, cr),
-                            _ => problems.push(Problem { row: l.row, message: "The entries add up to more than LocalBooks can hold".into() }),
+                            _ => problems.push(Problem { row: l.row, message: "The entries add up to more than Tillhouse can hold".into() }),
                         }
                     }
                 }
@@ -590,7 +590,7 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                 }
                 match total.checked_add(*debits) {
                     Some(t) => total = t,
-                    None => problems.push(Problem { row: first.row, message: "The entries add up to more than LocalBooks can hold".into() }),
+                    None => problems.push(Problem { row: first.row, message: "The entries add up to more than Tillhouse can hold".into() }),
                 }
             }
             records = entries.len();
@@ -717,7 +717,7 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                 }
                 match total.checked_add(l.amount_cents) {
                     Some(t) => total = t,
-                    None => problems.push(Problem { row: l.row, message: format!("The {}s add up to more than LocalBooks can hold", d.noun) }),
+                    None => problems.push(Problem { row: l.row, message: format!("The {}s add up to more than Tillhouse can hold", d.noun) }),
                 }
             }
             // A discount comes off the lines; the sales tax goes on top.
@@ -729,7 +729,7 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                 }
                 match total.checked_add(tax).and_then(|t| t.checked_sub(discount)) {
                     Some(t) => total = t,
-                    None => problems.push(Problem { row: ls[0].row, message: format!("The {}s add up to more than LocalBooks can hold", d.noun) }),
+                    None => problems.push(Problem { row: ls[0].row, message: format!("The {}s add up to more than Tillhouse can hold", d.noun) }),
                 }
             }
         }

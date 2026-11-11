@@ -327,8 +327,8 @@ pub async fn handle_message(pool: &SqlitePool, message: Value) -> Option<Value> 
                 json!({
                     "protocolVersion": version,
                     "capabilities": { "tools": { "listChanged": false } },
-                    "serverInfo": { "name": "localbooks", "title": "LocalBooks", "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "Read-only accounting summaries from the LocalBooks company file open on this computer. All amounts are integer cents in the company's home currency; divide by 100 for display. Nothing here can change the books."
+                    "serverInfo": { "name": "localbooks", "title": "Tillhouse", "version": env!("CARGO_PKG_VERSION") },
+                    "instructions": "Read-only accounting summaries from the Tillhouse company file open on this computer. All amounts are integer cents in the company's home currency; divide by 100 for display. Nothing here can change the books."
                 }),
             )
         }
@@ -481,7 +481,7 @@ fn check_request(req: &Request, token: &str, port: u16) -> Result<(), Response> 
         return Err(Response {
             status: 401,
             body: Some(json!({ "error": "Missing or wrong access token" })),
-            extra_headers: &[("WWW-Authenticate", "Bearer realm=\"LocalBooks\"")],
+            extra_headers: &[("WWW-Authenticate", "Bearer realm=\"Tillhouse\"")],
         });
     }
     if !req.header("content-type").is_some_and(|v| v.to_ascii_lowercase().starts_with("application/json")) {

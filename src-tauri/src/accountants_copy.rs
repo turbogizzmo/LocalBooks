@@ -280,7 +280,7 @@ pub struct ImportPreview {
 fn read(bytes: &[u8]) -> Result<ChangesFile, String> {
     let file: ChangesFile = serde_json::from_slice(bytes).map_err(|_| "ACCOUNTANT_CHANGES_BAD: this isn't an accountant's changes file".to_string())?;
     if file.format != FORMAT {
-        return Err("ACCOUNTANT_CHANGES_BAD: this changes file is from another version of LocalBooks".into());
+        return Err("ACCOUNTANT_CHANGES_BAD: this changes file is from another version of Tillhouse".into());
     }
     Ok(file)
 }

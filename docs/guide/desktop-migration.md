@@ -7,9 +7,9 @@ The wizard brings in books from:
   directly (see **From QuickBooks for Mac 2012 and earlier** below)
 - later QuickBooks Desktop for Mac, through a backup saved for QuickBooks for Windows (see **From
   QuickBooks Desktop for Mac** below)
-- a QuickBooks Desktop that is **still installed and running** on this computer, which LocalBooks
+- a QuickBooks Desktop that is **still installed and running** on this computer, which Tillhouse
   asks for the data itself (Preview: see
-  [QuickBooks still installed: let LocalBooks export it](#quickbooks-still-installed-let-localbooks-export-it))
+  [QuickBooks still installed: let Tillhouse export it](#quickbooks-still-installed-let-tillhouse-export-it))
 - a QuickBooks **IIF export** (`.iif`)
 - a Quicken **QIF export** (`.qif`), which many banks and other programs also produce
 - QuickBooks **report exports** (`.csv` or `.xlsx`) from QuickBooks Desktop for Windows or Mac, or
@@ -34,7 +34,7 @@ books, choose the `.qbw` company file or a `.qbb` backup instead.
 **From Quicken:** use **File › File Export › QIF File**. Choose **All accounts**, and include
 **Transactions**, **Account list** and **Category list**.
 
-Then choose the file in the wizard, as for a company file below. LocalBooks reads it like this:
+Then choose the file in the wizard, as for a company file below. Tillhouse reads it like this:
 
 - **Accounts and categories** become accounts. Subaccounts (`Utilities:Electric`) keep their
   parent. An account the file uses but never declares gets a type from its name and how it is
@@ -51,14 +51,14 @@ Then choose the file in the wizard, as for a company file below. LocalBooks read
 - **IIF transactions:** a full import makes invoices, credit memos, sales receipts, payments,
   deposits, bills, vendor credits, item receipts, bill payments, checks, card charges, card credits, transfers,
   estimates and purchase orders. Anything else posts as a journal entry. IIF doesn't record which
-  invoice a payment paid, so, like QuickBooks, LocalBooks applies each payment to that customer's
+  invoice a payment paid, so, like QuickBooks, Tillhouse applies each payment to that customer's
   oldest open invoices, and each bill payment to that vendor's oldest open bills. A deposit is
   matched to undeposited payments of the same amount.
 - **QIF transactions:** a full import makes checks (when they have a check number), expenses, card
   charges, card credits, deposits and transfers. Opening balances post against Opening Balance Equity.
-  - A transfer appears in both accounts of a Quicken export; LocalBooks brings it in once.
+  - A transfer appears in both accounts of a Quicken export; Tillhouse brings it in once.
   - A blank category goes to **Uncategorized Income** or **Uncategorized Expense**.
-  - Investment accounts are skipped, because LocalBooks doesn't track securities.
+  - Investment accounts are skipped, because Tillhouse doesn't track securities.
 - **Dates:** IIF dates are always month first. QIF dates are read month first unless a date in the
   file can only be day first (such as `25/04/2024`).
 - **Lists only:** a file with lists but no transactions (such as Intuit's "Import First - List
@@ -70,13 +70,13 @@ Then choose the file in the wizard, as for a company file below. LocalBooks read
 ## From QuickBooks for Mac 2012 and earlier
 
 QuickBooks for Mac 2010, 2011 and 2012 keep the company in one unencrypted file (`.qb2012`,
-`.qb2011` or `.qb2010`), which LocalBooks reads directly. QuickBooks doesn't need to be installed.
+`.qb2011` or `.qb2010`), which Tillhouse reads directly. QuickBooks doesn't need to be installed.
 
 1. Close the company in QuickBooks, or copy the file.
 2. Choose the file in the wizard, as for a company file below. If your company is a folder (a
    bundle), choose the folder or any file inside it.
 
-LocalBooks reads the file like this:
+Tillhouse reads the file like this:
 
 - **Accounts** keep their names, types and subaccounts (account numbers aren't brought over). A
   subaccount of a different type than its parent moves to the top level. Hidden accounts come in inactive.
@@ -85,13 +85,13 @@ LocalBooks reads the file like this:
   Customers and vendors keep their company name, address, phone, email, notes and payment terms;
   vendors keep their tax ID and 1099 flag. Service, inventory, non-inventory and other charge
   items come in with their price and income account, and discount items as discount items (a
-  percent discount keeps its percent). Groups come in as LocalBooks groups (see step 4).
+  percent discount keeps its percent). Groups come in as Tillhouse groups (see step 4).
   Subtotal, payment and sales tax items aren't added to the item list; in a full import an
   invoice's or sales receipt's subtotal and discount lines stay where they were on the form. Employees and other names appear on their
   transactions but aren't added to a list, and classes aren't imported.
 - **Transactions** come in by type: invoices, sales receipts, credit memos, payments, deposits,
   bills, vendor credits, bill payments, checks, card charges, transfers, journal entries,
-  estimates and purchase orders. A full import makes them LocalBooks documents, with each payment
+  estimates and purchase orders. A full import makes them Tillhouse documents, with each payment
   applied to the invoices it paid, each bill payment to its bills, and each deposit linked to the
   payments it swept, as QuickBooks recorded them. Paychecks, payroll liability and sales tax
   payments, item receipts and inventory adjustments post as journal entries. Sales orders aren't
@@ -105,13 +105,13 @@ LocalBooks reads the file like this:
   accounts to check against QuickBooks' balance sheet. On Intuit's two 2012 sample companies,
   every transaction balances and every account matches.
 
-QuickBooks for Mac 2013 and later files may be encrypted. If LocalBooks says the file is
+QuickBooks for Mac 2013 and later files may be encrypted. If Tillhouse says the file is
 encrypted, use the steps below.
 
 ## From QuickBooks Desktop for Mac
 
-LocalBooks can't open a later QuickBooks for Mac company file (`.qb2024`, `.qb2023` and so on) or a
-Mac backup (`.qbmb`) directly, because QuickBooks encrypts them. LocalBooks never tries to decrypt
+Tillhouse can't open a later QuickBooks for Mac company file (`.qb2024`, `.qb2023` and so on) or a
+Mac backup (`.qbmb`) directly, because QuickBooks encrypts them. Tillhouse never tries to decrypt
 them. Save a copy for QuickBooks for Windows
 instead, and import that:
 
@@ -120,43 +120,43 @@ instead, and import that:
    which makes the same file).
 3. Click **Verify** when asked. If verification fails, rebuild the company file in QuickBooks first.
 4. Choose a name and location, and click **Save**.
-5. When QuickBooks asks for a password, **leave both fields blank** and click **OK**. LocalBooks
+5. When QuickBooks asks for a password, **leave both fields blank** and click **OK**. Tillhouse
    can't read a password-protected backup.
-6. In LocalBooks, choose the new `.qbb` file in the wizard, as for a company file below.
+6. In Tillhouse, choose the new `.qbb` file in the wizard, as for a company file below.
 
 Exporting to IIF from QuickBooks for Mac (**File › Export › Lists to IIF File**) brings in lists
 only, not transactions, so use the Windows backup to move your books. If you can't make the
 Windows backup (for example, your QuickBooks for Mac only opens files in view-only mode), export
 its reports instead: see [Import QuickBooks reports](#import-quickbooks-reports).
 
-## QuickBooks still installed: let LocalBooks export it
+## QuickBooks still installed: let Tillhouse export it
 
 > **Preview.** This was built from Intuit's published interfaces and documentation, and tested
 > against sample replies in Intuit's documented format. It has **not yet been tried against a
 > running QuickBooks** on either platform. If it fails, export the reports yourself instead (see
 > [Import QuickBooks reports](#import-quickbooks-reports)); the result is the same.
 
-If QuickBooks Desktop still runs on this computer, LocalBooks can ask it for the open company's
+If QuickBooks Desktop still runs on this computer, Tillhouse can ask it for the open company's
 data through Intuit's own public interfaces, so you don't have to export anything by hand. It
 sends **read-only requests only**: nothing in QuickBooks is added, changed or deleted.
 
 1. Open QuickBooks and your company file.
 2. **On a Mac only:** choose **Reports › Accountant & Taxes › Journal**, set the dates to **All**,
    keep the Debit and Credit columns, and leave the report as the front window.
-3. In LocalBooks, go to **Settings › Import & Migration** (or **File › Utilities › Import /
+3. In Tillhouse, go to **Settings › Import & Migration** (or **File › Utilities › Import /
    Convert…**), open **QuickBooks still installed? Export from my installed QuickBooks** under step 1, and click **Export from
    QuickBooks**.
 4. Answer the permission prompt (below) the first time.
 5. Carry on from [2. Review what was read](#2-review-what-was-read-and-choose-accounts). The import
    is named after your company and listed as **From QuickBooks** under *Your imports*.
 
-What LocalBooks asks for: the company name, the chart of accounts (with balances to check the
+What Tillhouse asks for: the company name, the chart of accounts (with balances to check the
 import against), customers and jobs, vendors, items, terms (Windows), classes, and a count of
 invoices, bills and bill payments. The transactions come from the **Journal** report for all dates,
 which holds every transaction with all its lines. Everything then goes through the same reader as
-[report exports](#what-localbooks-does-with-them), so it imports the same way.
+[report exports](#what-tillhouse-does-with-them), so it imports the same way.
 
-LocalBooks compares the counts of invoices, bills and bill payments with the Journal and tells you
+Tillhouse compares the counts of invoices, bills and bill payments with the Journal and tells you
 if they differ, which usually means the Journal didn't cover all dates. On Windows the class list
 comes in, inactive classes included, and the Journal's **Class** column gives each line its class
 (see [Classes](#classes)). QuickBooks for Mac's Journal window has no Class column, so there only
@@ -164,23 +164,23 @@ the class list comes in.
 
 ### QuickBooks Desktop for Mac
 
-LocalBooks talks to QuickBooks for Mac through its AppleScript commands: `executeqbxml` for the
+Tillhouse talks to QuickBooks for Mac through its AppleScript commands: `executeqbxml` for the
 lists, and `reportAsText` to read the Journal report in the front window (QuickBooks for Mac
 can't run reports on request). QuickBooks Desktop for Mac 2024 has both; older versions may not,
-in which case LocalBooks says so and you can export the reports instead.
+in which case Tillhouse says so and you can export the reports instead.
 
-**The permission prompt.** The first time, macOS asks whether **LocalBooks** may control
-**QuickBooks**. Click **OK**. This is macOS's Automation permission: it lets LocalBooks send
-QuickBooks requests, and LocalBooks only sends read-only ones. If you clicked **Don't Allow**, open
-**System Settings › Privacy & Security › Automation**, find LocalBooks, turn on QuickBooks, and try
+**The permission prompt.** The first time, macOS asks whether **Tillhouse** may control
+**QuickBooks**. Click **OK**. This is macOS's Automation permission: it lets Tillhouse send
+QuickBooks requests, and Tillhouse only sends read-only ones. If you clicked **Don't Allow**, open
+**System Settings › Privacy & Security › Automation**, find Tillhouse, turn on QuickBooks, and try
 again.
 
-LocalBooks never opens or decrypts the QuickBooks for Mac company file itself: QuickBooks does
+Tillhouse never opens or decrypts the QuickBooks for Mac company file itself: QuickBooks does
 the reading and hands over the answers.
 
 ### QuickBooks Desktop for Windows
 
-LocalBooks talks to QuickBooks for Windows through the **QuickBooks SDK**, Intuit's free toolkit
+Tillhouse talks to QuickBooks for Windows through the **QuickBooks SDK**, Intuit's free toolkit
 for apps that work with QuickBooks Desktop. It runs the same list queries plus a Journal report
 query, so nothing needs to be open besides the company file.
 
@@ -189,16 +189,16 @@ query, so nothing needs to be open besides the company file.
    The wizard tells you whether it is installed.
 2. The first time, open the company file as the **Admin** user. When you click **Export from
    QuickBooks**, QuickBooks shows an **Application Certificate** window asking whether to let
-   LocalBooks read this company file. Choose **Yes, whenever this QuickBooks company file is
+   Tillhouse read this company file. Choose **Yes, whenever this QuickBooks company file is
    open**, then **Continue**.
 3. If you chose **No** by mistake, or the access needs changing, use **Edit › Preferences ›
    Integrated Applications › Company Preferences** in QuickBooks.
 
-If QuickBooks is showing a dialog, LocalBooks says so: close it and try again.
+If QuickBooks is showing a dialog, Tillhouse says so: close it and try again.
 
 ## Import QuickBooks reports
 
-Every QuickBooks product can export its reports to Excel or CSV, so this works even when LocalBooks
+Every QuickBooks product can export its reports to Excel or CSV, so this works even when Tillhouse
 can't read the company file, and needs no file decryption. Export these reports, then choose them
 **all together** in step 1 (hold **⌘** or **Ctrl** to pick several, or drag them onto the box):
 
@@ -261,11 +261,11 @@ Only the Journal is needed; the lists add detail. Lists can also be imported on 
 The **General Ledger** (or **Transaction Detail by Account**) works too. Set the dates to **All**
 and show the **Type**, **Date**, **Num**, **Name**, **Memo**, **Split**, **Debit** and **Credit**
 columns (and **Trans #** where QuickBooks offers it). It lists each line under its account, so
-LocalBooks rebuilds each transaction by pairing its lines through the **Split** column. A line it
+Tillhouse rebuilds each transaction by pairing its lines through the **Split** column. A line it
 can't pair is listed as not read completely and isn't posted. Use either the Journal or the
 General Ledger, not both: each holds every transaction.
 
-### What LocalBooks does with them
+### What Tillhouse does with them
 
 - **Finding the data:** the title rows, blank and spacer columns, account headings, total rows and
   the footer are skipped. Columns are found by their heading, whatever the product calls them, in
@@ -283,7 +283,7 @@ General Ledger, not both: each holds every transaction.
 - **Account types** come from the Account Listing. Without it, each account gets a type from its
   name and how it's used, as for IIF. Check the types in step 2.
 - **Full import:** invoices, payments, sales receipts, credit memos, bills, vendor credits, bill
-  payments, checks, expenses, card charges, card credits, deposits and transfers become LocalBooks
+  payments, checks, expenses, card charges, card credits, deposits and transfers become Tillhouse
   documents, as for IIF. General journal entries and anything else post as journal entries. The
   reports don't say which invoice a payment paid, so payments apply to the customer's oldest open
   invoices, bill payments to the vendor's oldest open bills, and deposits to undeposited payments of
@@ -295,37 +295,37 @@ General Ledger, not both: each holds every transaction.
 
 ## From GnuCash
 
-Choose the book itself, the `.gnucash` file you open in GnuCash. LocalBooks reads both kinds of
+Choose the book itself, the `.gnucash` file you open in GnuCash. Tillhouse reads both kinds of
 book: the default compressed XML file, and a book saved as SQLite (**File › Save As…** with
 **Data Format** set to `sqlite3`). The file is only read, so it can stay open in GnuCash, though
 it's best to close GnuCash first so that your last changes are saved. GnuCash's dated backups
 (`Books.gnucash.20240101120000.gnucash`) are books too, if you need an earlier state. The `.log`
 files aren't needed.
 
-LocalBooks reads the book like this:
+Tillhouse reads the book like this:
 
 - **Accounts** keep their GnuCash paths (`Expenses:Auto:Fuel`). Bank and cash accounts become bank
   accounts; Asset, Credit Card, Liability, Equity, Income, Expense, A/Receivable and A/Payable
-  accounts become the matching LocalBooks types; trading accounts become equity accounts, as GnuCash
+  accounts become the matching Tillhouse types; trading accounts become equity accounts, as GnuCash
   shows them. Hidden accounts come in inactive.
   - **Placeholders** (such as the top-level `Assets` or `Expenses`) become ordinary parent accounts.
-  - In LocalBooks a subaccount has its parent's type, so an account whose type differs from its
+  - In Tillhouse a subaccount has its parent's type, so an account whose type differs from its
     parent's moves to the top level. For example, `Assets:Current Assets:Checking Account` (a bank
     account under an asset account) becomes the top-level bank account `Checking Account`. Step 2
     still shows its full GnuCash path.
 - **Amounts** come over exactly. GnuCash stores each amount as a fraction. One that isn't a whole
   number of cents (such as `1.005`) isn't rounded: its transaction is listed under **lines not read
   in full**, with the amount, for you to enter by hand.
-- **Currencies.** The home currency is the one most of the book's transactions use. LocalBooks
+- **Currencies.** The home currency is the one most of the book's transactions use. Tillhouse
   books every amount in that currency:
   - A transaction in the home currency uses its home-currency amounts, even for an account kept in
-    another currency. Those accounts hold home-currency amounts in LocalBooks.
+    another currency. Those accounts hold home-currency amounts in Tillhouse.
   - A transaction in another currency uses the amounts its home-currency accounts received or paid
     (GnuCash's *amount* rather than its *value*). A line in an account kept in another currency
     then has no home-currency amount, so the transaction is listed rather than converted at a
     guessed rate.
   - Exchange rates and stock prices from the price database aren't imported.
-- **Investments.** Stock and mutual fund accounts are skipped, because LocalBooks doesn't track
+- **Investments.** Stock and mutual fund accounts are skipped, because Tillhouse doesn't track
   securities. A transaction that touches one is listed with its other lines (usually the bank
   side), so you can enter the cash movement yourself.
 - **Customers, vendors and jobs** come in with their billing address, phone, email, notes and
@@ -342,7 +342,7 @@ LocalBooks reads the book like this:
   (draft) invoice or bill posts nothing in GnuCash, so it isn't imported.
 - **Not imported:** scheduled transactions, budgets, the price database, reconciliation status,
   tax tables and employees.
-- **Dates:** GnuCash stores each date as a time of day in UTC. LocalBooks takes the calendar date
+- **Dates:** GnuCash stores each date as a time of day in UTC. Tillhouse takes the calendar date
   you saw in GnuCash, including for older books that stored midnight in your time zone.
 
 ## From a spreadsheet you laid out
@@ -353,11 +353,11 @@ Kept your customers, vendors, sales, bills or adjusting entries in a spreadsheet
 1. Choose what the sheet holds under **The sheet holds**: customers or vendors; invoices, sales
    receipts, credit memos or deposits; bills, bill credits, checks, credit card charges or credit
    card credits; or journal entries. One sheet holds one kind. No sheet yet? Click **Download the …
-   template**: a CSV whose columns are LocalBooks' field names, with an example to replace.
+   template**: a CSV whose columns are Tillhouse's field names, with an example to replace.
 2. Click **Choose a spreadsheet…** and pick the file (`.csv`, `.xlsx`, `.xls` or `.ods`; the first
    sheet of a workbook is read). The first row with two or more filled cells is taken as the
    headings; blank rows are skipped.
-3. Check the matching: each LocalBooks field shows the column LocalBooks picked for it from the
+3. Check the matching: each Tillhouse field shows the column Tillhouse picked for it from the
    headings (ignoring case and punctuation, so "E-mail", "Inv #" or "Qty" match) and that column's
    first value. Change any of them, or choose **Not in the sheet**.
 
@@ -383,10 +383,10 @@ Kept your customers, vendors, sales, bills or adjusting entries in a spreadsheet
    which you match to your own accounts.
 
    On a transaction, each row is a line, and every line needs an **Amount**, or a Quantity and
-   Rate. Say whether dates like 03/04/2026 are month first or day first, or leave LocalBooks to
+   Rate. Say whether dates like 03/04/2026 are month first or day first, or leave Tillhouse to
    work it out from the dates in the sheet. Dates written 2026-03-04 and Excel date cells always
    read.
-4. Click **Check the rows**. LocalBooks reads every row and lists each one that would fail, by its
+4. Click **Check the rows**. Tillhouse reads every row and lists each one that would fail, by its
    row number in the spreadsheet: a required value missing, a date or amount that doesn't read, a
    name that appears twice, an amount that isn't the quantity times the rate, rows of one
    transaction that name a different customer, vendor, date or account, a journal row with both a
@@ -397,10 +397,10 @@ Kept your customers, vendors, sales, bills or adjusting entries in a spreadsheet
 
 Rows with the same number are one transaction, one line per row, in the order of the sheet; a row
 without a number (where the number isn't required) is a transaction of its own. Each line posts to
-the account its row names; an account LocalBooks doesn't have yet is listed in step 2 to match to
+the account its row names; an account Tillhouse doesn't have yet is listed in step 2 to match to
 one of yours or create. A customer, vendor or payee who isn't in your books yet is added with the
 import (a payee as a vendor). In a **Full import**, invoices, sales receipts, credit memos,
-deposits, bills, bill credits, checks and card charges and credits become those LocalBooks
+deposits, bills, bill credits, checks and card charges and credits become those Tillhouse
 documents, with the sales tax and discount on their invoices and sales receipts; journal entries
 post as journal entries.
 
@@ -418,12 +418,12 @@ Receive Payments instead.
 
 ## Payroll from a payroll service
 
-LocalBooks doesn't run payroll; your payroll service pays your people and files the taxes. To get
+Tillhouse doesn't run payroll; your payroll service pays your people and files the taxes. To get
 each payroll into your books, export it from the service as a journal (most call it a journal entry
 or general ledger report) as a .csv or Excel file, then under step 1 open **Payroll: a payroll
 service's journal export** and click **Choose a payroll export…**.
 
-1. **Columns.** LocalBooks matches the file's columns from their headings: **Date** and
+1. **Columns.** Tillhouse matches the file's columns from their headings: **Date** and
    **Account** are required, with **Debit** and **Credit** columns or one signed **Amount**
    (positive is a debit). **Entry** (a payroll ID, check date or batch) says which rows belong
    together; without it, rows on the same date make one entry. **Memo** goes on each line. Change
@@ -447,13 +447,13 @@ Past imports are listed under the button, with how many of their entries have be
 2. Click **Choose a file…**, or drag the file onto the box. For report exports, choose the report
    and its lists together.
 3. Wait while the progress bar works through the file; large files take a few minutes. Keep
-   LocalBooks open. The file is only read, never changed, and nothing is added to your books yet.
+   Tillhouse open. The file is only read, never changed, and nothing is added to your books yet.
 
 To bring in a different file later, click **Import another file**.
 
 If QuickBooks Desktop is still running on this computer, you can open **QuickBooks still
 installed? Export from my installed QuickBooks** below the file box instead: see
-[QuickBooks still installed: let LocalBooks export it](#quickbooks-still-installed-let-localbooks-export-it).
+[QuickBooks still installed: let Tillhouse export it](#quickbooks-still-installed-let-tillhouse-export-it).
 
 ## 2. Review what was read and choose accounts
 
@@ -464,12 +464,12 @@ installed? Export from my installed QuickBooks** below the file box instead: see
    **Recovered**, **No amount** or **Not read**. Only **Not read** lines can leave something out; if
    their transaction is listed, enter it by hand after posting. Transactions listed as **could not
    be read completely** are never posted. If some **amounts were not in whole cents**, open that
-   list too: a few company files store amounts with a fraction of a cent, and LocalBooks keeps money
+   list too: a few company files store amounts with a fraction of a cent, and Tillhouse keeps money
    in whole cents, so each such stored balance counts as zero and each such line or applied payment
    is left out. Check them in the original books.
-3. For each source account, choose a LocalBooks account under **Post to this LocalBooks account**.
+3. For each source account, choose a Tillhouse account under **Post to this Tillhouse account**.
    Or click **Match existing accounts and create the rest** to map by name and create what's missing.
-   Every account must have a LocalBooks account before you can post.
+   Every account must have a Tillhouse account before you can post.
 4. If the file has customers, vendors and items, click **Bring in customers, vendors and items**
    (**…, items and classes** when it has classes). It matches existing records by name and adds
    the rest; classes are added as described under [Classes](#classes). Price levels come in with them (a
@@ -477,20 +477,20 @@ installed? Export from my installed QuickBooks** below the file box instead: see
    get their default price level. Each level it creates is recorded in the audit trail. Item
    groups from a company file come in too, with their items in order, their quantities, and
    whether printed forms list the items. An item the group lists without a quantity (one you type
-   on the form) comes in at quantity 1, since a LocalBooks group needs one; check those groups
+   on the form) comes in at quantity 1, since a Tillhouse group needs one; check those groups
    after the import. A group with the same name as one you already have is
-   left as it is. A discount or percent charge in a group is left out of it, since a LocalBooks
+   left as it is. A discount or percent charge in a group is left out of it, since a Tillhouse
    group can't hold one; the summary says how many items were left out of groups. A group whose name an item already has, or none of whose items came in,
    is not added; the summary counts them.
 
 ## 3. Post to your books
 
 1. Choose how to bring in the transactions:
-   - **Full import** (recommended when the file has sales documents) makes LocalBooks invoices,
+   - **Full import** (recommended when the file has sales documents) makes Tillhouse invoices,
      credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges, card credits,
      transfers, estimates and purchase orders, so open invoices and bills, customer and vendor
      balances, and A/R and A/P aging carry over. Anything that can't be a document posts as a
-     journal entry and is listed under **not brought in as LocalBooks documents**. A deposit that
+     journal entry and is listed under **not brought in as Tillhouse documents**. A deposit that
      moved payments out of Undeposited Funds into an account that isn't a bank (receipts written
      off to an expense, say) comes in as a transfer out of Undeposited Funds: its payments no longer
      wait to be deposited, and voiding the transfer puts them back.
@@ -506,18 +506,18 @@ A QuickBooks Desktop company file (`.qbw`), backup (`.qbb`) or portable file (`.
 full ledger brings, besides accounts, customers, vendors, items and classes:
 
 - **Payroll.** Paychecks and payroll liability payments come in, so your payroll expense and
-  liability accounts match the original books. LocalBooks doesn't run payroll itself.
+  liability accounts match the original books. Tillhouse doesn't run payroll itself.
 - **Cost of goods sold.** An invoice or sales receipt that sold inventory brings the cost of what it
   sold, moved from Inventory Asset to Cost of Goods Sold as the original program recorded it.
 - **Inventory adjustments**, and the cost changes a bill made to stock already sold, come in, so
   Inventory Asset and Cost of Goods Sold match the file. Item quantities on hand and assembly
   builds don't come in yet: adjust quantities after the import (see
   [Count and correct stock](inventory.md#count-and-correct-stock)).
-- **Discounts and subtotals.** The file's discount items become LocalBooks discount items (a percent
+- **Discounts and subtotals.** The file's discount items become Tillhouse discount items (a percent
   discount keeps its percent). In a full import, an invoice's or sales receipt's subtotal and
   discount lines stay where they were on the form, rather than one amount off the whole form.
   Subtotal, payment and sales tax items are not added to your item list as things to sell.
-- **Item groups** come in as LocalBooks groups with their items in order, when you bring in
+- **Item groups** come in as Tillhouse groups with their items in order, when you bring in
   customers, vendors and items (step 2 below).
 - **Deposits split between accounts.** A deposit that went partly into one bank account and partly
   into another comes in as a deposit into the account that got the most, with the rest shown as
@@ -532,7 +532,7 @@ When the file has classes, posting brings them in, in either kind of import. A Q
 company file (`.qbw`) or backup (`.qbb`) brings its class list and each line's class; so do IIF
 files, report exports with a **Class** column, and QuickBooks still installed on Windows.
 
-- Each class matches a LocalBooks class with the same name (ignoring capitals) under the same
+- Each class matches a Tillhouse class with the same name (ignoring capitals) under the same
   parent, or is created. Subclasses keep their parent: `Construction:Remodel` comes in as
   **Remodel** under **Construction**.
 - Every line keeps its class, on the journal entry and, in a full import, on the invoice, bill,
@@ -551,7 +551,7 @@ amounts only, not accounts, customers or payments, and steps 2 and 3 change:
 
 1. In step 2, check **Invoices**, **Invoice lines**, **Total**, **Dates** and **Ignored**. Ignored
    lines are matches outside invoice tables, or amounts that couldn't be decoded.
-2. Under **Post to this LocalBooks income account**, choose an account for each line type, or click
+2. Under **Post to this Tillhouse income account**, choose an account for each line type, or click
    **Create an income account for each**.
 3. In step 3, keep **Opening Balance Equity** under **Balance each invoice against** unless your
    accountant says otherwise. The file has no customer payments, so these sales shouldn't sit in

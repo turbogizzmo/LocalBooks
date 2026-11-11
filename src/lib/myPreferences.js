@@ -1,4 +1,4 @@
-// Preferences › General, the My Preferences part: how LocalBooks behaves for you on this computer.
+// Preferences › General, the My Preferences part: how Tillhouse behaves for you on this computer.
 // None of these change what is posted; they only change how the screens take input. They live in
 // this computer's web storage, like the sort order of each list.
 
@@ -113,7 +113,7 @@ export function setMyPreferences(changes) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
   } catch {
-    // Storage full or unavailable: the change still holds until LocalBooks closes.
+    // Storage full or unavailable: the change still holds until Tillhouse closes.
   }
   window.dispatchEvent(new Event(CHANGED));
 }
@@ -148,7 +148,7 @@ export function useMyPreferences() {
   const [prefs, setPrefs] = useState(current);
   useEffect(() => {
     const refresh = () => setPrefs(current);
-    // Another window of LocalBooks changed them.
+    // Another window of Tillhouse changed them.
     const onStorage = (e) => {
       if (e.key === STORAGE_KEY) {
         current = read();

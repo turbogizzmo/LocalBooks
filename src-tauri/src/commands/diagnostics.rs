@@ -24,7 +24,7 @@ pub async fn preview_diagnostics(app: AppHandle, db: State<'_, Db>) -> Result<Ve
 #[tauri::command]
 pub async fn save_diagnostics(app: AppHandle, db: State<'_, Db>) -> Result<Option<String>, String> {
     // Where first: nothing is gathered if the dialog is cancelled.
-    let name = format!("LocalBooks diagnostics {}.zip", Local::now().format("%Y-%m-%d"));
+    let name = format!("Tillhouse diagnostics {}.zip", Local::now().format("%Y-%m-%d"));
     let dialog_app = app.clone();
     let chosen = tauri::async_runtime::spawn_blocking(move || dialog_app.dialog().file().set_file_name(&name).add_filter("Zip file", &["zip"]).blocking_save_file())
         .await

@@ -73,7 +73,7 @@ export default function CondenseData({ isAdmin, onDone }) {
 
   const run = async () => {
     const ok = await askConfirm(
-      `Condense transactions through ${formatDate(cutoff)}?\n\nLocalBooks first saves a verified archive of your full history (it opens read-only) and a plain backup. ` +
+      `Condense transactions through ${formatDate(cutoff)}?\n\nTillhouse first saves a verified archive of your full history (it opens read-only) and a plain backup. ` +
         `It then builds the condensed file and checks it against the archive before switching to it. If any check fails, your books are left as they are.`,
       { confirmLabel: 'Condense' },
     );

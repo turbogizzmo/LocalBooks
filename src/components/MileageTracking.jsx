@@ -553,7 +553,7 @@ function RatesTab({ onNotice }) {
     <section className="qb-panel flex min-h-0 flex-1 flex-col">
       <div className="flex-none border-b border-qb-border px-2 py-1 text-sm">
         <p>
-          A trip’s deductible amount is its miles × the rate in effect on the trip date. LocalBooks doesn’t come with any rates: enter the official rate for each period yourself. The IRS
+          A trip’s deductible amount is its miles × the rate in effect on the trip date. Tillhouse doesn’t come with any rates: enter the official rate for each period yourself. The IRS
           publishes its standard mileage rates (business, medical/moving, charitable) at <span className="select-all font-semibold">irs.gov/tax-professionals/standard-mileage-rates</span>; check
           there or with your accountant when a new year or a mid-year change starts.
         </p>

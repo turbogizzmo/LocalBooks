@@ -12,7 +12,7 @@ const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Sales › Send Forms: the forms marked "Email later". Each goes out with its form's email template
- * and PDF: all at once over SMTP when sending from LocalBooks is on, otherwise as one new message
+ * and PDF: all at once over SMTP when sending from Tillhouse is on, otherwise as one new message
  * per form in the mail app. A sent form leaves the queue and its send is added to its history.
  */
 export default function SendForms() {
@@ -112,7 +112,7 @@ export default function SendForms() {
               <>
                 <label className="flex items-center gap-1">
                   <input type="radio" name="send-forms-method" checked={method === 'SMTP'} onChange={() => setMethod('SMTP')} disabled={busy} />
-                  Send from LocalBooks ({smtp.fromEmail})
+                  Send from Tillhouse ({smtp.fromEmail})
                 </label>
                 <label className="flex items-center gap-1">
                   <input type="radio" name="send-forms-method" checked={method === 'MAIL_APP'} onChange={() => setMethod('MAIL_APP')} disabled={busy} />

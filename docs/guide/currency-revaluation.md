@@ -16,7 +16,7 @@ Profit and Loss for that period show what they're worth then.
    the gain or loss.
 5. Click **Post revaluation** and confirm.
 
-LocalBooks posts the net gain or loss to **Unrealized Exchange Gain or Loss** on that date and
+Tillhouse posts the net gain or loss to **Unrealized Exchange Gain or Loss** on that date and
 reverses it the next day. Your books keep each invoice at its original rate, so when the customer
 pays, the realized gain or loss (in **Exchange Gain or Loss**) is still exactly right.
 
@@ -30,7 +30,7 @@ voided, and you can revalue that date again.
 
 ## Look up daily exchange rates
 
-LocalBooks can suggest exchange rates for you. It's **off** until you turn it on.
+Tillhouse can suggest exchange rates for you. It's **off** until you turn it on.
 
 1. Go to **Settings › Preferences Console**, click **Multiple Currencies**, then **Company
    Preferences**.
@@ -43,7 +43,7 @@ shows where the rate came from: **ECB** and the date it was published.
 
 - **Weekends and holidays.** The ECB publishes on business days, so a Saturday invoice uses
   Friday's rate. The note shows the date of the rate that was used.
-- **You can always change it.** Type a different rate and LocalBooks keeps yours. If you've typed
+- **You can always change it.** Type a different rate and Tillhouse keeps yours. If you've typed
   a rate, the note shows the ECB rate with a **Use** button instead of replacing it.
 - **Saved transactions keep their rate.** Opening a saved invoice or expense never changes its rate,
   and nothing is re-rated when new rates come in.
@@ -72,6 +72,6 @@ HKD, HUF, IDR, ILS, INR, ISK, JPY, KRW, MXN, MYR, NOK, NZD, PHP, PLN, RON, SEK, 
 and ZAR), with history back to January 4, 1999. For any other currency or an earlier date, enter
 the rate yourself.
 
-> **Tip:** Like every rate in LocalBooks, a suggested rate is rounded to six decimal places. For a
+> **Tip:** Like every rate in Tillhouse, a suggested rate is rounded to six decimal places. For a
 > currency worth much less than your home currency (1 JPY = 0.006874 USD, for example), that leaves
 > fewer significant digits than the ECB publishes.

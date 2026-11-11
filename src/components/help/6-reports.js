@@ -10,7 +10,7 @@ export const screens = {
 };
 
 /**
- * Topics: two sentences each, describing what LocalBooks actually does. `views` lists the
+ * Topics: two sentences each, describing what Tillhouse actually does. `views` lists the
  * screens a topic is about (shown under "On this screen"); `go` opens the place to do it, with an
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
@@ -26,7 +26,7 @@ export const topics = [
   {
     id: 'email-report-pdf', area: 'reports', views: ['reports', 'accounting/register', 'sales/customers', 'dashboard'],
     title: 'Email a report, list or register as a PDF',
-    body: 'Export › Email as PDF… on any report, list or register attaches it as a PDF to a message: sent from LocalBooks when Settings › Email is set up, or opened in your mail app. Save as PDF… saves the same file, and the Reminders list can be emailed too. Tick Password-protect the PDF to make it open only with a password you give the recipient another way.',
+    body: 'Export › Email as PDF… on any report, list or register attaches it as a PDF to a message: sent from Tillhouse when Settings › Email is set up, or opened in your mail app. Save as PDF… saves the same file, and the Reminders list can be emailed too. Tick Password-protect the PDF to make it open only with a password you give the recipient another way.',
     keywords: 'email report pdf send attach accountant export save pdf list register reminders mail password protect encrypt',
     go: { label: 'Go to Reports', view: 'reports' },
     guide: 'reports',
@@ -34,7 +34,7 @@ export const topics = [
   {
     id: 'scheduled-reports', area: 'reports', views: ['reports'],
     title: 'Schedule reports to email or save',
-    body: 'Reports › Scheduled Reports… runs chosen reports every day, week, month or quarter, for dates counted from the run (last month, quarter to date…), and emails them through Settings › Email or saves them to a folder as PDF or Excel. Schedules run only while LocalBooks is open; a run missed while it was closed happens once when it next opens. Scheduled PDFs can be password-protected; the password stays in this computer’s credential store, not the company file.',
+    body: 'Reports › Scheduled Reports… runs chosen reports every day, week, month or quarter, for dates counted from the run (last month, quarter to date…), and emails them through Settings › Email or saves them to a folder as PDF or Excel. Schedules run only while Tillhouse is open; a run missed while it was closed happens once when it next opens. Scheduled PDFs can be password-protected; the password stays in this computer’s credential store, not the company file.',
     keywords: 'schedule scheduled report automatic recurring email monthly weekly daily quarterly accountant folder pdf excel send password protect encrypt',
     go: { label: 'Go to Reports', view: 'reports' },
     guide: 'reports',

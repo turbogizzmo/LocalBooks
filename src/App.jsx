@@ -68,7 +68,7 @@ const WINDOWLESS = takeWindowlessOpen();
 const leaf = (view) => !!view && !!findNav(view) && !findNav(view).item.children;
 
 /**
- * The windows this LocalBooks window starts with. The page it was opened on (Window › New Window) or
+ * The windows this Tillhouse window starts with. The page it was opened on (Window › New Window) or
  * the Import wizard for a QuickBooks file being migrated comes first. Otherwise Edit › Preferences ›
  * Desktop View › Start on decides: the company's saved desktop (else the Home page), the Home page,
  * one chosen screen, or no windows. A company opened without restoring windows starts with none.
@@ -124,7 +124,7 @@ export default function App() {
   useEffect(() => {
     if (inventoryOn !== null) api.setMenuViewEnabled('expenses/purchase-orders', inventoryOn).catch(() => {});
   }, [inventoryOn]);
-  const companyName = prefs.data?.company_name ?? 'LocalBooks';
+  const companyName = prefs.data?.company_name ?? 'Tillhouse';
   // Which company is open, as the window title shows it: its name, or the file's name until it is named.
   const openCompany = storage.data?.companyName ?? null;
   const company = {
@@ -193,13 +193,13 @@ export default function App() {
     };
   }, []);
 
-  // Closing LocalBooks with unsaved entries in a form asks first.
+  // Closing Tillhouse with unsaved entries in a form asks first.
   useEffect(() => guardWindowClose(), []);
 
   // File › New Company… and Open or Restore Company… (the window reloads on the company opened).
   const companyFiles = useCompanyFileActions();
 
-  // Window › New Window: another LocalBooks window, for a second screen, on the active window's page.
+  // Window › New Window: another Tillhouse window, for a second screen, on the active window's page.
   const [windowError, setWindowError] = useState(null);
   const openNewWindow = useCallback(() => {
     setWindowError(null);
@@ -241,7 +241,7 @@ export default function App() {
   }, [select, openNewWindow]);
 
   // Ctrl/Cmd+Alt+N opens the + New matrix from anywhere; F1 toggles Help; Ctrl+Shift+N opens a new
-  // LocalBooks window (on macOS the Window menu's Cmd+Shift+N does).
+  // Tillhouse window (on macOS the Window menu's Cmd+Shift+N does).
   useEffect(() => {
     const onKey = (e) => {
       if (!IS_MAC && e.ctrlKey && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
@@ -283,9 +283,9 @@ export default function App() {
     <CompanyContext.Provider value={company}>
     <WindowManagerContext.Provider value={managerContext}>
     <div className="flex h-full">
-      {sidebar === 'menu' && <Sidebar current={activeView} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} isAdmin={isAdmin} />}
+      {sidebar === 'menu' && <Sidebar current={activeView} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'Tillhouse'} storage={storage.data?.storage} isAdmin={isAdmin} />}
       {/* The left pane as the Open Window List alone, or the list beside the menu (View › Open Window List). */}
-      {(sidebar === 'open-windows' || windowPrefs.showOpenWindowList) && <OpenWindowList asSidebar={sidebar === 'open-windows'} companyName={openCompany ?? 'LocalBooks'} />}
+      {(sidebar === 'open-windows' || windowPrefs.showOpenWindowList) && <OpenWindowList asSidebar={sidebar === 'open-windows'} companyName={openCompany ?? 'Tillhouse'} />}
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="qb-toolbar no-print flex-none">
           {parent && <span className="text-sm text-qb-ink-muted">{parent.label} ›</span>}

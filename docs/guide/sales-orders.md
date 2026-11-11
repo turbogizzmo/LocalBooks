@@ -66,7 +66,7 @@ The list shows each order's **Status**: **Open** (nothing invoiced yet), **Partl
 
 ## Backorders and stock
 
-Stock leaves when an order is invoiced, not when it is taken. Until then LocalBooks shows what is
+Stock leaves when an order is invoiced, not when it is taken. Until then Tillhouse shows what is
 promised:
 
 - **On sales orders**: what is left to ship on open orders, for each item.

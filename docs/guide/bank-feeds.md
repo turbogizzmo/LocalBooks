@@ -1,12 +1,12 @@
 # Import bank transactions (bank feeds)
 
-Bring your bank's transactions into LocalBooks, then approve each one into your books. There are two
+Bring your bank's transactions into Tillhouse, then approve each one into your books. There are two
 ways to get them:
 
 - **Import a statement file** you download from your bank: **OFX**, **QFX**, **QBO**, **CSV**, or a
   **PDF** bank or card statement. Free, and works with almost any bank.
 - **Connect a bank** through SimpleFIN to fetch new transactions with one click. This needs a
-  SimpleFIN Bridge subscription (about $15 a year, paid to SimpleFIN, not LocalBooks).
+  SimpleFIN Bridge subscription (about $15 a year, paid to SimpleFIN, not Tillhouse).
 
 Either way, transactions wait under **For review** until you approve them. Nothing posts on its own.
 
@@ -15,7 +15,7 @@ Either way, transactions wait under **For review** until you approve them. Nothi
 1. Download a statement from your bank's website. Choose OFX, QFX or QBO if offered: those files
    carry the bank's own ID for each transaction. If your bank only offers PDF statements, see
    [Import a PDF statement](#import-a-pdf-statement).
-2. In LocalBooks go to **Banking › Bank Feeds** and choose the **Account** the statement is for.
+2. In Tillhouse go to **Banking › Bank Feeds** and choose the **Account** the statement is for.
 3. Click **Import statement…** and choose the file. The new transactions appear under **For review**.
 
 You can import overlapping statements safely. Transactions already imported are skipped and
@@ -28,11 +28,11 @@ PDF statements are useful for rebuilding older history, because banks usually ke
 online when CSV or OFX downloads only go back a few months.
 
 1. Choose the **Account** the statement is for, click **Import statement…** and choose the PDF.
-2. LocalBooks reads the transaction table from the PDF and opens the **Which columns are which?**
+2. Tillhouse reads the transaction table from the PDF and opens the **Which columns are which?**
    window. Its columns are named after the statement's column titles (for example *Date*,
    *Description*, *Withdrawals*, *Deposits*, *Balance*).
 3. Check the columns and the **Preview**, as for a CSV file (see
-   [When LocalBooks asks which columns are which](#when-localbooks-asks-which-columns-are-which)).
+   [When Tillhouse asks which columns are which](#when-tillhouse-asks-which-columns-are-which)).
 4. Read the **balance check** above the preview:
    - **Balances check out** means the opening balance plus the transactions equals the closing
      balance, and every running balance follows from the one before it. Nothing was missed.
@@ -40,10 +40,10 @@ online when CSV or OFX downloads only go back a few months.
      The message says how far off the total is and at which transaction the running balance first
      stops matching. Compare the preview with the statement before importing.
    - Some statements print no opening and closing balance, so there is nothing to check against.
-5. Click **Import … transactions**. LocalBooks remembers the columns for the next statement with the
+5. Click **Import … transactions**. Tillhouse remembers the columns for the next statement with the
    same column titles.
 
-What LocalBooks handles:
+What Tillhouse handles:
 
 - **Descriptions on two or more lines** are joined into one.
 - **Dates without a year** (01/15, Jan 15) take their year from the statement period printed on the
@@ -53,7 +53,7 @@ What LocalBooks handles:
   `12.00-`, and `CR` / `DR` markers.
 - **Card statements**, which print charges as positive amounts. When you import into a credit card
   account, charges come in as money out and payments as money in. If the balances only add up with
-  every sign reversed, LocalBooks reverses them and says so.
+  every sign reversed, Tillhouse reverses them and says so.
 - **Statements over several pages**, with the column titles repeated on each page. Totals, page
   footers and summary tables (such as a daily balance list) are skipped.
 - **Re-importing** a statement, or a CSV file covering the same days, skips what is already there.
@@ -61,7 +61,7 @@ What LocalBooks handles:
 Good to know:
 
 - **Scanned statements can't be imported.** A statement that was scanned or photographed is only a
-  picture, and LocalBooks does not do OCR (text recognition). LocalBooks says "this PDF has no
+  picture, and Tillhouse does not do OCR (text recognition). Tillhouse says "this PDF has no
   text". Download the statement from your bank's website instead: those PDFs contain text.
 - **Password-protected PDFs** must be opened and saved without a password first.
 - Everything is read on your computer. The PDF is not sent anywhere.
@@ -69,13 +69,13 @@ Good to know:
 ## Connect a bank (SimpleFIN)
 
 SimpleFIN Bridge signs in to your banks and shares read-only transaction data with apps you
-approve. LocalBooks never sees your bank password.
+approve. Tillhouse never sees your bank password.
 
 1. Go to **bridge.simplefin.org**, create an account, and connect your banks there.
 2. In SimpleFIN Bridge, create a **setup token** for a new app connection and copy it.
-3. In LocalBooks go to **Banking › Bank Feeds** and click **Connect a bank…**.
+3. In Tillhouse go to **Banking › Bank Feeds** and click **Connect a bank…**.
 4. Paste the token and click **Connect**. Your SimpleFIN accounts and their balances are listed.
-5. For each account you want, choose the LocalBooks bank or credit card account under **Feeds
+5. For each account you want, choose the Tillhouse bank or credit card account under **Feeds
    into**, check the **from** date, and click **Link**. The suggested date is the day after the
    last transaction already in Bank Feeds for that account, so nothing is fetched twice.
 6. Click **Sync now**. New transactions appear under **For review**.
@@ -84,16 +84,16 @@ After that, click **Sync banks** on the Bank Feeds toolbar whenever you want new
 
 Good to know:
 
-- **A setup token works once.** If LocalBooks says the token was already used and you didn't use
+- **A setup token works once.** If Tillhouse says the token was already used and you didn't use
   it, someone else may have: disable it in SimpleFIN Bridge and create a new one.
 - **The access is kept in this computer's keychain**, not in the company file or its backups. If
   you open the company file on another computer, the connection shows **Reconnect**: paste a new
   setup token and your account links are kept.
-- **SimpleFIN allows about 24 updates a day**, so LocalBooks syncs only when you ask, and at most
+- **SimpleFIN allows about 24 updates a day**, so Tillhouse syncs only when you ask, and at most
   every 10 minutes. Each sync re-checks the last 5 days to catch transactions that post late.
 - **Only posted transactions are fetched.** Pending ones arrive in a later sync once they post.
 - **Up to 90 days back.** For older history, import statement files.
-- **Accounts in another currency can't be linked**, because LocalBooks bank accounts are kept in
+- **Accounts in another currency can't be linked**, because Tillhouse bank accounts are kept in
   your home currency. Import their statements as files instead.
 - Messages from SimpleFIN (for example "reauthenticate with your bank") appear on the connection.
   Fix those in SimpleFIN Bridge.
@@ -107,7 +107,7 @@ less Stripe's fees, refunds and disputes. **Banking › Payout Feeds** brings ea
 deposit that shows all of it, so your income is the gross sales and the fees are an expense.
 
 **Connect** (Admins): in the Stripe Dashboard, under Developers › API keys, create a **restricted
-key** with **Read** access to **Balance** and **Payouts** (nothing else). In LocalBooks click
+key** with **Read** access to **Balance** and **Payouts** (nothing else). In Tillhouse click
 **Connect Stripe…**, paste the key, and choose:
 
 - the **bank account** the payouts arrive in;
@@ -115,9 +115,9 @@ key** with **Read** access to **Balance** and **Payouts** (nothing else). In Loc
   customers);
 - the accounts for **processor fees**, **refunds** and **chargebacks**.
 
-LocalBooks checks the key with Stripe, then keeps it in this computer's credential store (the
+Tillhouse checks the key with Stripe, then keeps it in this computer's credential store (the
 Keychain on a Mac), never in the company file. Nothing is fetched until you connect, and then only
-when you click **Get payouts** (or on a schedule you choose, below); LocalBooks talks only to Stripe
+when you click **Get payouts** (or on a schedule you choose, below); Tillhouse talks only to Stripe
 and sends nothing anywhere else.
 
 **Get payouts** fetches paid payouts from the last 90 days (afterwards, since the last fetch). Each
@@ -140,9 +140,9 @@ Each withdrawal comes in as a payout made of everything since the withdrawal bef
 
 **Connect** (Admins): at developer.paypal.com, log in with your business account, create a **REST
 app** under Apps & Credentials (Live), and make sure its **Transaction search** feature is on. In
-LocalBooks click **Connect PayPal…**, paste the app's **client id** and **secret**, and choose the
+Tillhouse click **Connect PayPal…**, paste the app's **client id** and **secret**, and choose the
 accounts as for Stripe. Tick **Sandbox app** only to try it with PayPal's test environment.
-LocalBooks uses the credentials only to read your transactions, checks them with PayPal, and keeps
+Tillhouse uses the credentials only to read your transactions, checks them with PayPal, and keeps
 them in this computer's credential store, never in the company file.
 
 **Get payouts** reads the last 90 days of PayPal activity (afterwards, since the last fetch), plus a
@@ -163,9 +163,9 @@ the same way.
 **Connect** (Admins): in your Shopify admin, go to **Settings › Apps and sales channels › Develop
 apps**, create an app, and under **Admin API** give it only the
 **read_shopify_payments_payouts** and **read_shopify_payments_accounts** scopes. Install it and
-copy its **Admin API access token** (it's shown once). In LocalBooks click **Connect Shopify…**,
+copy its **Admin API access token** (it's shown once). In Tillhouse click **Connect Shopify…**,
 enter your store's address (such as `my-store.myshopify.com`) and the token, and choose the
-accounts as for Stripe. LocalBooks checks the token can read your Shopify Payments account, keeps
+accounts as for Stripe. Tillhouse checks the token can read your Shopify Payments account, keeps
 it in this computer's credential store, and talks only to your store's Admin API.
 
 **Get payouts** fetches paid payouts to your bank from the last 90 days (afterwards, since the last
@@ -175,13 +175,13 @@ wait until they are paid. Test-mode transactions are left out.
 ### Fetch payouts automatically
 
 Each feed is fetched only when you click **Get payouts** until an Admin changes **Fetch** on the
-feed to every hour, 6 hours, 12 hours or once a day. LocalBooks then fetches it on that schedule
+feed to every hour, 6 hours, 12 hours or once a day. Tillhouse then fetches it on that schedule
 while it is open and someone who can change the books is signed in; the line beside **Fetch** says
 when it last did and what it found, or why it couldn't. New payouts still wait for you to click
-**Record deposit**. On a Mac, after LocalBooks is updated the Keychain may ask once whether
-LocalBooks can read the feed's key; choose **Always Allow** so automatic fetches can run.
+**Record deposit**. On a Mac, after Tillhouse is updated the Keychain may ask once whether
+Tillhouse can read the feed's key; choose **Always Allow** so automatic fetches can run.
 
-## When LocalBooks asks which columns are which
+## When Tillhouse asks which columns are which
 
 Most bank CSV files are recognized automatically: a date, a description, and either one amount
 column (negative = money out) or separate money-in and money-out columns such as Credit/Debit,
@@ -195,10 +195,10 @@ Deposits/Withdrawals or Paid in/Paid out. Otherwise a window opens:
 4. Check the **Preview**: dates should be right and money out should show as negative (red).
 5. Click **Import … transactions**.
 
-LocalBooks remembers your choices, so the next file with the same columns imports directly. The
+Tillhouse remembers your choices, so the next file with the same columns imports directly. The
 window also opens when every date in a file could be read either way (such as 03/07), so you can
 confirm the day/month order once. For PDF statements it always opens, so you can check the table
-LocalBooks read and its balance check.
+Tillhouse read and its balance check.
 
 ## Approve or exclude each transaction
 
@@ -219,7 +219,7 @@ the category shown on its row (and its payee and class), all together or, if one
 A downloaded transaction is often one you already entered: a check you wrote, a deposit you made,
 a bill payment or a transfer. Matching it to that transaction records nothing new.
 
-- **On import**, LocalBooks matches a downloaded transaction by itself when exactly one entered
+- **On import**, Tillhouse matches a downloaded transaction by itself when exactly one entered
   transaction in that account agrees: the same amount, dated from 45 days before to 7 days after
   the bank's date, and, when the bank names a check number (*CHECK 1042*), the same check number.
   The import message says how many were matched; they don't appear under **For review**.
@@ -227,7 +227,7 @@ a bill payment or a transfer. Matching it to that transaction records nothing ne
   **Match: Check #1042 · …** under **For review**. Select it and click **Match**.
 - **Match by hand.** For any other line, click **Find a match…** to list entered transactions for
   that amount within four months, nearest date first, and click **Match** on the right one. When
-  two entered transactions agree, LocalBooks never picks one for you.
+  two entered transactions agree, Tillhouse never picks one for you.
 - **Show matched** lists the matched lines with what each matched; **Unmatch** puts a line back
   under **For review**. Voiding the matched transaction puts its line back too.
 
@@ -239,7 +239,7 @@ some text (capitals and extra spaces don't matter), its **Payee** is the name yo
 than one rule fits, the one with the longest text wins. The note under **Payee** says *Named by a
 renaming rule*.
 
-- **When you change a payee** and approve the line, LocalBooks offers a rule: *Use this name next
+- **When you change a payee** and approve the line, Tillhouse offers a rule: *Use this name next
   time?* with the description's first words filled in. Adjust it and click **Save rule**, or **No
   thanks**.
 - **Rules…** lists your renaming rules: search them, **Edit**, **Remove**, or **Add rule**. Its
@@ -250,12 +250,12 @@ Rules only name lines still waiting for review; transactions already added keep 
 
 ## How categories are suggested
 
-LocalBooks suggests a category for every transaction, in this order:
+Tillhouse suggests a category for every transaction, in this order:
 
 1. **Rules.** A built-in vendor list (for example fuel stations go to Fuel & Auto), and a rule
    learned from each transaction you approve, matching the first distinctive words of its
    description. The note under the category says which kind of rule matched.
-2. **Similar past transactions.** When no rule matches, LocalBooks looks for the past transactions
+2. **Similar past transactions.** When no rule matches, Tillhouse looks for the past transactions
    in this company file that are most like this one: words in the description, the exact amount,
    roughly the same amount, the same bank account and the same time of the month. It suggests the
    category most of them used, with a **High**, **Medium** or **Low** confidence badge and a
@@ -275,7 +275,7 @@ Good to know:
   imported from QuickBooks gets useful suggestions from the start.
 - **It stays on your computer.** Suggestions are worked out from your company file in memory. Nothing
   is sent anywhere and nothing extra is stored.
-- **Voiding** an approved transaction sends it back for review, and LocalBooks forgets it.
+- **Voiding** an approved transaction sends it back for review, and Tillhouse forgets it.
 - Inactive accounts are never suggested.
 
 > **Tip:** Approving a bank transaction that you already entered by hand records it twice. Match it

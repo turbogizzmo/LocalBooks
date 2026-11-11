@@ -186,7 +186,7 @@ const WRITE_ENDINGS: [&str; 8] = ["Add", "Mod", "Del", "Void", "AddRq", "ModRq",
 /// Refuses a request unless every message in it is one of [`Query`]'s, so nothing that could
 /// change QuickBooks data is ever sent, whatever builds the request.
 pub fn ensure_read_only(request: &str) -> Result<(), String> {
-    let refuse = |why: String| Err(format!("QB_NOT_READ_ONLY: LocalBooks only sends QuickBooks read-only queries, and refused {why}"));
+    let refuse = |why: String| Err(format!("QB_NOT_READ_ONLY: Tillhouse only sends QuickBooks read-only queries, and refused {why}"));
     let root = xml::parse(request)?;
     let Some(msgs) = (root.name == "QBXML").then(|| root.child("QBXMLMsgsRq")).flatten() else {
         return refuse("a request that is not a qbXML message set".into());

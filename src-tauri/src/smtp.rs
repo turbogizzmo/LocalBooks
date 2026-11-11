@@ -216,8 +216,8 @@ pub async fn send_test(settings: SmtpSettings, secrets: &SecretStore, password: 
     let message = Message::builder()
         .from(from.clone())
         .to(from)
-        .subject(format!("LocalBooks test email from {company}"))
-        .body(format!("This is a test message from LocalBooks.\n\nIf you can read it, {company} can email invoices and estimates through {}.", settings.host))
+        .subject(format!("Tillhouse test email from {company}"))
+        .body(format!("This is a test message from Tillhouse.\n\nIf you can read it, {company} can email invoices and estimates through {}.", settings.host))
         .map_err(|e| format!("SMTP_MESSAGE: {e}"))?;
     transport.send(message).await.map_err(|e| send_error(&e))?;
     Ok(settings.from_email)
@@ -258,7 +258,7 @@ fn build_message(settings: &SmtpSettings, outgoing: Outgoing) -> Result<Message,
 pub async fn send(pool: &SqlitePool, secrets: &SecretStore, outgoing: Outgoing) -> Result<(), String> {
     let settings = get_settings(pool).await?;
     if !settings.enabled {
-        return Err("SMTP_OFF: sending from LocalBooks is turned off in Settings › Email".into());
+        return Err("SMTP_OFF: sending from Tillhouse is turned off in Settings › Email".into());
     }
     let transport = transport(&settings, secrets, None).await?;
     let message = build_message(&settings, outgoing)?;

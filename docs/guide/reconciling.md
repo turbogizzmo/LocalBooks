@@ -1,13 +1,13 @@
 # Reconcile an account
 
 Reconciling checks your books against a bank or credit card statement. Once it balances,
-LocalBooks locks the matched transactions so the reconciled balance can't change.
+Tillhouse locks the matched transactions so the reconciled balance can't change.
 
 1. Go to **Banking › Reconcile** and choose the **Account**.
 2. From your statement, enter the **Statement ending date** and **Ending balance**. If the
    statement shows a **Service charge** (a bank or card fee) or **Interest earned**, enter each
    one's amount, date and account (an expense account for the charge, an income account for the
-   interest), and a class if you track classes. Then click **Start reconciling**. LocalBooks posts
+   interest), and a class if you track classes. Then click **Start reconciling**. Tillhouse posts
    each as a journal entry ("Service charge" or "Interest earned") and ticks it as cleared, so you
    don't have to record it separately. Its date must be on or before the statement ending date.
 3. Tick each transaction that appears on the statement. Only transactions up to the statement date
@@ -21,7 +21,7 @@ listed under **Reconciliation history**.
 ## Keep the statement with the reconciliation
 
 While reconciling, click **Attach statement…** beside **Edit statement info** and choose the
-statement file (a PDF or a picture, up to 25 MB). LocalBooks keeps a copy in the company file with
+statement file (a PDF or a picture, up to 25 MB). Tillhouse keeps a copy in the company file with
 that reconciliation. Finished reconciliations show theirs in the **Statement** column of
 **Reconciliation history**, where you can attach one later too. Click a file's name to save a copy,
 or **×** to delete it (you can restore it from **Accounting › Attachments Library**, where the
@@ -56,7 +56,7 @@ outstanding on the statement date (or cleared on a later statement); Summary sho
 
 **Reports › Accountant & Taxes › Reconciliation Discrepancy** shows cleared transactions that were
 changed, voided or deleted after their reconciliation was finished. When you finish a reconciliation,
-LocalBooks keeps a copy of each cleared transaction (its date, account and amount). The report
+Tillhouse keeps a copy of each cleared transaction (its date, account and amount). The report
 compares those copies with the books and lists anything:
 
 - **Deleted**, **Voided** or **Moved to another account**;
@@ -66,17 +66,17 @@ compares those copies with the books and lists anything:
 
 It also checks that each statement begins where the one before it ended.
 
-LocalBooks blocks all of these changes itself, so the report is normally empty. It is there to catch
+Tillhouse blocks all of these changes itself, so the report is normally empty. It is there to catch
 a company file changed by another program.
 
-Reconciliations finished with an earlier version of LocalBooks, before it kept these copies, can't
+Reconciliations finished with an earlier version of Tillhouse, before it kept these copies, can't
 be checked line by line: the report checks that their cleared transactions still add up to the statement and
 says how many were checked this way. **Previous Reconciliation** works for every reconciliation,
 old or new.
 
 ## If the difference won't reach $0.00
 
-- Look for a transaction on the statement that isn't in LocalBooks yet (bank fees and interest are
+- Look for a transaction on the statement that isn't in Tillhouse yet (bank fees and interest are
   common). Record it, then come back.
 - Check that you didn't tick something that isn't on this statement.
 - Use **Edit statement info** if you typed the ending date or balance wrong.

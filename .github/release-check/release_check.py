@@ -12,6 +12,9 @@ $GITHUB_STEP_SUMMARY (or prints it when run by hand) and exits 1 when a check fa
   upgrade    run the new release's `--check-file` on a copy of each seeded company
   launch     start the installed app on a copy of each seeded company, check it is still running
              after LAUNCH_SECONDS with no crash, quit it, then verify the file it upgraded
+  installer-upgrade
+             install the previous release, apply this one over it as the updater does, and check
+             one copy is left, it opens each seeded company, and the app data folder is kept
 """
 
 import argparse
@@ -33,6 +36,7 @@ from pathlib import Path
 
 LAUNCH_SECONDS = 30
 CHECK_TIMEOUT = 600
+INSTALL_TIMEOUT = 600
 APP_ID = "com.localbooks.desktop"
 # The installers and update bundles each platform's job checks, by file-name suffix.
 INSTALLERS = {
@@ -252,10 +256,12 @@ def cmd_install(args):
     elif args.platform == "windows":
         setup = only(args.release_dir, "-setup.exe")
         subprocess.run([str(setup), "/S"], check=True)
-        roots = [Path(os.environ["LOCALAPPDATA"]) / "LocalBooks", Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "LocalBooks"]
+        # The installer names the folder after the product: Tillhouse, or LocalBooks before 0.16.
+        local, program_files = Path(os.environ["LOCALAPPDATA"]), Path(os.environ.get("ProgramFiles", "C:/Program Files"))
+        roots = [base / name for name in ("Tillhouse", "LocalBooks") for base in (local, program_files)]
         candidates = [p for root in roots if root.is_dir() for p in root.glob("*.exe") if not p.name.lower().startswith("uninstall")]
         if not candidates:
-            raise SystemExit(f"the installer finished but no LocalBooks executable was found in {roots}")
+            raise SystemExit(f"the installer finished but no Tillhouse executable was found in {roots}")
         exe = candidates[0]
     else:
         deb = only(args.release_dir, ".deb")
@@ -361,9 +367,9 @@ def cmd_balances(args):
     finish()
 
 
-def cmd_upgrade(args):
+def cmd_upgrade(args, done=True, heading="Upgrade with `--check-file`"):
     work = Path(args.work)
-    summary("### Upgrade with `--check-file`\n\n| Company | Schema | Pre-upgrade copy | File Check & Repair | Balances | Result |\n|---|---|---|---|---|---|")
+    summary(f"### {heading}\n\n| Company | Schema | Pre-upgrade copy | File Check & Repair | Balances | Result |\n|---|---|---|---|---|---|")
     for source in companies(args.seed_dir):
         name = source.stem
         folder = work / name
@@ -405,7 +411,8 @@ def cmd_upgrade(args):
             f"| {checkup.get('status', '?')} ({statuses}) | {mark(not compare_books(name, before, after))} | {mark(not problems)} |"
         )
     summary()
-    finish()
+    if done:
+        finish()
 
 
 # ------------------------------------------------------------------------------------------------
@@ -460,11 +467,11 @@ def quit_app(process):
         return "forced"
 
 
-def cmd_launch(args):
+def cmd_launch(args, done=True, heading=None):
     work = Path(args.work)
     backups = data_dir() / "backups"
     startup_log = data_dir() / "startup-error.log"
-    summary(f"### Launch smoke ({LAUNCH_SECONDS} s each)\n\n| Company | Running after {LAUNCH_SECONDS} s | Crash reports | Quit | Upgraded by the app | Pre-upgrade copy | Integrity | Balances | Result |\n|---|---|---|---|---|---|---|---|---|")
+    summary(f"### {heading or 'Launch smoke'} ({LAUNCH_SECONDS} s each)\n\n| Company | Running after {LAUNCH_SECONDS} s | Crash reports | Quit | Upgraded by the app | Pre-upgrade copy | Integrity | Balances | Result |\n|---|---|---|---|---|---|---|---|---|")
     for source in companies(args.seed_dir):
         name = source.stem
         file = copy_company(source, work / name)
@@ -509,6 +516,251 @@ def cmd_launch(args):
             f"| {mark(bool(copies) or before['schema'] >= args.app_schema)} | {mark(healthy)} | {mark(not changed)} | {mark(not problems)} |"
         )
     summary()
+    if done:
+        finish()
+
+
+# ------------------------------------------------------------------------------------------------
+# Installer upgrade: the previous release installed, then this one over it the way the updater does
+# ------------------------------------------------------------------------------------------------
+#
+# The other steps install this release on a clean machine. Installed copies get it as an update
+# instead, and Tauri's installers key some things on the product name (LocalBooks became Tillhouse
+# in 0.16: docs/plans/rebrand.md), so this step installs the previous release first, then applies
+# this one as tauri-plugin-updater 2.14.1 does, and checks that one copy is left, that it opens the
+# seeded companies with unchanged balances, and that the app data folder kept everything in it.
+#
+#   Windows  the updater runs the NSIS setup with its install mode's arguments and `/UPDATE`
+#            (plugins/updater/src/updater.rs `updater_parameters`: `nsis_args()` then "/UPDATE";
+#            config.rs `nsis_args`: installMode "passive" is "/P"). It also passes "/R /ARGS …" to
+#            restart the app, which only relaunches it, so that is left out here.
+#   macOS    the updater unpacks the .app.tar.gz without its top folder and swaps it into the
+#            running bundle's own path (updater.rs: `extract_path_from_executable`, then
+#            `swap_bundle(&self.extract_path, …)` or `replace_bundle`), so the bundle keeps the
+#            previous release's folder name.
+#   Linux    `dpkg -i` the new .deb over the old one; `rpm -U` the new .rpm over the old one in a
+#            scratch root (no scripts, no dependency checks: the packages' names and Obsoletes are
+#            what is checked there).
+
+
+def product(config_path):
+    config = json.loads(Path(config_path).read_text())
+    name = config["productName"]
+    identifier = config["identifier"]
+    manufacturer = config.get("bundle", {}).get("publisher") or identifier.split(".")[1]
+    # Tauri names the Linux packages with heck's kebab case of the product name.
+    kebab = "".join(("-" + c.lower()) if c.isupper() and i and name[i - 1].islower() else c.lower() for i, c in enumerate(name)).replace(" ", "-")
+    return {"name": name, "identifier": identifier, "manufacturer": manufacturer, "package": kebab}
+
+
+def snapshot(folders):
+    """Every file under `folders` (the app data folders), with a marker added to prove it survives."""
+    marker = folders[0] / "release-check-marker.txt"
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("left by the release check's installer upgrade step\n")
+    return {str(p) for folder in folders if folder.is_dir() for p in folder.rglob("*") if p.is_file()}
+
+
+def check_kept(before, folders, rows):
+    after = {str(p) for folder in folders if folder.is_dir() for p in folder.rglob("*") if p.is_file()}
+    gone = sorted(before - after)
+    if gone:
+        fail(f"the upgrade removed {len(gone)} file(s) from the app data folder, such as {gone[:5]}")
+    rows.append(("App data folder kept every file", not gone, f"{len(before)} files, {len(gone)} removed"))
+
+
+def report(rows, heading):
+    summary(f"### {heading}\n\n| Check | Result | Details |\n|---|---|---|")
+    for check, ok, details in rows:
+        summary(f"| {check} | {mark(ok)} | {details} |")
+    summary()
+
+
+def expect(rows, check, ok, details, message=None):
+    rows.append((check, ok, details))
+    if not ok:
+        fail(message or f"{check}: {details}")
+
+
+def run_new_app(args, exe, label):
+    """The upgraded app opens a copy of each seeded company: `--check-file`, as the Upgrade step."""
+    checked = argparse.Namespace(app=str(exe), seed_dir=args.seed_dir, before=args.before, work=str(Path(args.work) / label), app_schema=args.app_schema)
+    cmd_upgrade(checked, done=False, heading=f"Upgraded install ({label}): `--check-file`")
+    return checked
+
+
+def upgrade_windows(args, old, new):
+    import winreg
+
+    uninstall = r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
+
+    def read(path, value=""):
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path) as key:
+                return winreg.QueryValueEx(key, value)[0]
+        except OSError:
+            return None
+
+    def entries():
+        names = []
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, uninstall) as key:
+            for i in range(winreg.QueryInfoKey(key)[0]):
+                sub = winreg.EnumKey(key, i)
+                if sub in (old["name"], new["name"]) or read(f"{uninstall}\\{sub}", "DisplayName") in (old["name"], new["name"]):
+                    names.append(sub)
+        return sorted(set(names))
+
+    def exe_in(folder):
+        found = [p for p in Path(folder).glob("*.exe") if not p.name.lower().startswith("uninstall")] if folder and Path(folder).is_dir() else []
+        return found[0] if found else None
+
+    # A clean machine: remove the copy the Install step put here (the uninstaller run in place,
+    # `_?=`, so it finishes before this goes on; run silently it keeps the app data).
+    for product_ in (new, old):
+        folder = read(f"Software\\{product_['manufacturer']}\\{product_['name']}")
+        if folder and (Path(folder) / "uninstall.exe").exists():
+            subprocess.run([str(Path(folder) / "uninstall.exe"), "/S", f"_?={folder}"], check=False, timeout=INSTALL_TIMEOUT)
+            shutil.rmtree(folder, ignore_errors=True)
+        for key in (f"{uninstall}\\{product_['name']}", f"Software\\{product_['manufacturer']}\\{product_['name']}"):
+            subprocess.run(["reg", "delete", f"HKCU\\{key}", "/f"], check=False, capture_output=True)
+    if entries():
+        raise SystemExit(f"could not remove the earlier installs before the upgrade: {entries()}")
+
+    data = [Path(os.environ["APPDATA"]) / new["identifier"], Path(os.environ["LOCALAPPDATA"]) / new["identifier"]]
+    kept = snapshot(data)
+    rows = []
+
+    subprocess.run([str(only(args.previous_dir, "-setup.exe")), "/S"], check=True, timeout=INSTALL_TIMEOUT)
+    old_folder = read(f"Software\\{old['manufacturer']}\\{old['name']}")
+    expect(rows, f"{old['name']} {args.previous} installed", bool(exe_in(old_folder)) and entries() == [old["name"]], f"{old_folder}; uninstall entries {entries()}")
+
+    setup = only(args.release_dir, "-setup.exe")
+    subprocess.run([str(setup), "/P", "/UPDATE"], check=True, timeout=INSTALL_TIMEOUT)
+    new_folder = read(f"Software\\{new['manufacturer']}\\{new['name']}")
+    exe = exe_in(new_folder)
+    expect(rows, f"Updated with `{setup.name} /P /UPDATE`", bool(exe), f"{exe or 'no executable'} in {new_folder}")
+    expect(rows, "One uninstall entry", entries() == [new["name"]], f"{entries()}", f"uninstall entries after the upgrade are {entries()}, expected only {new['name']}")
+    start_menu = Path(os.environ["APPDATA"]) / "Microsoft/Windows/Start Menu/Programs"
+    if old["name"] != new["name"]:
+        left = sorted(p.name for p in Path(old_folder).iterdir()) if old_folder and Path(old_folder).is_dir() else []
+        expect(rows, f"{old['name']} install folder removed", not left, f"{old_folder}: {', '.join(left) if left else 'gone'}")
+        expect(rows, f"{old['name']} registry keys removed", read(f"Software\\{old['manufacturer']}\\{old['name']}") is None, f"Software\\{old['manufacturer']}\\{old['name']}")
+        expect(rows, f"{old['name']} Start menu shortcut removed", not (start_menu / f"{old['name']}.lnk").exists(), str(start_menu / f"{old['name']}.lnk"))
+    expect(rows, f"{new['name']} Start menu shortcut", (start_menu / f"{new['name']}.lnk").exists(), str(start_menu / f"{new['name']}.lnk"))
+    check_kept(kept, data, rows)
+    report(rows, f"Installer upgrade: {args.previous} → this release (Windows, NSIS)")
+    if exe:
+        run_new_app(args, exe, "windows-nsis")
+
+
+def rpm_in(root):
+    """rpm acting on the scratch root only. Ubuntu's rpm keeps its database under $HOME unless told
+    otherwise (and sudo changes $HOME), so every call names the same database inside the root."""
+    return ["sudo", "rpm", "--root", str(root), "--dbpath", "/var/lib/rpm"]
+
+
+def upgrade_linux(args, old, new):
+    data = [Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / new["identifier"], Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / new["identifier"]]
+    kept = snapshot(data)
+
+    def status(package, root=None):
+        if root:
+            return subprocess.run([*rpm_in(root), "-q", package], capture_output=True, text=True).returncode == 0
+        out = subprocess.run(["dpkg-query", "-W", "-f=${Status}", package], capture_output=True, text=True)
+        return out.returncode == 0 and out.stdout.strip() == "install ok installed"
+
+    def binary(files):
+        found = [f for f in files if "/usr/bin/" in f and Path(f).is_file()]
+        return Path(found[0]) if found else None
+
+    # .deb: remove the copy the Install step put here, install the previous package, then the new one.
+    rows = []
+    subprocess.run(["sudo", "dpkg", "-r", new["package"], old["package"]], check=False, capture_output=True)
+    subprocess.run(["sudo", "dpkg", "-i", str(only(args.previous_dir, ".deb").resolve())], check=True, stdout=subprocess.DEVNULL)
+    expect(rows, f"{old['package']} ({args.previous}) installed", status(old["package"]), "dpkg -i")
+    deb = only(args.release_dir, ".deb")
+    installed = subprocess.run(["sudo", "dpkg", "-i", str(deb.resolve())], capture_output=True, text=True)
+    expect(rows, f"`dpkg -i {deb.name}` over it", installed.returncode == 0, (installed.stderr or installed.stdout).strip()[-300:].replace("\n", " ") or "ok")
+    expect(rows, f"{new['package']} installed", status(new["package"]), "dpkg-query")
+    if old["package"] != new["package"]:
+        expect(rows, f"{old['package']} removed", not status(old["package"]), "dpkg-query", f"{old['package']} is still installed after installing {new['package']}")
+    files = subprocess.run(["dpkg", "-L", new["package"]], capture_output=True, text=True).stdout.splitlines()
+    deb_exe = binary(files)
+    expect(rows, "Executable", bool(deb_exe), str(deb_exe))
+    check_kept(kept, data, rows)
+    report(rows, f"Installer upgrade: {args.previous} → this release (Linux, .deb)")
+    if deb_exe:
+        run_new_app(args, deb_exe, "linux-deb")
+
+    # .rpm: in a scratch root, so it doesn't meet the .deb's files.
+    rows = []
+    root = Path(args.work) / "rpm-root"
+    shutil.rmtree(root, ignore_errors=True)
+    root.mkdir(parents=True)
+    subprocess.run([*rpm_in(root), "--initdb"], check=True)
+    rpm_flags = ["--nodeps", "--noscripts", "--nosignature"]
+    installed = subprocess.run([*rpm_in(root), "-i", *rpm_flags, str(only(args.previous_dir, ".rpm").resolve())], capture_output=True, text=True)
+    expect(rows, f"{old['package']} ({args.previous}) installed", installed.returncode == 0 and status(old["package"], root), f"rpm -i: {(installed.stderr or installed.stdout).strip()[-300:].replace(chr(10), ' ') or 'ok'}")
+    rpm = only(args.release_dir, ".rpm")
+    upgraded = subprocess.run([*rpm_in(root), "-U", *rpm_flags, str(rpm.resolve())], capture_output=True, text=True)
+    expect(rows, f"`rpm -U {rpm.name}` over it", upgraded.returncode == 0, (upgraded.stderr or upgraded.stdout).strip()[-300:].replace("\n", " ") or "ok")
+    expect(rows, f"{new['package']} installed", status(new["package"], root), "rpm -q")
+    if old["package"] != new["package"]:
+        expect(rows, f"{old['package']} removed (Obsoletes)", not status(old["package"], root), "rpm -q", f"{old['package']} is still installed after rpm -U {rpm.name}")
+    listed = subprocess.run([*rpm_in(root), "-ql", new["package"]], capture_output=True, text=True).stdout.splitlines()
+    rpm_exe = binary([str(root) + f for f in listed])
+    expect(rows, "Executable", bool(rpm_exe), str(rpm_exe))
+    report(rows, f"Installer upgrade: {args.previous} → this release (Linux, .rpm)")
+    if rpm_exe:
+        run_new_app(args, rpm_exe, "linux-rpm")
+
+
+def upgrade_macos(args, old, new):
+    data = [Path.home() / "Library/Application Support" / new["identifier"]]
+    kept = snapshot(data)
+    rows = []
+    applications = Path(args.work) / "Applications"
+    shutil.rmtree(applications, ignore_errors=True)
+    applications.mkdir(parents=True)
+    # The previous release as installed: its update bundle holds the .app as its top folder.
+    subprocess.run(["tar", "-xzf", str(only(args.previous_dir, ".app.tar.gz")), "-C", str(applications)], check=True)
+    bundles = sorted(applications.glob("*.app"))
+    expect(rows, f"{old['name']} ({args.previous}) in Applications", len(bundles) == 1, ", ".join(b.name for b in bundles))
+    if len(bundles) != 1:
+        report(rows, f"Installer upgrade: {args.previous} → this release (macOS)")
+        return
+    bundle = bundles[0]
+    # What the updater does: unpack without the top folder into a temp dir on the same volume,
+    # then move it into the current bundle's path (the rename fallback of `swap_bundle`).
+    staged = Path(tempfile.mkdtemp(prefix="tauri_updated_app", dir=args.work))
+    archive = only(args.release_dir, ".app.tar.gz")
+    subprocess.run(["tar", "-xzf", str(archive), "-C", str(staged), "--strip-components", "1"], check=True)
+    os.chmod(staged, 0o755)
+    backup = Path(tempfile.mkdtemp(prefix="tauri_current_app", dir=args.work)) / "current_app"
+    os.rename(bundle, backup)
+    os.rename(staged, bundle)
+    info = bundle / "Contents/Info.plist"
+
+    def plist(key):
+        return subprocess.run(["plutil", "-extract", key, "raw", str(info)], capture_output=True, text=True).stdout.strip()
+
+    expect(rows, f"Updated with `{archive.name}` in place", info.exists(), f"bundle kept its path: {bundle.name}")
+    expect(rows, "Shows the new name", plist("CFBundleName") == new["name"], f"CFBundleName {plist('CFBundleName')!r}")
+    expect(rows, "Same identifier", plist("CFBundleIdentifier") == new["identifier"], plist("CFBundleIdentifier"))
+    exe = bundle / "Contents/MacOS" / plist("CFBundleExecutable")
+    expect(rows, "Executable", exe.is_file(), str(exe.relative_to(applications)))
+    check_kept(kept, data, rows)
+    report(rows, f"Installer upgrade: {args.previous} → this release (macOS)")
+    if exe.is_file():
+        checked = run_new_app(args, exe, "macos")
+        checked.work = str(Path(args.work) / "macos-launch")
+        cmd_launch(checked, done=False, heading="Upgraded install (macOS): launch")
+
+
+def cmd_installer_upgrade(args):
+    old, new = product(args.previous_config), product(args.config)
+    summary(f"Upgrading an installed **{old['name']} {args.previous}** to **{new['name']}** as the updater does.\n")
+    {"windows": upgrade_windows, "linux": upgrade_linux, "darwin": upgrade_macos}[args.platform](args, old, new)
     finish()
 
 
@@ -540,6 +792,17 @@ def main():
         p.add_argument("--before", required=True)
         p.add_argument("--work", required=True)
         p.add_argument("--app-schema", type=int, required=True)
+    p = sub.add_parser("installer-upgrade")
+    p.add_argument("--platform", choices=INSTALLERS, required=True)
+    p.add_argument("--release-dir", required=True, help="this release's installers")
+    p.add_argument("--previous-dir", required=True, help="the previous release's installers")
+    p.add_argument("--config", required=True, help="this release's tauri.conf.json")
+    p.add_argument("--previous-config", required=True, help="the previous release's tauri.conf.json")
+    p.add_argument("--previous", required=True, help="the previous release's tag")
+    p.add_argument("--seed-dir", required=True)
+    p.add_argument("--before", required=True)
+    p.add_argument("--work", required=True)
+    p.add_argument("--app-schema", type=int, required=True)
     args = parser.parse_args()
     {
         "artifacts": cmd_artifacts,
@@ -548,6 +811,7 @@ def main():
         "balances": cmd_balances,
         "upgrade": cmd_upgrade,
         "launch": cmd_launch,
+        "installer-upgrade": cmd_installer_upgrade,
     }[args.command](args)
 
 

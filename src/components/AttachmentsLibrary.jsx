@@ -203,7 +203,7 @@ function FilePanel({ file, onNotice, onChanged }) {
               <span className="qb-label">Keywords</span>
               <input className="qb-input" value={keywords} onChange={(e) => setKeywords(e.target.value)} maxLength={500} placeholder="e.g. W-9 2025, signed" />
             </label>
-            <label className="flex items-center gap-1" title="Sent along with the invoice, estimate or sales receipt when it is emailed (by LocalBooks or your mail app), and printed after it">
+            <label className="flex items-center gap-1" title="Sent along with the invoice, estimate or sales receipt when it is emailed (by Tillhouse or your mail app), and printed after it">
               <input type="checkbox" className="accent-qb-green" checked={withForm} onChange={(e) => setWithForm(e.target.checked)} />
               Send with the form when it is emailed or printed
             </label>

@@ -987,7 +987,7 @@ async fn write_expense(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
     let (from, total) = if is_credit { single_debit(t)? } else { single_credit(t)? };
     match (is_check, is_credit, books.kind(from)) {
         (true, false, "BANK") | (false, false, "BANK" | "CREDIT_CARD") | (false, true, "CREDIT_CARD") => {}
-        (_, true, _) => return Err("it is a refund into a bank account, which has no LocalBooks form".into()),
+        (_, true, _) => return Err("it is a refund into a bank account, which has no Tillhouse form".into()),
         (true, _, _) => return Err("it was not written from a bank account".into()),
         (false, _, _) => return Err("it was not paid from a bank or card account".into()),
     }
@@ -1047,7 +1047,7 @@ async fn write_transfer(tx: &mut Transaction<'_, Sqlite>, t: &Staged, books: &Bo
             !system && matches!(kind.as_str(), "BANK" | "CREDIT_CARD" | "OTHER_CURRENT_ASSET" | "OTHER_CURRENT_LIABILITY" | "LONG_TERM_LIABILITY")
         });
         if !allowed {
-            return Err(format!("LocalBooks transfers cannot use one of its accounts ({})", books.kind(account).to_lowercase().replace('_', " ")));
+            return Err(format!("Tillhouse transfers cannot use one of its accounts ({})", books.kind(account).to_lowercase().replace('_', " ")));
         }
     }
     let id: i64 =

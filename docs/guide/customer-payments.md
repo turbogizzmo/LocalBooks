@@ -22,7 +22,7 @@ taken before you billed the work.
 2. In **Received from**, choose the customer. Their open invoices are listed, oldest first, and
    **Customer balance** shows at the top right. Every active customer is in the list, including
    those with nothing open, for a prepayment or a deposit before you bill the work.
-3. Type the **Amount received**. LocalBooks applies it for you: to an invoice whose balance is
+3. Type the **Amount received**. Tillhouse applies it for you: to an invoice whose balance is
    exactly that amount, otherwise to the oldest invoices first. Adjust the **Payment** on any row
    if the customer told you otherwise, or tick and untick invoices in the first column. To spread
    the amount received over the invoices again, click **Auto Apply** in the toolbar. Under the
@@ -116,7 +116,7 @@ loss.
 
 ## Payments in another currency
 
-For an invoice in a foreign currency, enter the exchange rate on the payment date. LocalBooks
+For an invoice in a foreign currency, enter the exchange rate on the payment date. Tillhouse
 shows the amount received in your home currency and the exchange gain or loss before you post,
 and the final payment always clears the invoice exactly.
 
@@ -142,7 +142,7 @@ When the bank returns a customer's check unpaid:
    account for it.
 4. Click **Record Bounced Check**.
 
-LocalBooks posts one entry: Accounts Receivable goes back up by the check, and the bank goes down
+Tillhouse posts one entry: Accounts Receivable goes back up by the check, and the bank goes down
 by the check plus the bank's fee (the fee goes to its expense account). The invoice the check paid
 opens again, so it shows in A/R aging and on statements from the bounce date, and the customer can
 pay it again. The customer fee goes on a new invoice, *Returned check charge*.
@@ -150,7 +150,7 @@ pay it again. The customer fee goes on a new invoice, *Returned check charge*.
 Money from a deposit's **other funds** lines can bounce too: it goes back to the account the
 deposit credited.
 
-A **sales receipt** from a customer can bounce as well. It has no invoice to reopen, so LocalBooks
+A **sales receipt** from a customer can bounce as well. It has no invoice to reopen, so Tillhouse
 charges it back: the bank goes down by the check (and the bank's fee), and a new invoice,
 *Returned check: sales receipt #…*, bills the customer for it, with the customer fee as a second
 line. The sale's income is unchanged; the customer pays the new invoice in Receive Payments.
@@ -194,7 +194,7 @@ In **Settings › Preferences Console › Finance Charge › Company Preferences
    overdue invoice, the date interest runs from and the number of days.
 3. Change any charge you want to (for example to waive part of it), and untick customers you
    don't want to charge.
-4. Click **Assess charges**. LocalBooks creates one finance charge invoice per ticked customer,
+4. Click **Assess charges**. Tillhouse creates one finance charge invoice per ticked customer,
    dated and due on the assessment date. The invoice list marks them **FC**.
 
 ### How the charge is worked out

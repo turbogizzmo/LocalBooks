@@ -255,7 +255,7 @@ fn table(file: &str, bytes: &[u8]) -> Result<Table, String> {
     Err(match why {
         Some(why) => format!("REPORT_NEEDS_DEBIT_CREDIT: {file}: {why}"),
         None => format!(
-            "REPORT_UNRECOGNISED: {file} is not a QuickBooks report LocalBooks reads: none of its first {HEADER_SEARCH_ROWS} rows has the column headings of a \
+            "REPORT_UNRECOGNISED: {file} is not a QuickBooks report Tillhouse reads: none of its first {HEADER_SEARCH_ROWS} rows has the column headings of a \
              Journal or General Ledger (Date, Account or Split, Debit, Credit), an Account Listing (Account, Type), a customer or vendor contact list or an item list"
         ),
     })

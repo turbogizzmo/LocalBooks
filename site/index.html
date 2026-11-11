@@ -3,251 +3,310 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LocalBooks Tester Guide</title>
-  <meta name="description" content="Download and install LocalBooks, move your books over from QuickBooks, Quicken or GnuCash, and report what you find.">
+  <title>Tillhouse: accounting that stays on your computer</title>
+  <meta name="description" content="Tillhouse is local-first, double-entry accounting for US small businesses. Your books live in one file on your own computer: no account, no subscription, no cloud. Opens QuickBooks Desktop, Quicken and GnuCash books.">
+  <link rel="canonical" href="https://tillhouse.app/">
+  <meta property="og:title" content="Tillhouse: your books, kept at home">
+  <meta property="og:description" content="Local-first, double-entry accounting for US small businesses. One file on your computer, no subscription.">
+  <meta property="og:url" content="https://tillhouse.app/">
+  <meta property="og:image" content="https://tillhouse.app/shots/home.jpg">
+  <meta name="theme-color" content="#14211f">
   <link rel="icon" type="image/png" href="favicon.png">
   <style>
-    /* The LocalBooks app palette and type (tailwind.config.js), so the page feels like the app. */
+    /* Spruce & Brass, the app's palette (tailwind.config.js). System fonts only, so the page
+       loads nothing from anyone else. Layout: one centred column, full-width bands. */
     :root {
-      --green: #2ca01c;
-      --green-hover: #248a17;
-      --green-active: #1d7313;
-      --green-tint: #e9f6e7;
-      --nav: #232733;
-      --nav-hover: #2f3443;
-      --nav-active: #393f50;
-      --nav-text: #babec5;
-      --canvas: #f4f5f8;
+      --spruce: #0b5d57;
+      --spruce-hover: #084843;
+      --spruce-ink: #0a4f4a;
+      --tint: #e6f2f0;
+      --brass: #e8b44a;
+      --brass-ink: #8c6400;
+      --night: #14211f;
+      --night-2: #1c2d2a;
+      --night-text: #b8c7c3;
+      --canvas: #f5f6f4;
       --surface: #ffffff;
-      --ink: #393a3d;
-      --ink-muted: #6b6c72;
-      --ink-faint: #8d9096;
-      --border: #d4d7dc;
-      --border-strong: #babec5;
-      --row-hover: #f5f5f5;
-      --header-bg: #eceef1;
-      --negative: #d52b1e;
-      --warning: #ff8000;
-      --info: #0077c5;
-      --info-tint: #eaf4fb;
-      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-      --mono: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      --ink: #1c2426;
+      --muted: #56615f;
+      --line: #dce1df;
+      --line-strong: #b9c2bf;
+      --row-hover: #f2f4f3;
+      --info: #22609e;
+      --info-tint: #e8f0f8;
+      --warn-ink: #8a4b00;
+      --warn-tint: #fdf3e1;
+      --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      --display: "Avenir Next", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --spruce: #5fc3b4;
+        --spruce-hover: #84d5c9;
+        --spruce-ink: #84d5c9;
+        --tint: #15302c;
+        --brass-ink: #f0b95a;
+        --canvas: #0f1716;
+        --surface: #16211f;
+        --ink: #e6eeec;
+        --muted: #9aaaa6;
+        --line: #26332f;
+        --line-strong: #3a4945;
+        --row-hover: #1c2a27;
+        --info: #8cb8e6;
+        --info-tint: #16263a;
+        --warn-ink: #f4d08a;
+        --warn-tint: #33280f;
+        color-scheme: dark;
+      }
     }
     * { box-sizing: border-box; }
-    html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-    body {
-      margin: 0;
-      font: 14px/20px var(--sans);
-      color: var(--ink);
-      background: var(--canvas);
-    }
-    a { color: var(--info); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    code, kbd { font-family: var(--mono); font-size: 12px; }
-    code { background: var(--header-bg); border: 1px solid var(--border); border-radius: 2px; padding: 0 4px; }
-    kbd { background: var(--surface); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; }
+    html { -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    body { margin: 0; font: 16px/1.55 var(--sans); color: var(--ink); background: var(--canvas); }
+    a { color: var(--info); text-underline-offset: 2px; }
+    a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; border-radius: 4px; }
+    h1, h2, h3 { font-family: var(--display); line-height: 1.15; text-wrap: balance; margin: 0; }
+    h2 { font-size: clamp(26px, 3.4vw, 34px); font-weight: 700; letter-spacing: -0.01em; }
+    h3 { font-size: 18px; font-weight: 700; }
+    p { margin: 0; }
+    code, kbd { font-family: var(--mono); font-size: 0.85em; }
+    code { background: var(--row-hover); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+    kbd { background: var(--surface); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+    .small { font-size: 14px; }
+    .muted { color: var(--muted); }
+    .skip { position: absolute; left: -999px; }
+    .skip:focus { left: 12px; top: 12px; z-index: 10; background: var(--surface); padding: 8px 12px; }
 
-    /* Top bar: the app's sidebar navy */
-    .topbar { background: var(--nav); color: var(--nav-text); }
-    .topbar-inner { max-width: 980px; margin: 0 auto; padding: 0 16px; height: 48px; display: flex; align-items: center; gap: 10px; }
-    .topbar img { width: 26px; height: 26px; border-radius: 4px; }
-    .brand { color: #fff; font-weight: 600; font-size: 16px; }
-    .tag { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--nav-text); border: 1px solid var(--nav-active); border-radius: 3px; padding: 1px 6px; }
-    .topnav { margin-left: auto; display: flex; gap: 2px; }
-    .topnav a { color: var(--nav-text); padding: 6px 10px; border-radius: 2px; font-size: 13px; }
-    .topnav a:hover { background: var(--nav-hover); color: #fff; text-decoration: none; }
+    /* Header */
+    .top { background: var(--night); color: var(--night-text); position: sticky; top: 0; z-index: 5; }
+    .top .wrap { display: flex; align-items: center; gap: 12px; height: 60px; }
+    .brand { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; font: 700 20px/1 var(--display); letter-spacing: -0.01em; }
+    .brand svg { width: 30px; height: 30px; }
+    .top nav { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
+    .top nav a { color: var(--night-text); text-decoration: none; font-size: 14px; padding: 6px 10px; border-radius: 6px; }
+    .top nav a:hover { background: var(--night-2); color: #fff; }
+    .top nav a.gh { border: 1px solid #2b3b38; }
 
-    main { max-width: 980px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
-
-    /* Panels: .qb-panel with the Settings-style header strip */
-    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
-    .panel > h2 {
-      margin: 0; padding: 3px 10px; background: var(--header-bg); border-bottom: 1px solid var(--border);
-      font-size: 11px; line-height: 18px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted);
-    }
-    .panel-body { padding: 14px 16px; }
-    .panel-body > :first-child { margin-top: 0; }
-    .panel-body > :last-child { margin-bottom: 0; }
-    h1 { font-size: 28px; line-height: 34px; margin: 0 0 6px; font-weight: 600; }
-    h3 { font-size: 14px; margin: 16px 0 4px; }
-    p { margin: 8px 0; }
-    .muted { color: var(--ink-muted); }
-    .small { font-size: 12px; line-height: 16px; }
+    .rename { background: #213531; color: #e6eeec; font-size: 14px; }
+    .rename .wrap { padding-top: 8px; padding-bottom: 8px; }
+    .rename strong { color: var(--brass); }
 
     /* Hero */
-    .hero { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
-    .lede { font-size: 15px; line-height: 22px; color: var(--ink); }
-    .facts { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 4px; }
-    .facts li { padding-left: 18px; position: relative; }
-    .facts li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 8px; height: 8px; border-radius: 2px; background: var(--green); }
+    .hero { background: var(--night); color: #e6eeec; padding: 56px 0 64px; }
+    .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 40px; align-items: center; }
+    .hero h1 { font-size: clamp(38px, 6vw, 60px); font-weight: 700; letter-spacing: -0.02em; color: #fff; }
+    .hero .lede { font-size: 19px; color: var(--night-text); margin-top: 18px; max-width: 34em; }
+    .points { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    .points li { font-size: 14px; border: 1px solid #2b3b38; border-radius: 999px; padding: 4px 12px; }
+    .points li::before { content: "✓ "; color: var(--brass); font-weight: 700; }
+    .download { margin-top: 28px; display: grid; gap: 10px; justify-items: start; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 20px; font: 700 16px/1 var(--sans); border-radius: 8px; border: 1px solid transparent; text-decoration: none; cursor: pointer; }
+    .btn-primary { background: var(--brass); color: var(--night); }
+    .btn-primary:hover { background: #f0c46a; }
+    .btn-quiet { background: transparent; color: #fff; border-color: #3a4c48; }
+    .btn-quiet:hover { background: var(--night-2); }
+    .btn-spruce { background: #0b5d57; color: #fff; }
+    .btn-spruce:hover { background: #084843; }
+    .btn-line { background: var(--surface); color: var(--ink); border-color: var(--line-strong); }
+    .btn-line:hover { background: var(--row-hover); }
+    .version-line { font-size: 14px; color: var(--night-text); }
+    .version-line b { color: #fff; font-variant-numeric: tabular-nums; }
+    .other-downloads { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; }
+    .other-downloads a { color: #9fddd3; }
 
-    .download { border: 1px solid var(--border); border-radius: 2px; background: var(--canvas); padding: 12px; }
-    .download .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
-    .version { font-size: 22px; line-height: 28px; font-weight: 600; margin: 2px 0 8px; font-variant-numeric: tabular-nums; }
+    /* Screenshots: Tillhouse on the seeded "Five Years Test Co" (synthetic test data). */
+    .hero-shot { margin: 0; }
+    .hero-shot img, .screens img { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid #2b3b38; background: #f5f6f4; }
+    .hero-shot img { box-shadow: 0 30px 60px rgba(0,0,0,.35); }
+    .screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 28px; }
+    .screens figure { margin: 0; display: grid; gap: 8px; }
+    .screens img { border-color: var(--line); box-shadow: 0 10px 30px rgba(20,33,31,.10); }
+    .screens figcaption { color: var(--muted); text-align: left; margin: 0; font-size: 14px; }
+    figcaption { font-size: 13px; color: var(--night-text); margin-top: 10px; text-align: center; }
 
-    /* Buttons: .qb-btn */
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 0 14px;
-      font: 600 13px/1 var(--sans); border-radius: 2px; border: 1px solid transparent; cursor: pointer; white-space: nowrap;
-    }
-    .btn:hover { text-decoration: none; }
-    .btn:focus-visible { outline: none; box-shadow: 0 0 0 2px #2ca01c40; }
-    .btn-primary { background: var(--green); color: #fff; }
-    .btn-primary:hover { background: var(--green-hover); }
-    .btn-primary:active { background: var(--green-active); }
-    .btn-secondary { background: var(--surface); color: var(--ink); border-color: var(--border-strong); }
-    .btn-secondary:hover { background: var(--row-hover); }
-    .btn-block { width: 100%; }
-    .other-downloads { margin-top: 8px; display: grid; gap: 2px; }
-    .other-downloads a { font-size: 12px; }
+    /* Bands */
+    .band { padding: 64px 0; border-bottom: 1px solid var(--line); }
+    .band.alt { background: var(--surface); }
+    .band .wrap > header { display: grid; gap: 10px; margin-bottom: 28px; max-width: 46em; }
+    .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brass-ink); }
+    .lead { font-size: 18px; color: var(--muted); }
 
-    /* Tabs: the Settings tab strip */
-    .tabs { display: inline-flex; gap: 1px; border: 1px solid var(--border-strong); border-radius: 2px; overflow: hidden; background: var(--border-strong); margin-bottom: 12px; }
-    .tabs button { font: 600 12px/16px var(--sans); padding: 4px 12px; border: 0; background: #fff; color: var(--ink); cursor: pointer; }
+    .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .feature { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: grid; gap: 8px; align-content: start; }
+    .band.alt .feature { background: var(--canvas); }
+    .feature .ic { width: 36px; height: 36px; border-radius: 9px; background: var(--tint); color: var(--spruce-ink); display: grid; place-items: center; }
+    .feature .ic svg { width: 20px; height: 20px; }
+    .feature p { color: var(--muted); font-size: 15px; }
+
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
+    .band.alt .card { background: var(--canvas); }
+    .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+    .stack { display: grid; gap: 12px; }
+
+    /* Install tabs */
+    .tabs { display: inline-flex; gap: 0; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+    .tabs button { font: 600 14px/1 var(--sans); padding: 10px 16px; border: 0; background: var(--surface); color: var(--ink); cursor: pointer; }
+    .tabs button + button { border-left: 1px solid var(--line-strong); }
     .tabs button:hover { background: var(--row-hover); }
-    .tabs button[aria-selected="true"] { background: var(--nav); color: #fff; }
+    .tabs button[aria-selected="true"] { background: #0b5d57; color: #fff; }
     [role="tabpanel"][hidden] { display: none; }
+    ol.steps { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+    ol.steps li::marker { font-weight: 700; color: var(--spruce-ink); }
 
-    ol.steps { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
-    ol.steps li::marker { font-weight: 600; color: var(--green-active); }
+    .notice { border: 1px solid; padding: 10px 12px; font-size: 14px; border-radius: 8px; margin: 12px 0; }
+    .notice-info { border-color: color-mix(in srgb, var(--info) 40%, transparent); background: var(--info-tint); color: var(--ink); }
+    .notice-success { border-color: color-mix(in srgb, var(--spruce) 40%, transparent); background: var(--tint); color: var(--ink); }
+    .notice-warn { border-color: color-mix(in srgb, var(--warn-ink) 40%, transparent); background: var(--warn-tint); color: var(--ink); }
 
-    /* Notices: the app's Notice component */
-    .notice { border: 1px solid; padding: 6px 10px; font-size: 13px; border-radius: 2px; margin: 10px 0; }
-    .notice-info { border-color: #0077c566; background: var(--info-tint); color: #005a96; }
-    .notice-success { border-color: #2ca01c66; background: var(--green-tint); color: var(--green-active); }
-    .notice-warn { border-color: #ff800066; background: #fff8e6; color: #8a4b00; }
+    .table-wrap { overflow-x: auto; }
+    table.grid { width: 100%; border-collapse: collapse; font-size: 15px; }
+    .grid th { padding: 8px 10px; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; text-align: left; border-bottom: 1px solid var(--line-strong); }
+    .grid td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    details { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-top: 12px; background: var(--surface); }
+    .band.alt details { background: var(--canvas); }
+    summary { cursor: pointer; font-weight: 700; }
+    details[open] summary { margin-bottom: 10px; }
 
-    /* Register-style table: .qb-grid */
-    table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .grid th { height: 24px; padding: 0 8px; background: var(--header-bg); color: var(--ink-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; text-align: left; border-bottom: 1px solid var(--border-strong); }
-    .grid td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
-    .grid tr:hover td { background: var(--row-hover); }
+    /* Move your books chooser (filled by the script below) */
+    .mig-label { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; }
+    .mig-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+    .mig-choice { font: inherit; text-align: left; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; cursor: pointer; }
+    .mig-choice:hover { border-color: var(--line-strong); background: var(--row-hover); }
+    .mig-choice:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+    .mig-choice[aria-pressed="true"] { border-color: var(--spruce); background: var(--tint); box-shadow: inset 3px 0 0 var(--spruce); }
+    .mig-choice .name { display: block; font-weight: 700; }
+    .mig-choice .sub { display: block; font-size: 13px; color: var(--muted); }
+    .mig-result { margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 16px 18px; }
+    .mig-result h3 { margin-bottom: 2px; }
+    .mig-result .for { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
 
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .guide-list { columns: 2; column-gap: 24px; margin: 0; padding-left: 18px; }
-    .guide-list li { break-inside: avoid; padding: 1px 0; }
-    details { border: 1px solid var(--border); border-radius: 2px; padding: 6px 10px; margin-top: 8px; background: var(--canvas); }
-    summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+    ul.facts { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+    ul.facts li { padding-left: 22px; position: relative; }
+    ul.facts li::before { content: ""; position: absolute; left: 3px; top: 9px; width: 9px; height: 9px; border-radius: 2px; background: var(--brass); }
 
-    footer { max-width: 980px; margin: 0 auto; padding: 8px 16px 32px; color: var(--ink-faint); font-size: 12px; }
+    .privacy { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .privacy .card h3 { margin-bottom: 6px; }
+    .privacy .card p { color: var(--muted); font-size: 15px; }
 
-    /* Move your books: pick a program, then what you have, and see only those steps. */
-    .mig-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); margin: 14px 0 6px; }
-    .mig-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
-    .mig-choice { font: inherit; text-align: left; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 2px; padding: 8px 10px; cursor: pointer; }
-    .mig-choice:hover { border-color: var(--border-strong); background: var(--row-hover); }
-    .mig-choice:focus-visible { outline: none; box-shadow: 0 0 0 2px #2ca01c40; border-color: var(--green); }
-    .mig-choice[aria-pressed="true"] { border-color: var(--green); background: var(--green-tint); box-shadow: inset 3px 0 0 var(--green); }
-    .mig-choice .name { display: block; font-weight: 600; }
-    .mig-choice .sub { display: block; font-size: 12px; color: var(--ink-muted); }
-    .mig-result { margin-top: 14px; border: 1px solid var(--border); border-radius: 2px; background: var(--canvas); padding: 12px 14px; }
-    .mig-result h3 { font-size: 15px; margin: 0 0 2px; }
-    .mig-result .for { color: var(--ink-muted); font-size: 12px; margin: 0 0 10px; }
-    @media (max-width: 760px) {
-      .hero, .two-col { grid-template-columns: 1fr; }
-      .guide-list { columns: 1; }
-      .topnav { display: none; }
-      h1 { font-size: 22px; line-height: 28px; }
+    .guide-list { columns: 3 220px; column-gap: 28px; margin: 0; padding-left: 18px; }
+    .guide-list li { break-inside: avoid; padding: 2px 0; }
+
+    footer { background: var(--night); color: var(--night-text); padding: 36px 0 48px; font-size: 14px; }
+    footer .wrap { display: grid; gap: 12px; }
+    footer a { color: #9fddd3; }
+    footer .links { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+
+    @media (max-width: 860px) {
+      .hero .wrap, .two { grid-template-columns: 1fr; }
+      .hero { padding: 40px 0 48px; }
+      .top nav a:not(.gh):not(.dl) { display: none; }
+    }
+    @media (max-width: 480px) {
+      .band { padding: 48px 0; }
     }
   </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <img src="icon.png" alt="">
-      <span class="brand">LocalBooks</span>
-      <span class="tag">Tester preview</span>
-      <nav class="topnav" aria-label="Sections">
-        <a href="#install">Install</a>
-        <a href="#move">Move your books</a>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="mark" viewBox="0 0 64 64">
+      <rect width="64" height="64" rx="14" fill="#0b5d57"/>
+      <path d="M14 24 32 11.5 50 24" fill="none" stroke="#e8b44a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="15" y="29" width="34" height="7.5" rx="2" fill="#fff"/>
+      <rect x="28" y="29" width="8" height="24" rx="2" fill="#fff"/>
+    </symbol>
+  </svg>
+
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="#top" aria-label="Tillhouse home"><svg aria-hidden="true"><use href="#mark"/></svg>Tillhouse</a>
+      <nav aria-label="Sections">
+        <a href="#features">Features</a>
+        <a href="#move">Moving from QuickBooks</a>
         <a href="#whats-new">What’s new</a>
-        <a href="#updates">Updates</a>
-        <a href="#data">Your data</a>
-        <a href="#report">Report a problem</a>
+        <a href="#privacy">Privacy</a>
         <a href="#guides">Guides</a>
+        <a class="gh" href="https://github.com/turbogizzmo/LocalBooks">GitHub</a>
       </nav>
     </div>
   </header>
 
-  <main>
-    <section class="panel">
-      <h2>Welcome, tester</h2>
-      <div class="panel-body hero">
+  <div class="rename" role="note">
+    <div class="wrap"><strong>LocalBooks is now Tillhouse.</strong> Same app, same company files. The next update renames it, and your books, settings and saved passwords stay where they are.</div>
+  </div>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="wrap">
         <div>
-          <h1>Small-business accounting that stays on your computer</h1>
-          <p class="lede">
-            LocalBooks keeps your books in a single file on your own machine: invoices, bills, bank feeds, inventory,
-            reconciliation and financial statements, with every transaction posted as a balanced double-entry journal entry.
-            Design your own invoice and estimate forms, save them as PDF, and email them to customers, one at a time or in a batch.
-            Thank you for trying it.
-          </p>
-          <ul class="facts">
-            <li>No account, no subscription, no cloud: your company file never leaves your computer.</li>
-            <li>Bring your books with you from QuickBooks Desktop (Windows or Mac), QuickBooks Online, Quicken or GnuCash. <a href="#move">See how</a>.</li>
-            <li>Familiar layout for anyone coming from classic desktop accounting software.</li>
-            <li><strong>For US businesses.</strong> Sales tax, 1099s and W-9s, the tax calendar, ACH payment files and printed checks follow US rules, and dates and amounts show the US way (10/13/2026, 1,234.56). There is no VAT or GST, and LocalBooks runs no payroll in any country.</li>
-            <li>Invoices and estimates you design yourself: print them, save them as PDF, or email them with the PDF attached.</li>
-            <li>Updates install themselves after you approve them, with a copy of your books saved first.</li>
+          <h1>Your books, kept at home.</h1>
+          <p class="lede">Tillhouse is double-entry accounting for US small businesses that lives in one file on your own computer. Invoices, bills, bank feeds, inventory, reconciliation and financial statements, with every transaction posted as a balanced journal entry.</p>
+          <ul class="points">
+            <li>No account</li>
+            <li>No subscription</li>
+            <li>No cloud</li>
+            <li>Open source</li>
           </ul>
+          <div class="download" id="download" aria-live="polite">
+            <a class="btn btn-primary" id="primary-download" href="https://github.com/turbogizzmo/LocalBooks/releases/latest">Download Tillhouse</a>
+            <div class="version-line">Newest version: <b id="version">checking…</b> · <span id="primary-note">opens the downloads page</span></div>
+            <div class="other-downloads" id="other-downloads"></div>
+          </div>
         </div>
-        <div class="download" aria-live="polite">
-          <div class="label">Newest version</div>
-          <div class="version" id="version">Checking…</div>
-          <a class="btn btn-primary btn-block" id="primary-download" href="https://github.com/turbogizzmo/LocalBooks/releases/latest">Download LocalBooks</a>
-          <div class="small muted" id="primary-note" style="margin-top:6px">Opens the downloads page.</div>
-          <div class="other-downloads" id="other-downloads"></div>
+        <figure class="hero-shot">
+          <img src="shots/home.jpg" width="1600" height="1000" fetchpriority="high"
+               alt="Tillhouse's Home dashboard: workflow icons for customers, vendors and employees, shortcuts for banking and the company, and the bank, card, receivable and payable balances of a sample company.">
+          <figcaption>Tillhouse on a sample company.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="band" id="features">
+      <div class="wrap">
+        <header>
+          <span class="eyebrow">What it does</span>
+          <h2>Everything a small business keeps books for</h2>
+          <p class="lead">A classic desktop accounting layout, fast with the keyboard, for sales, purchases, banking and reports. For US businesses: sales tax, 1099s, ACH files and printed checks follow US rules. There is no VAT or GST, and no payroll.</p>
+        </header>
+        <div class="screens">
+          <figure>
+            <img src="shots/invoices.jpg" width="1600" height="1000" loading="lazy"
+                 alt="The Invoice form with customer, invoice date, Invoice number, terms and due date, and below it the list of invoices with their totals, open balances and overdue status.">
+            <figcaption>An invoice and the invoice list.</figcaption>
+          </figure>
+          <figure>
+            <img src="shots/report.jpg" width="1600" height="1000" loading="lazy"
+                 alt="The Balance Sheet in the Reports center: assets, liabilities and equity with their totals, a check that assets equal liabilities plus equity, and the list of reports beside it.">
+            <figcaption>The Balance Sheet in the Reports center.</figcaption>
+          </figure>
+        </div>
+        <div class="features">
+          <div class="feature"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span><h3>Invoices, estimates and sales orders</h3><p>Design your own forms, then print them, save them as PDF or email them, one at a time or in a batch. Credit memos, statements, finance charges and price levels too.</p></div>
+          <div class="feature"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg></span><h3>Bills, checks and purchase orders</h3><p>Enter and pay bills, print checks, make ACH payment files, receive items before the bill, route bills for approval and enter receipts from a PDF.</p></div>
+          <div class="feature"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6M5 10v8M19 10v8M9 10v8M15 10v8M3 20h18"/></svg></span><h3>Bank feeds and reconciliation</h3><p>Import OFX, QFX, CSV or PDF statements, or connect through SimpleFIN. Rules sort repeat payees, payout feeds bring in Stripe, PayPal and Shopify, and reconciling locks the month.</p></div>
+          <div class="feature"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><h3>Reports you can click into</h3><p>Profit and loss, balance sheet, aging, sales and expense reports, budgets, graphs and a Company Snapshot. Click any amount to see the transactions behind it.</p></div>
+          <div class="feature"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></span><h3>Inventory and jobs</h3><p>Stock on hand at moving-average cost, item groups, reorder points and job costing, with time and mileage billed to customers.</p></div>
+          <div class="feature"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7h6M9 11h6M9 15h3"/><rect x="4" y="3" width="16" height="18" rx="2"/></svg></span><h3>Sales tax, 1099s and closing</h3><p>Sales tax by agency with returns and adjustments, 1099s and W-9s, a tax calendar, a closing date, and Accountant’s Copy for your accountant.</p></div>
+          <div class="feature"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><h3>Users and encryption</h3><p>Users with roles, optional whole-file encryption and two-step sign-in, and a hash-chained audit trail that shows any change made behind its back.</p></div>
+          <div class="feature"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></span><h3>Backups that check themselves</h3><p>A verified backup every day, a copy before every upgrade, encrypted offsite backup to a folder you choose, and Reinstall Previous Version if an update misbehaves.</p></div>
+          <div class="feature"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="4"/></svg></span><h3>Money kept exact</h3><p>Amounts are whole cents, never rounded floats. Debits equal credits, checked twice, and posted entries are corrected by reversal, never edited.</p></div>
         </div>
       </div>
     </section>
 
-    <section class="panel" id="install">
-      <h2>Install</h2>
-      <div class="panel-body">
-        <div class="tabs" role="tablist" aria-label="Operating system">
-          <button role="tab" id="tab-windows" aria-controls="panel-windows" aria-selected="true">Windows</button>
-          <button role="tab" id="tab-mac" aria-controls="panel-mac" aria-selected="false">macOS</button>
-          <button role="tab" id="tab-linux" aria-controls="panel-linux" aria-selected="false">Linux</button>
-        </div>
-
-        <div role="tabpanel" id="panel-windows" aria-labelledby="tab-windows">
-          <ol class="steps">
-            <li>Download the <strong>Windows installer</strong> (the file ending in <code>-setup.exe</code>).</li>
-            <li>Open it. Because LocalBooks is not code-signed yet, Windows may show <em>“Windows protected your PC”</em>.
-              Click <strong>More info</strong>, then <strong>Run anyway</strong>.</li>
-            <li>Follow the installer. It installs for your user account only and does not need an administrator.</li>
-            <li>Start <strong>LocalBooks</strong> from the Start menu.</li>
-          </ol>
-          <div class="notice notice-info">Use the <code>-setup.exe</code> installer rather than the <code>.msi</code>: automatic updates use the same kind of installer, so you never end up with two copies.</div>
-        </div>
-
-        <div role="tabpanel" id="panel-mac" aria-labelledby="tab-mac" hidden>
-          <ol class="steps">
-            <li>Download the <strong>macOS disk image</strong> (<code>.dmg</code>). One download works on Apple silicon and Intel Macs.</li>
-            <li>Open it and drag <strong>LocalBooks</strong> into <strong>Applications</strong>.</li>
-            <li>Open LocalBooks from Applications. Because LocalBooks is not notarized by Apple yet, macOS stops it the first time.</li>
-            <li>Open <strong>System Settings › Privacy &amp; Security</strong>, scroll down to the message about LocalBooks, and click <strong>Open Anyway</strong>. You only need to do this once.</li>
-          </ol>
-          <details>
-            <summary>macOS says LocalBooks “is damaged and can’t be opened”</summary>
-            <p class="small">That message means macOS quarantined the download. Open <strong>Terminal</strong> and run
-              <code>xattr -cr /Applications/LocalBooks.app</code>, then open LocalBooks again.</p>
-          </details>
-        </div>
-
-        <div role="tabpanel" id="panel-linux" aria-labelledby="tab-linux" hidden>
-          <ol class="steps">
-            <li><strong>Debian or Ubuntu:</strong> download the <code>.deb</code> and install it with <code>sudo apt install ./LocalBooks_*.deb</code>.</li>
-            <li><strong>Fedora or openSUSE:</strong> download the <code>.rpm</code> and install it with your package manager.</li>
-            <li><strong>Any distribution:</strong> download the <code>.AppImage</code>, make it executable (<code>chmod +x</code>), and run it. Only the AppImage updates itself; the <code>.deb</code> and <code>.rpm</code> are updated by installing the new package.</li>
-          </ol>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel" id="move">
-      <h2>Move your books to LocalBooks</h2>
-      <div class="panel-body">
-        <p>Everything comes in through the Desktop Migration Wizard, in <strong>Settings › Import &amp; Migration</strong> (or <strong>File › Utilities › Import / Convert…</strong>). The wizard only reads your file: nothing changes in your old program, and nothing is added to LocalBooks until you post.</p>
+    <section class="band alt" id="move">
+      <div class="wrap">
+        <header>
+          <span class="eyebrow">Moving from QuickBooks Desktop</span>
+          <h2>Bring your books with you</h2>
+          <p class="lead">Tillhouse opens QuickBooks Desktop company files and backups from Windows and Mac, and reads Quicken, GnuCash, QuickBooks Online report exports and spreadsheets.</p>
+        </header>
+        <p>Everything comes in through the Desktop Migration Wizard, in <strong>Settings › Import &amp; Migration</strong> (or <strong>File › Utilities › Import / Convert…</strong>). The wizard only reads your file: nothing changes in your old program, and nothing is added to Tillhouse until you post.</p>
         <div id="mig" hidden>
           <p class="mig-label">1. Which program are you leaving?</p>
           <div class="mig-choices" id="mig-sources" role="group" aria-label="Program you're leaving"></div>
@@ -265,7 +324,7 @@
             <tr><td><strong>QuickBooks Desktop for Windows</strong></td><td>Choose your company file (<code>.qbw</code>) or a backup (<code>.qbb</code>) in the wizard.</td></tr>
             <tr><td><strong>QuickBooks for Mac 2012</strong> or earlier</td><td>Choose your company file (<code>.qb2012</code>, <code>.qb2011</code> or <code>.qb2010</code>) in the wizard. QuickBooks doesn’t need to be installed. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-quickbooks-for-mac-2012-and-earlier">Steps</a></td></tr>
             <tr><td><strong>QuickBooks Desktop for Mac</strong> 2016 and later</td><td>In QuickBooks, choose <strong>File › Export › To QuickBooks for Windows</strong>, click <strong>Verify</strong>, and leave the password <strong>blank</strong>. Then choose the <code>.qbb</code> it saves. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-quickbooks-desktop-for-mac">Steps</a></td></tr>
-            <tr><td><strong>QuickBooks still installed</strong> (Windows or Mac)</td><td><em>Preview.</em> Let LocalBooks export it: open your company file in QuickBooks (on a Mac, also open <strong>Reports › Accountant &amp; Taxes › Journal</strong> for all dates), then click <strong>Export from QuickBooks</strong> in the wizard. LocalBooks asks QuickBooks for the data through Intuit’s own interfaces, read-only. Windows needs Intuit’s free QuickBooks SDK. Not yet tried against a running QuickBooks. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it">Steps</a></td></tr>
+            <tr><td><strong>QuickBooks still installed</strong> (Windows or Mac)</td><td><em>Preview.</em> Let Tillhouse export it: open your company file in QuickBooks (on a Mac, also open <strong>Reports › Accountant &amp; Taxes › Journal</strong> for all dates), then click <strong>Export from QuickBooks</strong> in the wizard. Tillhouse asks QuickBooks for the data through Intuit’s own interfaces, read-only. Windows needs Intuit’s free QuickBooks SDK. Not yet tried against a running QuickBooks. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#quickbooks-still-installed-let-tillhouse-export-it">Steps</a></td></tr>
             <tr><td><strong>QuickBooks Online</strong>, or a QuickBooks you <strong>no longer have a license</strong> for</td><td>Export the <strong>Journal</strong> report (dates: <strong>All</strong>), plus the account, customer, vendor and item lists, to Excel or CSV, and choose them all together. An expired QuickBooks still opens in view-only mode, which can run reports. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-quickbooks-reports">Steps for each version</a></td></tr>
             <tr><td><strong>Quicken</strong></td><td>In Quicken, choose <strong>File › File Export › QIF File</strong> with <strong>All accounts</strong> (or one account at a time), and include transactions, the account list and the category list. Then choose the <code>.qif</code>. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-an-iif-or-qif-export">Steps</a></td></tr>
             <tr><td><strong>GnuCash</strong></td><td>Choose your <code>.gnucash</code> book (either the XML or SQLite kind). <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-gnucash">Steps</a></td></tr>
@@ -278,24 +337,83 @@
         <p class="mig-label">Then, whichever program you came from</p>
         <ol class="steps">
           <li><strong>Run a trial balance</strong> in your old program first, so you have something to compare with.</li>
-          <li>In LocalBooks, open <strong>Settings › Import &amp; Migration</strong> and choose your file or files.</li>
-          <li>Check <strong>Balances matching the file</strong>, then match each account to a LocalBooks account (or click <strong>Match existing accounts and create the rest</strong>).</li>
+          <li>In Tillhouse, open <strong>Settings › Import &amp; Migration</strong> and choose your file or files.</li>
+          <li>Check <strong>Balances matching the file</strong>, then match each account to a Tillhouse account (or click <strong>Match existing accounts and create the rest</strong>).</li>
           <li>Choose <strong>Full import</strong> to bring in invoices, bills, payments and deposits as real documents, so open balances and aging carry over. Then post.</li>
-          <li>Compare LocalBooks’ trial balance with your old program’s. Not right? <strong>Start over…</strong> under <em>Your imports</em> puts your books back exactly as they were.</li>
+          <li>Compare Tillhouse’s trial balance with your old program’s. Not right? <strong>Start over…</strong> under <em>Your imports</em> puts your books back exactly as they were.</li>
         </ol>
         <p class="small muted">Full details, including what each format can and can’t carry over: <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md">Moving your books guide</a>.</p>
+
       </div>
     </section>
 
-    <section class="panel" id="whats-new">
-      <h2>What’s new to test in 0.15</h2>
-      <div class="panel-body">
-        <ul class="facts">
+    <section class="band" id="install">
+      <div class="wrap">
+        <header>
+          <span class="eyebrow">Install</span>
+          <h2>Ten minutes on Windows, Mac or Linux</h2>
+          <p class="lead">Tillhouse is not code-signed yet, so the first start takes one extra click. These are the steps.</p>
+        </header>
+        <div class="card">
+<div class="tabs" role="tablist" aria-label="Operating system">
+          <button role="tab" id="tab-windows" aria-controls="panel-windows" aria-selected="true">Windows</button>
+          <button role="tab" id="tab-mac" aria-controls="panel-mac" aria-selected="false">macOS</button>
+          <button role="tab" id="tab-linux" aria-controls="panel-linux" aria-selected="false">Linux</button>
+        </div>
+
+        <div role="tabpanel" id="panel-windows" aria-labelledby="tab-windows">
+          <ol class="steps">
+            <li>Download the <strong>Windows installer</strong> (the file ending in <code>-setup.exe</code>).</li>
+            <li>Open it. Because Tillhouse is not code-signed yet, Windows may show <em>“Windows protected your PC”</em>.
+              Click <strong>More info</strong>, then <strong>Run anyway</strong>.</li>
+            <li>Follow the installer. It installs for your user account only and does not need an administrator.</li>
+            <li>Start <strong>Tillhouse</strong> from the Start menu.</li>
+          </ol>
+          <div class="notice notice-info">Use the <code>-setup.exe</code> installer rather than the <code>.msi</code>: automatic updates use the same kind of installer, so you never end up with two copies.</div>
+        </div>
+
+        <div role="tabpanel" id="panel-mac" aria-labelledby="tab-mac" hidden>
+          <ol class="steps">
+            <li>Download the <strong>macOS disk image</strong> (<code>.dmg</code>). One download works on Apple silicon and Intel Macs.</li>
+            <li>Open it and drag <strong>Tillhouse</strong> into <strong>Applications</strong>.</li>
+            <li>Open Tillhouse from Applications. Because Tillhouse is not notarized by Apple yet, macOS stops it the first time.</li>
+            <li>Open <strong>System Settings › Privacy &amp; Security</strong>, scroll down to the message about Tillhouse, and click <strong>Open Anyway</strong>. You only need to do this once.</li>
+          </ol>
+          <details>
+            <summary>macOS says Tillhouse “is damaged and can’t be opened”</summary>
+            <p class="small">That message means macOS quarantined the download. Open <strong>Terminal</strong> and run
+              <code>xattr -cr /Applications/Tillhouse.app</code>, then open Tillhouse again.</p>
+          </details>
+        </div>
+
+        <div role="tabpanel" id="panel-linux" aria-labelledby="tab-linux" hidden>
+          <ol class="steps">
+            <li><strong>Debian or Ubuntu:</strong> download the <code>.deb</code> and install it with <code>sudo apt install ./Tillhouse_*.deb</code>.</li>
+            <li><strong>Fedora or openSUSE:</strong> download the <code>.rpm</code> and install it with your package manager.</li>
+            <li><strong>Any distribution:</strong> download the <code>.AppImage</code>, make it executable (<code>chmod +x</code>), and run it. Only the AppImage updates itself; the <code>.deb</code> and <code>.rpm</code> are updated by installing the new package.</li>
+          </ol>
+        </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band alt" id="whats-new">
+      <div class="wrap">
+        <header>
+          <span class="eyebrow">For testers</span>
+          <h2>What’s new to test in 0.15</h2>
+          <p class="lead">Testing on a copy of your books? Back up first in <strong>Settings › File &amp; Data Controls</strong>. For a structured run, work through the <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/testing/edge-cases.md">edge-case checklist</a>; the <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md">changelog</a> has everything that changed.</p>
+        </header>
+        <div class="two">
+          <div class="card">
+<ul class="facts">
           <li><strong>New in 0.15.0: Invoice number and new names</strong>: start an invoice and check the <strong>Invoice #</strong> box; type a customer that isn’t on your list and confirm it asks before adding it.</li>
           <li><strong>New in 0.15.0: Billable costs on the invoice</strong>: mark a card charge billable to a customer, then start an invoice for them and add it when offered.</li>
           <li><strong>New in 0.15.0: Purchase orders</strong>: edit, delete, print and email an open purchase order, then make a bill from it.</li>
           <li><strong>New in 0.15.0: Sales tax adjustments</strong>: in <strong>Sales › Sales Tax</strong>, use <strong>Adjust…</strong> and check the return.</li>
           <li><strong>New in 0.15.0: Encryption and two-step sign-in (optional)</strong>: on a test copy, turn them on in <strong>Settings › Users &amp; Passwords</strong> and sign in again.</li>
+            </ul>
+<details><summary>Still worth testing from earlier versions (40)</summary><ul class="facts">
           <li><strong>New in 0.14.0: Sales orders</strong>: open <strong>Sales › Sales Orders</strong>, record an order, then turn it into an invoice for part of it and check what is left open.</li>
           <li><strong>New in 0.14.0: Receive items before the bill</strong>: make a purchase order, receive part of it in <strong>Vendors › Receive Items</strong>, then enter the bill from the receipt.</li>
           <li><strong>New in 0.14.0: Discounts and charges on purchase forms</strong>: add a discount or other-charge line to a bill, check or purchase order and check the total.</li>
@@ -321,7 +439,7 @@
           <li><strong>New in 0.11.0: Find what a name did</strong>: click a vendor or customer to list its transactions; double-click a row in a register, the Invoices, Bills or Expenses list to open it; click a register or Reconcile heading to sort.</li>
           <li><strong>New in 0.11.0: Enter moves between fields</strong>: turn it on in <strong>Settings › Preferences Console › General</strong>, then fill in a bill with Enter instead of Tab.</li>
           <li><strong>New in 0.11.0: Six more reports</strong>: try <strong>Profit &amp; Loss by Month</strong>, <strong>Transaction List by Vendor</strong> and <strong>Voided Transactions</strong>.</li>
-          <li><strong>New in 0.10.3: Windows inside LocalBooks</strong>: open an invoice, a bill and a report and they float side by side; try <strong>Window › Tile Vertically</strong>, <strong>View › One Window</strong> and <strong>View › Open Window List</strong>. Close the company and reopen it: your windows come back.</li>
+          <li><strong>New in 0.10.3: Windows inside Tillhouse</strong>: open an invoice, a bill and a report and they float side by side; try <strong>Window › Tile Vertically</strong>, <strong>View › One Window</strong> and <strong>View › Open Window List</strong>. Close the company and reopen it: your windows come back.</li>
           <li><strong>New in 0.10.3: Choose the left pane and where you start</strong>: in <strong>Edit › Preferences › Desktop View</strong>, show only the open windows (or no left pane), and start on Home, your last windows or a screen you choose.</li>
           <li><strong>New in 0.10.3: What’s new in Help</strong>: press F1 and search “what’s new” for the newest features, each with a link to its steps.</li>
           <li><strong>New in 0.10.2: Pay Bills writes checks</strong>: <strong>Expenses › Bills › Pay bills</strong> from a bank account, then print the checks. Attach the vendor’s invoice to a new bill too, or a receipt to an expense; a 📎 marks transactions with files.</li>
@@ -336,69 +454,63 @@
           <li><strong>Condense Data</strong> (on a copy of your books): <strong>File › Utilities › Condense Data…</strong>, then open the archive it makes.</li>
           <li><strong>QuickBooks for Mac 2010–2012</strong> company files import in the Desktop Migration Wizard.</li>
           <li><strong>Still have QuickBooks running?</strong> Try <strong>Export from my installed QuickBooks</strong> (preview) in the Desktop Migration Wizard, and tell us how it goes.</li>
-        </ul>
-        <p class="small muted">Testing on a copy of your books? Use <strong>Settings › File &amp; Data Controls</strong> to back up first. Want a structured run? Work through the <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/testing/edge-cases.md">edge-case checklist</a>, and see the <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md">changelog</a> for everything that changed.</p>
-      </div>
-    </section>
-
-    <div class="two-col">
-      <section class="panel" id="updates">
-        <h2>Updates</h2>
-        <div class="panel-body">
-          <p>LocalBooks checks for a new version a few seconds after it starts. When one is ready you’ll see a blue bar at the top:</p>
-          <div class="notice notice-info"><strong>LocalBooks <span id="update-new">(new version)</span></strong> is available (you have <span id="update-old">yours</span>). &nbsp;<span class="btn btn-primary" style="min-height:24px;padding:0 10px;font-size:12px">Install and restart</span> <span class="btn" style="min-height:24px;padding:0 10px;font-size:12px">Later</span></div>
-          <ol class="steps">
-            <li>Open <strong>What’s new in …</strong> under the bar to read the release notes if you like, then click <strong>Install and restart</strong>. <strong>Later</strong> hides the bar until LocalBooks next starts.</li>
-            <li>LocalBooks downloads the update, checks its digital signature, installs it and reopens.</li>
-            <li>The first time the new version opens your company file, it saves a copy first (Settings › File &amp; Data Controls, listed as <em>Before upgrade</em>).</li>
-            <li>On a Mac, the first start after an update may ask you to let LocalBooks use its saved passwords in your Keychain, once for each one (until LocalBooks is signed with an Apple Developer ID). Click <strong>Always Allow</strong>.</li>
-          </ol>
-          <p class="small muted">To check yourself, or to turn off automatic checks, go to <strong>Settings › Updates</strong>. Checking sends nothing about your books. If a new version has a problem, <strong>Help › Reinstall Previous Version…</strong> backs up your books and goes back to the one before it.</p>
-          <p class="small muted">Previews (shown as <em>preview</em> beside the version at the top of this page) are early versions that are not offered as automatic updates. Download and install them from this page; your company file and settings carry over.</p>
-        </div>
-      </section>
-
-      <section class="panel" id="data">
-        <h2>Your data</h2>
-        <div class="panel-body">
-          <div class="notice notice-info">LocalBooks is new. Keep your old program’s books until you’ve compared a month or two in LocalBooks and you’re happy the numbers match.</div>
-          <ul class="facts">
-            <li>Your company file stays on your computer. Nothing is uploaded.</li>
-            <li>LocalBooks makes an automatic backup each day. Make your own any time from <strong>Settings › File &amp; Data Controls › Back up now</strong>.</li>
-            <li>To try things freely, use made-up customers and amounts, or keep a separate test company file: <strong>Settings › File &amp; Data Controls › Change Company File Location…</strong>, pick an empty folder, and choose <em>Start a new, empty company file there</em>.</li>
-            <li>Bank connections (SimpleFIN) are optional. For a no-risk trial, SimpleFIN’s demo token gives fake transactions.</li>
-            <li>Emailing an invoice or estimate opens a new message in your own mail app; nothing is sent until you click Send there. Sending from LocalBooks over SMTP is optional (<strong>Settings › Email</strong>), and your email password stays in your computer’s Keychain or Credential Manager. To test emailing, send to your own address first.</li>
-          </ul>
-        </div>
-      </section>
-    </div>
-
-    <section class="panel" id="report">
-      <h2>Report a problem or suggest something</h2>
-      <div class="panel-body">
-        <p>Open an issue on GitHub (a free GitHub account is needed):</p>
-        <p><a class="btn btn-primary" href="https://github.com/turbogizzmo/LocalBooks/issues/new">Report a problem</a>
-           <a class="btn btn-secondary" href="https://github.com/turbogizzmo/LocalBooks/issues">See known issues</a></p>
-        <table class="grid" aria-label="What to include">
+            </ul></details>
+          </div>
+          <div class="stack">
+            <div class="card stack" id="updates">
+              <h3>Updates</h3>
+              <p>Tillhouse checks for a new version a few seconds after it starts and shows a bar at the top when one is ready:</p>
+              <div class="notice notice-info"><strong>Tillhouse <span id="update-new">(new version)</span></strong> is available (you have <span id="update-old">yours</span>). <strong>Install and restart</strong> · Later</div>
+              <p class="small">It checks the download’s signature, saves a copy of your books before the new version first opens them, and reopens. On a Mac, the first start after an update may ask to use saved passwords in your Keychain: click <strong>Always Allow</strong>. <strong>Help › Reinstall Previous Version…</strong> goes back if something is wrong. Previews (marked <em>preview</em> beside the version above) are not offered as automatic updates: download them here.</p>
+            </div>
+            <div class="card stack" id="report">
+              <h3>Report a problem or suggest something</h3>
+              <p class="small">Open an issue on GitHub (a free account is needed). Please include:</p>
+              <div class="table-wrap">
+<table class="grid" aria-label="What to include">
           <thead><tr><th style="width:34%">Please include</th><th>Where to find it</th></tr></thead>
           <tbody>
-            <tr><td>Your LocalBooks version</td><td><strong>Settings › Updates</strong></td></tr>
+            <tr><td>Your Tillhouse version</td><td><strong>Settings › Updates</strong></td></tr>
             <tr><td>Windows or macOS version</td><td>Windows: <kbd>Win</kbd> + <kbd>R</kbd>, type <code>winver</code>. Mac: Apple menu › About This Mac</td></tr>
             <tr><td>What you did, what you expected, what happened</td><td>Step by step is ideal; a screenshot helps a lot</td></tr>
             <tr><td>The exact error message</td><td>Copy the text from the red message bar</td></tr>
-            <tr><td>A diagnostics file (optional)</td><td><strong>Help › Save Diagnostics…</strong> saves a zip with LocalBooks’ version, your system and its own log, with no business data; attach it to the issue</td></tr>
+            <tr><td>A diagnostics file (optional)</td><td><strong>Help › Save Diagnostics…</strong> saves a zip with Tillhouse’s version, your system and its own log, with no business data; attach it to the issue</td></tr>
           </tbody>
         </table>
-        <div class="notice notice-warn small">Never attach your company file or backups to a public issue: they contain your financial records. If a file is needed, say so in the issue and we’ll arrange a private way.</div>
-        <p class="small muted">Found a security problem? Please report it privately through <a href="https://github.com/turbogizzmo/LocalBooks/security/advisories/new">GitHub’s private vulnerability reporting</a> instead of a public issue.</p>
+              </div>
+              <div class="notice notice-warn small">Never attach your company file or backups to a public issue: they hold your financial records. Say a file is needed and we’ll arrange a private way.</div>
+              <p><a class="btn btn-spruce" href="https://github.com/turbogizzmo/LocalBooks/issues/new">Report a problem</a> <a class="btn btn-line" href="https://github.com/turbogizzmo/LocalBooks/issues">Known issues</a></p>
+              <p class="small muted">Found a security problem? Report it privately through <a href="https://github.com/turbogizzmo/LocalBooks/security/advisories/new">GitHub’s private vulnerability reporting</a>.</p>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
-    <section class="panel" id="guides">
-      <h2>Step-by-step guides</h2>
-      <div class="panel-body">
-        <p class="muted">The same guides are built into the app: press <kbd>F1</kbd> or click <strong>Help</strong>.</p>
-        <ul class="guide-list" id="guide-list">
+    <section class="band" id="privacy">
+      <div class="wrap">
+        <header>
+          <span class="eyebrow">Privacy</span>
+          <h2>Nothing leaves your computer unless you send it</h2>
+          <p class="lead">Your company file is one file on your own disk. Tillhouse has no account to sign up for and no telemetry. It only goes online for things you turn on.</p>
+        </header>
+        <div class="privacy">
+          <div class="card"><h3>Your file, your disk</h3><p>Everything is in one company file you can copy, back up and move. Nothing is uploaded, and it opens without an internet connection.</p></div>
+          <div class="card"><h3>Only what you turn on</h3><p>Update checks, bank connections (SimpleFIN), payout feeds and sending email are each optional, and each says what it sends where.</p></div>
+          <div class="card"><h3>Passwords stay in your keychain</h3><p>Email, bank and offsite-backup passwords go to your computer’s Keychain or Credential Manager, never into the company file or a log.</p></div>
+          <div class="card"><h3>Keep your old books for now</h3><p>Tillhouse is new. Keep your old program’s books until a month or two in Tillhouse matches and you’re happy with the numbers.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band alt" id="guides">
+      <div class="wrap">
+        <header>
+          <span class="eyebrow">User guide</span>
+          <h2>Step-by-step guides</h2>
+          <p class="lead">The same guides are built into the app: press <kbd>F1</kbd> or click <strong>Help</strong>.</p>
+        </header>
+<ul class="guide-list" id="guide-list">
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/whats-new.md">What’s new</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/getting-started.md">Getting started</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/preferences.md">Preferences reference</a></li>
@@ -432,9 +544,9 @@
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/cleaning-up-books.md">Cleaning up the books</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/backups-and-company-files.md">Backups and company files</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/users-and-passwords.md">Users, passwords and sensitive data</a></li>
-          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/safeguards-rule.md">The FTC Safeguards Rule and LocalBooks</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/safeguards-rule.md">The FTC Safeguards Rule and Tillhouse</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md">Moving from QuickBooks, Quicken or GnuCash</a></li>
-          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/ledger-integrity.md">How LocalBooks keeps the books accurate</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/ledger-integrity.md">How Tillhouse keeps the books accurate</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/ai-assistant.md">Read-only AI access</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/troubleshooting.md">Troubleshooting</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/tree/main/docs/guide">All guides</a></li>
@@ -444,11 +556,17 @@
   </main>
 
   <footer>
-    LocalBooks is open source under the <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/LICENSE">MIT License</a> ·
-    <a href="https://github.com/turbogizzmo/LocalBooks">Source code</a> ·
-    <a href="https://github.com/turbogizzmo/LocalBooks/releases">All releases</a> ·
-    <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/THIRD-PARTY-NOTICES.txt">Third-party notices</a>
-    <p>QuickBooks® is a registered trademark of Intuit Inc. LocalBooks is an independent project and is not affiliated with, endorsed by, or sponsored by Intuit Inc.</p>
+    <div class="wrap">
+      <a class="brand" href="#top"><svg aria-hidden="true"><use href="#mark"/></svg>Tillhouse</a>
+      <div class="links">
+        <span>Open source under the <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/LICENSE">MIT License</a></span>
+        <a href="https://github.com/turbogizzmo/LocalBooks">Source code on GitHub</a>
+        <a href="https://github.com/turbogizzmo/LocalBooks/releases">All releases</a>
+        <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/THIRD-PARTY-NOTICES.txt">Third-party notices</a>
+        <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/SECURITY.md">Security</a>
+      </div>
+      <p>QuickBooks® is a registered trademark of Intuit Inc. Tillhouse is an independent project and is not affiliated with, endorsed by, or sponsored by Intuit Inc.</p>
+    </div>
   </footer>
 
   <script>
@@ -456,37 +574,37 @@
     // no-JavaScript fallback. Steps are this page's own HTML strings, not user input.
     (function () {
       const G = 'https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/';
-      const wizard = 'In LocalBooks, open <strong>Settings › Import &amp; Migration</strong> and choose ';
+      const wizard = 'In Tillhouse, open <strong>Settings › Import &amp; Migration</strong> and choose ';
       const reportSteps = (journal) => [
         journal,
         'Also export the <strong>Account Listing</strong>, <strong>Customer Contact List</strong>, <strong>Vendor Contact List</strong> and <strong>Item List</strong>. Only the Journal is required; the lists add types, addresses and balances to check against.',
         wizard + '<strong>all the files together</strong> (hold <kbd>⌘</kbd> or <kbd>Ctrl</kbd>, or drag them in).'
       ];
       // QuickBooks itself exports, through Intuit's interfaces (Preview).
-      const exportStep = 'In LocalBooks, go to <strong>Settings › Import &amp; Migration</strong>, open <strong>QuickBooks still installed? Export from my installed QuickBooks</strong> under step 1, and click <strong>Export from QuickBooks</strong>.';
+      const exportStep = 'In Tillhouse, go to <strong>Settings › Import &amp; Migration</strong>, open <strong>QuickBooks still installed? Export from my installed QuickBooks</strong> under step 1, and click <strong>Export from QuickBooks</strong>.';
       const installedType = (product, steps) => ({
-        name: 'QuickBooks still installed: let LocalBooks export it', sub: 'Preview · QuickBooks runs on this computer',
-        heading: 'Let LocalBooks ask ' + product + ' for your data', steps,
-        note: 'Preview: built from Intuit’s documentation and not yet tried against a running QuickBooks. LocalBooks sends read-only requests only. If it fails, export the reports yourself.',
-        guide: 'desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it' });
+        name: 'QuickBooks still installed: let Tillhouse export it', sub: 'Preview · QuickBooks runs on this computer',
+        heading: 'Let Tillhouse ask ' + product + ' for your data', steps,
+        note: 'Preview: built from Intuit’s documentation and not yet tried against a running QuickBooks. Tillhouse sends read-only requests only. If it fails, export the reports yourself.',
+        guide: 'desktop-migration.md#quickbooks-still-installed-let-tillhouse-export-it' });
       const DATA = [
         { name: 'QuickBooks Desktop for Windows', sub: 'Pro, Premier or Enterprise', types: [
           { name: 'A company file or backup', sub: '.qbw or .qbb', heading: 'Import it directly', direct: true, steps: [
               'Copy your <code>.qbw</code> company file, or a <code>.qbb</code> backup, to this computer.',
               wizard + 'the file.'],
-            note: 'LocalBooks reads Windows company files and backups itself, so this works even if your QuickBooks no longer opens. A few encrypted fields, such as stored tax IDs, don’t come through.',
+            note: 'Tillhouse reads Windows company files and backups itself, so this works even if your QuickBooks no longer opens. A few encrypted fields, such as stored tax IDs, don’t come through.',
             guide: 'desktop-migration.md' },
           installedType('QuickBooks for Windows', [
               'Install Intuit’s free <strong>QuickBooks Desktop SDK</strong> (the guide links to it).',
               'Open your company file in QuickBooks, signed in as the Admin the first time.',
               exportStep,
-              'QuickBooks asks whether to let LocalBooks read the file: choose <strong>Yes, whenever this QuickBooks company file is open</strong>.'])
+              'QuickBooks asks whether to let Tillhouse read the file: choose <strong>Yes, whenever this QuickBooks company file is open</strong>.'])
         ]},
         { name: 'QuickBooks for Mac 2012', sub: 'Or 2011 and 2010', types: [
           { name: 'A company file', sub: '.qb2012, .qb2011 or .qb2010', heading: 'Import it directly', direct: true, steps: [
               'Close the company in QuickBooks, or copy the file to this computer.',
               wizard + 'the <code>.qb2012</code> file (or the folder, if your company is one).'],
-            note: 'These older Mac files aren’t encrypted, so LocalBooks reads them itself, even without QuickBooks. Each account’s total is checked against the balance QuickBooks stored.',
+            note: 'These older Mac files aren’t encrypted, so Tillhouse reads them itself, even without QuickBooks. Each account’s total is checked against the balance QuickBooks stored.',
             guide: 'desktop-migration.md#from-quickbooks-for-mac-2012-and-earlier' }
         ]},
         { name: 'QuickBooks Desktop for Mac', sub: 'Any year, 2016 to 2024', types: [
@@ -494,13 +612,13 @@
               'Open the company in QuickBooks for Mac as the admin. For a <code>.qbmb</code> backup, restore it first. Intuit suggests running <strong>File › Utilities › Verify Data</strong> first.',
               'Choose <strong>File › Export › To QuickBooks for Windows</strong> (older versions: <strong>Back Up to QuickBooks for Windows</strong>). Leave the password <strong>blank</strong>, and save the <code>.qbb</code> somewhere easy to find.',
               wizard + 'that <code>.qbb</code>.'],
-            note: 'Mac company files are in a Mac-only, encrypted format, so QuickBooks itself has to do this conversion. LocalBooks can’t open a password-protected backup.',
+            note: 'Mac company files are in a Mac-only, encrypted format, so QuickBooks itself has to do this conversion. Tillhouse can’t open a password-protected backup.',
             guide: 'desktop-migration.md#from-quickbooks-desktop-for-mac' },
           installedType('QuickBooks for Mac', [
               'Open your company file in QuickBooks for Mac.',
               'Choose <strong>Reports › Accountant &amp; Taxes › Journal</strong>, set the dates to <strong>All</strong>, and leave the report as the front window.',
               exportStep,
-              'macOS asks whether LocalBooks may control QuickBooks: click <strong>OK</strong>. That lets LocalBooks ask QuickBooks for your data; it changes nothing there.']),
+              'macOS asks whether Tillhouse may control QuickBooks: click <strong>OK</strong>. That lets Tillhouse ask QuickBooks for your data; it changes nothing there.']),
           { name: 'QuickBooks won’t open any more', sub: 'Expired subscription or no license', heading: 'Export your reports instead', steps: reportSteps(
               'Open the company in QuickBooks for Mac. An expired copy still opens it in <strong>view-only mode</strong> for about a year; if it won’t open at all, install Intuit’s 30-day trial. Go to <strong>Reports › Accountant &amp; Taxes › Journal</strong>, set the dates to <strong>All</strong>, and export it to Excel or CSV.'),
             note: 'View-only mode can still run and export reports. The guide lists the exact columns to include.',
@@ -516,14 +634,14 @@
               'In Quicken, choose <strong>File › File Export › QIF File</strong>. Pick <strong>All accounts</strong> if your edition offers it (otherwise one account at a time), and include <strong>Transactions</strong>, <strong>Account list</strong> and <strong>Category list</strong>.',
               'Set the end date to today, so future scheduled transactions aren’t exported.',
               wizard + 'the <code>.qif</code> file.'],
-            note: 'Investment accounts are skipped, because LocalBooks doesn’t track securities.',
+            note: 'Investment accounts are skipped, because Tillhouse doesn’t track securities.',
             guide: 'desktop-migration.md#import-an-iif-or-qif-export' }
         ]},
         { name: 'GnuCash', sub: 'XML or SQLite books', types: [
           { name: 'A GnuCash book', sub: '.gnucash', heading: 'Import it directly', direct: true, steps: [
               'Close the book in GnuCash (or copy the file).',
               wizard + 'the <code>.gnucash</code> file.'],
-            note: 'Customers, vendors, invoices and bills come in as LocalBooks documents. Investment accounts are skipped.',
+            note: 'Customers, vendors, invoices and bills come in as Tillhouse documents. Investment accounts are skipped.',
             guide: 'desktop-migration.md#from-gnucash' }
         ]},
         { name: 'Something else', sub: 'Another program, or just your bank', types: [
@@ -532,7 +650,7 @@
               wizard + 'the file.'],
             guide: 'desktop-migration.md#import-an-iif-or-qif-export' },
           { name: 'Only my bank’s records', sub: 'Starting fresh', heading: 'Start a new company and import your bank history', steps: [
-              'Start a new company in LocalBooks and set up your bank and card accounts.',
+              'Start a new company in Tillhouse and set up your bank and card accounts.',
               'In <strong>Banking › Bank Feeds</strong>, import statements as <strong>OFX, QFX, QBO, CSV or PDF</strong>, or connect your bank with SimpleFIN.',
               'Enter opening balances and any open invoices and bills from your last statements or reports.'],
             guide: 'bank-feeds.md' }
@@ -580,7 +698,7 @@
       function show(t) {
         resultEl.innerHTML =
           '<div class="mig-result"><h3></h3><p class="for"></p>' +
-          (t.direct ? '<div class="notice notice-success">LocalBooks reads this directly. No conversion needed.</div>' : '') +
+          (t.direct ? '<div class="notice notice-success">Tillhouse reads this directly. No conversion needed.</div>' : '') +
           '<ol class="steps">' + t.steps.map((s) => '<li>' + s + '</li>').join('') + '</ol>' +
           (t.note ? '<div class="notice notice-info">' + t.note + '</div>' : '') +
           '<p class="small"><a href="' + G + t.guide + '">Full steps in the guide</a></p></div>';
@@ -646,7 +764,7 @@
           }).filter(Boolean);
           var mine = found.filter(function (f) { return f.kind.os === os; })[0] || found[0];
           if (!mine) {
-            note.textContent = 'Opens the downloads page.';
+            note.textContent = 'opens the downloads page';
             return;
           }
           primary.href = mine.asset.browser_download_url;
@@ -666,8 +784,8 @@
           others.appendChild(all);
         })
         .catch(function () {
-          versionEl.textContent = 'Coming soon';
-          note.textContent = 'No release has been published yet. Check back shortly, or open the downloads page.';
+          versionEl.textContent = 'see the downloads page';
+          note.textContent = 'open the downloads page for every file';
           primary.href = RELEASES;
         });
     })();

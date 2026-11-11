@@ -1,11 +1,11 @@
 ---
 name: run-localbooks
-description: Build and launch the LocalBooks desktop app (Tauri) safely on test company files, drive it, and stop it. Use when asked to run, try, screenshot or hands-on test LocalBooks, or to work through docs/testing/edge-cases.md.
+description: Build and launch the Tillhouse (formerly LocalBooks) desktop app (Tauri) safely on test company files, drive it, and stop it. Use when asked to run, try, screenshot or hands-on test LocalBooks, or to work through docs/testing/edge-cases.md.
 ---
 
-# Run LocalBooks for testing
+# Run Tillhouse for testing
 
-LocalBooks is a Tauri app: Rust backend in `src-tauri/`, React screens in `src/`. These steps run
+Tillhouse is a Tauri app: Rust backend in `src-tauri/`, React screens in `src/`. These steps run
 a **debug build on test company files**, never the user's real books.
 
 ## Safety first
@@ -13,7 +13,7 @@ a **debug build on test company files**, never the user's real books.
 - Debug builds keep their own settings and company file under
   `~/Library/Application Support/com.localbooks.desktop/dev-builds/` (see `data_dirs` in
   `src-tauri/src/main.rs`). The user's real company file and settings, one folder up, are never
-  touched. Never launch a release build (`LocalBooks.app`) for testing.
+  touched. Never launch a release build (`Tillhouse.app`, or `LocalBooks.app` from before the rename) for testing.
 - Only open files under `dev-builds/test-companies/` (made by the seeder below) or new files
   created inside `dev-builds/`.
 - Debug builds, and builds under any bundle identifier other than `com.localbooks.desktop`, never

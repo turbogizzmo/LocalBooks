@@ -17,7 +17,7 @@ record new trips for it. **Make active** brings it back.
 
 ## Enter the mileage rate
 
-A trip's deductible amount is its miles × the mileage rate in effect on the trip date. LocalBooks
+A trip's deductible amount is its miles × the mileage rate in effect on the trip date. Tillhouse
 doesn't come with any rates, because they change: enter the official rate yourself.
 
 1. Find the rate. The IRS publishes its standard mileage rates (business, medical or moving, and
@@ -36,7 +36,7 @@ have no deductible amount, and the Trips list and the reports say how many there
 1. Click the **Trips** tab (or choose **+ New › Mileage Trip**).
 2. Choose the **Vehicle** and the **Trip date**.
 3. Enter the miles one of two ways:
-   - both **Odometer start** and **Odometer end**, and LocalBooks works out the **Total miles**; or
+   - both **Odometer start** and **Odometer end**, and Tillhouse works out the **Total miles**; or
    - just the **Total miles**, for example `12.5`.
 4. Optionally choose a **Customer:Job** and enter the **Notes / purpose**.
 5. To bill the customer for the trip, tick **Billable**. A billable trip needs a customer or job.
@@ -57,7 +57,7 @@ with the income account it should post to and your usual sales rate per mile.
    **Sales rate per mile**. It starts at the item's rate.
 4. Check the **Invoice date** and **Due date**, then click **Create invoice**.
 
-LocalBooks creates and posts one invoice with a line for each trip: the miles as the quantity at
+Tillhouse creates and posts one invoice with a line for each trip: the miles as the quantity at
 your sales rate, described with the trip's date, vehicle and notes. The invoice is listed under
 **Sales › Invoices**, where you can print, email or edit it like any other. Editing the invoice
 keeps the trips on it. **Voiding** the invoice makes its trips billable again.

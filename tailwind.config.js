@@ -1,29 +1,34 @@
 import plugin from 'tailwindcss/plugin';
 
+// Spruce & Brass, the Tillhouse palette (docs/plans/rebrand.md). The token names (qb.green, …) are
+// kept so the 6,000 class names that use them stay as they are; only the colors changed.
+// Every text pair meets WCAG AA (4.5:1): white on green 7.7:1, ink on white 15.8:1.
 const qb = {
-  green: '#2ca01c',
-  greenHover: '#248a17',
-  greenActive: '#1d7313',
-  greenTint: '#e9f6e7',
-  nav: '#232733',
-  navHover: '#2f3443',
-  navActive: '#393f50',
-  navText: '#babec5',
-  canvas: '#f4f5f8',
-  // The work area behind windows open inside LocalBooks, as the grey behind QuickBooks' windows.
-  desktop: '#d9dde3',
+  green: '#0b5d57',
+  greenHover: '#084843',
+  greenActive: '#0a4f4a',
+  greenTint: '#e6f2f0',
+  // The accent: the selected item in the sidebar. A fill only; as text use greenActive.
+  brass: '#e8b44a',
+  nav: '#14211f',
+  navHover: '#1c2d2a',
+  navActive: '#213531',
+  navText: '#b8c7c3',
+  canvas: '#f5f6f4',
+  // The work area behind windows open inside Tillhouse.
+  desktop: '#d8dedc',
   surface: '#ffffff',
-  ink: '#393a3d',
-  inkMuted: '#6b6c72',
-  inkFaint: '#8d9096',
-  border: '#d4d7dc',
-  borderStrong: '#babec5',
-  rowHover: '#f5f5f5',
-  rowSelected: '#eef7ec',
-  headerBg: '#eceef1',
-  negative: '#d52b1e',
-  warning: '#ff8000',
-  info: '#0077c5',
+  ink: '#1c2426',
+  inkMuted: '#56615f',
+  inkFaint: '#626c6a',
+  border: '#dce1df',
+  borderStrong: '#b9c2bf',
+  rowHover: '#f2f4f3',
+  rowSelected: '#e6f2f0',
+  headerBg: '#eceeed',
+  negative: '#b42318',
+  warning: '#b54708',
+  info: '#22609e',
 };
 
 /** @type {import('tailwindcss').Config} */
@@ -62,6 +67,7 @@ export default {
             selected: qb.rowSelected,
             header: qb.headerBg,
           },
+          brass: qb.brass,
           negative: qb.negative,
           warning: qb.warning,
           info: qb.info,
@@ -256,13 +262,12 @@ export default {
           '&:focus-visible': { outline: 'none', boxShadow: theme('boxShadow.focus') },
           '&:disabled': { opacity: '0.5', cursor: 'not-allowed' },
         },
-        // White text needs a green dark enough to read (WCAG AA 4.5:1): qb.green on white text is
-        // 3.4:1, so filled green buttons and badges use greenActive (6.0:1) and darker (R19).
+        // White text on a filled button meets WCAG AA (4.5:1): greenActive is 9.4:1 (R19).
         '.qb-btn-primary': {
           backgroundColor: qb.greenActive,
           color: '#ffffff',
-          '&:hover:not(:disabled)': { backgroundColor: '#196511' },
-          '&:active:not(:disabled)': { backgroundColor: '#15560e' },
+          '&:hover:not(:disabled)': { backgroundColor: qb.greenHover },
+          '&:active:not(:disabled)': { backgroundColor: '#073f3b' },
         },
         '.qb-btn-secondary': {
           backgroundColor: qb.surface,
@@ -289,7 +294,7 @@ export default {
           '&:hover': { backgroundColor: qb.navHover, color: '#ffffff' },
           '&[aria-current="page"], &.is-active': {
             backgroundColor: qb.navActive,
-            borderLeftColor: qb.green,
+            borderLeftColor: qb.brass,
             color: '#ffffff',
             fontWeight: '600',
           },

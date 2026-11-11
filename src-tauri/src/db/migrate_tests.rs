@@ -18,7 +18,7 @@ async fn a_file_upgraded_by_a_newer_version_is_refused_plainly_and_left_alone() 
 
     let err = super::open(&path).await.unwrap_err();
     assert!(err.starts_with("DB_NEWER_FILE"), "{err}");
-    assert!(err.contains("Install the latest LocalBooks"), "{err}");
+    assert!(err.contains("Install the latest Tillhouse"), "{err}");
     let pool = super::open_read_only_for_test(&path).await;
     let newest: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations").fetch_one(&pool).await.unwrap();
     assert_eq!(newest, 9999, "nothing was rolled back or rewritten");
