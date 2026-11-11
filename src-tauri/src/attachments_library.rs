@@ -323,6 +323,11 @@ pub async fn files_to_send(pool: &SqlitePool, kind: crate::forms::FormKind, docu
             "SELECT r.file_name, r.content FROM record_attachments r JOIN sales_orders o ON o.customer_id = r.record_id
              WHERE r.record_kind = 'CUSTOMER' AND o.id = ?1 AND r.send_with_form = 1 AND r.deleted_at IS NULL ORDER BY r.id"
         }
+        // A purchase order posts nothing: its own files marked Send with forms.
+        FormKind::PurchaseOrder => {
+            "SELECT file_name, content FROM record_attachments
+             WHERE record_kind = 'PURCHASE_ORDER' AND record_id = ?1 AND send_with_form = 1 AND deleted_at IS NULL ORDER BY id"
+        }
         // A bill payment stub: the files on the payment's own transaction.
         FormKind::BillPayment => {
             "SELECT a.file_name, a.content FROM attachments a JOIN bill_payments p ON p.journal_entry_id = a.journal_entry_id

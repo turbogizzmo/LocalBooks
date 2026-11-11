@@ -11,84 +11,19 @@ import RowMenu from './RowMenu.jsx';
 import SplitGrid, { blankSplit, splitRowsFromCopy, summarizeSplits } from './SplitGrid.jsx';
 import PurchaseFormLines, { usePurchaseFormLines } from './PurchaseFormLines.jsx';
 import { purchaseLineMessage } from '../lib/purchaseLines.js';
-import { percentText } from '../lib/itemTypes.js';
 import { useFormClass } from './ClassSelect.jsx';
 import { isCategory } from './Bills.jsx';
-import { DocHeader, PrintPortal, useCompany } from './PrintDocuments.jsx';
-import { accountLabel } from './AccountSelect.jsx';
 import { isHeldForApproval } from '../lib/approvals.js';
-import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
-import { formatCents, formatQuantity } from '../lib/money.js';
+import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
+import { useFormPrinter } from './FormPages.jsx';
 
 const STATUS = { OPEN: 'Open', CLOSED: 'Closed', BILLED: 'Billed' };
-
-/** Loads what a printed purchase order shows: its lines, and its discounts and charges. */
-export async function purchaseOrderPrintLines(id) {
-  const [lines, formLines] = await Promise.all([api.getPurchaseOrderLines(id), api.getPurchaseFormLines('PURCHASE_ORDER', id)]);
-  return { lines, formLines };
-}
-
-export function PurchaseOrderDocument({ company, order, lines, formLines = [], accounts }) {
-  return (
-    <article className="doc">
-      <DocHeader company={company} title="Purchase Order" subtitle={`PO #${order.poNumber} · ${formatDate(order.poDate)}`} />
-      <div className="doc-bill-to">
-        <div className="doc-label">Vendor</div>
-        <div className="doc-company-name">{order.vendorName}</div>
-        {order.expectedDate && <div>Expected by {formatDate(order.expectedDate)}</div>}
-      </div>
-      <table className="doc-table">
-        <thead>
-          <tr>
-            <th>Item / account</th>
-            <th>Description</th>
-            <th className="doc-num">Qty</th>
-            <th className="doc-num">Rate</th>
-            <th className="doc-num">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.flatMap((l, i) => {
-            // A discount or charge prints under the line it applies to.
-            const extra = formLines.find((f) => f.afterLine === i + 1);
-            return [
-              <tr key={i}>
-                <td>{accountLabel(accounts, l.accountId)}</td>
-                <td>{l.description ?? ''}</td>
-                <td className="doc-num">{l.quantityE4 ? formatQuantity(l.quantityE4) : ''}</td>
-                <td className="doc-num">{l.rateCents ? formatCents(l.rateCents) : ''}</td>
-                <td className="doc-num">{formatCents(l.amountCents)}</td>
-              </tr>,
-              extra && (
-                <tr key={`f${i}`}>
-                  <td>{accountLabel(accounts, extra.accountId)}</td>
-                  <td>{extra.description}</td>
-                  <td className="doc-num" />
-                  <td className="doc-num">{extra.percentPpm ? percentText(extra.percentPpm) : ''}</td>
-                  <td className="doc-num">{formatCents(extra.kind === 'DISCOUNT' ? -extra.amountCents : extra.amountCents)}</td>
-                </tr>
-              ),
-            ];
-          })}
-        </tbody>
-      </table>
-      <table className="doc-totals">
-        <tbody>
-          <tr className="doc-grand">
-            <td>Total</td>
-            <td className="doc-num">{formatCents(order.totalCents)}</td>
-          </tr>
-        </tbody>
-      </table>
-      {order.memo && <p className="doc-note">{order.memo}</p>}
-    </article>
-  );
-}
 
 /** `copyOf` (from Duplicate) starts the order as a copy of a saved one, dated today. */
 function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCancel, savedStep, copyOf = null }) {
@@ -199,31 +134,6 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
   );
 }
 
-/** A saved purchase order drawn as it prints. */
-function PurchaseOrderPreview({ company, order, accounts }) {
-  const [lines, setLines] = useState(null);
-  const [error, setError] = useState(null);
-  useEffect(() => {
-    let live = true;
-    setLines(null);
-    setError(null);
-    purchaseOrderPrintLines(order.id).then(
-      (l) => live && setLines(l),
-      (err) => live && setError(errorText(err)),
-    );
-    return () => {
-      live = false;
-    };
-  }, [order.id]);
-  if (error) return <Notice kind="error" text={error} />;
-  if (!lines) return <div className="px-2 py-1 text-sm text-qb-ink-muted">Loading…</div>;
-  return (
-    <div className="mx-auto max-w-[820px] bg-white p-6 shadow-md">
-      <PurchaseOrderDocument company={company} order={order} lines={lines.lines} formLines={lines.formLines} accounts={accounts} />
-    </div>
-  );
-}
-
 function BillDialog({ order, onClose, onDone }) {
   const [billDate, setBillDate] = useState(todayIso);
   const [dueDate, setDueDate] = useState(() => addDays(todayIso(), 30));
@@ -267,14 +177,12 @@ function BillDialog({ order, onClose, onDone }) {
 
 /** Expenses › Purchase Orders: non-posting orders to vendors, later turned into bills. */
 export default function PurchaseOrders({ accounts, intent }) {
-  const company = useCompany();
   const { data, error, reload } = useLedgerQuery(api.listPurchaseOrders);
   const vendors = useLedgerQuery(api.listVendors);
   const defaultCategory = useMemo(() => accounts.find((a) => a.isActive && isCategory(a) && a.classification === 'EXPENSE')?.id ?? null, [accounts]);
   const [composing, setComposing] = useState(intent?.action === 'purchase-order');
   const [notice, setNotice] = useState(null);
   const [billing, setBilling] = useState(null);
-  const [printing, setPrinting] = useState(null);
   // A purchase order saved with Save and print, printed once the list has it.
   const [printId, setPrintId] = useState(null);
   const [filter, setFilter] = useState('OPEN');
@@ -289,14 +197,9 @@ export default function PurchaseOrders({ accounts, intent }) {
   }, { storageKey: 'purchase-orders' });
   const list = sorter.sorted;
 
-  const print = async (order) => {
-    try {
-      setPrinting({ order, ...(await purchaseOrderPrintLines(order.id)) });
-      setTimeout(() => printDocument(), 120);
-    } catch (err) {
-      setNotice({ kind: 'error', text: errorText(err) });
-    }
-  };
+  // Printed as its Purchase Order form (Settings › Custom Forms), like the other forms.
+  const [printPortal, forms] = useFormPrinter(setNotice);
+  const print = (order) => forms.print('PURCHASE_ORDER', order.id);
   useEffect(() => {
     const order = printId !== null && (data ?? []).find((o) => o.id === printId);
     if (!order) return;
@@ -345,11 +248,7 @@ export default function PurchaseOrders({ accounts, intent }) {
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       {!inventoryOn && <Notice kind="info" text="Inventory and purchase orders are turned off in Preferences › Items & Inventory. Existing purchase orders stay here; new ones can't be made." />}
-      {printing && (
-        <PrintPortal>
-          <PurchaseOrderDocument company={company} order={printing.order} lines={printing.lines} formLines={printing.formLines} accounts={accounts} />
-        </PrintPortal>
-      )}
+      {printPortal}
       {composing && viewing ? (
         <SavedDocView
           label="Purchase order"
@@ -358,7 +257,8 @@ export default function PurchaseOrders({ accounts, intent }) {
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
           onDuplicate={inventoryOn ? () => duplicate(viewing) : undefined}
-          onPrint={() => print(viewing)}
+          // Drawn, printed and emailed as its Purchase Order form (Settings › Custom Forms).
+          form={{ kind: 'PURCHASE_ORDER', id: viewing.id }}
           record={{ kind: 'PURCHASE_ORDER', id: viewing.id }}
           onNotice={setNotice}
           extra={[
@@ -370,7 +270,6 @@ export default function PurchaseOrders({ accounts, intent }) {
             ],
           ]}
         >
-          <PurchaseOrderPreview company={company} order={viewing} accounts={accounts} />
         </SavedDocView>
       ) : composing ? (
         <NewPurchaseOrder

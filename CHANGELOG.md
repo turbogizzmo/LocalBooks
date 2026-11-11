@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Email and design purchase orders.** A saved purchase order now prints, saves as PDF and emails
+  to the vendor like the other forms, with Email later too. It shows the vendor's address and
+  each line's Customer:Job and Class, and its look is set in Settings › Custom Forms › Purchase
+  order. File › Print Forms › Purchase Orders uses the same design.
+
 - **Customer Statements marks what was sent for this period.** The ✉ beside a customer now means
   their statement for the period on screen was emailed. Before, emailing one month's statement
   marked every period as sent. Statements emailed before this update show no mark.

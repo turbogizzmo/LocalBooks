@@ -631,6 +631,7 @@ pub async fn email_queue(pool: &SqlitePool) -> Result<Vec<ReminderItem>, String>
                 crate::forms::FormKind::CreditMemo => "Credit memo",
                 crate::forms::FormKind::BillPayment => "Bill payment",
                 crate::forms::FormKind::SalesOrder => "Sales order",
+                crate::forms::FormKind::PurchaseOrder => "Purchase order",
             };
             ReminderItem {
                 id: Some(q.document_id),
