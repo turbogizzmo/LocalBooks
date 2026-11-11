@@ -79,6 +79,7 @@ mod list_reports;
 mod money;
 mod mail_app;
 mod offsite;
+mod opening;
 mod other_names;
 mod parties;
 mod party_contacts;
@@ -231,24 +232,16 @@ fn main() {
                 std::process::exit(0);
             }
             steps.step("hand-off check");
-            // Otherwise the file opens in place; without one, config.json is honoured, falling back
-            // to the local file (with a warning) if that location is unavailable.
-            let database = match tauri::async_runtime::block_on(db::Db::startup_with_file(config, launch_file)) {
-                Ok(database) => database,
-                Err(err) => {
-                    // Returning an error from setup aborts the process with no explanation (macOS
-                    // shows only a crash report). Start instead and let the window explain.
-                    eprintln!("LocalBooks could not open its company file: {err}");
-                    commands::record_startup_failure(&data_dir, &err);
-                    app.manage(commands::StartupFailure { message: err, company_file: data_dir.join(storage::DB_FILE_NAME) });
-                    steps.finish("open company (failed)");
-                    return Ok(());
-                }
-            };
-            steps.step("open company");
-            tauri::async_runtime::block_on(database.refresh_gate());
-            steps.step("access gate");
-            app.manage(database);
+            // The company file opens off the UI thread (gap R28): the window paints at once and shows
+            // Opening <name>… until it is open. Meanwhile the books stand empty, and the access gate
+            // stays unchecked, so only the commands that are safe before sign-in run.
+            app.manage(opening::Opening::default());
+            opening::install(app.handle());
+            app.manage(db::Db::closed(config.clone()));
+            // Announced now, before the window can ask and before a second launch can hand anything
+            // over, so the window never starts on No Company Open by mistake.
+            let target = launch_target(&config, launch_file.as_deref());
+            let turn = opening::begin_at_launch(app.handle(), target.as_deref().map(|path| (path, opening::recent_name(&config_dir, path))));
             app.manage(simplefin::SimpleFin::new(simplefin::secret_store(&config_dir))?);
             app.manage(fx_rates::ReqwestHttp::new()?);
             app.manage(bank::suggest::Suggester::default());
@@ -263,77 +256,26 @@ fn main() {
             let mcp_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move { mcp_handle.state::<mcp_server::McpService>().start_if_enabled().await });
 
-            // Accept hand-offs from later launches.
+            // Accept hand-offs from later launches, before the open: a second launch during a slow
+            // open hands its file over (it opens once this one is done) instead of starting another
+            // LocalBooks that would fight over the file.
             let handoff_handle = app.handle().clone();
             let guard = tauri::async_runtime::block_on(instance::listen(&config_dir, move |request| {
                 let app = handoff_handle.clone();
                 tauri::async_runtime::spawn(async move { commands::handle_hand_off(&app, request).await });
             }));
-            steps.step("services and hand-off listener");
             match guard {
                 Ok(guard) => {
                     app.manage(std::sync::Mutex::new(Some(guard)));
                 }
                 Err(err) => eprintln!("single-instance hand-off unavailable: {err}"),
             }
+            steps.finish("services and hand-off listener");
 
-            // The first window to load reopens the company's saved desktop (Desktop View preferences).
-            windows::restore_on_next_load(app.handle(), true);
-            let title_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move { commands::company_changed(&title_handle).await });
-
-            // Scheduled reports: due ones run soon after launch (catching up on runs missed while
-            // LocalBooks was closed), then every few minutes while it stays open.
-            let schedules = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-                loop {
-                    commands::run_due_schedules(&schedules).await;
-                    tokio::time::sleep(std::time::Duration::from_secs(10 * 60)).await;
-                }
-            });
-
-            // Payout feeds an Admin set to fetch automatically: checked every 15 minutes while the
-            // app is open, each fetched when its interval has passed (`payout_feeds::fetch_due`).
-            let payouts = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-                loop {
-                    commands::run_due_payout_fetches(&payouts).await;
-                    tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
-                }
-            });
-
-            // Idle sign-out even when no window asks: once a minute, so an encrypted company file
-            // (gap R1) is closed, and its key leaves memory, soon after the idle limit passes.
-            let idle_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-                    if idle_handle.state::<db::Db>().idle_expired() {
-                        commands::sign_out_after_idle(&idle_handle).await;
-                    }
-                }
-            });
-
-            // Daily automatic backup, off the startup path.
+            // With a file, it opens in place; without one, config.json is honoured, falling back to
+            // the local file (with a warning) if that location is unavailable.
             let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let db = handle.state::<db::Db>();
-                if let Err(err) = backup::auto_backup(db.inner()).await {
-                    eprintln!("automatic backup failed: {err}");
-                }
-                // Offsite copies while the app stays open: checked now and every hour, made when
-                // the newest is older than a day (`offsite::INTERVAL`). A failure is kept on the
-                // Offsite screen; the message never holds the key or password.
-                loop {
-                    if let Ok(store) = commands::offsite_secrets(&handle) {
-                        let _ = offsite::run_if_due(db.inner(), &store).await;
-                    }
-                    tokio::time::sleep(std::time::Duration::from_secs(60 * 60)).await;
-                }
-            });
-            steps.finish("background tasks");
+            tauri::async_runtime::spawn(async move { open_at_launch(handle, config, launch_file, data_dir, turn).await });
             Ok(())
         })
         .invoke_handler(guarded(commands::handler()))
@@ -372,6 +314,106 @@ fn main() {
         });
 }
 
+/// The launch's company file, opened off the UI thread (gap R28; `docs/plans/opening-screen.md`).
+/// The window shows Opening <name>… until this ends; then it reloads into the failure screen,
+/// sign-in or the app. The work that needs the books open starts only once they are.
+async fn open_at_launch(app: tauri::AppHandle, config: db::DbConfig, launch_file: Option<std::path::PathBuf>, data_dir: std::path::PathBuf, turn: opening::Turn) {
+    let started = std::time::Instant::now();
+    let opened = db::Db::startup_with_file(config, launch_file).await;
+    diagnostics::log(&format!("company file opened in {} ms{}", started.elapsed().as_millis(), if opened.is_err() { " (failed)" } else { "" }));
+    let database = app.state::<db::Db>();
+    match opened {
+        Ok(opened) => {
+            database.adopt(opened).await;
+            database.refresh_gate().await;
+        }
+        Err(err) => {
+            // The window explains (StartupFailure.jsx); managed before the turn ends, so the window
+            // finds it when it reloads.
+            eprintln!("LocalBooks could not open its company file: {err}");
+            commands::record_startup_failure(&data_dir, &err);
+            app.manage(commands::StartupFailure { message: err, company_file: data_dir.join(storage::DB_FILE_NAME) });
+            drop(turn);
+            return;
+        }
+    }
+    // The first window to load reopens the company's saved desktop (Desktop View preferences).
+    windows::restore_on_next_load(&app, true);
+    commands::company_changed(&app).await;
+    drop(turn);
+    start_background_work(&app);
+}
+
+/// Which file the launch is about to open, to name it on screen (`Db::startup_with_file` decides
+/// the same way, and may still fall back to the local file). `None`: the company was left closed,
+/// so nothing opens and the window goes to No Company Open.
+fn launch_target(config: &db::DbConfig, launch_file: Option<&std::path::Path>) -> Option<std::path::PathBuf> {
+    if let Some(file) = launch_file {
+        return Some(file.to_path_buf());
+    }
+    let saved = storage::read_config(&config.config_dir);
+    if saved.start_with_no_company {
+        return None;
+    }
+    Some(saved.database_directory.map_or_else(|| config.default_path.clone(), |dir| storage::resolve_network_path(&dir).join(storage::DB_FILE_NAME)))
+}
+
+/// What runs while LocalBooks stays open, once the launch's company file is: scheduled reports,
+/// payout feeds, idle sign-out, the daily backup and offsite copies.
+fn start_background_work(app: &tauri::AppHandle) {
+    // Scheduled reports: due ones run soon after launch (catching up on runs missed while
+    // LocalBooks was closed), then every few minutes while it stays open.
+    let schedules = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        loop {
+            commands::run_due_schedules(&schedules).await;
+            tokio::time::sleep(std::time::Duration::from_secs(10 * 60)).await;
+        }
+    });
+
+    // Payout feeds an Admin set to fetch automatically: checked every 15 minutes while the
+    // app is open, each fetched when its interval has passed (`payout_feeds::fetch_due`).
+    let payouts = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        loop {
+            commands::run_due_payout_fetches(&payouts).await;
+            tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
+        }
+    });
+
+    // Idle sign-out even when no window asks: once a minute, so an encrypted company file
+    // (gap R1) is closed, and its key leaves memory, soon after the idle limit passes.
+    let idle_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            if idle_handle.state::<db::Db>().idle_expired() {
+                commands::sign_out_after_idle(&idle_handle).await;
+            }
+        }
+    });
+
+    // Daily automatic backup, off the startup path.
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let db = handle.state::<db::Db>();
+        if let Err(err) = backup::auto_backup(db.inner()).await {
+            eprintln!("automatic backup failed: {err}");
+        }
+        // Offsite copies while the app stays open: checked now and every hour, made when
+        // the newest is older than a day (`offsite::INTERVAL`). A failure is kept on the
+        // Offsite screen; the message never holds the key or password.
+        loop {
+            if let Ok(store) = commands::offsite_secrets(&handle) {
+                let _ = offsite::run_if_due(db.inner(), &store).await;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(60 * 60)).await;
+        }
+    });
+}
+
 /// Checks the signed-in user's role ([`permissions`]) before handing a command to `handler`; a
 /// refused command fails with the reason and never runs.
 fn guarded(handler: impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static) -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
@@ -379,8 +421,10 @@ fn guarded(handler: impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static)
         let command = invoke.message.command();
         let need = permissions::need(command);
         let activity = matches!(need, permissions::Need::Write | permissions::Need::Admin) || command == "touch_session";
-        // Without a company file manager (startup failed), nothing is open to protect.
-        if let Some(db) = invoke.message.webview().try_state::<db::Db>() {
+        // When the launch could not open the company file, nothing is open to protect, and the
+        // failure screen's own commands (the updater's) must run.
+        let failed = invoke.message.webview().try_state::<commands::StartupFailure>().is_some();
+        if let Some(db) = invoke.message.webview().try_state::<db::Db>().filter(|_| !failed) {
             if let Err(reason) = db.check(need, activity) {
                 if reason == permissions::IDLE_SIGNED_OUT {
                     let app = invoke.message.webview().app_handle().clone();

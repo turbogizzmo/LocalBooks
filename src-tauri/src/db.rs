@@ -188,6 +188,17 @@ impl Db {
         Db::with(None, config)
     }
 
+    /// The launch opened `opened` off the UI thread (gap R28) while this one, already managed, stood
+    /// empty: its company file and any startup warning become this one's. Refresh the gate after.
+    pub async fn adopt(&self, opened: Db) {
+        let warning = opened.startup_warning.lock().expect("warning mutex").take();
+        let archive = opened.archive.load(std::sync::atomic::Ordering::Relaxed);
+        let live = opened.live.write().await.take();
+        self.archive.store(archive, std::sync::atomic::Ordering::Relaxed);
+        *self.live.write().await = live;
+        *self.startup_warning.lock().expect("warning mutex") = warning;
+    }
+
     /// Startup: honour `config.json` when its folder and company file are available; otherwise open
     /// the default local company file and remember why, so the UI can say so.
     pub async fn startup(config: DbConfig) -> Result<Db, String> {
@@ -1003,12 +1014,15 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>, pa
 /// Checks and upgrades a newly opened company file (see [`open_for`]).
 async fn prepare(pool: &SqlitePool, path: &Path, backups: Option<&Path>) -> Result<(), String> {
     refuse_newer_file(pool, path).await?;
-    if let Some(dir) = backups {
-        if let Some(version) = pending_upgrade_from(pool).await? {
-            crate::backup::pre_upgrade_snapshot(pool, path, dir, version).await.map_err(|e| {
-                format!("{e} (LocalBooks did not upgrade {} because it could not save a copy first)", path.display())
-            })?;
-        }
+    let pending = pending_upgrade_from(pool).await?;
+    if let (Some(dir), Some(version)) = (backups, pending) {
+        crate::opening::note(crate::opening::STEP_SAVING_COPY);
+        crate::backup::pre_upgrade_snapshot(pool, path, dir, version).await.map_err(|e| {
+            format!("{e} (LocalBooks did not upgrade {} because it could not save a copy first)", path.display())
+        })?;
+    }
+    if pending.is_some() {
+        crate::opening::note(crate::opening::STEP_UPDATING);
     }
     migrate(pool).await.map_err(|e| format!("cannot migrate company file {}: {e}", path.display()))
 }

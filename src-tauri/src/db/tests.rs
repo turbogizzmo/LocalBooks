@@ -183,6 +183,24 @@ async fn localbooks_files_open_in_place_for_the_session() {
 }
 
 #[tokio::test]
+async fn the_launch_opens_off_the_ui_thread_into_the_managed_books() {
+    // Gap R28: the managed books start empty and take the launch's file, and its warning, once open.
+    let tmp = TempDir::new("adopt");
+    let cfg = test_config(&tmp.0);
+    let managed = Db::closed(cfg.clone());
+    assert!(managed.status().await.is_none(), "nothing is open while the launch opens the file");
+    let opened = Db::startup_with_file(cfg.clone(), Some(tmp.0.join("Gone.localbooks"))).await.unwrap();
+    managed.adopt(opened).await;
+    managed.refresh_gate().await;
+    let status = managed.status().await.expect("the launch's file is now the managed one");
+    assert!(status.is_default);
+    assert!(status.startup_warning.unwrap().contains("Gone.localbooks"), "the reason the launch file didn't open carries over");
+    post_one(&managed).await;
+    assert_eq!(entries(&managed).await, 1, "the adopted books take writes");
+    managed.shutdown().await;
+}
+
+#[tokio::test]
 async fn new_company_files_are_created_named_and_never_replace_a_file() {
     let tmp = TempDir::new("create");
     let cfg = test_config(&tmp.0);

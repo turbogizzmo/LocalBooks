@@ -18,6 +18,10 @@ people using LocalBooks.
   now copies its subtotals, discount lines, percentage charges and groups, so the copy credits the
   same amount as the original. Before, the copy left them out and credited the full amount of the
   item lines.
+- **No more blank window while a company opens.** When LocalBooks starts, or opens a company from
+  the File menu, the recent list or a backup, the window now says *Opening <company>…* and what it's
+  doing, such as saving a copy before updating the file. Before, it stayed blank until the file was
+  open. A file double-clicked while another is still opening waits its turn.
 - **Diagnostics say why starting was slow.** The log in Help › Save Diagnostics now records how
   long LocalBooks took to start and which steps were slow, such as opening the company file.
 
