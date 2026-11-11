@@ -105,6 +105,39 @@ working.
   read. Those vendors come in without a tax ID, and an unreadable value left by an earlier import is
   removed automatically. Enter the ID again from the vendor's W-9.
 
+## Encrypt the whole company file
+
+Off unless an Admin turns it on. With it on, the whole company file, its attachments and every
+backup made from it are encrypted, so a copy that leaves your computer (a lost laptop, a backup
+drive, a synced folder) shows nothing readable without a user's password or the recovery key.
+
+> **Warning:** With it on, if every Admin forgets their password and the recovery key is lost,
+> nobody can open these books or any backup of them: not you, not LocalBooks' authors. Without it,
+> **Remove all users** can still get you back in.
+
+1. Sign in as an Admin and go to **Settings › Users & Passwords**.
+2. Under **Encrypt the whole company file**, tick **I understand that losing every Admin password
+   and the recovery key means losing these books**.
+3. Enter **Your password** again, and a **temporary password** for each other user. They choose
+   their own the next time they sign in.
+4. Click **Encrypt Company File**. LocalBooks makes an encrypted copy, checks it against your books,
+   and switches to it.
+5. Save the **new recovery key** it shows: the one you had before no longer opens this file.
+
+The company file then opens on the sign-in screen and nothing in it can be read until someone signs
+in. Signing out, or being signed out when idle, closes it again.
+
+- **Backups made before** you turned it on are still unencrypted. Users & Passwords lists them:
+  click **Delete Them…** once you no longer need them. Copies in a synced folder's history or on
+  other drives aren't affected.
+- **Backups made since** are encrypted with the same passwords, and restore as usual. A backup of
+  another encrypted company can't be restored into this one: open it with **File › Open Company
+  File** and sign in to it.
+- **Turning a user off** removes their access to the encrypted file. Turning them back on needs a
+  new temporary password.
+- **To turn it off,** enter your password under **Turn Off Encryption…**. The file goes back to an
+  ordinary, unencrypted one.
+
 ## What this protects, and what it doesn't
 
 - Tax IDs are encrypted (AES-256) with a key that is itself locked by each allowed user's password
@@ -113,9 +146,10 @@ working.
 - Roles are enforced by LocalBooks. The rest of the company file is a regular database that another
   program could read or change; changes made outside LocalBooks show up in
   [Verify and correct the ledger](ledger-integrity.md).
-- Vendor tax IDs and bank details are the only values encrypted inside the company file. The rest of
-  the file, its local backups and its attachments are readable by anyone who has them, so turn on
-  full-disk encryption on every computer that holds them: FileVault on a Mac (System Settings ›
+- Unless the whole company file is encrypted (above), vendor tax IDs and bank details are the only
+  values encrypted inside it. The rest of the file, its local backups and its attachments are
+  readable by anyone who has them, so turn on whole-file encryption, or full-disk encryption on every
+  computer that holds them: FileVault on a Mac (System Settings ›
   Privacy & Security), BitLocker or Device Encryption on Windows. Offsite backups are encrypted as a
   whole.
 - [SECURITY.md](https://github.com/turbogizzmo/LocalBooks/blob/main/SECURITY.md) lists every security claim with the code and test behind it.

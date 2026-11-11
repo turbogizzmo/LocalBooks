@@ -38,7 +38,7 @@ use std::path::{Path, PathBuf};
 use chrono::{Datelike, Local, NaiveDate};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::{Connection, SqliteConnection, SqlitePool};
 
 use crate::backup::{self, BackupFile};
@@ -744,7 +744,8 @@ struct ArchiveRecord {
 /// groups, and `PRAGMA foreign_key_check` (File Check & Repair's LINKS check) confirms nothing dangles.
 async fn open_private(path: &Path) -> Result<SqliteConnection, String> {
     crate::wal_guard::check(path)?;
-    let options = SqliteConnectOptions::new().filename(path).foreign_keys(false).create_if_missing(false);
+    // A copy of an encrypted company (gap R1) opens with its key.
+    let options = crate::file_cipher::options_for(path)?.0.foreign_keys(false).create_if_missing(false);
     SqliteConnection::connect_with(&options).await.map_err(|e| format!("CONDENSE_OPEN: cannot open {}: {e}", path.display()))
 }
 
@@ -1130,7 +1131,7 @@ pub async fn pool_is_archive(pool: &SqlitePool) -> bool {
 
 async fn open_checked(path: &Path) -> Result<SqlitePool, String> {
     crate::wal_guard::check(path)?;
-    let options = SqliteConnectOptions::new().filename(path).foreign_keys(true).create_if_missing(false);
+    let options = crate::file_cipher::options_for(path)?.0.foreign_keys(true).create_if_missing(false);
     SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|e| format!("CONDENSE_OPEN: cannot open {}: {e}", path.display()))
 }
 

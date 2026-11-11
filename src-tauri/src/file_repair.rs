@@ -360,7 +360,8 @@ async fn check_stored_totals(pool: &SqlitePool) -> Result<CheckResult, String> {
 
 async fn check_space(pool: &SqlitePool) -> Result<CheckResult, String> {
     let (pages, free, page_size): (i64, i64, i64) =
-        sqlx::query_as("SELECT (SELECT page_count FROM pragma_page_count), (SELECT freelist_count FROM pragma_freelist_count), (SELECT page_size FROM pragma_page_size)")
+        // SQLCipher answers page_size as text on an encrypted file (gap R1).
+        sqlx::query_as("SELECT (SELECT page_count FROM pragma_page_count), (SELECT freelist_count FROM pragma_freelist_count), CAST((SELECT page_size FROM pragma_page_size) AS INTEGER)")
             .fetch_one(pool)
             .await
             .map_err(err)?;

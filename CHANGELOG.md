@@ -26,7 +26,12 @@ people using LocalBooks.
   long LocalBooks took to start and which steps were slow, such as opening the company file.
 
 ## [0.14.0]
-
+- **Encrypt the whole company file.** An Admin can now encrypt the whole company file, its
+  attachments and every backup made from it (Settings › Users & Passwords). It is off unless you turn
+  it on. With it on, a copy that leaves your computer shows nothing readable without a password or
+  the recovery key, the file opens on the sign-in screen, and signing out closes it again. **Read the
+  warning first:** if every Admin forgets their password and the recovery key is lost, nobody can
+  open those books or their backups.
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
   job carries over to the bill, and Open Purchase Orders by Job lists what is still on order for
   each job.
