@@ -57,6 +57,7 @@ mod tests {
             &pool,
             CreditMemoInput {
                 customer_name: "Acme".into(),
+                credit_number: None,
                 credit_date: d(1),
                 memo: None,
                 refund_account_id: None,
