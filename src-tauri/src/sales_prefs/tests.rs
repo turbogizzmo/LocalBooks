@@ -23,6 +23,7 @@ fn open(id: i64, balance_cents: i64) -> Open {
 async fn invoice(pool: &SqlitePool, customer: &str, cents: i64, issued: NaiveDate, due: NaiveDate) -> i64 {
     let income = account(pool, "4100").await;
     let input = InvoiceInput {
+        invoice_number: None,
         customer_name: customer.into(),
         issue_date: issued,
         due_date: due,
@@ -191,7 +192,7 @@ async fn zero_amount_estimate_lines_stay_off_the_invoice() {
     let pool = test_pool().await;
     let income = account(&pool, "4100").await;
     let line = |what: &str, rate: i64| SalesLineInput { product_service_id: None, description: what.into(), quantity_e4: 10_000, rate_cents: rate, income_account_id: income, class_id: None, is_taxable: false, service_date: None };
-    let estimate = |lines| EstimateInput { customer_name: "Initech".into(), estimate_date: d(10, 1), expiration_date: None, memo: None, lines, tax_rate_id: None, discount_cents: 0, details: Default::default() };
+    let estimate = |lines| EstimateInput { estimate_number: None, customer_name: "Initech".into(), estimate_date: d(10, 1), expiration_date: None, memo: None, lines, tax_rate_id: None, discount_cents: 0, details: Default::default() };
     let est = create_estimate(&pool, estimate(vec![line("Design", 50_000), line("Site visit (included)", 0), line("Build", 25_000)])).await.expect("a zero line is allowed");
     assert_eq!(est.total_cents, 75_000);
     assert!(create_estimate(&pool, estimate(vec![line("Nothing", 0)])).await.unwrap_err().starts_with("EST_AMOUNT_TOO_LARGE"), "the estimate itself needs an amount");
@@ -209,6 +210,7 @@ async fn zero_amount_estimate_lines_stay_off_the_invoice() {
     // Through the invoice form: with the preference on, a zero line sent along is left off.
     preferences::set(&pool, DROP_ZERO_LINES, "true").await.unwrap();
     let form = InvoiceInput {
+        invoice_number: None,
         customer_name: "Initech".into(),
         issue_date: d(10, 6),
         due_date: d(11, 5),
@@ -332,6 +334,7 @@ async fn pay_bills_takes_early_payment_discounts_through_their_last_day() {
 async fn invoice_on_terms(pool: &SqlitePool, customer: &str, cents: i64, issued: NaiveDate, terms_id: Option<i64>) -> i64 {
     let income = account(pool, "4100").await;
     let input = InvoiceInput {
+        invoice_number: None,
         customer_name: customer.into(),
         issue_date: issued,
         due_date: issued + Duration::days(30),

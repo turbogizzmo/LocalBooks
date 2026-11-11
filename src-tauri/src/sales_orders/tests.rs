@@ -41,6 +41,7 @@ fn line(s: &Shop, product: i64, qty: i64, rate: i64) -> SalesOrderLineInput {
 
 fn order(customer: &str, date: NaiveDate, lines: Vec<SalesOrderLineInput>) -> SalesOrderInput {
     SalesOrderInput {
+        order_number: None,
         customer_name: customer.into(),
         order_date: date,
         expected_date: None,
@@ -69,7 +70,7 @@ fn invoice(s: &Shop, customer: &str, takes: &[(i64, i64, i64)]) -> (InvoiceInput
             service_date: None,
         })
         .collect();
-    let input = InvoiceInput { customer_name: customer.into(), issue_date: d(10), due_date: d(30), lines, currency: None, tax_rate_id: None, discount_cents: Cents::ZERO, details: Default::default() };
+    let input = InvoiceInput { invoice_number: None, customer_name: customer.into(), issue_date: d(10), due_date: d(30), lines, currency: None, tax_rate_id: None, discount_cents: Cents::ZERO, details: Default::default() };
     (input, takes.iter().enumerate().map(|(i, (order_line_id, ..))| Take { order_line_id: *order_line_id, invoice_line: i }).collect())
 }
 
@@ -261,6 +262,7 @@ async fn an_estimate_becomes_an_order_once_and_is_then_invoiced_through_it() {
     let estimate = crate::estimates::create_estimate(
         &s.pool,
         crate::estimates::EstimateInput {
+            estimate_number: None,
             customer_name: "Acme".into(),
             estimate_date: d(1),
             expiration_date: None,

@@ -20,6 +20,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, due: Naive
     create_and_post_invoice(
         pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: customer.into(),
             issue_date: issue,
             due_date: due,

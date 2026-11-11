@@ -175,6 +175,7 @@ async fn voiding_reverses_unwinds_documents_and_audits() {
     let invoice = create_and_post_invoice(
         &fx.pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Acme".into(),
             issue_date: date(),
             due_date: date(),

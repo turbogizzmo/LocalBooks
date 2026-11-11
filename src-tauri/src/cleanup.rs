@@ -635,7 +635,7 @@ pub async fn write_off(pool: &SqlitePool, input: &WriteOffInput) -> Result<Write
                 return Err(format!("WO_FOREIGN: invoice #{number} is in {}; write-offs are in the home currency", currency.unwrap_or_default()));
             }
             let description = format!("Write-off of invoice #{number}");
-            let credit = CreditMemoInput { form_lines: Vec::new(),
+            let credit = CreditMemoInput { credit_number: None, form_lines: Vec::new(),
                 customer_name: customer.clone(),
                 credit_date: input.write_off_date,
                 memo: Some(memo.map_or_else(|| description.clone(), |m| format!("{description}: {m}"))),

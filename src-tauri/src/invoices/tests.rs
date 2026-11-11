@@ -40,6 +40,7 @@ async fn simple_invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, due
     create_and_post_invoice(
         pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: customer.into(),
             issue_date: issue,
             due_date: due,
@@ -65,6 +66,7 @@ async fn invoice_posts_to_ar_and_income_then_payment_clears_ar() {
     );
 
     let input = InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme Corp".into(),
         issue_date: d(1),
         due_date: d(31),
@@ -180,6 +182,7 @@ async fn non_income_account_rolls_back_everything() {
     let services = account_id(&pool, "4100").await;
     let rent = account_id(&pool, "6300").await;
     let input = InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme Corp".into(),
         issue_date: d(1),
         due_date: d(31),
@@ -237,6 +240,7 @@ async fn fractional_quantities_post_rounded_amounts() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Hourly Client".into(),
             issue_date: d(1),
             due_date: d(31),
@@ -278,6 +282,7 @@ async fn foreign_invoice_books_home_ar_and_payments_realize_fx() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Berlin GmbH".into(),
             issue_date: d(1),
             due_date: d(31),
@@ -340,6 +345,7 @@ async fn foreign_payment_after_voided_partial_payments_is_accepted() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Lyon SARL".into(),
             issue_date: d(1),
             due_date: d(31),
@@ -379,6 +385,7 @@ async fn foreign_payment_deposits_its_home_amount() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "London Ltd".into(),
             issue_date: d(1),
             due_date: d(31),

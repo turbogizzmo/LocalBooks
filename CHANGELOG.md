@@ -41,6 +41,14 @@ people using LocalBooks.
   name box, nothing saved), when you leave the name box or save. This covers invoices, sales
   receipts, estimates, credit memos, sales orders, bills, checks, expenses, purchase orders, vendor
   credits and payees typed in a register. Imports still add the names they bring in.
+- **Invoice # on the invoice form.** A new invoice shows the number it will get before you save,
+  and you can type another. If that number is already used, LocalBooks says which invoice has it
+  and offers the next free number. Estimates, sales receipts, credit memos and sales orders have
+  the same box (Estimate #, Sale #, Credit #, Order #). Duplicate still gives the copy the next
+  number.
+- **An edited invoice keeps its number.** Saving changes to a posted invoice used to post the
+  corrected invoice under a new number; it now keeps the original's number, so customers,
+  statements, payments and reports go on showing the same one.
 
 ## [0.14.0]
 - **Encrypt the whole company file.** An Admin can now encrypt the whole company file, its

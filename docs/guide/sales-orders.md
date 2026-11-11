@@ -8,7 +8,9 @@ invoice an order all at once or in parts, as you ship.
 
 1. Go to **Sales › Sales Orders** and click **New sales order** (or **Customers › Create Sales
    Orders**).
-2. Enter the **Customer**, **Order date** and, if you know it, the **Expected** ship date. Rep, ship
+2. Enter the **Customer**, **Order date** and, if you know it, the **Expected** ship date.
+   **Order #** shows the next number; type another to use it (see
+   [Invoice numbers](invoices.md#invoice-numbers)). A saved order keeps its number when you change it. Rep, ship
    via, P.O. No., FOB and the addresses work as on an invoice.
 3. Add the item lines with quantity and rate. If you charge sales tax, pick the rate; tax is worked
    out again on each invoice.

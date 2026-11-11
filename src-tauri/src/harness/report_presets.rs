@@ -55,6 +55,7 @@ pub(super) async fn company() -> SqlitePool {
     let invoice = crate::invoices::create_and_post_invoice(
         p,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Brightwater Cafe".into(),
             issue_date: d(2025, 11, 14),
             due_date: d(2025, 12, 14),
@@ -70,7 +71,7 @@ pub(super) async fn company() -> SqlitePool {
     .id;
     let memo = crate::credits::create_credit_memo(
         p,
-        CreditMemoInput { form_lines: Vec::new(),
+        CreditMemoInput { credit_number: None, form_lines: Vec::new(),
             customer_name: "Brightwater Cafe".into(),
             credit_date: d(2025, 11, 20),
             memo: Some("Misprinted posters".into()),
@@ -628,6 +629,7 @@ async fn columns_by_class_customer_job_and_vendor_tie_out() {
     crate::invoices::create_and_post_invoice(
         p,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Brightwater Cafe:Patio Menu".into(),
             issue_date: d(2025, 12, 3),
             due_date: d(2025, 12, 17),

@@ -18,6 +18,7 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 
 fn invoice(customer: &str, account: i64, cents: i64, details: SalesDetails) -> InvoiceInput {
     InvoiceInput {
+        invoice_number: None,
         customer_name: customer.into(),
         issue_date: d(1),
         due_date: d(31),
@@ -123,6 +124,7 @@ async fn an_estimate_carries_its_details_to_its_invoice() {
     let estimate = crate::estimates::create_estimate(
         &pool,
         crate::estimates::EstimateInput {
+            estimate_number: None,
             customer_name: "Initech".into(),
             estimate_date: d(1),
             expiration_date: None,
@@ -161,6 +163,7 @@ async fn sales_by_rep_totals_invoices_and_receipts() {
     crate::sales::post_sales_receipt(
         &pool,
         crate::sales::SalesReceiptInput {
+            receipt_number: None,
             payment_method_id: None,
             customer_name: None,
             receipt_date: d(2),
@@ -227,6 +230,7 @@ async fn carried_details_survive_later_list_changes() {
         ..Default::default()
     };
     let estimate_input = || crate::estimates::EstimateInput {
+        estimate_number: None,
         customer_name: "Initech".into(),
         estimate_date: d(1),
         expiration_date: None,

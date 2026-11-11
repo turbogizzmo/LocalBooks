@@ -10,6 +10,7 @@ async fn invoice(pool: &SqlitePool, customer: &str) -> i64 {
     create_and_post_invoice(
         pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: customer.into(),
             issue_date: d(1),
             due_date: d(31),

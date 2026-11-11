@@ -142,6 +142,13 @@ export const topics = [
     guide: 'invoices',
   },
   {
+    id: 'invoice-numbers', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'sales/orders'],
+    title: 'Invoice numbers',
+    body: 'Invoice # on a new invoice shows the number it will get: one more than the highest so far. Leave it, or type another to use it instead; numbering carries on from the highest number used. Each number is used once: if the one you typed is taken, saving says which invoice has it and offers the next free number (Use #…), or Cancel to type another. Duplicate gives the copy the next number; an edited invoice keeps its own. Estimate #, Sale #, Credit # and Order # work the same way.',
+    keywords: 'invoice number numbering next number change number starting number sequence duplicate number estimate number sales receipt number credit memo number order number',
+    guide: 'invoices',
+  },
+  {
     id: 'receive-payment', area: 'sales', views: ['sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Record a customer payment',
     body: 'Receive Payment applies money to one or several open invoices, in full or in part, and the invoice status updates to Partial or Paid. Deposit it straight to a bank account, or to Undeposited Funds to combine several payments into one bank deposit later. Pick how you were paid from the tiles (Cash, Check, Card, Bank / ACH, or More). Typing the amount received applies it to an invoice with exactly that balance, or else the oldest first (Preferences › Payments sets this, and whether ticking invoices works out the amount); Auto Apply spreads it again. Totals under the invoices show the amount due, what is applied, discounts, what stays open and any unapplied amount.',

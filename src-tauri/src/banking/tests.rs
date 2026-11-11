@@ -32,6 +32,7 @@ async fn deposit_sweeps_undeposited_funds_and_other_lines() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Acme".into(),
             issue_date: d(1),
             due_date: d(31),

@@ -41,6 +41,7 @@ async fn sales_receipt_debits_cash_and_credits_revenue() {
     let receipt = post_sales_receipt(
         &pool,
         SalesReceiptInput {
+            receipt_number: None,
             payment_method_id: None,
             customer_name: Some("Walk-in Wanda".into()),
             receipt_date: d(12),
@@ -72,6 +73,7 @@ async fn sales_receipt_rejects_non_income_lines_and_rolls_back() {
     let err = post_sales_receipt(
         &pool,
         SalesReceiptInput {
+            receipt_number: None,
             payment_method_id: None,
             customer_name: Some("Nobody".into()),
             receipt_date: d(12),
@@ -109,6 +111,7 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "acme corp".into(),
             issue_date: d(1),
             due_date: d(31),
@@ -131,6 +134,7 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
     post_sales_receipt(
         &pool,
         SalesReceiptInput {
+            receipt_number: None,
             payment_method_id: None,
             customer_name: None,
             receipt_date: d(6),

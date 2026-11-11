@@ -29,6 +29,7 @@ fn with_form(form_lines: Vec<FormLineInput>) -> SalesDetails {
 
 fn invoice(lines: Vec<InvoiceLineInput>, form_lines: Vec<FormLineInput>, tax_rate_id: Option<i64>, discount_cents: i64) -> InvoiceInput {
     InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme".into(),
         issue_date: d(1),
         due_date: d(31),
@@ -122,6 +123,7 @@ async fn a_sales_receipt_with_a_subtotal_posts_balanced() {
     let receipt = post_sales_receipt(
         &pool,
         SalesReceiptInput {
+            receipt_number: None,
             customer_name: None,
             receipt_date: d(2),
             deposit_account_id: checking,
@@ -155,6 +157,7 @@ async fn an_estimate_carries_its_subtotals_to_its_invoice() {
     let estimate = crate::estimates::create_estimate(
         &pool,
         crate::estimates::EstimateInput {
+            estimate_number: None,
             customer_name: "Initech".into(),
             estimate_date: d(1),
             expiration_date: None,
@@ -350,6 +353,7 @@ async fn a_sales_receipt_with_a_discount_posts_balanced() {
     let receipt = post_sales_receipt(
         &pool,
         SalesReceiptInput {
+            receipt_number: None,
             customer_name: None,
             receipt_date: d(2),
             deposit_account_id: checking,
@@ -456,6 +460,7 @@ async fn fixed_and_percent_charges_post_balanced_and_carry_from_an_estimate() {
     let estimate = crate::estimates::create_estimate(
         &pool,
         crate::estimates::EstimateInput {
+            estimate_number: None,
             customer_name: "Initech".into(),
             estimate_date: d(1),
             expiration_date: None,
@@ -736,6 +741,7 @@ async fn a_credit_memo_with_a_discount_a_charge_and_a_subtotal_posts_balanced_an
     let memo = crate::credits::create_credit_memo(
         &pool,
         crate::credits::CreditMemoInput {
+            credit_number: None,
             customer_name: "Acme".into(),
             credit_date: d(3),
             memo: None,

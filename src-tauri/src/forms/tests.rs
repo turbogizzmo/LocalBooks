@@ -121,6 +121,7 @@ async fn real_invoices_render_saved_templates_to_pdf() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Initech".into(),
             issue_date: d(1),
             due_date: d(31),
@@ -324,6 +325,7 @@ async fn sales_forms_print_rep_shipping_and_custom_fields() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Initech".into(),
             issue_date: d(1),
             due_date: d(31),
@@ -367,6 +369,7 @@ async fn taxable_lines_print_with_a_t() {
     let line = |d: &str, taxable: bool| InvoiceLineInput { description: d.into(), quantity_e4: 10_000, rate_cents: Cents(1_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: taxable, service_date: None };
     let day = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
     let input = |tax: Option<i64>| InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme".into(),
         issue_date: day,
         due_date: day,

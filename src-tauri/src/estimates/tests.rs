@@ -21,7 +21,7 @@ async fn estimate_does_not_post_until_converted() {
     let line = |qty: i64, rate: i64| SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
     let estimate = create_estimate(
         &pool,
-        EstimateInput { customer_name: "Initech".into(), estimate_date: d(1), expiration_date: Some(d(31)), memo: None, lines: vec![line(10, 12_500), line(1, 5_000)], tax_rate_id: None, discount_cents: 0, details: Default::default() },
+        EstimateInput { estimate_number: None, customer_name: "Initech".into(), estimate_date: d(1), expiration_date: Some(d(31)), memo: None, lines: vec![line(10, 12_500), line(1, 5_000)], tax_rate_id: None, discount_cents: 0, details: Default::default() },
     )
     .await
     .expect("estimate saves");
@@ -54,6 +54,7 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
     let estimate = create_estimate(
         &pool,
         EstimateInput {
+            estimate_number: None,
             customer_name: "Initech".into(),
             estimate_date: d(1),
             expiration_date: None,
@@ -71,6 +72,7 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
 
     // The form's lines, edited before posting: 8 hours instead of 10.
     let form = |account: i64| InvoiceInput {
+        invoice_number: None,
         customer_name: detail.estimate.customer_name.clone(),
         issue_date: d(5),
         due_date: d(30),
@@ -98,7 +100,7 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
     // The invoice must still be for the estimate's customer.
     let other = create_estimate(
         &pool,
-        EstimateInput { customer_name: "Initech".into(), estimate_date: d(2), expiration_date: None, memo: None, lines: vec![SalesLineInput { product_service_id: None, description: "Audit".into(), quantity_e4: 10_000, rate_cents: 5_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None }], tax_rate_id: None, discount_cents: 0, details: Default::default() },
+        EstimateInput { estimate_number: None, customer_name: "Initech".into(), estimate_date: d(2), expiration_date: None, memo: None, lines: vec![SalesLineInput { product_service_id: None, description: "Audit".into(), quantity_e4: 10_000, rate_cents: 5_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None }], tax_rate_id: None, discount_cents: 0, details: Default::default() },
     )
     .await
     .unwrap();
@@ -112,7 +114,7 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
     assert!(err(sqlx::query("UPDATE estimates SET memo = 'x' WHERE id = ?1").bind(estimate.id).execute(&pool).await).starts_with("EST_CONVERTED"));
     assert!(set_estimate_status(&pool, estimate.id, "PENDING").await.is_err());
 
-    let elsewhere = InvoiceInput { customer_name: "Someone Else".into(), ..form(services) };
+    let elsewhere = InvoiceInput { invoice_number: None, customer_name: "Someone Else".into(), ..form(services) };
     assert!(invoice_from_estimate(&pool, other.id, elsewhere).await.unwrap_err().starts_with("EST_INVOICE_MISMATCH"));
     assert_eq!(get_estimate(&pool, other.id).await.unwrap().status, "PENDING");
 }

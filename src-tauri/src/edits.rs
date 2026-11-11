@@ -61,7 +61,8 @@ async fn entry_of(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64) -> Res
 }
 
 /// Replaces an invoice with an edited one; returns the new invoice's id. Payments, applied credits
-/// and bounced checks stay applied to the edited invoice.
+/// and bounced checks stay applied to the edited invoice, and it keeps the original's number: the
+/// voided original is marked replaced, which frees the number for it (migration 0162).
 pub async fn replace_invoice(pool: &SqlitePool, invoice_id: i64, input: InvoiceInput) -> Result<i64, String> {
     run(pool, async |tx| {
         let old = live_entry(tx, "invoices", invoice_id, "invoice").await?;
@@ -70,6 +71,8 @@ pub async fn replace_invoice(pool: &SqlitePool, invoice_id: i64, input: InvoiceI
         let reimbursed = crate::billable_costs::reimbursed_accounts(tx, invoice_id).await?;
         // Voided first, so stock the original sold is back before the edited version sells it.
         crate::ledger::void_for_replacement(tx, old).await?;
+        let number: i64 = sqlx::query_scalar("UPDATE invoices SET is_replaced = 1 WHERE id = ?1 RETURNING invoice_number").bind(invoice_id).fetch_one(&mut **tx).await.map_err(db_err)?;
+        let input = InvoiceInput { invoice_number: Some(number), ..input.clone() };
         let new_id = crate::invoices::write_invoice_reimbursing(tx, &input, &carried, &reimbursed).await?;
         let new_entry = entry_of(tx, "invoices", new_id).await?;
         record(tx, old, new_entry).await?;

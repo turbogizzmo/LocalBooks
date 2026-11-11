@@ -121,6 +121,7 @@ async fn an_invoice_paid_total_out_of_step_with_its_payments_is_reported() {
     let invoice = invoices::create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Acme".into(),
             issue_date: day,
             due_date: day,

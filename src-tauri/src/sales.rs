@@ -279,6 +279,9 @@ pub struct SalesLineInput {
 pub struct SalesReceiptInput {
     /// Optional: walk-in cash sales need no customer.
     pub customer_name: Option<String>,
+    /// The number typed in the form's number box; `None` takes the next one (`doc_numbers`).
+    #[serde(default)]
+    pub receipt_number: Option<i64>,
     pub receipt_date: NaiveDate,
     pub deposit_account_id: i64,
     /// The kind of payment; taken from `payment_method_id` when that is given.
@@ -513,9 +516,10 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     };
     let (method_id, method) = crate::profile_lists::resolve_payment_method(tx, input.payment_method_id, Some(&input.payment_method), "SR").await?;
 
+    let number = crate::doc_numbers::take_number(tx, crate::doc_numbers::DocKind::SalesReceipt, input.receipt_number).await?;
     let (receipt_id, receipt_number): (i64, i64) = sqlx::query_as(
         "INSERT INTO sales_receipts (receipt_number, customer_id, receipt_date, deposit_account_id, payment_method, reference, memo, total_cents, tax_rate_id, tax_cents, discount_cents, payment_method_id)
-         VALUES ((SELECT COALESCE(MAX(receipt_number), 0) + 1 FROM sales_receipts), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+         VALUES (?12, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
          RETURNING id, receipt_number",
     )
     .bind(customer_id)
@@ -529,6 +533,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     .bind(tax_cents)
     .bind(input.discount_cents)
     .bind(method_id)
+    .bind(number)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;

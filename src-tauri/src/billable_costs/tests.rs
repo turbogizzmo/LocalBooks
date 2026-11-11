@@ -66,6 +66,7 @@ async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
     // An edit of the invoice keeps the cost billed; voiding it frees the cost again.
     let lines = crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap().items;
     let edited = crate::invoices::InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme".into(),
         issue_date: d(11),
         due_date: d(31),
@@ -299,6 +300,7 @@ async fn an_edited_reimbursement_line_can_move_to_another_expense_account() {
     .await
     .unwrap();
     let edited = |account_id: i64| crate::invoices::InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme".into(),
         issue_date: d(11),
         due_date: d(31),

@@ -24,6 +24,7 @@ async fn account_of_type(pool: &SqlitePool, account_type: &str) -> i64 {
 
 fn invoice(customer: &str, income: i64, cents: i64, details: SalesDetails) -> InvoiceInput {
     InvoiceInput {
+        invoice_number: None,
         customer_name: customer.into(),
         issue_date: d(10, 1),
         due_date: d(10, 31),
@@ -163,6 +164,7 @@ async fn an_invoice_and_a_bill_keep_their_term_and_early_payment_discount() {
 
     // Only invoices carry a term.
     let receipt = SalesReceiptInput {
+        receipt_number: None,
         customer_name: None,
         receipt_date: d(10, 1),
         deposit_account_id: account_of_type(&pool, "BANK").await,
@@ -208,6 +210,7 @@ async fn payment_methods_name_a_kind_of_payment() {
     let services = account(&pool, "4100").await;
     let bank = account_of_type(&pool, "BANK").await;
     let receipt = |method: Option<i64>, kind: &str| SalesReceiptInput {
+        receipt_number: None,
         customer_name: None,
         receipt_date: d(10, 1),
         deposit_account_id: bank,
@@ -242,7 +245,7 @@ async fn payment_methods_name_a_kind_of_payment() {
     assert_eq!(stored, ("CHECK".into(), None));
     // A sales receipt's details (no terms column) save with a customer message.
     let thanks = create_profile_entry(&pool, ProfileList::CustomerMessage, "Thanks!").await.unwrap();
-    let with_message = SalesReceiptInput { details: SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() }, ..receipt(None, "CASH") };
+    let with_message = SalesReceiptInput { receipt_number: None, details: SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() }, ..receipt(None, "CASH") };
     let sold = post_sales_receipt(&pool, with_message).await.unwrap();
     assert_eq!(document_details(&pool, SalesDoc::SalesReceipt, sold.id).await.unwrap().customer_message.as_deref(), Some("Thanks!"));
     let unused = create_payment_method(&pool, PaymentMethodInput { name: "Venmo".into(), kind: "OTHER".into() }).await.unwrap();
