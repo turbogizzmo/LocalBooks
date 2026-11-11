@@ -150,7 +150,7 @@ file can see and change everything, as in earlier versions.
   (`a_computer_is_added_beside_the_app_and_signs_in_only_where_its_secret_is` in
   [`mfa/device/tests.rs`](src-tauri/src/mfa/device/tests.rs)). The schema refuses a computer
   without an authenticator app, and everything that removes the app removes the computers
-  (`every_way_back_removes_the_computers_too`; triggers in migration 0177). The system's check
+  (`every_way_back_removes_the_computers_too`; triggers in migration 0175). The system's check
   accepts the computer's own password or PIN as a fallback, so on that computer the second step is
   as strong as the computer's sign-in.
 - **Remember me on this computer** (optional, off by default) keeps the user's password in the

@@ -11,7 +11,7 @@
 //!   upgrade rehearsed on a throwaway copy when it is from an older version, without replacing the
 //!   books (here, or for an offsite copy in `offsite::test_restore`).
 //!
-//! Each is a row in `backup_safety_events` (migration 0176), with where it was. Nothing is sent
+//! Each is a row in `backup_safety_events` (migration 0174), with where it was. Nothing is sent
 //! anywhere: the check is the file system's own answer to "which volume is this folder on".
 
 use std::path::Path;
@@ -23,7 +23,7 @@ use sqlx::SqlitePool;
 use crate::backup::{self, CompanyFileInfo};
 use crate::ledger::db_err;
 
-/// What `backup_safety_events` records (migration 0176).
+/// What `backup_safety_events` records (migration 0174).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     /// A backup saved off the disk the company file is on.

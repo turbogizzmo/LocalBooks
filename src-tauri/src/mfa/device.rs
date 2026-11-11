@@ -1,4 +1,4 @@
-//! Two-step sign-in on this computer (gap R29; design in `docs/plans/passkeys.md`; migration 0177).
+//! Two-step sign-in on this computer (gap R29; design in `docs/plans/passkeys.md`; migration 0175).
 //!
 //! Beside the authenticator app, a user may let **one computer** sign them in with Touch ID or
 //! Windows Hello ([`crate::platform_auth`]) instead of typing a code:

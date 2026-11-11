@@ -2,7 +2,7 @@
 
 Status: **built natively for macOS and Windows; not on Linux.** Optional, and off unless a user
 adds a computer, beside an authenticator app (R26, [`multi-factor-sign-in.md`](multi-factor-sign-in.md)).
-Gap R29 in [`docs/gaps.md`](../gaps.md). Migration 0177.
+Gap R29 in [`docs/gaps.md`](../gaps.md). Migration 0175.
 
 ## The goal
 
@@ -73,7 +73,7 @@ One shape on both platforms, so one piece of Rust holds the rules and one set of
    computer's credential store ([`secrets.rs`](../../src-tauri/src/secrets.rs): the macOS Keychain
    or Windows Credential Manager) under the id. The company file keeps the id, a label (the
    computer's name), and SHA-256 of the secret bound to the user and the id
-   (`user_device_factors`, migration 0177). The secret is never in the company file, its backups,
+   (`user_device_factors`, migration 0175). The secret is never in the company file, its backups,
    the audit trail or an error.
 3. **Signing in**, after a right password, at the code step: if this computer holds a secret that
    matches one of the user's rows, the screen offers **Use Touch ID** / **Use Windows Hello**. The
