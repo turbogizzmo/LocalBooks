@@ -69,7 +69,7 @@ async fn unapplied_credits_are_listed_beside_open_documents_and_applied_oldest_f
             reference: Some("RMA 7".into()),
             credit_date: d("2026-02-10"),
             memo: None,
-            lines: vec![crate::credits::VendorCreditLineInput { account_id: expense, amount_cents: 2_500, memo: None, class_id: None, customer_id: None }],
+            lines: vec![crate::credits::VendorCreditLineInput { account_id: expense, amount_cents: Cents(2_500), memo: None, class_id: None, customer_id: None }],
         },
     )
     .await

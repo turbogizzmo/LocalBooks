@@ -84,7 +84,7 @@ pub(super) async fn company() -> SqlitePool {
     .await
     .expect("credit memo")
     .id;
-    crate::credits::apply_customer_credit(p, ApplyCreditInput { credit_id: memo, document_id: invoice, amount_cents: 10_000, applied_date: d(2025, 11, 21) }).await.expect("apply credit");
+    crate::credits::apply_customer_credit(p, ApplyCreditInput { credit_id: memo, document_id: invoice, amount_cents: Cents(10_000), applied_date: d(2025, 11, 21) }).await.expect("apply credit");
 
     let bill = crate::expenses::post_vendor_bill(
         p,
@@ -112,13 +112,13 @@ pub(super) async fn company() -> SqlitePool {
             reference: Some("RP-C1".into()),
             credit_date: d(2025, 11, 25),
             memo: Some("Damaged stock".into()),
-            lines: vec![VendorCreditLineInput { account_id: office, amount_cents: 6_000, memo: Some("Damaged stock".into()), class_id: Some(studio), customer_id: None }],
+            lines: vec![VendorCreditLineInput { account_id: office, amount_cents: Cents(6_000), memo: Some("Damaged stock".into()), class_id: Some(studio), customer_id: None }],
         },
     )
     .await
     .expect("vendor credit")
     .id;
-    crate::credits::apply_vendor_credit(p, ApplyCreditInput { credit_id: credit, document_id: bill, amount_cents: 2_500, applied_date: d(2025, 11, 26) }).await.expect("apply vendor credit");
+    crate::credits::apply_vendor_credit(p, ApplyCreditInput { credit_id: credit, document_id: bill, amount_cents: Cents(2_500), applied_date: d(2025, 11, 26) }).await.expect("apply vendor credit");
     // A year-end adjusting entry, between balance sheet accounts so the other presets are unchanged.
     let entry = crate::ledger::JournalEntry {
         id: None,

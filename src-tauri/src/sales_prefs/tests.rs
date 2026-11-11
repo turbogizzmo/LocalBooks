@@ -161,7 +161,7 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
             reference: Some("RMA-7".into()),
             credit_date: d(10, 2),
             memo: None,
-            lines: vec![VendorCreditLineInput { account_id: expense, amount_cents: 7_000, memo: None, class_id: None, customer_id: None }],
+            lines: vec![VendorCreditLineInput { account_id: expense, amount_cents: Cents(7_000), memo: None, class_id: None, customer_id: None }],
         },
     )
     .await
@@ -175,7 +175,7 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
         vec![CreditUse { credit_id: credit.id, bill_id: first, amount_cents: 6_000 }, CreditUse { credit_id: credit.id, bill_id: second, amount_cents: 1_000 }]
     );
 
-    let credits: Vec<ApplyCreditInput> = uses.iter().map(|u| ApplyCreditInput { credit_id: u.credit_id, document_id: u.bill_id, amount_cents: u.amount_cents, applied_date: d(10, 9) }).collect();
+    let credits: Vec<ApplyCreditInput> = uses.iter().map(|u| ApplyCreditInput { credit_id: u.credit_id, document_id: u.bill_id, amount_cents: Cents(u.amount_cents), applied_date: d(10, 9) }).collect();
     let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 9), amount_cents, reference: None, to_be_printed: false };
     // The first bill is paid off by the credit alone; the second needs 20.00 more.
     let too_much = pay_bills_with_credits(&pool, vec![pay(second, 3_000)], credits.clone(), Vec::new(), d(10, 9)).await.unwrap_err();

@@ -22,6 +22,7 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 
 use crate::ledger::db_err;
+use crate::money::Cents;
 use crate::preferences;
 
 pub const PRICE_LEVELS: &str = "price_levels_enabled";
@@ -530,14 +531,14 @@ pub async fn pay_bills_with_credits(
             reference: Some("Discount".into()),
             credit_date: payment_date,
             memo: Some(memo.clone()),
-            lines: vec![crate::credits::VendorCreditLineInput { account_id: account, amount_cents: d.amount_cents, memo: Some(memo), class_id: None, customer_id: None }],
+            lines: vec![crate::credits::VendorCreditLineInput { account_id: account, amount_cents: Cents(d.amount_cents), memo: Some(memo), class_id: None, customer_id: None }],
         }));
     }
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         for (d, credit) in &taken {
             let credit_id = crate::credits::write_vendor_credit(&mut tx, credit).await?;
-            let apply = crate::credits::ApplyCreditInput { credit_id, document_id: d.bill_id, amount_cents: d.amount_cents, applied_date: payment_date };
+            let apply = crate::credits::ApplyCreditInput { credit_id, document_id: d.bill_id, amount_cents: Cents(d.amount_cents), applied_date: payment_date };
             crate::credits::apply_vendor_credit_in_tx(&mut tx, &apply).await?;
         }
         for credit in &credits {

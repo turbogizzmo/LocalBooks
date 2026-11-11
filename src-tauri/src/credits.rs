@@ -17,6 +17,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::invoices::{line_amount, validate_line};
 use crate::ledger::{db_err, format_cents, post_entry_in_tx, recompute_paid, rollback, EntrySource, JournalEntry, JournalLine, MAX_LINE_CENTS};
+use crate::money::Cents;
 use crate::sales::{find_or_create_named, Party, SalesLineInput};
 
 fn clean(text: Option<&str>) -> Option<&str> {
@@ -272,7 +273,7 @@ pub struct ApplyCreditInput {
     pub credit_id: i64,
     /// An invoice (customer credit) or a bill (vendor credit).
     pub document_id: i64,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub applied_date: NaiveDate,
 }
 
@@ -326,7 +327,8 @@ pub(crate) async fn apply_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite>
     if currency.is_some() {
         return Err("CM_FOREIGN_INVOICE: credits apply to home-currency invoices only".into());
     }
-    if input.amount_cents < 1 || input.amount_cents > remaining || input.amount_cents > total - paid {
+    let amount = input.amount_cents.get();
+    if amount < 1 || amount > remaining || amount > total - paid {
         return Err(format!(
             "CM_BAD_AMOUNT: apply between {} and {} (the smaller of the credit left and the invoice balance)",
             format_cents(1),
@@ -384,7 +386,7 @@ pub async fn apply_open_credits_to_invoice(pool: &SqlitePool, invoice_id: i64, a
             }
             let amount_cents = remaining.min(open);
             // The single-credit path checks the customer, the invoice's state and currency.
-            apply_customer_credit_in_tx(tx, &ApplyCreditInput { credit_id, document_id: invoice_id, amount_cents, applied_date }).await?;
+            apply_customer_credit_in_tx(tx, &ApplyCreditInput { credit_id, document_id: invoice_id, amount_cents: Cents(amount_cents), applied_date }).await?;
             open -= amount_cents;
             used.count += 1;
             used.applied_cents = used.applied_cents.checked_add(amount_cents).ok_or("CM_BAD_AMOUNT: too much credit")?;
@@ -429,7 +431,7 @@ pub struct RefundCreditInput {
     /// Bank or credit card account the refund is paid from (customer) or received into (vendor).
     pub account_id: i64,
     pub refund_date: NaiveDate,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub reference: Option<String>,
 }
 
@@ -477,7 +479,8 @@ pub(crate) async fn refund_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite
     if voided || refund.is_some() {
         return Err(format!("CM_NOT_AVAILABLE: a voided credit memo or a refund receipt has no credit to {what}"));
     }
-    if input.amount_cents < 1 || input.amount_cents > remaining {
+    let amount = input.amount_cents.get();
+    if amount < 1 || amount > remaining {
         return Err(format!("CM_BAD_AMOUNT: {what} up to the {} of credit left", format_cents(remaining)));
     }
     if write_off {
@@ -493,7 +496,7 @@ pub(crate) async fn refund_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite
         id: None,
         date: input.refund_date,
         description: format!("{action} of {source} - {customer}{reference}"),
-        lines: vec![JournalLine::debit(ar, input.amount_cents), JournalLine::credit(input.account_id, input.amount_cents)],
+        lines: vec![JournalLine::debit(ar, amount), JournalLine::credit(input.account_id, amount)],
         currency: None,
     };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::Journal).await?;
@@ -544,7 +547,7 @@ pub struct UnappliedPaymentInput {
     /// Undeposited Funds or a bank account, as for an invoice payment.
     pub deposit_account_id: i64,
     pub payment_date: NaiveDate,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub payment_method: String,
     #[serde(default)]
     pub payment_method_id: Option<i64>,
@@ -579,7 +582,8 @@ pub(crate) async fn next_credit_number(tx: &mut Transaction<'_, Sqlite>, payment
 /// Posts an unapplied payment as the customer's credit (Dr the deposit account / Cr A/R), then
 /// refunds it or writes it off at once if asked. Returns the credit's id.
 pub(crate) async fn write_unapplied_payment(tx: &mut Transaction<'_, Sqlite>, input: &UnappliedPaymentInput) -> Result<i64, String> {
-    if !(1..=MAX_LINE_CENTS).contains(&input.amount_cents) {
+    let amount = input.amount_cents.get();
+    if !(1..=MAX_LINE_CENTS).contains(&amount) {
         return Err("INV_BAD_AMOUNT: the unapplied amount must be greater than zero".into());
     }
     let keep_as = input.keep_as.as_deref().unwrap_or("CREDIT");
@@ -636,7 +640,7 @@ pub(crate) async fn write_unapplied_payment(tx: &mut Transaction<'_, Sqlite>, in
         id: None,
         date: input.payment_date,
         description: format!("Payment - unapplied - {customer}{note}"),
-        lines: vec![JournalLine::debit(input.deposit_account_id, input.amount_cents), JournalLine::credit(ar, input.amount_cents)],
+        lines: vec![JournalLine::debit(input.deposit_account_id, amount), JournalLine::credit(ar, amount)],
         currency: None,
     };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::CreditMemo(memo_id)).await?;
@@ -662,7 +666,7 @@ pub(crate) async fn write_unapplied_payment(tx: &mut Transaction<'_, Sqlite>, in
 #[serde(rename_all = "camelCase")]
 pub struct VendorCreditLineInput {
     pub account_id: i64,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub memo: Option<String>,
     #[serde(default)]
     pub class_id: Option<i64>,
@@ -730,12 +734,13 @@ pub(crate) async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input:
     }
     let mut total: i64 = 0;
     for (idx, line) in input.lines.iter().enumerate() {
-        if !(1..=MAX_LINE_CENTS).contains(&line.amount_cents) {
+        let amount = line.amount_cents.get();
+        if !(1..=MAX_LINE_CENTS).contains(&amount) {
             return Err(format!("VC_BAD_AMOUNT: line {} amount must be greater than zero", idx + 1));
         }
-        total = total.checked_add(line.amount_cents).filter(|t| *t <= MAX_LINE_CENTS).ok_or("VC_TOO_LARGE: the credit is too large")?;
+        total = total.checked_add(amount).filter(|t| *t <= MAX_LINE_CENTS).ok_or("VC_TOO_LARGE: the credit is too large")?;
     }
-    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents.get()).collect();
     let (form_amounts, total) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "VC")?;
     crate::purchase_lines::check(tx, &input.form_lines, "VC").await?;
     let vendor = input.vendor_name.trim();
@@ -789,7 +794,7 @@ pub(crate) async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input:
             .execute(&mut **tx)
             .await
             .map_err(db_err)?;
-        lines.push(JournalLine::credit(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id));
+        lines.push(JournalLine::credit(line.account_id, line.amount_cents.get()).with_memo(line.memo.as_deref()).with_class(line.class_id));
     }
     lines.extend(crate::purchase_lines::journal_lines(&input.form_lines, &form_amounts, false));
     crate::purchase_lines::write(tx, crate::purchase_lines::PurchaseDoc::VendorCredit, credit_id, &input.form_lines, &form_amounts).await?;
@@ -832,7 +837,8 @@ pub(crate) async fn apply_vendor_credit_in_tx(tx: &mut Transaction<'_, Sqlite>, 
     if bill_voided || !(status == "UNPAID" || status == "PARTIAL") {
         return Err("VC_BILL_NOT_OPEN: that bill has nothing left to pay".into());
     }
-    if input.amount_cents < 1 || input.amount_cents > remaining || input.amount_cents > total - paid {
+    let amount = input.amount_cents.get();
+    if amount < 1 || amount > remaining || amount > total - paid {
         return Err(format!("VC_BAD_AMOUNT: apply up to {} (the smaller of the credit left and the bill balance)", format_cents(remaining.min(total - paid))));
     }
     sqlx::query("INSERT INTO vendor_credit_applications (vendor_credit_id, bill_id, applied_date, amount_cents) VALUES (?1, ?2, ?3, ?4)")
@@ -888,7 +894,8 @@ pub async fn refund_vendor_credit(pool: &SqlitePool, input: RefundCreditInput) -
         if voided {
             return Err("VC_NOT_AVAILABLE: that vendor credit is voided".into());
         }
-        if input.amount_cents < 1 || input.amount_cents > remaining {
+        let amount = input.amount_cents.get();
+        if amount < 1 || amount > remaining {
             return Err(format!("VC_BAD_AMOUNT: a refund can be up to the {} of credit left", format_cents(remaining)));
         }
         check_money_account(tx, input.account_id, "VC").await?;
@@ -898,7 +905,7 @@ pub async fn refund_vendor_credit(pool: &SqlitePool, input: RefundCreditInput) -
             id: None,
             date: input.refund_date,
             description: format!("Vendor refund - {vendor}{reference}"),
-            lines: vec![JournalLine::debit(input.account_id, input.amount_cents), JournalLine::credit(ap, input.amount_cents)],
+            lines: vec![JournalLine::debit(input.account_id, amount), JournalLine::credit(ap, amount)],
             currency: None,
         };
         let entry_id = post_entry_in_tx(tx, &entry, EntrySource::Journal).await?;

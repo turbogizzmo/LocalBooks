@@ -50,9 +50,9 @@ async fn credit_memos_reduce_receivables_apply_to_invoices_and_refund() {
     assert_eq!(balance(&pool, services).await, -40_000);
 
     let apply = |doc, cents| apply_customer_credit(&pool, ApplyCreditInput { credit_id: memo.id, document_id: doc, amount_cents: cents, applied_date: d(6) });
-    assert!(apply(other, 1_000).await.unwrap_err().starts_with("CM_OTHER_CUSTOMER"));
-    assert!(apply(inv, 25_000).await.unwrap_err().starts_with("CM_BAD_AMOUNT"));
-    assert_eq!(apply(inv, 15_000).await.unwrap().remaining_cents, 5_000);
+    assert!(apply(other, Cents(1_000)).await.unwrap_err().starts_with("CM_OTHER_CUSTOMER"));
+    assert!(apply(inv, Cents(25_000)).await.unwrap_err().starts_with("CM_BAD_AMOUNT"));
+    assert_eq!(apply(inv, Cents(15_000)).await.unwrap().remaining_cents, 5_000);
     assert_eq!(invoice_state(&pool, inv).await, (15_000, "PARTIAL".into(), 35_000));
     assert_eq!(balance(&pool, ar).await, 40_000, "applying a credit posts nothing");
 
@@ -76,7 +76,7 @@ async fn credit_memos_reduce_receivables_apply_to_invoices_and_refund() {
     assert!(crate::ledger::void_transaction(&pool, memo_entry).await.unwrap_err().starts_with("VOID_CREDIT_USED"));
 
     // Refund the 5,000 left, then undo it by voiding the refund's entry.
-    let refunded = refund_customer_credit(&pool, RefundCreditInput { credit_id: memo.id, account_id: checking, refund_date: d(8), amount_cents: 5_000, reference: Some("Chk 101".into()) })
+    let refunded = refund_customer_credit(&pool, RefundCreditInput { credit_id: memo.id, account_id: checking, refund_date: d(8), amount_cents: Cents(5_000), reference: Some("Chk 101".into()) })
         .await
         .unwrap();
     assert_eq!(refunded.remaining_cents, 0);
@@ -100,7 +100,7 @@ async fn removing_a_credit_reopens_the_invoice_and_refund_receipts_credit_the_ba
     let memo = create_credit_memo(&pool, CreditMemoInput { credit_number: None, form_lines: Vec::new(), customer_name: "Acme".into(), credit_date: d(5), memo: None, refund_account_id: None, lines: vec![line(services, 30_000)], tax_rate_id: None, header: Default::default() })
         .await
         .unwrap();
-    apply_customer_credit(&pool, ApplyCreditInput { credit_id: memo.id, document_id: inv, amount_cents: 30_000, applied_date: d(6) }).await.unwrap();
+    apply_customer_credit(&pool, ApplyCreditInput { credit_id: memo.id, document_id: inv, amount_cents: Cents(30_000), applied_date: d(6) }).await.unwrap();
     assert_eq!(invoice_state(&pool, inv).await, (30_000, "PAID".into(), 0));
     let app = list_customer_credit_applications(&pool, memo.id).await.unwrap()[0].id;
     remove_customer_credit(&pool, app).await.unwrap();
@@ -117,7 +117,7 @@ async fn removing_a_credit_reopens_the_invoice_and_refund_receipts_credit_the_ba
     .unwrap();
     assert_eq!((receipt.remaining_cents, balance(&pool, checking).await - before), (0, -4_500));
     assert_eq!(balance(&pool, ar).await, 0, "invoice 30,000 less the 30,000 credit memo; the refund receipt never touches A/R");
-    let err = apply_customer_credit(&pool, ApplyCreditInput { credit_id: receipt.id, document_id: inv, amount_cents: 100, applied_date: d(9) }).await.unwrap_err();
+    let err = apply_customer_credit(&pool, ApplyCreditInput { credit_id: receipt.id, document_id: inv, amount_cents: Cents(100), applied_date: d(9) }).await.unwrap_err();
     assert!(err.starts_with("CM_NOT_AVAILABLE"), "{err}");
     let receipt_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM credit_memos WHERE id = ?1").bind(receipt.id).fetch_one(&pool).await.unwrap();
     crate::ledger::void_transaction(&pool, receipt_entry).await.unwrap();
@@ -136,19 +136,19 @@ async fn vendor_credits_reduce_payables_and_apply_to_bills() {
     let bill = crate::expenses::post_vendor_bill(&pool, bill).await.unwrap().id;
     let credit = create_vendor_credit(
         &pool,
-        VendorCreditInput { form_lines: Vec::new(), vendor_name: "staples".into(), reference: Some("RMA-7".into()), credit_date: d(3), memo: None, lines: vec![VendorCreditLineInput { account_id: supplies, amount_cents: 12_000, memo: Some("Returned toner".into()), class_id: None, customer_id: None }] },
+        VendorCreditInput { form_lines: Vec::new(), vendor_name: "staples".into(), reference: Some("RMA-7".into()), credit_date: d(3), memo: None, lines: vec![VendorCreditLineInput { account_id: supplies, amount_cents: Cents(12_000), memo: Some("Returned toner".into()), class_id: None, customer_id: None }] },
     )
     .await
     .unwrap();
     assert_eq!(balance(&pool, ap).await, -28_000);
     assert_eq!(balance(&pool, supplies).await, 28_000);
 
-    let applied = apply_vendor_credit(&pool, ApplyCreditInput { credit_id: credit.id, document_id: bill, amount_cents: 10_000, applied_date: d(4) }).await.unwrap();
+    let applied = apply_vendor_credit(&pool, ApplyCreditInput { credit_id: credit.id, document_id: bill, amount_cents: Cents(10_000), applied_date: d(4) }).await.unwrap();
     assert_eq!(applied.remaining_cents, 2_000);
     let (paid, status): (i64, String) = sqlx::query_as("SELECT amount_paid_cents, status FROM bills WHERE id = ?1").bind(bill).fetch_one(&pool).await.unwrap();
     assert_eq!((paid, status.as_str()), (10_000, "PARTIAL"));
 
-    let refunded = refund_vendor_credit(&pool, RefundCreditInput { credit_id: credit.id, account_id: checking, refund_date: d(5), amount_cents: 2_000, reference: None }).await.unwrap();
+    let refunded = refund_vendor_credit(&pool, RefundCreditInput { credit_id: credit.id, account_id: checking, refund_date: d(5), amount_cents: Cents(2_000), reference: None }).await.unwrap();
     assert_eq!(refunded.remaining_cents, 0);
     assert_eq!(balance(&pool, ap).await, -30_000, "bill 40,000 less the credit's 10,000 applied; the 2,000 refunded came back to the bank");
     assert_eq!(balance(&pool, checking).await, 2_000);
@@ -182,4 +182,20 @@ async fn an_invoice_takes_the_customers_open_credits_oldest_first() {
     let second = invoice(&pool, "Other Co", services, 1_000).await;
     let used = apply_open_credits_to_invoice(&pool, second, d(6)).await.unwrap();
     assert_eq!((used.count, used.applied_cents), (1, 1_000));
+}
+
+#[test]
+fn credit_amounts_arrive_as_bare_integers() {
+    let apply: ApplyCreditInput = serde_json::from_str(r#"{"creditId":1,"documentId":2,"amountCents":12345,"appliedDate":"2026-06-01"}"#).unwrap();
+    assert_eq!(apply.amount_cents, Cents(12_345));
+    let refund: RefundCreditInput = serde_json::from_str(r#"{"creditId":1,"accountId":3,"refundDate":"2026-06-02","amountCents":500,"reference":null}"#).unwrap();
+    assert_eq!(refund.amount_cents, Cents(500));
+    let unapplied: UnappliedPaymentInput = serde_json::from_str(
+        r#"{"customerName":"Acme","depositAccountId":3,"paymentDate":"2026-06-03","amountCents":2500,"paymentMethod":"CHECK","reference":null}"#,
+    )
+    .unwrap();
+    assert_eq!(unapplied.amount_cents, Cents(2_500));
+    let vendor: VendorCreditLineInput = serde_json::from_str(r#"{"accountId":4,"amountCents":700,"memo":null}"#).unwrap();
+    assert_eq!(vendor.amount_cents, Cents(700));
+    assert!(serde_json::from_str::<ApplyCreditInput>(r#"{"creditId":1,"documentId":2,"amountCents":1.5,"appliedDate":"2026-06-01"}"#).is_err(), "a fractional amount is refused");
 }

@@ -74,8 +74,10 @@ enters the ledger code; the invoice total and the memorized-invoice summary now 
 arithmetic. Most of the diff is call sites that build these structs, rewritten from the compiler's
 error spans. Stage 2b (#382): the sales receipt and estimate inputs (`SalesLineInput.rate_cents`,
 `SalesReceiptInput.discount_cents`, `EstimateInput.discount_cents`), the same way; the receipt and
-estimate totals now use checked arithmetic. Next: `ProductInput.rate_cents` and
-`FormLineInput.amount_cents`, then the credits inputs.
+estimate totals now use checked arithmetic. Stage 2c (#384): `ProductInput.rate_cents` and
+`FormLineInput.amount_cents` (a re-edited discount is negated with `checked_neg`). Stage 2d: the
+credits inputs (`ApplyCreditInput`, `RefundCreditInput`, `UnappliedPaymentInput` and
+`VendorCreditLineInput`, each `amount_cents`). Next: the bills, checks and expenses inputs.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:
