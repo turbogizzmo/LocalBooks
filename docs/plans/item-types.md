@@ -207,8 +207,8 @@ in either is relaxed.
   taxable and non-taxable discount lines on the right side.
 - **Sales Tax Item and Tax Group.** Not built here. In Desktop these are items placed on the form;
   in LocalBooks the tax is the document's rate (`tax_rates`), and R11 will add combined rates
-  (a group of component rates, each with its agency) to that table. When R11 lands, a *Tax Group*
-  is a combined rate, not an item, and a *Sales Tax Item* is a rate. The `item_type` triggers leave
+  (a group of component rates, each with its agency) to that table. R11 landed (#281): a *Tax
+  Group* is a combined rate, not an item, and a *Sales Tax Item* is a rate. The `item_type` triggers leave
   room for a `SALES_TAX` item if imports ever need one; this note recommends against it.
 - **Price levels.** They set the rate of item lines and fixed charges, including the members a group
   drops on the form (each member priced for the customer). They never change a discount, a percent
@@ -238,8 +238,9 @@ in either is relaxed.
   not decoded yet. IIF and QIF imports are unchanged.
 - **Recurring invoices, finance charges, statements.** Recurring templates store the input JSON,
   which now may hold `formLines`; finance charges and statements don't add form lines.
-- **Purchase forms.** Not in this step. The item column offers the new kinds on invoices, sales
-  receipts, estimates and credit memos.
+- **Purchase forms.** Not in the first step; built later (see below). Purchase forms are split
+  lines by account, not items, so their discounts and charges are their own lines after a split
+  line (`purchase_lines.rs`), not the sales layout.
 
 ## Built after this step
 
@@ -250,20 +251,25 @@ in either is relaxed.
   (migration 0114: `credit_memo_form_lines` and `credit_memo_lines.percent_ppm`). Layout, checks
   and tax are the invoice's, with the code `CM`; the entry is the invoice's reversed, so a discount
   line *credits* its account. `item_types::LineTables` names each document's two line tables.
+- **Bills, checks and expenses, vendor credits and purchase orders** take a discount or charge
+  after any split line, as an amount or a percent of that line (#325, migration 0115:
+  `purchase_form_lines` and `products_services.expense_account_id`). `purchase_lines::lay_out`
+  works them out; a discount posts the other way from the split lines (on a bill, a credit) and a
+  charge with them. An Other Charge or Discount item can name an income or expense account for
+  purchase forms, used there instead of its income account. A purchase order's lines print on it
+  and carry to its bill and to the bills for received items (#329).
 
 ## Out of scope (later work)
 
-- **Sales Tax Item and Tax Group**: with R11, as above.
-- Charges that are a percent of the whole form rather than the line above. (Discounts and charges
-  on credit memos are built in #320; on bills, checks and expenses, vendor credits and purchase
-  orders in `purchase_lines.rs`, T21, as described in `docs/guide/bills.md`, where Other Charge and
-  Discount items have an expense account.)
+- **Sales Tax Item and Tax Group**: rates and combined rates (R11), not items, as above.
+- Charges that are a percent of the whole form rather than the line above.
+- A Customer:Job and Billable on a purchase form's discount and charge lines (gaps row T84).
 - Groups inside groups, and discounts inside groups.
 - Decoding the subtotal, discount and group item types in company files.
 
 ## Building it
 
-Built in PR #151; the rest is gaps row T21. One commit per type, on sales forms (invoices, sales receipts, estimates), in this order:
+Built in PR #151; the rest under gaps row T21, done (see *Built after this step*). One commit per type, on sales forms (invoices, sales receipts, estimates), in this order:
 
 1. **Subtotal**: migration `0067` (all of the storage above, so the schema lands once), `item_types.rs`,
    form-lines tables written and read back, the grid's Subtotal entry, printing.
