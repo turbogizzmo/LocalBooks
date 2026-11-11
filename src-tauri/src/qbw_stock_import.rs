@@ -188,11 +188,11 @@ pub(crate) async fn post(tx: &mut Transaction<'_, Sqlite>, batch_id: i64) -> Res
     for item in &items {
         let refused = match (item.product_id, item.item_type.as_deref(), item.asset_id) {
             (None, _, _) => Some("it was not brought in as an item".to_string()),
-            (Some(_), Some(t), _) if t != "ITEM" => Some("it was brought in as a kind of item LocalBooks doesn't track in stock".to_string()),
-            (Some(_), _, _) if item.already_tracked => Some("LocalBooks already tracked this item before the import, so its stock was left as it was".to_string()),
-            (Some(_), _, None) => Some("its inventory account isn't matched to a LocalBooks account".to_string()),
+            (Some(_), Some(t), _) if t != "ITEM" => Some("it was brought in as a kind of item Tillhouse doesn't track in stock".to_string()),
+            (Some(_), _, _) if item.already_tracked => Some("Tillhouse already tracked this item before the import, so its stock was left as it was".to_string()),
+            (Some(_), _, None) => Some("its inventory account isn't matched to a Tillhouse account".to_string()),
             (Some(_), _, Some(_)) if item.asset_type.as_deref() != Some("OTHER_CURRENT_ASSET") || item.asset_system == Some(true) => {
-                Some("its inventory account isn't an Other Current Asset account in LocalBooks".to_string())
+                Some("its inventory account isn't an Other Current Asset account in Tillhouse".to_string())
             }
             _ => None,
         };
@@ -246,7 +246,7 @@ pub(crate) async fn post(tx: &mut Transaction<'_, Sqlite>, batch_id: i64) -> Res
         }
         if let Some(&(q, v)) = carried.get(&item.source_item_id) {
             why.push(format!(
-                "its last changes ({} units, {}) would leave a quantity and value of different signs, which LocalBooks can't hold, so they were left out",
+                "its last changes ({} units, {}) would leave a quantity and value of different signs, which Tillhouse can't hold, so they were left out",
                 crate::inventory::format_qty(q),
                 crate::ledger::format_cents(v)
             ));
