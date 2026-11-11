@@ -32,7 +32,7 @@ export const screens = {
     guide: 'expenses-and-checks',
   },
   'expenses/purchase-orders': {
-    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines (and each line’s Customer:Job) in one step, or receive the goods first with Receive Items.',
+    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines (and each line’s Customer:Job) in one step, or receive the goods first with Receive Items. A bill made from a purchase order takes the vendor’s terms and due date, and is checked like one entered in Enter Bills: a repeated bill number or an unusual date asks first, and approval rules for bills apply.',
     guide: 'purchase-orders',
   },
   'expenses/item-receipts': {

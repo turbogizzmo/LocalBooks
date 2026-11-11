@@ -19,6 +19,10 @@ people using LocalBooks.
   goes back to its own day after them (January 31, February 28, March 31). Before, it moved to the
   28th for good after February. Schedules already set up pick this up from their next date on.
 - In Memorize, changing **Repeat every** now moves the **Next date** too.
+- **Bills from purchase orders use the vendor's terms.** Create Bill on a purchase order now gives
+  the bill the vendor's terms, so its due date follows them and Pay Bills offers the early-payment
+  discount. It also gets the same checks as Enter Bills: a repeated vendor bill number or an
+  unusual date asks before saving, and approval rules for bills hold it for approval.
 ## [0.14.1]
 - **Help for every screen, setting and menu command.** F1 now explains every page in the sidebar,
   including Approvals, Payout Feeds, the Attachments Library, Reps, Ship Via & Fields and each

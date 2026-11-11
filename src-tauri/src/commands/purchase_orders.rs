@@ -40,8 +40,22 @@ pub async fn set_purchase_order_closed(app: AppHandle, db: State<'_, Db>, id: i6
 }
 
 #[tauri::command]
-pub async fn bill_purchase_order(app: AppHandle, db: State<'_, Db>, id: i64, bill_date: NaiveDate, due_date: NaiveDate, bill_number: Option<String>) -> Result<i64, String> {
-    let bill = workflows::bill_purchase_order(&db.pool().await, id, bill_date, due_date, bill_number).await?;
+pub async fn bill_purchase_order(
+    app: AppHandle,
+    db: State<'_, Db>,
+    id: i64,
+    bill_date: NaiveDate,
+    due_date: NaiveDate,
+    bill_number: Option<String>,
+    confirmed: Option<Vec<String>>,
+) -> Result<i64, String> {
+    let pool = db.pool().await;
+    // The same checks as Enter Bills: approval rules, then the duplicate bill number, date and
+    // retained-earnings warnings.
+    let input = workflows::purchase_order_bill(&pool, id, bill_date, due_date, bill_number).await?;
+    crate::approvals::check_not_held(&pool, crate::approvals::Kind::Bill, &input.vendor_name, input.total_cents).await?;
+    guards::check(&pool, guards::bill(&input, None), confirmed.as_deref()).await?;
+    let bill = workflows::post_purchase_order_bill(&pool, id, &input).await?;
     notify(&app);
     Ok(bill)
 }
