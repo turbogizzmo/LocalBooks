@@ -613,14 +613,20 @@ async fn posts_a_real_company_file() {
     // LocalBooks' balance per mapped account against the file's stored balance (negated:
     // the file stores debits as negative, LocalBooks reports debit-normal balances).
     let summary = batch_summary(&pool, batch).await.unwrap();
-    let mut per_target: HashMap<i64, (i64, Vec<String>)> = HashMap::new();
+    // An account the file keeps no balance for (some equity and system accounts) can't be compared;
+    // nor can a LocalBooks account that any such file account maps to.
+    let mut per_target: HashMap<i64, (Option<i64>, Vec<String>)> = HashMap::new();
     for a in summary.accounts.iter().filter(|a| a.line_count > 0) {
-        let e = per_target.entry(a.account_id.unwrap()).or_default();
-        e.0 += a.stored_balance_cents.unwrap_or(0);
+        let e = per_target.entry(a.account_id.unwrap()).or_insert((Some(0), Vec::new()));
+        e.0 = e.0.zip(a.stored_balance_cents).map(|(sum, b)| sum + b);
         e.1.push(a.full_name.clone());
     }
+    let unstored: Vec<&str> = per_target.values().filter(|(s, _)| s.is_none()).flat_map(|(_, n)| n.iter().map(String::as_str)).collect();
+    if !unstored.is_empty() {
+        println!("not compared (the file keeps no balance): {}", unstored.join(", "));
+    }
     let (mut same, mut differ) = (0, 0);
-    for (account, (stored, names)) in &per_target {
+    for (account, stored, names) in per_target.iter().filter_map(|(a, (s, n))| Some((a, (*s)?, n))) {
         let books = balance(&pool, *account).await;
         if books == -stored {
             same += 1;

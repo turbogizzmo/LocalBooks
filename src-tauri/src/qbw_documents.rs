@@ -260,7 +260,7 @@ pub fn read_documents(
         let mut by: BTreeMap<i64, Vec<Row>> = BTreeMap::new();
         for r in rows_of(pages, catalog, table) {
             let subtotal = r.get("item_id").as_int().is_some_and(|i| subtotals.contains(&i));
-            if !non_posting && !subtotal && r.get("is_no_post_bool").as_int() == Some(1) {
+            if (!non_posting && !subtotal && r.get("is_no_post_bool").as_int() == Some(1)) || r.get("is_memorized_transaction_bool").as_int() == Some(1) {
                 continue;
             }
             if let Some(t) = r.get("transaction_id").as_int() {
@@ -269,8 +269,13 @@ pub fn read_documents(
         }
         by
     };
+    // A memorized transaction is a template, not a document (see `qbw_company::memorized`).
     let headers_of = |table: &str| -> HashMap<i64, Row> {
-        rows_of(pages, catalog, table).into_iter().filter_map(|r| Some((r.get("transaction_id").as_int()?, r))).collect()
+        rows_of(pages, catalog, table)
+            .into_iter()
+            .filter(|r| r.get("is_memorized_transaction_bool").as_int() != Some(1))
+            .filter_map(|r| Some((r.get("transaction_id").as_int()?, r)))
+            .collect()
     };
     let methods: HashMap<i64, String> =
         rows_of(pages, catalog, "abmc_payment_method").iter().filter_map(|r| Some((r.get("payment_method_id").as_int()?, text(r, "name")?))).collect();

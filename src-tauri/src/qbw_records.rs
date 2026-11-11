@@ -34,9 +34,13 @@ pub const MISSING_DOMAIN: u16 = 0;
 /// byte says, so it could make a damaged row read through to its end with every value shifted.
 const MISSING_COLUMN_GUESSES: [(u16, bool, u32); 4] = [(2, true, 4), (1, true, 2), (24, false, 1), (2, false, 4)];
 
-/// A table with more missing columns than this is walked as if they were not stored: guessing
-/// each would multiply the walks per row.
-const MAX_GUESSED_COLUMNS: u32 = 2;
+/// Up to this many missing columns, each row is tried with every guess (at most 125 readings).
+const MAX_GUESSED_COLUMNS: u32 = 3;
+
+/// Up to this many missing columns (a placeholder is put in for each), a table's rows are read by
+/// working out the layout once, on the first row that needs it, and reusing it for the others (all
+/// rows of a table share one layout). More gaps than this is a catalog too damaged to guess.
+const MAX_LEARNED_COLUMNS: u32 = 6;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Column {
@@ -303,7 +307,7 @@ fn fill_missing_columns(cols: &mut Vec<Column>) {
     let defined: HashSet<u32> = cols.iter().map(|c| c.id).collect();
     let last = cols.last().map_or(0, |c| c.id);
     let gaps = (last as usize).saturating_sub(1).saturating_sub(defined.iter().filter(|id| (1..last).contains(*id)).count());
-    if gaps == 0 || gaps > MAX_GUESSED_COLUMNS as usize {
+    if gaps == 0 || gaps > MAX_LEARNED_COLUMNS as usize {
         return;
     }
     for id in (1..last).filter(|id| !defined.contains(id)) {
@@ -425,21 +429,39 @@ pub fn walk_prefix(row: &[u8], cols: &[Column]) -> (Vec<(String, Value)>, usize)
 
 /// Decodes a row, dropping trailing columns for rows written under an older, shorter schema.
 /// Columns the catalog is missing are first taken as not stored, then as each likely type in
-/// turn; the first reading that ends exactly on the row's length wins.
+/// turn; the first reading that ends exactly on the row's length wins. With more missing columns
+/// than `MAX_GUESSED_COLUMNS` they are only taken as not stored (see `table_rows`).
 pub fn walk_row(row: &[u8], cols: &[Column]) -> Option<HashMap<String, Value>> {
     let row = strip_extra(row);
+    let missing = cols.iter().filter(|c| c.domain == MISSING_DOMAIN).count() as u32;
+    let limit = if missing > MAX_GUESSED_COLUMNS { 0 } else { missing };
+    guess_layout(&row, cols, limit).map(|(values, _)| values)
+}
+
+/// Walks with trailing columns dropped one at a time, as `walk_row` does.
+fn walk_dropping(row: &[u8], cols: &[Column]) -> Option<HashMap<String, Value>> {
+    (0..=MAX_DROPPED_COLUMNS.min(cols.len())).find_map(|drop| walk_columns(row, &cols[..cols.len() - drop]))
+}
+
+/// Tries the missing columns (the first `limit` of them guessed, the rest taken as not stored)
+/// as not stored, then as each likely type, and returns the first reading that fits with the
+/// column list that gave it. `row` has had its extra byte removed.
+fn guess_layout(row: &[u8], cols: &[Column], limit: u32) -> Option<(HashMap<String, Value>, Vec<Column>)> {
     let missing: Vec<usize> = cols.iter().enumerate().filter(|(_, c)| c.domain == MISSING_DOMAIN).map(|(i, _)| i).collect();
     if missing.is_empty() {
-        return (0..=MAX_DROPPED_COLUMNS.min(cols.len())).find_map(|drop| walk_columns(&row, &cols[..cols.len() - drop]));
+        return walk_dropping(row, cols).map(|values| (values, cols.to_vec()));
     }
     let options = MISSING_COLUMN_GUESSES.len() + 1;
-    let tries = if missing.len() as u32 > MAX_GUESSED_COLUMNS { 1 } else { options.pow(missing.len() as u32) };
+    let tries = options.pow(limit.min(missing.len() as u32));
     (0..tries).find_map(|n| {
         let mut guess = n;
         let mut chosen = Vec::with_capacity(cols.len());
         for (i, col) in cols.iter().enumerate() {
-            if !missing.contains(&i) {
+            let Some(k) = missing.iter().position(|m| *m == i) else {
                 chosen.push(col.clone());
+                continue;
+            };
+            if k as u32 >= limit {
                 continue;
             }
             let choice = guess % options;
@@ -448,7 +470,7 @@ pub fn walk_row(row: &[u8], cols: &[Column]) -> Option<HashMap<String, Value>> {
                 chosen.push(Column { domain, nullable, width, ..col.clone() });
             }
         }
-        (0..=MAX_DROPPED_COLUMNS.min(chosen.len())).find_map(|drop| walk_columns(&row, &chosen[..chosen.len() - drop]))
+        walk_dropping(row, &chosen).map(|values| (values, chosen))
     })
 }
 
@@ -464,13 +486,30 @@ pub struct TableRows {
 pub fn table_rows(pages: &[LogicalPage], catalog: &Catalog, table: u32) -> TableRows {
     let mut out = TableRows { rows: Vec::new(), unchained: 0, unwalkable: 0, partial: Vec::new() };
     let Some(cols) = catalog.columns.get(&table) else { return out };
+    // A table with more lost columns than each row can afford to guess learns its layout from the
+    // first row that reads with one, and reads the rest with it.
+    let missing = cols.iter().filter(|c| c.domain == MISSING_DOMAIN).count() as u32;
+    let mut learned: Option<Vec<Column>> = None;
+    // A row that fits no guess is damaged; after a few, stop searching (each search is costly).
+    let mut searches_left = 3;
     for page in pages.iter().filter(|p| p.owner == table && !CHUNK_KINDS.contains(&p.kind)) {
         for span in &page.rows {
             if !span.chained {
                 out.unchained += 1;
                 continue;
             }
-            match walk_row(page.row(span), cols) {
+            let values = match &learned {
+                Some(layout) => walk_dropping(&strip_extra(page.row(span)), layout).or_else(|| walk_row(page.row(span), cols)),
+                None if missing > MAX_GUESSED_COLUMNS && searches_left > 0 => {
+                    searches_left -= 1;
+                    guess_layout(&strip_extra(page.row(span)), cols, missing).map(|(values, layout)| {
+                        learned = Some(layout);
+                        values
+                    })
+                }
+                None => walk_row(page.row(span), cols),
+            };
+            match values {
                 Some(values) => out.rows.push(Row { values }),
                 None => {
                     out.unwalkable += 1;
