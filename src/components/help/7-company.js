@@ -64,6 +64,13 @@ export const topics = [
     guide: 'troubleshooting',
   },
   {
+    id: 'opening-company', area: 'company', views: ['settings/diagnostics'],
+    title: 'When LocalBooks says “Opening <company>…”',
+    body: 'While a company file opens (when LocalBooks starts, or with File › Open, the recent list, Restore or New Company), the window names the company and what it is doing. It takes longer the first time a new version opens the file: LocalBooks saves a copy of the file as it was, then updates it. A network or synced folder, or an antivirus check, can slow it too. Let it finish; then the company, the sign-in screen, or the reason it could not open appears.',
+    keywords: 'opening slow startup blank window loading upgrade update company file waiting',
+    guide: 'troubleshooting',
+  },
+  {
     id: 'save-diagnostics', area: 'company', views: ['settings/diagnostics', 'settings/updates'],
     title: 'Save diagnostics for whoever is helping you',
     body: 'Help › Save Diagnostics… (or Settings › Diagnostics) saves a zip file where you choose: LocalBooks’ version, your operating system, the company file’s size, schema version and integrity check, how many rows each table has, and LocalBooks’ log of when it started, stopped, which file it opened and any crash. It holds no customers, vendors or amounts, and LocalBooks never sends it anywhere. Show what’s in it lets you read it first.',

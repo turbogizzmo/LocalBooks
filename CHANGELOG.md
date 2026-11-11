@@ -55,6 +55,12 @@ people using LocalBooks.
   description of their inventory adjustment lines, so none of the adjustments were read and
   Inventory Asset and Cost of Goods Sold came out wrong. LocalBooks now reads those lines, and the
   cost of inventory recorded on bills comes in too.
+- **No more blank window while a company opens.** When LocalBooks starts, or opens a company from
+  the File menu, the recent list or a backup, the window now says *Opening <company>…* and what it's
+  doing, such as saving a copy before updating the file. Before, it stayed blank until the file was
+  open. A file double-clicked while another is still opening waits its turn.
+- **Diagnostics say why starting was slow.** The log in Help › Save Diagnostics now records how
+  long LocalBooks took to start and which steps were slow, such as opening the company file.
 - **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
   "Company default" start at it on new sales forms. Before, once a company had two or more rates,
   those customers got no tax unless someone picked a rate on each form.
@@ -109,8 +115,6 @@ people using LocalBooks.
   same markup and rules as Sales › Bill Costs, and adds the ones you pick as lines. They are marked
   billed when the invoice is saved. Choosing a customer with unbilled costs or time on a new
   invoice asks whether to add them; Preferences › Time & Expenses can turn the question off.
-- **Diagnostics say why starting was slow.** The log in Help › Save Diagnostics now records how
-  long LocalBooks took to start and which steps were slow, such as opening the company file.
 - **No more surprise customers and vendors.** A name typed on a form that isn't on your list is no
   longer added silently when you save. LocalBooks stops and asks "*name* isn't on your customer
   list." with **Quick add**, **Set up…** (add it and open its record) and **Cancel** (back to the

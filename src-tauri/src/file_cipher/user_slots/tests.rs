@@ -204,6 +204,8 @@ async fn a_locked_file_refuses_every_command_except_unlock() {
     // - and the rest don't touch the open file's books at all (windows, files, the start screen).
     let elsewhere = [
         "get_startup_failure",
+        // Which file is opening and its step (gap R28): names a file, reads no books.
+        "get_opening_state",
         "get_third_party_notices",
         "get_start_screen",
         "open_company_file",
