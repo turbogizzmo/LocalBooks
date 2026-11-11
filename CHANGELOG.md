@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+### Added
+
+- **Item groups come in from company files.** Bringing in a company file's lists now adds its item
+  groups as LocalBooks groups, with their items in order, their quantities, and whether printed
+  forms list the items.
+
 ### Fixed
 
 - **Inventory adjustments come in from company files.** Some files had lost part of the

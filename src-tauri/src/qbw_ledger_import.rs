@@ -218,6 +218,22 @@ pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i6
         .await
         .map_err(db_err)?;
     }
+    for group in &ledger.sales_lists.item_groups {
+        sqlx::query(
+            "INSERT OR IGNORE INTO ledger_import_item_groups (batch_id, source_id, name, description, print_items, is_active, members)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        )
+        .bind(batch_id)
+        .bind(group.id)
+        .bind(group.name.trim())
+        .bind(&group.description)
+        .bind(group.print_items as i64)
+        .bind(group.active as i64)
+        .bind(serde_json::to_string(&group.members).expect("members serialize"))
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    }
     for (customer, level) in &ledger.sales_lists.customer_price_levels {
         sqlx::query("UPDATE ledger_import_parties SET price_level = ?3 WHERE batch_id = ?1 AND kind = 'CUSTOMER' AND source_id = ?2")
             .bind(batch_id)
@@ -856,6 +872,11 @@ pub struct ImportListsResult {
     /// Price levels: created, or matched by name to one already in LocalBooks (left as it is).
     pub price_levels_created: i64,
     pub price_levels_matched: i64,
+    /// Item groups: created, matched by name to a group already in LocalBooks (left as it is), or
+    /// left out (an item has the name, or none of its items could come in).
+    pub groups_created: i64,
+    pub groups_matched: i64,
+    pub groups_left_out: i64,
     /// What became of the file's classes, when it has any (see [`ClassesResult`]).
     pub classes: Option<ClassesResult>,
 }
@@ -1162,8 +1183,11 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
             return Err(ledger::rollback(tx, db_err(e)).await);
         }
     }
-    // Price levels last, so per-item levels can name the items just added; then the customers this
-    // import created get their default level.
+    // Groups and price levels after the items, so they can name the items just added; then the
+    // customers this import created get their default level.
+    if let Err(e) = import_item_groups(&mut tx, batch_id, &mut result).await {
+        return Err(ledger::rollback(tx, e).await);
+    }
     if let Err(e) = import_price_levels(&mut tx, batch_id, &mut result).await {
         return Err(ledger::rollback(tx, e).await);
     }
@@ -1178,6 +1202,83 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
     }
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(result)
+}
+
+/// Creates the staged item groups that aren't in LocalBooks yet (matched by name). A group keeps
+/// the items that came in as items or fixed charges, in its own order; discounts and percent
+/// charges can't be in a LocalBooks group and are left out of it. A group none of whose items came
+/// in, or whose name an item already has, is left out.
+async fn import_item_groups(tx: &mut sqlx::SqliteConnection, batch_id: i64, result: &mut ImportListsResult) -> Result<(), String> {
+    let staged: Vec<(i64, String, Option<String>, i64, i64, String)> = sqlx::query_as(
+        "SELECT source_id, name, description, print_items, is_active, members FROM ledger_import_item_groups
+         WHERE batch_id = ?1 AND item_group_id IS NULL ORDER BY name",
+    )
+    .bind(batch_id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(db_err)?;
+    for (source_id, name, description, print_items, active, members) in staged {
+        let existing: Option<i64> = sqlx::query_scalar("SELECT id FROM item_groups WHERE name = ?1 COLLATE NOCASE").bind(&name).fetch_optional(&mut *tx).await.map_err(db_err)?;
+        let (id, created) = match existing {
+            Some(id) => {
+                result.groups_matched += 1;
+                (id, false)
+            }
+            None => {
+                let mut products = Vec::new();
+                for (item, quantity_e4) in serde_json::from_str::<Vec<(i64, i64)>>(&members).unwrap_or_default() {
+                    let product: Option<i64> = sqlx::query_scalar(
+                        "SELECT i.product_id FROM ledger_import_items i JOIN products_services p ON p.id = i.product_id
+                         WHERE i.batch_id = ?1 AND i.source_id = ?2 AND p.item_type <> 'DISCOUNT' AND p.percent_ppm IS NULL",
+                    )
+                    .bind(batch_id)
+                    .bind(item)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .map_err(db_err)?
+                    .flatten();
+                    if let Some(product) = product.filter(|_| (1..=crate::invoices::MAX_QUANTITY_E4).contains(&quantity_e4)) {
+                        products.push((product, quantity_e4));
+                    }
+                }
+                let name_taken: bool =
+                    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM products_services WHERE name = ?1 COLLATE NOCASE)").bind(&name).fetch_one(&mut *tx).await.map_err(db_err)?;
+                if products.is_empty() || name_taken {
+                    result.groups_left_out += 1;
+                    continue;
+                }
+                let id: i64 = sqlx::query_scalar("INSERT INTO item_groups (name, description, print_items, is_active) VALUES (?1, ?2, ?3, ?4) RETURNING id")
+                    .bind(&name)
+                    .bind(description.as_deref().map(str::trim).filter(|d| !d.is_empty()))
+                    .bind(print_items)
+                    .bind(active)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(|e| format!("{} (group {name})", db_err(e)))?;
+                for (position, (product, quantity_e4)) in products.iter().enumerate() {
+                    sqlx::query("INSERT INTO item_group_members (group_id, position, product_id, quantity_e4) VALUES (?1, ?2, ?3, ?4)")
+                        .bind(id)
+                        .bind(position as i64 + 1)
+                        .bind(product)
+                        .bind(quantity_e4)
+                        .execute(&mut *tx)
+                        .await
+                        .map_err(|e| format!("{} (group {name})", db_err(e)))?;
+                }
+                result.groups_created += 1;
+                (id, true)
+            }
+        };
+        sqlx::query("UPDATE ledger_import_item_groups SET item_group_id = ?3, created_by_import = ?4 WHERE batch_id = ?1 AND source_id = ?2")
+            .bind(batch_id)
+            .bind(source_id)
+            .bind(id)
+            .bind(created as i64)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+    }
+    Ok(())
 }
 
 /// Creates the staged price levels that aren't in LocalBooks yet (matched by name), recording each
@@ -1659,6 +1760,8 @@ async fn add_lists(pool: &SqlitePool, batch_id: i64) -> Result<PostLedgerResult,
              (SELECT party_id FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'VENDOR' AND created_by_import = 1 AND is_active = 1)",
         "UPDATE products_services SET is_active = 1 WHERE is_active = 0 AND id IN
              (SELECT product_id FROM ledger_import_items WHERE batch_id = ?1 AND created_by_import = 1 AND is_active = 1)",
+        "UPDATE item_groups SET is_active = 1 WHERE is_active = 0 AND id IN
+             (SELECT item_group_id FROM ledger_import_item_groups WHERE batch_id = ?1 AND created_by_import = 1 AND is_active = 1)",
     ] {
         sqlx::query(sql).bind(batch_id).execute(pool).await.map_err(db_err)?;
     }
@@ -1745,6 +1848,8 @@ pub async fn reverse_batch(pool: &SqlitePool, batch_id: i64) -> Result<ReverseLe
              (SELECT product_id FROM ledger_import_items WHERE batch_id = ?1 AND created_by_import = 1)",
         "UPDATE classes SET is_active = 0 WHERE is_active = 1 AND id IN
              (SELECT class_id FROM ledger_import_classes WHERE batch_id = ?1 AND created_by_import = 1)",
+        "UPDATE item_groups SET is_active = 0 WHERE is_active = 1 AND id IN
+             (SELECT item_group_id FROM ledger_import_item_groups WHERE batch_id = ?1 AND created_by_import = 1)",
     ] {
         let done = sqlx::query(sql).bind(batch_id).execute(pool).await.map_err(db_err)?;
         result.list_records_deactivated += done.rows_affected() as i64;
@@ -1777,6 +1882,7 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
         "DELETE FROM ledger_import_items WHERE batch_id = ?1",
         "DELETE FROM ledger_import_sales_lists WHERE batch_id = ?1",
         "DELETE FROM ledger_import_price_levels WHERE batch_id = ?1",
+        "DELETE FROM ledger_import_item_groups WHERE batch_id = ?1",
         "DELETE FROM ledger_import_classes WHERE batch_id = ?1",
         "DELETE FROM ledger_import_transactions WHERE batch_id = ?1",
         "DELETE FROM ledger_import_accounts WHERE batch_id = ?1",

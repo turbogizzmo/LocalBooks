@@ -462,6 +462,16 @@ function UnbalancedList({ items }) {
 }
 
 /** What a post did with the file's classes, as a sentence (empty when the file has none). */
+// The file's item groups, when it has any: added, already there, and those left out.
+function groupsNote(r) {
+  if (!r.groupsCreated && !r.groupsMatched && !r.groupsLeftOut) return '';
+  return (
+    ` Groups: ${r.groupsCreated} added, ${r.groupsMatched} already there` +
+    (r.groupsLeftOut ? `, ${r.groupsLeftOut} left out (an item has the name, or none of its items came in)` : '') +
+    '.'
+  );
+}
+
 function classesNote(c) {
   if (!c) return '';
   return (
@@ -504,6 +514,7 @@ function ListsPanel({ summary, busy, accountsReady, run }) {
                 `Items: ${r.itemsCreated} added, ${r.itemsMatched} already there` +
                 (r.itemsOnFallbackAccount ? ` (${r.itemsOnFallbackAccount} post to your first income account: LocalBooks items need an income account; their description names the original account)` : '') +
                 '.' +
+                groupsNote(r) +
                 classesNote(r.classes),
             )
           }
@@ -696,6 +707,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
           `Items: ${li.itemsCreated} added, ${li.itemsMatched} already there` +
           (li.itemsOnFallbackAccount ? ` (${li.itemsOnFallbackAccount} post to your first income account: LocalBooks items need an income account; their description names the original account)` : '') +
           '.' +
+          groupsNote(li) +
           classesNote(r.classes)
         );
       },
