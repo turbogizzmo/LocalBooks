@@ -200,7 +200,7 @@ function TaxCalendar() {
               <td className="qb-grid-cell">{d.form}</td>
               <td className="qb-grid-cell" title={d.label}>{d.label}</td>
               <td className="qb-grid-cell">
-                {d.isPast ? 'Past' : next && d.dueDate === next.dueDate && d.label === next.label ? <span className="font-semibold text-qb-warning">● Next</span> : 'Upcoming'}
+                {d.isPast ? 'Past' : next && d.dueDate === next.dueDate && d.label === next.label ? <span className="font-semibold text-qb-warning-ink">● Next</span> : 'Upcoming'}
               </td>
             </tr>
           ))}
@@ -1071,7 +1071,8 @@ export default function PreferencesWindow({ isAdmin, intent, navigate }) {
         <nav aria-label="Preference categories" className="qb-panel min-h-0 overflow-auto py-0.5 scrollbar-thin">
           <ul role="listbox" aria-label="Categories">
             {CATEGORIES.map((c) => (
-              <li key={c.id}>
+              // The <li> is only a wrapper: the listbox's options are the buttons inside.
+              <li key={c.id} role="none">
                 <button
                   type="button"
                   role="option"
@@ -1086,9 +1087,12 @@ export default function PreferencesWindow({ isAdmin, intent, navigate }) {
           </ul>
         </nav>
         <div className="flex min-h-0 flex-col">
-          <div className="flex flex-none items-end gap-1 border-b border-qb-border-strong px-1" role="tablist" aria-label={`${category.label} preferences`}>
-            {tabButton('my', 'My Preferences')}
-            {tabButton('company', 'Company Preferences')}
+          <div className="flex flex-none items-end gap-1 border-b border-qb-border-strong px-1">
+            {/* Only the tabs are in the tablist; the heading sits beside it. */}
+            <div className="flex items-end gap-1" role="tablist" aria-label={`${category.label} preferences`}>
+              {tabButton('my', 'My Preferences')}
+              {tabButton('company', 'Company Preferences')}
+            </div>
             <h2 className="ml-auto self-center pb-0.5 text-md font-semibold">{category.label}</h2>
           </div>
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pt-2 scrollbar-thin" role="tabpanel">

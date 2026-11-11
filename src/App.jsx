@@ -23,6 +23,7 @@ import { formatDate, setFourDigitYears } from './lib/dates.js';
 import { setCurrencySymbol, setHoursFormat } from './lib/money.js';
 import * as cw from './lib/childWindows.js';
 import { runFormCommand } from './lib/formFlow.jsx';
+import { moveBetweenRegions, rememberRegionFocus } from './lib/regionKeys.js';
 
 /**
  * Reports › QuickReport: the Ctrl+Q of the list or register in front, for what is selected in it
@@ -196,6 +197,17 @@ export default function App() {
   // Closing LocalBooks with unsaved entries in a form asks first.
   useEffect(() => guardWindowClose(), []);
 
+  // F6 and Shift+F6 move between the sidebar, the toolbar and the active window (R19): Tab stays
+  // inside a window, so this is the keyboard's way back to the sidebar.
+  useEffect(() => {
+    document.addEventListener('keydown', moveBetweenRegions);
+    document.addEventListener('focusout', rememberRegionFocus);
+    return () => {
+      document.removeEventListener('keydown', moveBetweenRegions);
+      document.removeEventListener('focusout', rememberRegionFocus);
+    };
+  }, []);
+
   // File › New Company… and Open or Restore Company… (the window reloads on the company opened).
   const companyFiles = useCompanyFileActions();
 
@@ -287,7 +299,7 @@ export default function App() {
       {/* The left pane as the Open Window List alone, or the list beside the menu (View › Open Window List). */}
       {(sidebar === 'open-windows' || windowPrefs.showOpenWindowList) && <OpenWindowList asSidebar={sidebar === 'open-windows'} companyName={openCompany ?? 'LocalBooks'} />}
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="qb-toolbar no-print flex-none">
+        <header className="qb-toolbar no-print flex-none" data-f6-region="">
           {parent && <span className="text-sm text-qb-ink-muted">{parent.label} ›</span>}
           <h1 className="min-w-0 truncate text-lg font-semibold">{active ? windowName(active) : (openCompany ?? companyName)}</h1>
           <div className="ml-auto flex min-w-0 items-center gap-3">

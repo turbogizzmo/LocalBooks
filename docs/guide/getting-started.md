@@ -596,7 +596,9 @@ row. On **Print ▾** and **Email ▾**, press **Enter** or **Down** to open the
 
 ## Work without a mouse
 
-Every list, form and dialog can be used from the keyboard. **Tab** moves through a form's fields
+Every list, form and dialog can be used from the keyboard. **F6** moves between the sidebar, the
+toolbar and the window you are working in (**Shift+F6** goes back); all the keys are in
+[Use LocalBooks from the keyboard](keyboard.md). **Tab** moves through a form's fields
 and buttons in reading order, and through a line grid's columns in the order you chose (see
 "Choose a list's columns"). In a list, each row's **▾** button opens its menu (**Open**,
 **Edit…**, **Void**, **QuickReport** and the rest): Tab to it and press **Enter** or **Space**,

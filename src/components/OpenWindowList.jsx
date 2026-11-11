@@ -12,7 +12,7 @@ import { windowName } from './WindowManager.jsx';
 export default function OpenWindowList({ asSidebar = false, companyName = 'LocalBooks' }) {
   const { windows, activeId, focus } = useContext(WindowManagerContext);
   return (
-    <nav className={`no-print flex w-[190px] flex-none flex-col bg-qb-nav text-sm text-qb-nav-text ${asSidebar ? '' : 'border-l border-white/10'}`} aria-label="Open Windows">
+    <nav className={`no-print flex w-[190px] flex-none flex-col bg-qb-nav text-sm text-qb-nav-text ${asSidebar ? '' : 'border-l border-white/10'}`} aria-label="Open Windows" data-f6-region="">
       {asSidebar && (
         <div className="flex h-toolbar flex-none items-center gap-2 border-b border-white/10 px-3">
           <span className="grid h-5 w-5 flex-none place-items-center rounded-xs bg-qb-green-active text-2xs font-bold text-white">LB</span>

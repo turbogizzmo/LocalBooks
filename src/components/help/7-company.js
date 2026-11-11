@@ -317,10 +317,18 @@ export const topics = [
   {
     id: 'shortcuts', area: 'company', views: [],
     title: 'Keyboard shortcuts',
-    body: 'Press Ctrl+Alt+N (⌘⌥N on a Mac) to open + New from anywhere, Ctrl+Shift+N (⇧⌘N) to open a new window, and F1 to open or close Help. Esc closes Help and other panels.',
+    body: 'Press Ctrl+Alt+N (⌘⌥N on a Mac) to open + New from anywhere, Ctrl+Shift+N (⇧⌘N) to open a new window, F1 to open or close Help, and F6 to move between the sidebar, the toolbar and the window you are working in. Esc closes Help and other panels.',
     keywords: 'keyboard shortcut hotkey keys f1 new window',
     go: null,
     guide: 'troubleshooting',
+  },
+  {
+    id: 'keyboard', area: 'company', views: [],
+    title: 'Use LocalBooks from the keyboard',
+    body: 'Every page, form, list and dialog works without a mouse. F6 moves between the sidebar, the toolbar and the window you are working in (Shift+F6 goes back); Tab moves through the fields and buttons of that part, and in a window it goes round that window’s own fields. In the sidebar, Tab to a page and press Enter to open it. Ctrl+F6 brings the next window to the front and Esc closes the active one. LocalBooks aims to meet WCAG 2.1 AA, and every page is checked automatically for names, contrast and focus.',
+    keywords: 'keyboard accessibility accessible screen reader no mouse without mouse f6 tab focus sidebar toolbar wcag contrast navigate',
+    go: null,
+    guide: 'keyboard',
   },
   {
     id: 'whats-new', area: 'company', views: [],

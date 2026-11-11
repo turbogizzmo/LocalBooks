@@ -53,9 +53,10 @@ function Check({ label, checked, onChange }) {
   );
 }
 
-function Choice({ id, value, options, onChange }) {
+/** A select; `label` names it for screen readers when its row's label belongs to another field. */
+function Choice({ id, value, options, onChange, label }) {
   return (
-    <select id={id} className="qb-input w-full" value={value} onChange={(e) => onChange(e.target.value)}>
+    <select id={id} className="qb-input w-full" value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
       {options.map(([v, label]) => (
         <option key={v} value={v}>
           {label}
@@ -381,7 +382,7 @@ function TemplateDesigner({ kind, setKind }) {
               <Row label="Logo" htmlFor="form-logo">
                 <div className="flex gap-1">
                   <Choice id="form-logo" value={draft.logo} onChange={set('logo')} options={[['RIGHT', 'Top right'], ['LEFT', 'Top left'], ['HIDDEN', 'Hidden']]} />
-                  <Choice id="form-logo-size" value={draft.logoSize} onChange={set('logoSize')} options={[['SMALL', 'Small'], ['MEDIUM', 'Medium'], ['LARGE', 'Large']]} />
+                  <Choice id="form-logo-size" label="Logo size" value={draft.logoSize} onChange={set('logoSize')} options={[['SMALL', 'Small'], ['MEDIUM', 'Medium'], ['LARGE', 'Large']]} />
                 </div>
               </Row>
               <p className="text-2xs text-qb-ink-faint">The logo and company details come from Preferences › Company.</p>
@@ -478,10 +479,11 @@ function TemplateDesigner({ kind, setKind }) {
             <div className="flex h-row flex-none items-center gap-2 border-b border-qb-border px-2 text-xs text-qb-ink-muted">
               <span className="font-semibold text-qb-ink">Preview</span>
               {preview && <span>{preview.pages.length === 1 ? '1 page' : `${preview.pages.length} pages`}</span>}
-              {dirty && <span className="font-semibold text-qb-warning">Unsaved changes</span>}
+              {dirty && <span className="font-semibold text-qb-warning-ink">Unsaved changes</span>}
             </div>
             {previewError && <Notice kind="error" text={previewError} />}
-            <div className="min-h-0 flex-1 overflow-auto p-3 scrollbar-thin">
+            {/* Focusable, so the arrow keys can scroll a long preview. */}
+            <div className="min-h-0 flex-1 overflow-auto p-3 scrollbar-thin" role="region" aria-label="Preview" tabIndex={0}>
               <div className="mx-auto flex max-w-[720px] flex-col gap-3">
                 {preview?.pages.map((page, i) => (
                   <FormSheet key={i} page={page} logo={preview.logo} className="w-full shadow-md" />

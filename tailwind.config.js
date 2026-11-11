@@ -14,16 +14,22 @@ const qb = {
   desktop: '#d9dde3',
   surface: '#ffffff',
   ink: '#393a3d',
+  // Text colors meet WCAG 2.1 AA (4.5:1) on white, the canvas and the row and header greys (gap
+  // R19; the e2e accessibility spec checks every page). Faint text is the muted grey: a lighter one
+  // (#8d9096, 3.2:1 on white) was too pale to read.
   inkMuted: '#6b6c72',
-  inkFaint: '#8d9096',
+  inkFaint: '#6b6c72',
   border: '#d4d7dc',
   borderStrong: '#babec5',
   rowHover: '#f5f5f5',
   rowSelected: '#eef7ec',
   headerBg: '#eceef1',
-  negative: '#d52b1e',
+  negative: '#c8281c',
   warning: '#ff8000',
-  info: '#0077c5',
+  // Orange text (`text-qb-warning-ink`): the warning orange itself is 2.5:1 on white, fine for a
+  // border but not for words.
+  warningInk: '#a65300',
+  info: '#006cb4',
 };
 
 /** @type {import('tailwindcss').Config} */
@@ -63,7 +69,7 @@ export default {
             header: qb.headerBg,
           },
           negative: qb.negative,
-          warning: qb.warning,
+          warning: { DEFAULT: qb.warning, ink: qb.warningInk },
           info: qb.info,
         },
       },
