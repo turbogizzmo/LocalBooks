@@ -78,8 +78,8 @@ export const topics = [
   {
     id: 'print-checks-later', area: 'expenses', views: ['expenses/expenses', 'expenses/print-checks'],
     title: 'Print checks later, in a batch',
-    body: 'Tick Print later on Write Checks and the check is saved without a number, showing To print in the list. File › Print Forms › Checks… prints the waiting checks in order from the first number on your check stock, then asks whether they all printed: the ones that did keep their numbers, the others stay queued. Pay Bills has Print later too: its checks, one per vendor, wait in the same queue.',
-    keywords: 'print later to be printed queue batch check numbers print forms pay bills',
+    body: 'Tick Print later on Write Checks and the check is saved without a number, showing To print in the list. File › Print Forms › Checks… prints the waiting checks in order from the first number on your check stock, then asks whether they all printed: the ones that did keep their numbers, the others stay queued. Pay Bills has Print later too: its checks, one per vendor, wait in the same queue. With Change the check date when a check is printed on in Preferences › Checking, a queued check from either takes the date it prints (an edit: the original is voided and kept in the audit log).',
+    keywords: 'print later to be printed queue batch check numbers print forms pay bills check date re-date print date',
     go: { label: 'Go to Print Checks', view: 'expenses/print-checks' },
     guide: 'expenses-and-checks',
   },

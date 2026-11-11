@@ -276,3 +276,66 @@ async fn a_payment_taken_on_the_invoice_is_saved_with_it() {
     let after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM invoices").fetch_one(&pool).await.unwrap();
     assert_eq!(before, after, "a refused payment leaves no invoice behind");
 }
+
+/// Preferences › Checking › "Change check date when a check is printed" re-dates a Pay Bills check
+/// too: each of its bill payments is voided and paid again on the print date, linked as an edit, and
+/// the number goes on the replacements. A check already dated that day keeps its payments.
+#[tokio::test]
+async fn a_pay_bills_check_is_re_dated_when_it_prints() {
+    use crate::expenses::{BillInput, BillLineInput, BillPaymentInput};
+    let pool = test_pool().await;
+    let (checking, rent) = (account_id(&pool, "1010").await, account_id(&pool, "6300").await);
+    let bill = |vendor: &str, number: &str, cents: i64| BillInput {
+        form_lines: Vec::new(),
+        terms_id: None,
+        vendor_name: vendor.into(),
+        bill_number: Some(number.into()),
+        bill_date: d(1),
+        due_date: d(31),
+        memo: None,
+        total_cents: Cents(cents),
+        lines: vec![BillLineInput { account_id: rent, amount_cents: Cents(cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+    };
+    let mut ids = Vec::new();
+    for (vendor, number, cents) in [("Landlord", "L-1", 100_000), ("Landlord", "L-2", 20_000), ("Plumber", "P-9", 7_500)] {
+        ids.push(crate::expenses::post_vendor_bill(&pool, bill(vendor, number, cents)).await.unwrap().id);
+    }
+    // L-2 is paid only in part, so its open balance has to come back whole before it is paid again.
+    let pay = |bill_id: i64, cents: i64| BillPaymentInput { bill_id, payment_account_id: checking, payment_date: d(10), amount_cents: Cents(cents), reference: None, to_be_printed: true };
+    crate::expenses::pay_vendor_bills(&pool, vec![pay(ids[0], 100_000), pay(ids[1], 15_000), pay(ids[2], 7_500)]).await.unwrap();
+    crate::preferences::set(&pool, crate::preferences::tax_time::DATE_CHECKS_PRINTED, "true").await.unwrap();
+    let bank = || sqlx::query_scalar::<_, i64>("SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) FROM journal_lines l WHERE l.account_id = ?1").bind(checking).fetch_one(&pool);
+    let bank_before = bank().await.unwrap();
+
+    let queue = queued_bill_checks(&pool, None).await.unwrap();
+    let (landlord, plumber) = (queue[0].id, queue[1].id);
+    let printed = [
+        PrintedCheck { expense_id: 0, check_number: "1001".into(), bill_check_id: Some(landlord) },
+        PrintedCheck { expense_id: 0, check_number: "1002".into(), bill_check_id: Some(plumber) },
+    ];
+    // Plumber's check prints on its own date and keeps its payment; Landlord's prints on the 12th.
+    assert_eq!(mark_checks_printed_on(&pool, vec![printed[1].clone()], d(10)).await.unwrap(), 1);
+    assert_eq!(mark_checks_printed_on(&pool, vec![printed[0].clone()], d(12)).await.unwrap(), 1);
+
+    type Row = (i64, i64, String, i64, Option<String>, bool, bool);
+    let rows: Vec<Row> = sqlx::query_as("SELECT id, bill_id, payment_date, amount_cents, reference, to_be_printed, is_voided FROM bill_payments ORDER BY id")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    let live: Vec<_> = rows.iter().filter(|r| !r.6).map(|r| (r.1, r.2.as_str(), r.3, r.4.as_deref(), r.5)).collect();
+    assert_eq!(
+        live,
+        [(ids[2], "2026-10-10", 7_500, Some("1002"), false), (ids[0], "2026-10-12", 100_000, Some("1001"), false), (ids[1], "2026-10-12", 15_000, Some("1001"), false)],
+        "Plumber's kept its date; Landlord's two payments were paid again on the 12th"
+    );
+    let voided: Vec<(i64, &str, Option<&str>)> = rows.iter().filter(|r| r.6).map(|r| (r.1, r.2.as_str(), r.4.as_deref())).collect();
+    assert_eq!(voided, [(ids[0], "2026-10-10", None), (ids[1], "2026-10-10", None)]);
+
+    let bills: Vec<(i64, String)> = sqlx::query_as("SELECT amount_paid_cents, status FROM bills ORDER BY id").fetch_all(&pool).await.unwrap();
+    assert_eq!(bills, [(100_000, "PAID".to_string()), (15_000, "PARTIAL".to_string()), (7_500, "PAID".to_string())]);
+    assert_eq!(bank().await.unwrap(), bank_before, "the bank balance is unchanged; only the date moved");
+    let edits: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transaction_edits").fetch_one(&pool).await.unwrap();
+    assert_eq!(edits, 2, "each re-dated payment is linked to the one it replaced");
+    assert!(queued_bill_checks(&pool, None).await.unwrap().is_empty());
+    assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
+}

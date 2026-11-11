@@ -22,6 +22,10 @@ becomes its release notes on GitHub and in the app's update window (see
   bill, Create Bill now sends it for approval instead of asking you to re-enter it in Enter Bills.
   The order shows "bill awaiting approval"; approving posts the bill and marks the order billed with
   it, and rejecting leaves the order open.
+- **Pay Bills checks take the print date.** With **Change the check date when a check is printed**
+  on in Preferences › Checking, a check from Pay Bills waiting in File › Print Forms › Checks is now
+  re-dated to the day it prints, as checks from Write Checks already were. Each bill payment on it
+  is voided and paid again on that date, and both stay in the audit log.
 - **More accurate company-file imports.** Memorized transactions (templates) are no longer
   imported as real ones, which doubled some balances. Files whose description of a line table is
   missing several columns now read those lines, and a payment and deposit that a file keeps as two

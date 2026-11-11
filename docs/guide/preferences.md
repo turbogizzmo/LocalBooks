@@ -97,7 +97,7 @@ You can still pick another account on each form.
 |---|---|---|
 | **Duplicate check numbers** | On | Warns when a check number is already used in the same bank account. Voided checks don't count. |
 | **Vendor account number** | Off | **Print the vendor's account number in the check memo**: a check saved without a memo gets "Acct #…" from the vendor's record. |
-| **Check date** | Off | **Change the check date when a check is printed**: a check waiting in Print Forms takes the date it prints. This is an edit, so the original is voided and kept in the audit log. |
+| **Check date** | Off | **Change the check date when a check is printed**: a check waiting in Print Forms, from Write Checks or Pay Bills, takes the date it prints. This is an edit, so the original is voided and kept in the audit log (for a Pay Bills check, each bill payment on it is voided and paid again on the print date). A check in another currency keeps its date, since its rate belongs to it. |
 
 Renaming rules for downloaded payees are in **Banking › Bank Feeds › Rules…** (see
 [Bank feeds](bank-feeds.md)).
