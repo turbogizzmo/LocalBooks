@@ -50,6 +50,9 @@ export default function RegisterEntry({ account, accounts, heads, onRecorded }) 
   const dateRef = useRef(null);
   const vendors = useLedgerQuery(api.listVendors).data ?? [];
   const customers = useLedgerQuery(api.listCustomers).data ?? [];
+  // A check or charge pays a vendor or an other name (Expenses › Other Names), as on Write Checks.
+  const otherNames = useLedgerQuery(api.listOtherNames).data ?? [];
+  const payees = [...vendors, ...otherNames.filter((o) => o.isActive && !vendors.some((v) => v.name.toLowerCase() === o.name.toLowerCase())).map((o) => ({ ...o, listLabel: 'Other name' }))];
   useDirtySince(`register-entry-${account.id}`, { payee, otherId, memo, amounts, splits: splits?.map((r) => [r.accountId, r.amount, r.memo]) ?? null });
 
   // A bank register suggests the next check number, again after each row is recorded.
@@ -195,7 +198,7 @@ export default function RegisterEntry({ account, accounts, heads, onRecorded }) 
               </datalist>
             </>
           ) : (
-            <NameField kind="vendor" names={vendors} value={payee} onChange={setPayee} className="qb-input w-[190px]" placeholder="Who was paid?" />
+            <NameField kind="vendor" names={payees} value={payee} onChange={setPayee} className="qb-input w-[190px]" placeholder="Who was paid?" />
           )}
         </label>
         <label>

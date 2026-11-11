@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::ledger::{post_journal_entry, JournalEntry, JournalLine};
+use crate::money::Cents;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
@@ -96,17 +97,17 @@ async fn cash_basis_counts_invoices_as_paid_and_periods_line_up() {
     let pay = |invoice_id, day, cents| {
         crate::invoices::record_payment(
             &pool,
-            crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: day, amount_cents: cents, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+            crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: day, amount_cents: cents, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
         )
     };
     let first = invoice("2026-01-10", 100_000).await;
     post(&pool, ymd(2026, 1, 15), rent, checking, 10_000).await;
-    pay(first, ymd(2026, 2, 5), 40_000).await.unwrap();
-    pay(first, ymd(2026, 3, 3), 60_000).await.unwrap();
+    pay(first, ymd(2026, 2, 5), Cents(40_000)).await.unwrap();
+    pay(first, ymd(2026, 3, 3), Cents(60_000)).await.unwrap();
     let second = invoice("2026-03-01", 50_000).await;
     let memo = crate::credits::create_credit_memo(
         &pool,
-        crate::credits::CreditMemoInput { form_lines: Vec::new(),
+        crate::credits::CreditMemoInput { credit_number: None, form_lines: Vec::new(),
             customer_name: "Acme".into(),
             credit_date: ymd(2026, 3, 10),
             memo: None,
@@ -119,7 +120,7 @@ async fn cash_basis_counts_invoices_as_paid_and_periods_line_up() {
     .await
     .unwrap();
     crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: memo.id, document_id: second, amount_cents: 20_000, applied_date: ymd(2026, 3, 12) }).await.unwrap();
-    pay(second, ymd(2026, 3, 20), 30_000).await.unwrap();
+    pay(second, ymd(2026, 3, 20), Cents(30_000)).await.unwrap();
 
     let net = |basis, m: u32, last: u32| profit_and_loss_basis(&pool, ymd(2026, m, 1), ymd(2026, m, last), None, basis);
     assert_eq!(net(Basis::Accrual, 1, 31).await.unwrap().net_income_cents, 90_000);

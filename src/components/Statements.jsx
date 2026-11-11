@@ -21,7 +21,8 @@ export default function Statements({ intent = null }) {
   const [preview, setPreview] = useState(null); // { customerId, form }
   const [notice, setNotice] = useState(null);
   const [printPortal, forms] = useFormPrinter(setNotice);
-  const emailed = useEmailStatuses('STATEMENT');
+  // ✉ marks the customers whose statement for this period was emailed.
+  const emailed = useEmailStatuses('STATEMENT', end);
   const period = { startDate: start, endDate: end };
 
   useEffect(() => {
@@ -35,7 +36,8 @@ export default function Statements({ intent = null }) {
   // Choosing a group ticks its customers who have a statement this period.
   const listKey = list.map((c) => c[0]).join(',');
   useEffect(() => {
-    if (group) setPicked(new Set(list.map((c) => c[0]).filter((id) => group.memberIds.includes(id))));
+    // Back to All customers: the group's ticks go, so Print doesn't print only that group.
+    setPicked(group ? new Set(list.map((c) => c[0]).filter((id) => group.memberIds.includes(id))) : new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [group?.id, group?.memberIds?.join(','), listKey]);
   const markSent = async () => {

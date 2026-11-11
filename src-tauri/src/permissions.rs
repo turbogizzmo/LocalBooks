@@ -60,6 +60,11 @@ const OPEN: &[&str] = &[
 ];
 
 const ADMIN: &[&str] = &[
+    // Whole-file encryption (gap R1) changes who can ever open these books.
+    "encrypt_company_file",
+    "decrypt_company_file",
+    "list_unencrypted_backups",
+    "delete_unencrypted_backups",
     // Going back to the previous release changes the app for everyone using these books.
     "reinstall_previous_release",
     // Removing an attachment for good (deleting one is reversible and open to Standard users).

@@ -30,6 +30,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::invoices::{InvoiceInput, InvoiceLineInput};
 use crate::ledger::{db_err, format_cents, post_entry_in_tx, rollback, EntrySource, JournalEntry, JournalLine, MAX_LINE_CENTS, QUANTITY_SCALE};
+use crate::money::Cents;
 
 /// A deposited payment or deposit line that can be recorded as bounced.
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -404,7 +405,7 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, input: &BounceInput) -> Result<
     let fee_line = |account: i64| InvoiceLineInput {
         description: "Returned check charge".into(),
         quantity_e4: QUANTITY_SCALE,
-        rate_cents: input.customer_fee_cents,
+        rate_cents: Cents(input.customer_fee_cents),
         income_account_id: account,
         product_service_id: None,
         class_id: None,
@@ -412,13 +413,14 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, input: &BounceInput) -> Result<
         service_date: None,
     };
     let invoice_for = |customer: &str, lines: Vec<InvoiceLineInput>| InvoiceInput {
+        invoice_number: None,
         customer_name: customer.to_string(),
         issue_date: input.bounce_date,
         due_date: input.bounce_date,
         lines,
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
 
@@ -427,7 +429,7 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, input: &BounceInput) -> Result<
         let mut charge = vec![InvoiceLineInput {
             description: format!("Returned check: sales receipt #{number}"),
             quantity_e4: QUANTITY_SCALE,
-            rate_cents: source.amount,
+            rate_cents: Cents(source.amount),
             income_account_id: income,
             product_service_id: None,
             class_id: None,

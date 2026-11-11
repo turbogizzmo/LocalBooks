@@ -613,7 +613,8 @@ pub(crate) async fn void_for_replacement(tx: &mut Transaction<'_, Sqlite>, journ
 }
 
 async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, replacing: bool) -> Result<(), String> {
-    let header: Option<(i64, NaiveDate, Option<String>, String, Option<i64>, String, bool, Option<i64>)> = sqlx::query_as(
+    type HeaderRow = (i64, NaiveDate, Option<String>, String, Option<i64>, String, bool, Option<i64>);
+    let header: Option<HeaderRow> = sqlx::query_as(
         "SELECT entry_number, entry_date, memo, source_type, source_id, status, is_voided, reverses_entry_id
          FROM journal_entries WHERE id = ?1",
     )
@@ -778,7 +779,8 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
         return Err(format!("VOID_RECLASS_ORDER: entry #{later_number} reclassifies the same lines again; void it first"));
     }
 
-    let lines: Vec<(i64, Cents, Cents, Option<String>, Option<i64>)> = sqlx::query_as(
+    type LineRow = (i64, Cents, Cents, Option<String>, Option<i64>);
+    let lines: Vec<LineRow> = sqlx::query_as(
         "SELECT account_id, debit_cents, credit_cents, memo, class_id FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number",
     )
     .bind(journal_entry_id)
@@ -925,6 +927,8 @@ pub struct JournalEntryView {
     pub reversed_by_entry_number: Option<i64>,
     pub posted_at: Option<String>,
     pub is_adjusting: bool,
+    /// Typed in Make General Journal Entries ([`MANUAL_JOURNAL`]): Edit… and Duplicate are offered.
+    pub is_manual: bool,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -954,12 +958,26 @@ pub struct AuditEntry {
     pub detail: String,
 }
 
+/// SQL condition, on a journal entry aliased `e`: a journal entry typed in Make General Journal
+/// Entries, not one another screen posted (a refund, write-off, bounced check, sales tax payment,
+/// reclassification, item receipt or currency revaluation) or a reversal. Only these are edited
+/// or duplicated from the Journal Entries list; the others belong to the screen that made them.
+pub const MANUAL_JOURNAL: &str = "(e.source_type = 'JOURNAL' AND e.reverses_entry_id IS NULL
+    AND NOT EXISTS (SELECT 1 FROM class_reclassifications WHERE journal_entry_id = e.id)
+    AND NOT EXISTS (SELECT 1 FROM credit_refunds WHERE journal_entry_id = e.id)
+    AND NOT EXISTS (SELECT 1 FROM vendor_credit_refunds WHERE journal_entry_id = e.id)
+    AND NOT EXISTS (SELECT 1 FROM sales_tax_payments WHERE journal_entry_id = e.id)
+    AND NOT EXISTS (SELECT 1 FROM bounced_checks WHERE journal_entry_id = e.id)
+    AND NOT EXISTS (SELECT 1 FROM bounced_sales_receipts WHERE journal_entry_id = e.id)
+    AND NOT EXISTS (SELECT 1 FROM item_receipts WHERE journal_entry_id = e.id)
+    AND NOT EXISTS (SELECT 1 FROM fx_revaluations WHERE journal_entry_id = e.id OR reversal_entry_id = e.id))";
+
 pub async fn list_journal_entries(pool: &SqlitePool, limit: i64) -> Result<Vec<JournalEntryView>, String> {
     sqlx::query_as::<_, JournalEntryView>(&format!(
         "SELECT e.id, e.entry_number, e.entry_date, e.memo, {DISPLAY_SOURCE_TYPE} AS source_type, e.source_id,
                 COALESCE((SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = e.id), 0) AS total_cents,
                 e.is_voided, e.reverses_entry_id, o.entry_number AS reverses_entry_number,
-                r.entry_number AS reversed_by_entry_number, e.posted_at, e.is_adjusting
+                r.entry_number AS reversed_by_entry_number, e.posted_at, e.is_adjusting, {MANUAL_JOURNAL} AS is_manual
          FROM journal_entries e
          LEFT JOIN journal_entries o ON o.id = e.reverses_entry_id
          LEFT JOIN journal_entries r ON r.reverses_entry_id = e.id

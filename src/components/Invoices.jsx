@@ -30,6 +30,10 @@ import { useSuggestedRate } from './RateSuggestion.jsx';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useUnsavedChanges, useWindowContent } from '../lib/windows.js';
 import NameField from './NameField.jsx';
+import DocNumberBox, { useDocNumber } from './DocNumberBox.jsx';
+
+// Saving changes voids the posted invoice and posts the corrected one under the same number.
+const EDITED_NUMBER = 'An edited invoice keeps its number.';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
 import DateBox from './DateBox.jsx';
@@ -913,6 +917,8 @@ export default function Invoices({ accounts, intent }) {
   const invoices = useLedgerQuery(api.listInvoices);
   const [receiving, setReceiving] = useState(false);
   const customerRef = useRef(null);
+  // Invoice #: the next number, shown before saving; the person may type another.
+  const invoiceNumber = useDocNumber('INVOICE', 'Invoice');
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
   const creditMemos = useLedgerQuery(api.listCreditMemos);
@@ -1137,7 +1143,8 @@ export default function Invoices({ accounts, intent }) {
     setDueDate(due ?? date);
     setFiles([]);
     setShowAttachments(false);
-    setNotice({ kind: 'info', text: `A copy of invoice #${number}, dated today: it gets the next invoice number when you save it.` });
+    invoiceNumber.reset();
+    setNotice({ kind: 'info', text: `A copy of invoice #${number}, dated today: it gets the next invoice number, shown in Invoice #.` });
   };
   const duplicateInvoice = () => editing && startCopy(editing.number, issueDate, dueDate);
 
@@ -1186,6 +1193,7 @@ export default function Invoices({ accounts, intent }) {
     tax.reset();
     sales.reset();
     paidNow.reset();
+    invoiceNumber.reset();
   };
 
   const [memorizing, setMemorizing] = useState(null);
@@ -1265,6 +1273,7 @@ export default function Invoices({ accounts, intent }) {
         termsId,
         formLines,
       };
+      // A memorized invoice takes the next number each time it is entered.
       if (mode === 'memorize' && memorized) {
         const text = await saveMemorizedTransaction(memorized, input);
         setMemorized(null);
@@ -1273,6 +1282,12 @@ export default function Invoices({ accounts, intent }) {
         return;
       }
       if (mode === 'memorize') return setMemorizing(input);
+      if (!editing) {
+        const chosen = await invoiceNumber.resolve();
+        if (chosen.cancelled) return;
+        if (chosen.error) return setNotice({ kind: 'error', text: chosen.error });
+        input.invoiceNumber = chosen.value;
+      }
       // A credit limit warns; it never stops the sale.
       const homeTotal = currency ? toHomeCents(total, parseRateE6(rate)) : total;
       const over = await api.checkCreditLimit(input.customerName, homeTotal, editing?.id ?? null);
@@ -1494,6 +1509,7 @@ export default function Invoices({ accounts, intent }) {
               }}
             />
           </label>
+          <DocNumberBox number={invoiceNumber} fixed={editing ? editing.number : null} title={editing ? EDITED_NUMBER : undefined} />
           <label>
             <span className="qb-label">Terms</span>
             <TermsSelect

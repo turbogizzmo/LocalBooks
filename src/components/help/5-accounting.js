@@ -9,19 +9,22 @@ export const screens = {
   },
   'accounting/chart-of-accounts': {
     help: 'Every account in your books, grouped into assets, liabilities, equity, income and expenses, with subaccounts under their parents. Add, rename, renumber or inactivate accounts here. Renaming an account to another’s name offers to merge them: one journal entry moves its balance, and the lists that name it follow.',
+    guide: 'getting-started',
   },
   'accounting/classes': {
     help: 'Classes tag income and expenses by department, location or line of business, separately from your accounts. Add classes here, choose one on each line, then run Profit and Loss by Class.',
+    guide: 'getting-started',
   },
   'accounting/reclassify': {
     help: 'Move posted income and expense lines to another class. Each move posts a reclassifying journal entry on the line’s own date, which you can void to undo it.',
+    guide: 'journal-entries-and-voids',
   },
   'accounting/clean-up': {
     help: 'Client Data Review tools in one place: apply credits left on credit memos and vendor credits, clear payments stuck in Undeposited Funds, write off old invoices, review list changes, and compare the Balance Sheet with the inventory valuation. Every fix shows its totals and asks first.',
     guide: 'cleaning-up-books',
   },
   'accounting/journal': {
-    help: 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
+    help: 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments. Edit… and Duplicate are offered on entries typed here; entries other screens made (refunds, write-offs, bounced checks, tax payments, reclassifications) are changed or voided from their own screens.',
     guide: 'journal-entries-and-voids',
   },
   'accounting/find': {
@@ -30,6 +33,7 @@ export const screens = {
   },
   'accounting/recurring': {
     help: 'Memorized transactions that repeat on a schedule: rent, subscriptions, monthly invoices and accruals. Enter everything that is due in one step, edit a schedule or the transaction itself, or pause one. A copy that can’t be entered (a closed period, say) is listed and stays due; the others are entered.',
+    guide: 'memorized-transactions',
   },
   'accounting/todos': {
     help: 'Your own tasks, with due dates, about a customer, vendor or employee and optionally one of their invoices or bills. Tick Done to complete one; due ones also show in Reminders on the Dashboard.',
@@ -37,6 +41,7 @@ export const screens = {
   },
   'accounting/budgets': {
     help: 'Expected income and expenses for each account, month by month for a fiscal year. Compare a budget with your books in Reports › Budget vs. Actuals.',
+    guide: 'budgets',
   },
   'accounting/audit': {
     help: 'A history of every posting, void and reconciliation that cannot be edited, and a check that every posted entry still matches what was recorded.',
@@ -45,6 +50,10 @@ export const screens = {
   'accounting/fx-revaluation': {
     help: 'Restate open foreign-currency invoices at a period-end rate. The unrealized gain or loss is posted on that date and reversed the next day.',
     guide: 'currency-revaluation',
+  },
+  'accounting/attachments': {
+    help: 'Every file attached to a transaction, customer, vendor, item or account, with its date, keywords and what it’s attached to. Search, preview, save a copy or delete; a deleted file can be restored, and only an Admin removes one for good.',
+    guide: 'attachments',
   },
 };
 
@@ -106,6 +115,7 @@ export const topics = [
     body: 'Accounting › Reclassify Transactions lists posted income and expense lines by date, account and current class; tick lines, choose the new class and choose Reclassify. Each move posts a reclassifying journal entry on the line’s own date, so reports are corrected for that period, and voiding that entry undoes it.',
     keywords: 'reclassify wrong class change class fix class move class',
     go: { label: 'Go to Reclassify Transactions', view: 'accounting/reclassify' },
+    guide: 'journal-entries-and-voids',
   },
   {
     id: 'clean-up-books', area: 'accounting', views: ['accounting/clean-up', 'banking/transfers', 'sales/credits', 'expenses/credits', 'accounting/audit'],
