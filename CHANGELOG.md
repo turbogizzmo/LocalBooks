@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Customer Statements marks what was sent for this period.** The ✉ beside a customer now means
+  their statement for the period on screen was emailed. Before, emailing one month's statement
+  marked every period as sent. Statements emailed before this update show no mark.
+- Choosing **All customers** after a customer group clears the group's ticks, so Print no longer
+  prints only that group.
+
 ## [0.14.1]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a
