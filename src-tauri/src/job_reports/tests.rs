@@ -22,10 +22,10 @@ fn bill(lines: Vec<(i64, i64, Option<i64>)>) -> BillInput {
         bill_date: d(5),
         due_date: d(30),
         memo: None,
-        total_cents: lines.iter().map(|(_, cents, _)| cents).sum(),
+        total_cents: Cents(lines.iter().map(|(_, cents, _)| cents).sum()),
         lines: lines
             .into_iter()
-            .map(|(account_id, amount_cents, job)| BillLineInput { account_id, amount_cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: job, billable: None })
+            .map(|(account_id, amount_cents, job)| BillLineInput { account_id, amount_cents: Cents(amount_cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: job, billable: None })
             .collect(),
     }
 }
@@ -57,7 +57,7 @@ async fn an_unknown_job_is_refused() {
         check_number: None,
         payment_method: None,
         memo: None,
-        lines: vec![SplitLineInput { account_id: supplies, amount_cents: 500, memo: None, class_id: None, customer_id: Some(9_999), billable: None }],
+        lines: vec![SplitLineInput { account_id: supplies, amount_cents: Cents(500), memo: None, class_id: None, customer_id: Some(9_999), billable: None }],
         currency: None,
     };
     let err = crate::expenses::post_expense(&pool, input).await.unwrap_err();

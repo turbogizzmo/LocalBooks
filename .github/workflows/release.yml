@@ -73,6 +73,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install Linux dependencies
+        # A stuck package mirror once held a release build for an hour: fail fast, then re-run.
+        timeout-minutes: 10
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -120,6 +122,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install Linux dependencies
+        # A stuck package mirror once held a release build for an hour: fail fast, then re-run.
+        timeout-minutes: 10
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -184,6 +188,8 @@ jobs:
           fi
 
       - name: Install Linux dependencies
+        # A stuck package mirror once held a release build for an hour: fail fast, then re-run.
+        timeout-minutes: 10
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update

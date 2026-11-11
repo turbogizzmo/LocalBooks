@@ -132,8 +132,8 @@ async fn service_charge_and_interest_post_with_the_reconciliation_and_balance() 
     post(&pool, d(9, 2), checking, owner, 500_000).await;
     // The statement: 5,000.00 in, a 12.50 fee and 1.25 interest, so it ends at 4,988.75.
     let charges = [
-        ReconcileCharge { kind: ChargeKind::ServiceCharge, amount_cents: 1_250, date: d(9, 30), account_id: rent, class_id: None },
-        ReconcileCharge { kind: ChargeKind::InterestEarned, amount_cents: 125, date: d(9, 30), account_id: sales, class_id: None },
+        ReconcileCharge { kind: ChargeKind::ServiceCharge, amount_cents: Cents(1_250), date: d(9, 30), account_id: rent, class_id: None },
+        ReconcileCharge { kind: ChargeKind::InterestEarned, amount_cents: Cents(125), date: d(9, 30), account_id: sales, class_id: None },
     ];
     let rec = start_with_charges(&pool, checking, d(9, 30), 498_875, &charges).await.expect("starts with charges");
 
@@ -158,12 +158,12 @@ async fn a_bad_charge_posts_nothing() {
     let (checking, rent) = (account_id(&pool, "1010").await, account_id(&pool, "6300").await);
     let entries = || async { sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM journal_entries").fetch_one(&pool).await.unwrap() };
     let before = entries().await;
-    let late = ReconcileCharge { kind: ChargeKind::ServiceCharge, amount_cents: 500, date: d(10, 1), account_id: rent, class_id: None };
+    let late = ReconcileCharge { kind: ChargeKind::ServiceCharge, amount_cents: Cents(500), date: d(10, 1), account_id: rent, class_id: None };
     let err = start_with_charges(&pool, checking, d(9, 30), 0, &[late]).await.expect_err("after the statement");
     assert!(err.starts_with("REC_CHARGE_DATE"), "{err}");
-    let zero = ReconcileCharge { kind: ChargeKind::InterestEarned, amount_cents: 0, date: d(9, 30), account_id: rent, class_id: None };
+    let zero = ReconcileCharge { kind: ChargeKind::InterestEarned, amount_cents: Cents::ZERO, date: d(9, 30), account_id: rent, class_id: None };
     assert!(start_with_charges(&pool, checking, d(9, 30), 0, &[zero]).await.expect_err("zero").starts_with("REC_CHARGE_AMOUNT"));
-    let same = ReconcileCharge { kind: ChargeKind::ServiceCharge, amount_cents: 500, date: d(9, 30), account_id: checking, class_id: None };
+    let same = ReconcileCharge { kind: ChargeKind::ServiceCharge, amount_cents: Cents(500), date: d(9, 30), account_id: checking, class_id: None };
     assert!(start_with_charges(&pool, checking, d(9, 30), 0, &[same]).await.expect_err("same account").starts_with("REC_CHARGE_ACCOUNT"));
     // Nothing posted and no reconciliation was left started.
     assert_eq!(entries().await, before);
@@ -275,4 +275,15 @@ async fn a_statement_file_attaches_to_the_reconciliation() {
     assert_eq!(left, 0);
     undo_last(&pool, open.id, None).await.unwrap();
     assert!(add_record_file(&pool, "RECONCILIATION", open.id, "late.pdf", b"x").await.unwrap_err().starts_with("REC_UNDONE"));
+}
+
+#[test]
+fn reconcile_charge_and_bill_payment_amounts_are_bare_integers_in_json() {
+    let charge: ReconcileCharge = serde_json::from_str(r#"{"kind":"SERVICE_CHARGE","amountCents":1500,"date":"2026-06-30","accountId":7}"#).unwrap();
+    assert_eq!(charge.amount_cents, Cents(1_500));
+    assert_eq!(serde_json::to_value(&charge).unwrap()["amountCents"], serde_json::json!(1_500), "it goes back out as a bare integer");
+    let payment: crate::expenses::BillPaymentInput =
+        serde_json::from_str(r#"{"billId":3,"paymentAccountId":1,"paymentDate":"2026-06-15","amountCents":24690,"reference":null}"#).unwrap();
+    assert_eq!(payment.amount_cents, Cents(24_690));
+    assert!(serde_json::from_str::<ReconcileCharge>(r#"{"kind":"INTEREST_EARNED","amountCents":0.5,"date":"2026-06-30","accountId":7}"#).is_err(), "a fractional amount is refused");
 }

@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::ledger::{self, db_err, format_cents, mul_div_round, post_entry_in_tx, rollback, EntrySource, JournalEntry, JournalLine, MAX_LINE_CENTS, QUANTITY_SCALE};
+use crate::money::Cents;
 
 /// The clearing account receipts post to.
 pub const CLEARING_NAME: &str = "Items Received Not Billed";
@@ -43,8 +44,8 @@ pub struct ReceiptLineInput {
     #[serde(default)]
     pub quantity_e4: Option<i64>,
     #[serde(default)]
-    pub rate_cents: Option<i64>,
-    pub amount_cents: i64,
+    pub rate_cents: Option<Cents>,
+    pub amount_cents: Cents,
     #[serde(default)]
     pub class_id: Option<i64>,
 }
@@ -212,15 +213,15 @@ pub async fn receive_items(pool: &SqlitePool, input: ReceiptInput) -> Result<Rec
     let mut total: i64 = 0;
     for (idx, line) in input.lines.iter().enumerate() {
         let n = idx + 1;
-        if !(1..=MAX_LINE_CENTS).contains(&line.amount_cents) {
+        if !(1..=MAX_LINE_CENTS).contains(&line.amount_cents.get()) {
             return Err(format!("RECEIPT_BAD_AMOUNT: line {n} needs an amount above zero"));
         }
         match (line.quantity_e4, line.rate_cents) {
             (None, None) => {}
-            (Some(q), Some(r)) if q > 0 && r >= 0 => {}
+            (Some(q), Some(r)) if q > 0 && r >= Cents::ZERO => {}
             _ => return Err(format!("RECEIPT_BAD_QUANTITY: line {n} needs a quantity above zero and a rate, or neither")),
         }
-        total = total.checked_add(line.amount_cents).filter(|t| *t <= MAX_LINE_CENTS).ok_or_else(|| format!("RECEIPT_TOO_LARGE: the receipt exceeds {}", format_cents(MAX_LINE_CENTS)))?;
+        total = total.checked_add(line.amount_cents.get()).filter(|t| *t <= MAX_LINE_CENTS).ok_or_else(|| format!("RECEIPT_TOO_LARGE: the receipt exceeds {}", format_cents(MAX_LINE_CENTS)))?;
     }
     let id = run(pool, async |tx| write_receipt(tx, &input, total).await).await?;
     receipt(pool, id).await
@@ -261,7 +262,7 @@ async fn write_receipt(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptInput, t
         }
         if let Some(product) = line.product_service_id {
             if let Some(item) = crate::inventory::check_purchase_line(tx, product, line.account_id, line.quantity_e4, n).await? {
-                received.push((item, line.quantity_e4.unwrap_or_default(), line.amount_cents));
+                received.push((item, line.quantity_e4.unwrap_or_default(), line.amount_cents.get()));
             }
         }
         if let Some(class) = line.class_id {
@@ -269,8 +270,8 @@ async fn write_receipt(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptInput, t
         }
         let key = (line.account_id, line.class_id);
         match debits.iter_mut().find(|(k, _)| *k == key) {
-            Some((_, sum)) => *sum += line.amount_cents,
-            None => debits.push((key, line.amount_cents)),
+            Some((_, sum)) => *sum = sum.checked_add(line.amount_cents.get()).ok_or("RECEIPT_TOO_LARGE: the receipt is too large")?,
+            None => debits.push((key, line.amount_cents.get())),
         }
     }
 
@@ -459,7 +460,7 @@ pub async fn received_not_billed(pool: &SqlitePool, as_of: NaiveDate) -> Result<
 pub struct ReceiptBillLine {
     pub receipt_line_id: i64,
     /// What the vendor billed for the line (the receipt's amount when unchanged).
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -534,7 +535,7 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
     let mut total: i64 = 0;
     let mut billed_lines = Vec::with_capacity(lines.len());
     for (id, n, account, product, description, quantity, received, class, _, customer) in &lines {
-        let amount = input.lines.iter().find(|b| b.receipt_line_id == *id).map(|b| b.amount_cents).unwrap_or(*received);
+        let amount = input.lines.iter().find(|b| b.receipt_line_id == *id).map(|b| b.amount_cents.get()).unwrap_or(*received);
         if !(1..=MAX_LINE_CENTS).contains(&amount) {
             return Err(format!("RECEIPT_BAD_AMOUNT: line {n} needs an amount above zero"));
         }

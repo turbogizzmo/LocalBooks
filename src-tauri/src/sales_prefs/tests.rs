@@ -48,9 +48,9 @@ async fn bill_on_terms(pool: &SqlitePool, vendor: &str, cents: i64, date: NaiveD
         bill_date: date,
         due_date: date,
         memo: None,
-        total_cents: cents,
+        total_cents: Cents(cents),
         terms_id,
-        lines: vec![BillLineInput { account_id: expense, amount_cents: cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![BillLineInput { account_id: expense, amount_cents: Cents(cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
     };
     post_vendor_bill(pool, input).await.expect("bill posts").id
 }
@@ -161,7 +161,7 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
             reference: Some("RMA-7".into()),
             credit_date: d(10, 2),
             memo: None,
-            lines: vec![VendorCreditLineInput { account_id: expense, amount_cents: 7_000, memo: None, class_id: None, customer_id: None }],
+            lines: vec![VendorCreditLineInput { account_id: expense, amount_cents: Cents(7_000), memo: None, class_id: None, customer_id: None }],
         },
     )
     .await
@@ -175,12 +175,12 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
         vec![CreditUse { credit_id: credit.id, bill_id: first, amount_cents: 6_000 }, CreditUse { credit_id: credit.id, bill_id: second, amount_cents: 1_000 }]
     );
 
-    let credits: Vec<ApplyCreditInput> = uses.iter().map(|u| ApplyCreditInput { credit_id: u.credit_id, document_id: u.bill_id, amount_cents: u.amount_cents, applied_date: d(10, 9) }).collect();
+    let credits: Vec<ApplyCreditInput> = uses.iter().map(|u| ApplyCreditInput { credit_id: u.credit_id, document_id: u.bill_id, amount_cents: Cents(u.amount_cents), applied_date: d(10, 9) }).collect();
     let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 9), amount_cents, reference: None, to_be_printed: false };
     // The first bill is paid off by the credit alone; the second needs 20.00 more.
-    let too_much = pay_bills_with_credits(&pool, vec![pay(second, 3_000)], credits.clone(), Vec::new(), d(10, 9)).await.unwrap_err();
+    let too_much = pay_bills_with_credits(&pool, vec![pay(second, Cents(3_000))], credits.clone(), Vec::new(), d(10, 9)).await.unwrap_err();
     assert!(too_much.starts_with("BILL_OVERPAYMENT"), "{too_much}");
-    assert_eq!(pay_bills_with_credits(&pool, vec![pay(second, 2_000), pay(other, 1_000)], credits, Vec::new(), d(10, 9)).await.unwrap(), 3);
+    assert_eq!(pay_bills_with_credits(&pool, vec![pay(second, Cents(2_000)), pay(other, Cents(1_000))], credits, Vec::new(), d(10, 9)).await.unwrap(), 3);
     let status: Vec<String> = sqlx::query_scalar("SELECT status FROM bills ORDER BY id").fetch_all(&pool).await.unwrap();
     assert_eq!(status, ["PAID", "PAID", "PAID"]);
     let left: i64 = sqlx::query_scalar("SELECT remaining_cents FROM v_vendor_credit_balances WHERE vendor_credit_id = ?1").bind(credit.id).fetch_one(&pool).await.unwrap();
@@ -321,9 +321,9 @@ async fn pay_bills_takes_early_payment_discounts_through_their_last_day() {
     assert!(pay_bills_plan(&pool, &[on_terms], d(10, 12)).await.unwrap().discounts.is_empty(), "the discount has ended");
 
     let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 11), amount_cents, reference: None, to_be_printed: false };
-    let late = pay_bills_with_credits(&pool, vec![pay(on_terms, 49_000)], Vec::new(), plan.discounts.clone(), d(10, 12)).await.unwrap_err();
+    let late = pay_bills_with_credits(&pool, vec![pay(on_terms, Cents(49_000))], Vec::new(), plan.discounts.clone(), d(10, 12)).await.unwrap_err();
     assert!(late.starts_with("BILL_NO_DISCOUNT"), "{late}");
-    assert_eq!(pay_bills_with_credits(&pool, vec![pay(on_terms, 49_000)], Vec::new(), plan.discounts, d(10, 11)).await.unwrap(), 1);
+    assert_eq!(pay_bills_with_credits(&pool, vec![pay(on_terms, Cents(49_000))], Vec::new(), plan.discounts, d(10, 11)).await.unwrap(), 1);
     let status: String = sqlx::query_scalar("SELECT status FROM bills WHERE id = ?1").bind(on_terms).fetch_one(&pool).await.unwrap();
     assert_eq!(status, "PAID");
     let (reference, total): (Option<String>, i64) = sqlx::query_as("SELECT reference, total_cents FROM vendor_credits").fetch_one(&pool).await.unwrap();

@@ -74,7 +74,7 @@ pub async fn bill_purchase_order(
     // The same checks as Enter Bills: approval rules, then the duplicate bill number, date and
     // retained-earnings warnings.
     let input = workflows::purchase_order_bill(&pool, id, bill_date, due_date, bill_number).await?;
-    crate::approvals::check_not_held(&pool, crate::approvals::Kind::Bill, &input.vendor_name, input.total_cents).await?;
+    crate::approvals::check_not_held(&pool, crate::approvals::Kind::Bill, &input.vendor_name, input.total_cents.get()).await?;
     guards::check(&pool, guards::bill(&input, None), confirmed.as_deref()).await?;
     let bill = workflows::post_purchase_order_bill(&pool, id, &input).await?;
     notify(&app);

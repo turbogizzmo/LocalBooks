@@ -16,6 +16,7 @@ use sqlx::SqlitePool;
 use crate::banking::{DepositInput, DepositItemRef, DepositOtherLine, TransferInput};
 use crate::expenses::{ExpenseInput, SplitLineInput};
 use crate::ledger::db_err;
+use crate::money::Cents;
 
 /// Which column of the register the amount was typed in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -128,7 +129,7 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
     if let Some((other, _, _)) = single.as_ref().filter(|(_, t, _)| t == "BANK") {
         let outflow = matches!(input.side, RegisterSide::Payment | RegisterSide::Charge);
         let (from, to) = if outflow { (input.account_id, *other) } else { (*other, input.account_id) };
-        let transfer = TransferInput { from_account_id: from, to_account_id: to, transfer_date: input.entry_date, amount_cents: input.lines[0].amount_cents, memo: memo.map(str::to_string) };
+        let transfer = TransferInput { from_account_id: from, to_account_id: to, transfer_date: input.entry_date, amount_cents: Cents(input.lines[0].amount_cents), memo: memo.map(str::to_string) };
         let id = crate::banking::post_transfer(pool, transfer).await?;
         let entry: Option<i64> = sqlx::query_scalar("SELECT journal_entry_id FROM transfers WHERE id = ?1").bind(id).fetch_one(pool).await.map_err(db_err)?;
         return Ok(RegisterEntryPosted {
@@ -188,7 +189,7 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
         let other_lines = input
             .lines
             .iter()
-            .map(|l| DepositOtherLine { account_id: l.account_id, amount_cents: l.amount_cents, memo: l.memo.clone(), class_id: l.class_id, customer_id, vendor_id })
+            .map(|l| DepositOtherLine { account_id: l.account_id, amount_cents: Cents(l.amount_cents), memo: l.memo.clone(), class_id: l.class_id, customer_id, vendor_id })
             .collect();
         let deposit = DepositInput { bank_account_id: input.account_id, deposit_date: input.entry_date, memo, items: Vec::new(), other_lines, cash_back: None, deductions: Vec::new() };
         let deposit_id = crate::banking::post_bank_deposit(pool, deposit).await?;
@@ -215,7 +216,7 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
         lines: input
             .lines
             .iter()
-            .map(|l| SplitLineInput { account_id: l.account_id, amount_cents: l.amount_cents, memo: l.memo.clone(), class_id: l.class_id, customer_id: l.customer_id, billable: None })
+            .map(|l| SplitLineInput { account_id: l.account_id, amount_cents: Cents(l.amount_cents), memo: l.memo.clone(), class_id: l.class_id, customer_id: l.customer_id, billable: None })
             .collect(),
         currency: None,
     };

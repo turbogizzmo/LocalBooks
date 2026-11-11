@@ -3,6 +3,7 @@ use crate::bank::suggest::Suggester;
 use crate::bank::{approve_many, list_pending, Approval};
 use crate::db::test_pool;
 use crate::expenses::{ExpenseInput, SplitLineInput};
+use crate::money::Cents;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -32,7 +33,7 @@ async fn check(pool: &SqlitePool, number: Option<&str>, date: &str, cents: i64) 
         check_number: number.map(Into::into),
         payment_method: None,
         memo: None,
-        lines: vec![SplitLineInput { account_id: rent, amount_cents: cents, memo: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![SplitLineInput { account_id: rent, amount_cents: Cents(cents), memo: None, class_id: None, customer_id: None, billable: None }],
         currency: None,
     };
     crate::expenses::post_expense(pool, input).await.unwrap().journal_entry_id.unwrap()
@@ -95,7 +96,7 @@ async fn two_that_agree_are_offered_not_matched_and_lines_entered_later_are_sugg
     let (later, _) = download(&pool, checking, "2026-03-10", "TRANSFER IN", 25_000).await;
     assert_eq!(pending(&pool).await.iter().find(|t| t.id == later).unwrap().suggested_match, None);
     let savings: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Reserve Savings', 'BANK') RETURNING id").fetch_one(&pool).await.unwrap();
-    crate::banking::post_transfer(&pool, crate::banking::TransferInput { from_account_id: savings, to_account_id: checking, transfer_date: day("2026-03-09"), amount_cents: 25_000, memo: None })
+    crate::banking::post_transfer(&pool, crate::banking::TransferInput { from_account_id: savings, to_account_id: checking, transfer_date: day("2026-03-09"), amount_cents: Cents(25_000), memo: None })
         .await
         .unwrap();
     let suggested = pending(&pool).await.into_iter().find(|t| t.id == later).unwrap().suggested_match.unwrap();

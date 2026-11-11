@@ -6,6 +6,7 @@ use regex::{Regex, RegexBuilder};
 use super::*;
 use crate::bank::{combine, learned_pattern, CategorySuggestion, RuleSet};
 use crate::db::test_pool;
+use crate::money::Cents;
 
 fn day(s: &str) -> NaiveDate {
     NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
@@ -195,7 +196,7 @@ async fn expenses_entered_directly_are_history_too() {
         check_number: None,
         payment_method: None,
         memo: Some("Canva Pro subscription".into()),
-        lines: vec![crate::expenses::SplitLineInput { account_id: software, amount_cents: 1_499, memo: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![crate::expenses::SplitLineInput { account_id: software, amount_cents: Cents(1_499), memo: None, class_id: None, customer_id: None, billable: None }],
         currency: None,
     };
     crate::expenses::post_expense(&pool, expense).await.unwrap();

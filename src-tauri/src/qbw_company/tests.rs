@@ -145,7 +145,13 @@ fn reads_the_ledger_of_a_real_file() {
     let started = std::time::Instant::now();
     let ledger = read_ledger(Path::new(&path)).unwrap();
     let q = &ledger.quality;
-    println!("read in {:.1}s; refined pages {}; recovered lines {}", started.elapsed().as_secs_f64(), q.refined_pages, q.recovered_lines);
+    println!(
+        "read in {:.1}s; refined pages {}; recovered lines {}; joined transactions {}",
+        started.elapsed().as_secs_f64(),
+        q.refined_pages,
+        q.recovered_lines,
+        q.joined_transactions
+    );
     println!(
         "accounts {} (stored balances matched {}/{}), transactions {} balanced, {} unbalanced; unreadable lines {}, rejected {}",
         ledger.accounts.len(),
@@ -184,8 +190,21 @@ fn reads_the_ledger_of_a_real_file() {
     if let (Some(first), Some(last)) = (ledger.transactions.first(), ledger.transactions.last()) {
         println!("dates {} .. {}", first.date, last.date);
     }
+    // LOCALBOOKS_QBW_ACCOUNT=<full name>: every transaction with a line on that account.
+    if let Ok(name) = std::env::var("LOCALBOOKS_QBW_ACCOUNT") {
+        let id = ledger.accounts.iter().find(|a| a.full_name == name).map(|a| a.id);
+        for t in ledger.transactions.iter().filter(|t| t.lines.iter().any(|l| Some(l.account_id) == id)) {
+            let lines: Vec<String> = t.lines.iter().map(|l| format!("{} {}", l.account_id, crate::ledger::format_cents(l.cents))).collect();
+            println!("  on {name}: {} {} {} [{}]", t.kind, t.id, t.date, lines.join(", "));
+        }
+    }
     for t in &ledger.unbalanced {
         println!("  unbalanced {} #{:?} {} {:?} off by {}", t.kind, t.doc_num, t.date, t.name, crate::ledger::format_cents(t.imbalance_cents()));
+        if std::env::var("LOCALBOOKS_QBW_LINES").is_ok() {
+            for l in &t.lines {
+                println!("      transaction {} account {} {}", t.id, l.account_id, crate::ledger::format_cents(l.cents));
+            }
+        }
     }
     let names: HashMap<i64, &str> = ledger.accounts.iter().map(|a| (a.id, a.full_name.as_str())).collect();
     let mut totals: HashMap<i64, i64> = HashMap::new();
@@ -494,4 +513,51 @@ fn item_groups_read_their_items_in_order() {
     let kit = &groups[0];
     assert_eq!((kit.name.as_str(), kit.print_items, kit.active), ("Door kit", true, true));
     assert_eq!(kit.members, [(20, 10_000), (21, 30_000), (22, 10_000)]);
+}
+
+/// A memorized transaction is a template kept for entering the same transaction again: marked on
+/// its lines or on its header, it posts nothing and is not read as a transaction.
+#[test]
+fn memorized_transactions_are_templates() {
+    let row = |memorized: Option<i64>| Row {
+        values: memorized.map(|m| ("is_memorized_transaction_bool".to_string(), Value::Int(m))).into_iter().collect(),
+    };
+    assert!(!memorized(&row(Some(0)), Some(&row(Some(0)))));
+    assert!(!memorized(&row(None), None));
+    assert!(memorized(&row(Some(1)), None), "marked on the line");
+    assert!(memorized(&row(Some(0)), Some(&row(Some(1)))), "marked on the header");
+}
+
+/// One movement kept as two halves on the same day (a payment with only its receivables line, a
+/// deposit with only its bank line) is read as one transaction under the named half. Halves that
+/// could pair with more than one other transaction are left alone.
+#[test]
+fn split_halves_of_one_movement_are_joined() {
+    let half = |id: i64, date: &str, name: Option<&str>, lines: Vec<SourceLine>| SourceTransaction {
+        name: name.map(String::from),
+        date: date.parse().unwrap(),
+        ..txn(id, lines)
+    };
+    let mut txns: BTreeMap<i64, SourceTransaction> = [
+        half(62, "2025-03-01", Some("Home office"), vec![line(4, 750_000)]),
+        half(77, "2025-03-01", None, vec![line(1, -750_000)]),
+        // Three halves of 100.00 on one day: no unique pair, so none is joined.
+        half(80, "2025-04-01", None, vec![line(1, -10_000)]),
+        half(81, "2025-04-01", None, vec![line(4, 10_000)]),
+        half(82, "2025-04-01", None, vec![line(4, 10_000)]),
+        // A transaction with two lines that lost a third is damaged, not a half.
+        half(70, "2025-06-01", Some("Damaged"), vec![line(4, 1_000), line(2, 1_000)]),
+        half(71, "2025-06-01", None, vec![line(1, -2_000)]),
+        // The same amounts on different days are not one movement.
+        half(90, "2025-05-01", None, vec![line(1, -5_000)]),
+        half(91, "2025-05-02", None, vec![line(4, 5_000)]),
+    ]
+    .into_iter()
+    .map(|t| (t.id, t))
+    .collect();
+    assert_eq!(join_split_halves(&mut txns), 1);
+    assert!(!txns.contains_key(&77), "the unnamed half goes into the named one");
+    assert_eq!((txns[&62].lines.len(), txns[&62].imbalance_cents()), (2, 0));
+    assert_eq!(txns[&62].memo.as_deref(), Some("Read together with transaction 77 of the file, which held the other half"));
+    assert_eq!(txns.values().filter(|t| t.imbalance_cents() != 0).count(), 7);
 }

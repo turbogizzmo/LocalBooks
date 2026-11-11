@@ -92,7 +92,7 @@ async fn receive(pool: &SqlitePool, invoice_id: i64, date: NaiveDate, amount_cen
 }
 
 async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, terms: u64, lines: Vec<(i64, i64, &str)>) -> (i64, i64) {
-    let total = lines.iter().map(|l| l.1).sum();
+    let total: i64 = lines.iter().map(|l| l.1).sum();
     let summary = crate::expenses::post_vendor_bill(
         pool,
         BillInput { form_lines: Vec::new(),
@@ -102,12 +102,12 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, te
             bill_date: date,
             due_date: date + chrono::Days::new(terms),
             memo: None,
-            total_cents: total,
+            total_cents: Cents(total),
             lines: lines
                 .into_iter()
                 .map(|(account_id, amount_cents, memo)| BillLineInput {
                     account_id,
-                    amount_cents,
+                    amount_cents: Cents(amount_cents),
                     memo: Some(memo.into()),
                     quantity_e4: None,
                     rate_cents: None,
@@ -125,7 +125,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, te
 }
 
 async fn pay_bill(pool: &SqlitePool, bill_id: i64, date: NaiveDate, amount_cents: i64, from: i64) {
-    crate::expenses::pay_vendor_bill(pool, BillPaymentInput { bill_id, payment_account_id: from, payment_date: date, amount_cents, reference: None, to_be_printed: false })
+    crate::expenses::pay_vendor_bill(pool, BillPaymentInput { bill_id, payment_account_id: from, payment_date: date, amount_cents: Cents(amount_cents), reference: None, to_be_printed: false })
         .await
         .unwrap_or_else(|e| panic!("payment of bill {bill_id} on {date}: {e}"));
 }
@@ -144,7 +144,7 @@ async fn expense(pool: &SqlitePool, kind: &str, payee: &str, from: i64, date: Na
             memo: None,
             lines: lines
                 .into_iter()
-                .map(|(account_id, amount_cents, memo)| SplitLineInput { account_id, amount_cents, memo: Some(memo.into()), class_id: None, customer_id: None, billable: None })
+                .map(|(account_id, amount_cents, memo)| SplitLineInput { account_id, amount_cents: Cents(amount_cents), memo: Some(memo.into()), class_id: None, customer_id: None, billable: None })
                 .collect(),
             currency: None,
         },
@@ -199,7 +199,7 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
     // Opening: the owner's capital and a bank loan; part of it parked in savings.
     journal(p, d(2025, 1, 2), "Owner investment", vec![JournalLine::debit(c.checking, 5_000_000), JournalLine::credit(c.owner_investment, 5_000_000)]).await;
     journal(p, d(2025, 1, 3), "Equipment loan proceeds", vec![JournalLine::debit(c.checking, 2_400_000), JournalLine::credit(c.loan, 2_400_000)]).await;
-    crate::banking::post_transfer(p, TransferInput { from_account_id: c.checking, to_account_id: c.savings, transfer_date: d(2025, 1, 6), amount_cents: 1_500_000, memo: Some("Reserve".into()) })
+    crate::banking::post_transfer(p, TransferInput { from_account_id: c.checking, to_account_id: c.savings, transfer_date: d(2025, 1, 6), amount_cents: Cents(1_500_000), memo: Some("Reserve".into()) })
         .await
         .expect("transfer to savings");
     expense(p, "CHECK", "Pacific Office Outfitters", c.checking, d(2025, 1, 8), Some("1001"), vec![(c.equipment, 1_875_000, "Workstations and plotter")]).await;
@@ -327,7 +327,7 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
         // Pay the card off from checking each month.
         let card_balance: i64 = sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1").bind(c.card).fetch_one(p).await.unwrap();
         if card_balance > 0 {
-            crate::banking::post_transfer(p, TransferInput { from_account_id: c.checking, to_account_id: c.card, transfer_date: d(2025, month, 26), amount_cents: card_balance, memo: Some("Card payment".into()) })
+            crate::banking::post_transfer(p, TransferInput { from_account_id: c.checking, to_account_id: c.card, transfer_date: d(2025, month, 26), amount_cents: Cents(card_balance), memo: Some("Card payment".into()) })
                 .await
                 .expect("card payment");
         }

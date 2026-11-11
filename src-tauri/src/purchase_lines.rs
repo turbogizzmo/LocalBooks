@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, Transaction};
 
 use crate::ledger::{db_err, mul_div_round, JournalLine, MAX_LINE_CENTS};
+use crate::money::Cents;
 
 /// A discount (taken off) or a charge (added on).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,7 +90,7 @@ pub struct PurchaseFormLineInput {
     pub percent_ppm: Option<i64>,
     /// A fixed amount (positive), when it is not a percent.
     #[serde(default)]
-    pub amount_cents: Option<i64>,
+    pub amount_cents: Option<Cents>,
     /// The account it posts to.
     pub account_id: i64,
     #[serde(default)]
@@ -132,7 +133,7 @@ pub fn lay_out(splits: &[i64], form: &[PurchaseFormLineInput], code: &str) -> Re
         }
         placed.push(after);
         let base = splits[after - 1];
-        let amount = match (line.percent_ppm, line.amount_cents) {
+        let amount = match (line.percent_ppm, line.amount_cents.map(Cents::get)) {
             (Some(ppm), None) => {
                 if !(1..=1_000_000).contains(&ppm) {
                     return Err(format!("{code}_FORM_LINE_PERCENT: a {what} is from 0.0001% to 100%"));
@@ -287,7 +288,7 @@ pub fn fit_carried(form: Vec<CarriedLine>, splits: &[i64]) -> Vec<PurchaseFormLi
         .filter_map(|c| {
             let Some(amount) = c.line.amount_cents.filter(|_| c.line.percent_ppm.is_none()) else { return Some(c.line) };
             let base = c.line.after_line.checked_sub(1).and_then(|i| splits.get(i));
-            let fits = c.line.kind == PurchaseLineKind::Charge || base.is_some_and(|b| amount <= *b);
+            let fits = c.line.kind == PurchaseLineKind::Charge || base.is_some_and(|b| amount <= Cents(*b));
             if !fits || placed.contains(&c.source) {
                 return None;
             }
@@ -307,7 +308,7 @@ pub fn inputs_of(views: &[PurchaseFormLineView]) -> Vec<PurchaseFormLineInput> {
             description: v.description.clone(),
             product_service_id: v.product_service_id,
             percent_ppm: v.percent_ppm,
-            amount_cents: if v.percent_ppm.is_some() { None } else { Some(v.amount_cents) },
+            amount_cents: if v.percent_ppm.is_some() { None } else { Some(Cents(v.amount_cents)) },
             account_id: v.account_id,
             class_id: v.class_id,
         })

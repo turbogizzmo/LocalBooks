@@ -83,8 +83,8 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, ac
             bill_date: date,
             due_date: date + chrono::Days::new(30),
             memo: None,
-            total_cents: cents,
-            lines: vec![BillLineInput { account_id, amount_cents: cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+            total_cents: Cents(cents),
+            lines: vec![BillLineInput { account_id, amount_cents: Cents(cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
         },
     )
     .await
@@ -93,7 +93,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, ac
 }
 
 async fn pay_bill(pool: &SqlitePool, bill_id: i64, bank: i64, date: NaiveDate, cents: i64) {
-    expenses::pay_vendor_bill(pool, BillPaymentInput { bill_id, payment_account_id: bank, payment_date: date, amount_cents: cents, reference: None, to_be_printed: false }).await.expect("pay a bill");
+    expenses::pay_vendor_bill(pool, BillPaymentInput { bill_id, payment_account_id: bank, payment_date: date, amount_cents: Cents(cents), reference: None, to_be_printed: false }).await.expect("pay a bill");
 }
 
 async fn expense(pool: &SqlitePool, kind: &str, payee: &str, paid_from: i64, date: NaiveDate, account_id: i64, cents: i64) {
@@ -108,7 +108,7 @@ async fn expense(pool: &SqlitePool, kind: &str, payee: &str, paid_from: i64, dat
             check_number: (kind == "CHECK").then(|| "1001".into()),
             payment_method: None,
             memo: None,
-            lines: vec![SplitLineInput { account_id, amount_cents: cents, memo: None, class_id: None, customer_id: None, billable: None }],
+            lines: vec![SplitLineInput { account_id, amount_cents: Cents(cents), memo: None, class_id: None, customer_id: None, billable: None }],
             currency: None,
         },
     )
@@ -172,7 +172,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     ledger::post_journal_entry(&pool, JournalEntry { id: None, date: d(2024, 1, 2), description: "Owner's investment".into(), lines: vec![JournalLine::debit(checking, 5_000_000), JournalLine::credit(equity, 5_000_000)], currency: None })
         .await
         .expect("opening balance");
-    crate::banking::post_transfer(&pool, crate::banking::TransferInput { from_account_id: checking, to_account_id: savings, transfer_date: d(2024, 1, 3), amount_cents: 1_000_000, memo: Some("Reserve".into()) })
+    crate::banking::post_transfer(&pool, crate::banking::TransferInput { from_account_id: checking, to_account_id: savings, transfer_date: d(2024, 1, 3), amount_cents: Cents(1_000_000), memo: Some("Reserve".into()) })
         .await
         .expect("transfer");
 
@@ -220,7 +220,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     )
     .await
     .expect("credit memo");
-    credits::apply_customer_credit(&pool, ApplyCreditInput { credit_id: credit.id, document_id: credited.id, amount_cents: 2_500, applied_date: d(2025, 5, 21) }).await.expect("apply the credit");
+    credits::apply_customer_credit(&pool, ApplyCreditInput { credit_id: credit.id, document_id: credited.id, amount_cents: Cents(2_500), applied_date: d(2025, 5, 21) }).await.expect("apply the credit");
 
     // Vendors: 1099 contractors with encrypted tax IDs, bills paid, part paid and open.
     vendor_tax_id(&pool, "Pat Contractor", "123-45-6789", access).await;

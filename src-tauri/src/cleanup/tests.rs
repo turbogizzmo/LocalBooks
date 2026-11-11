@@ -69,7 +69,7 @@ async fn unapplied_credits_are_listed_beside_open_documents_and_applied_oldest_f
             reference: Some("RMA 7".into()),
             credit_date: d("2026-02-10"),
             memo: None,
-            lines: vec![crate::credits::VendorCreditLineInput { account_id: expense, amount_cents: 2_500, memo: None, class_id: None, customer_id: None }],
+            lines: vec![crate::credits::VendorCreditLineInput { account_id: expense, amount_cents: Cents(2_500), memo: None, class_id: None, customer_id: None }],
         },
     )
     .await
@@ -158,8 +158,8 @@ async fn double_deposit(pool: &SqlitePool) -> (i64, i64, i64) {
         memo: Some("Bank feed: ACME CHECK 1001".into()),
         items: vec![],
         other_lines: vec![
-            crate::banking::DepositOtherLine { account_id: services, amount_cents: 12_000, memo: None, class_id: None, customer_id: None, vendor_id: None },
-            crate::banking::DepositOtherLine { account_id: services, amount_cents: 500, memo: Some("Interest".into()), class_id: None, customer_id: None, vendor_id: None },
+            crate::banking::DepositOtherLine { account_id: services, amount_cents: Cents(12_000), memo: None, class_id: None, customer_id: None, vendor_id: None },
+            crate::banking::DepositOtherLine { account_id: services, amount_cents: Cents(500), memo: Some("Interest".into()), class_id: None, customer_id: None, vendor_id: None },
         ],
         cash_back: None,
         deductions: Vec::new(),

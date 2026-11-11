@@ -190,3 +190,31 @@ fn rows_read_when_the_catalog_lost_a_column() {
     fill_missing_columns(&mut zero);
     assert!(zero.iter().any(|c| c.id == 2 && c.domain == MISSING_DOMAIN));
 }
+
+
+/// A table that lost more column definitions than each row can afford to guess learns its layout
+/// once: the search over every guess finds the reading that fits, and the other rows of the table
+/// read with that layout directly.
+#[test]
+fn a_table_that_lost_many_columns_learns_its_layout_once() {
+    // Columns 2 to 5 lost: a nullable id, a 2-byte code, a flag and a never-null id, in that order.
+    let mut cols = vec![column(1, "target_id", 2, false, 4), column(6, "account_id", 2, true, 4), column(7, "amount_amt", 3, true, 20)];
+    fill_missing_columns(&mut cols);
+    assert_eq!(cols.iter().filter(|c| c.domain == MISSING_DOMAIN).count(), 4);
+    let amount: &[u8] = &[2, 0x40, 20, 7];
+    let row = |target: u32, account: u32| {
+        // Nullable columns in order: column 2, column 3, account, amount; all present.
+        synthetic_row(0b1111_0000, &[&target.to_le_bytes(), &9u32.to_le_bytes(), &3u16.to_le_bytes(), &[1], &5u32.to_le_bytes(), &account.to_le_bytes(), amount])
+    };
+    let first = row(41_997, 30);
+    assert!(walk_row(&first, &cols).is_none(), "four lost columns are more than each row guesses");
+    let (values, layout) = guess_layout(&first, &cols, 4).expect("the search finds the layout");
+    let first = Row { values };
+    assert_eq!((first.get("account_id"), first.get("amount_amt").as_cents()), (&Value::Int(30), Some(72_000)));
+    let second = Row { values: walk_dropping(&row(41_998, 31), &layout).expect("the next row reads with the learned layout") };
+    assert_eq!((second.get("target_id"), second.get("account_id")), (&Value::Int(41_998), &Value::Int(31)));
+    // Seven gaps are more than a catalog can lose and still be guessed: no placeholders.
+    let mut damaged = vec![column(1, "target_id", 2, false, 4), column(9, "account_id", 2, true, 4)];
+    fill_missing_columns(&mut damaged);
+    assert_eq!(damaged.len(), 2);
+}

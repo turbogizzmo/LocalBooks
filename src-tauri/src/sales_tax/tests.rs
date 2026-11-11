@@ -200,7 +200,7 @@ async fn cash_basis_counts_a_credit_applied_to_an_invoice_as_settling_it() {
     .unwrap();
     assert_eq!(memo.total_cents, inv.total_cents);
     let aug = |day| NaiveDate::from_ymd_opt(2026, 8, day).unwrap();
-    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: memo.id, document_id: inv.id, amount_cents: memo.total_cents, applied_date: aug(3) }).await.unwrap();
+    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: memo.id, document_id: inv.id, amount_cents: Cents(memo.total_cents), applied_date: aug(3) }).await.unwrap();
 
     let tax = |r: &TaxLiabilityReport| r.tax_collected_cents;
     assert_eq!(tax(&tax_liability(&pool, d(1), d(31)).await.unwrap()), -1_000, "July: the memo on its date");
