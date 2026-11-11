@@ -333,7 +333,7 @@ export const topics = [
   {
     id: 'whats-new', area: 'company', views: [],
     title: 'What’s new in Tillhouse',
-    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently the new name (LocalBooks is now Tillhouse, with your files and settings unchanged), whole-file encryption and two-step sign-in (both optional), the Invoice # box, billable costs on the invoice, purchase orders you can edit and email, sales tax adjustments and editing memorized transactions.',
+    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently the new name (LocalBooks is now Tillhouse, with your files and settings unchanged), inventory quantities from a QuickBooks Desktop file, Touch ID or Windows Hello for two-step sign-in, backup safety that knows where your copies are, and F6 to move around by keyboard.',
     keywords: 'new whats new what’s new release notes changes changelog latest version update features localbooks rename renamed name tillhouse',
     go: null,
     guide: 'whats-new',
