@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::ledger::{convert_lines, db_err, format_cents, post_entry_in_tx, rollback, EntrySource, ForeignCurrency, JournalEntry, JournalLine, MAX_LINE_CENTS};
+use crate::money::Cents;
 use crate::sales::{create_party, find_or_create_named, Party, PartyView};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -63,7 +64,7 @@ pub struct BillPaymentInput {
     pub bill_id: i64,
     pub payment_account_id: i64,
     pub payment_date: NaiveDate,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub reference: Option<String>,
     /// Pay Bills' "Print later": the check waits in File › Print Forms › Checks and gets its number
     /// (`reference`, which must be empty) when it prints.
@@ -486,7 +487,8 @@ pub async fn next_check_number(pool: &SqlitePool, account_id: i64) -> Result<Str
 
 /// Records one bill payment of `kind` (`STANDARD`, or `ACH` from an ACH file) and posts it. Returns its id.
 pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: &BillPaymentInput, kind: &str) -> Result<i64, String> {
-    if input.amount_cents <= 0 {
+    let amount = input.amount_cents.get();
+    if amount <= 0 {
         return Err("BILL_BAD_AMOUNT: payment amount must be greater than zero".into());
     }
     let bill: Option<(String, i64, i64, String, String, bool)> = sqlx::query_as(
@@ -506,10 +508,10 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
         return Err(format!("BILL_NOT_OPEN: this bill from {vendor} is {status}; only open bills can be paid"));
     }
     let open_balance = total - paid;
-    if input.amount_cents > open_balance {
+    if amount > open_balance {
         return Err(format!(
             "BILL_OVERPAYMENT: payment of {} exceeds the open balance of {}",
-            format_cents(input.amount_cents),
+            format_cents(amount),
             format_cents(open_balance)
         ));
     }
@@ -547,7 +549,7 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
         id: None,
         date: input.payment_date,
         description: format!("Bill Payment - {vendor}"),
-        lines: vec![JournalLine::debit(ap_account, input.amount_cents), JournalLine::credit(input.payment_account_id, input.amount_cents)],
+        lines: vec![JournalLine::debit(ap_account, amount), JournalLine::credit(input.payment_account_id, amount)],
         currency: None,
     };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::BillPayment(payment_id)).await?;
@@ -559,7 +561,7 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
         .await
         .map_err(db_err)?;
 
-    let new_paid = paid + input.amount_cents;
+    let new_paid = paid + amount;
     sqlx::query("UPDATE bills SET amount_paid_cents = ?1, status = ?2 WHERE id = ?3")
         .bind(new_paid)
         .bind(if new_paid == total { "PAID" } else { "PARTIAL" })

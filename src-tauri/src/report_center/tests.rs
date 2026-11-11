@@ -114,7 +114,7 @@ async fn missing_checks_finds_gaps_and_duplicates_and_keeps_voids() {
         async move { crate::expenses::post_vendor_bill(&pool, input).await.unwrap().id }
     };
     let (b1, b2, b3) = (bill("A").await, bill("B").await, bill("C").await);
-    let pay = |bill_id, reference: &str| crate::expenses::BillPaymentInput { bill_id, payment_account_id: checking, payment_date: d(1, 20), amount_cents: 5_000, reference: Some(reference.into()), to_be_printed: false };
+    let pay = |bill_id, reference: &str| crate::expenses::BillPaymentInput { bill_id, payment_account_id: checking, payment_date: d(1, 20), amount_cents: Cents(5_000), reference: Some(reference.into()), to_be_printed: false };
     crate::expenses::pay_vendor_bills(&pool, vec![pay(b1, "1010"), pay(b2, "1010")]).await.unwrap();
     crate::expenses::pay_vendor_bill(&pool, pay(b3, "EFT 88")).await.unwrap();
     // Checks from another account are not listed.

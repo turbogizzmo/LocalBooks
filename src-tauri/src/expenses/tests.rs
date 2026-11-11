@@ -36,7 +36,7 @@ fn bill(vendor: &str, lines: Vec<(i64, i64)>) -> BillInput {
 }
 
 fn pay(bill_id: i64, account: i64, cents: i64) -> BillPaymentInput {
-    BillPaymentInput { bill_id, payment_account_id: account, payment_date: d(10), amount_cents: cents, reference: Some("1001".into()), to_be_printed: false }
+    BillPaymentInput { bill_id, payment_account_id: account, payment_date: d(10), amount_cents: Cents(cents), reference: Some("1001".into()), to_be_printed: false }
 }
 
 #[tokio::test]

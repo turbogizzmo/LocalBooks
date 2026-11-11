@@ -23,6 +23,7 @@ use sqlx::{SqliteConnection, SqlitePool};
 use crate::crypto::{self, DataKey};
 use crate::expenses::BillPaymentInput;
 use crate::ledger::{db_err, rollback};
+use crate::money::Cents;
 use crate::nacha::{self, AccountType, SecCode};
 use crate::tax_ids::{mask, Access};
 
@@ -558,7 +559,7 @@ async fn write_ach_payments(tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>, i
                 bill_id: bill.bill_id,
                 payment_account_id: input.payment_account_id,
                 payment_date: input.payment_date,
-                amount_cents: bill.amount_cents,
+                amount_cents: Cents(bill.amount_cents),
                 reference: Some(format!("ACH {trace}")),
                 to_be_printed: false,
             };

@@ -479,7 +479,7 @@ async fn a_bill_payment_prints_and_emails_its_stub_with_every_bill_on_the_check(
         bill_id,
         payment_account_id: checking,
         payment_date: NaiveDate::from_ymd_opt(2026, 10, 15).unwrap(),
-        amount_cents: cents,
+        amount_cents: Cents(cents),
         reference: Some(check.into()),
         to_be_printed: false,
     };

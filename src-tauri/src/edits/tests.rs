@@ -189,7 +189,7 @@ async fn editing_a_part_paid_bill_keeps_its_payment_and_vendor_credit() {
         .unwrap()
     };
     let original = crate::expenses::post_vendor_bill(&pool, bill("Landlord", 200_000)).await.unwrap().id;
-    crate::expenses::pay_vendor_bill(&pool, crate::expenses::BillPaymentInput { bill_id: original, payment_account_id: checking, payment_date: date(3), amount_cents: 50_000, reference: None, to_be_printed: false }).await.unwrap();
+    crate::expenses::pay_vendor_bill(&pool, crate::expenses::BillPaymentInput { bill_id: original, payment_account_id: checking, payment_date: date(3), amount_cents: Cents(50_000), reference: None, to_be_printed: false }).await.unwrap();
     let credit: crate::credits::VendorCreditInput = serde_json::from_value(serde_json::json!({ "vendorName": "Landlord", "reference": "CR-1", "creditDate": "2026-06-04", "memo": null,
         "lines": [{ "accountId": rent, "amountCents": 10_000, "memo": null }] })).unwrap();
     let credit = crate::credits::create_vendor_credit(&pool, credit).await.unwrap().id;
@@ -264,7 +264,7 @@ async fn a_bill_paid_with_auto_applied_credits_and_discount_keeps_them_when_edit
     let plan = pay_bills_plan(&pool, &[original], date(5)).await.unwrap();
     assert_eq!((plan.discounts.len(), plan.credits.len()), (1, 1), "{plan:?}");
     let credits = plan.credits.iter().map(|u| crate::credits::ApplyCreditInput { credit_id: u.credit_id, document_id: u.bill_id, amount_cents: u.amount_cents, applied_date: date(5) }).collect();
-    let pay = crate::expenses::BillPaymentInput { bill_id: original, payment_account_id: checking, payment_date: date(5), amount_cents: 20_000, reference: None, to_be_printed: false };
+    let pay = crate::expenses::BillPaymentInput { bill_id: original, payment_account_id: checking, payment_date: date(5), amount_cents: Cents(20_000), reference: None, to_be_printed: false };
     pay_bills_with_credits(&pool, vec![pay], credits, plan.discounts, date(5)).await.unwrap();
     // 200.00 paid, 50.00 vendor credit and a 10.00 discount (2% of 500.00).
     assert_eq!(control_and_aging(&pool, true).await, (24_000, 24_000));

@@ -93,7 +93,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, ac
 }
 
 async fn pay_bill(pool: &SqlitePool, bill_id: i64, bank: i64, date: NaiveDate, cents: i64) {
-    expenses::pay_vendor_bill(pool, BillPaymentInput { bill_id, payment_account_id: bank, payment_date: date, amount_cents: cents, reference: None, to_be_printed: false }).await.expect("pay a bill");
+    expenses::pay_vendor_bill(pool, BillPaymentInput { bill_id, payment_account_id: bank, payment_date: date, amount_cents: Cents(cents), reference: None, to_be_printed: false }).await.expect("pay a bill");
 }
 
 async fn expense(pool: &SqlitePool, kind: &str, payee: &str, paid_from: i64, date: NaiveDate, account_id: i64, cents: i64) {

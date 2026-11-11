@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::ledger::{db_err, format_cents, rollback, EntrySource, JournalEntry, JournalLine, DISPLAY_SOURCE_TYPE};
+use crate::money::Cents;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -74,7 +75,7 @@ pub enum ChargeKind {
 #[serde(rename_all = "camelCase")]
 pub struct ReconcileCharge {
     pub kind: ChargeKind,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub date: NaiveDate,
     pub account_id: i64,
     #[serde(default)]
@@ -271,7 +272,7 @@ async fn post_charge(
         ChargeKind::ServiceCharge => "Service charge",
         ChargeKind::InterestEarned => "Interest earned",
     };
-    if charge.amount_cents <= 0 {
+    if !charge.amount_cents.is_positive() {
         return Err(format!("REC_CHARGE_AMOUNT: the {} must be more than zero", label.to_lowercase()));
     }
     if charge.date > statement_end_date {
@@ -280,7 +281,7 @@ async fn post_charge(
     if charge.account_id == account_id {
         return Err(format!("REC_CHARGE_ACCOUNT: choose an account other than the one being reconciled for the {}", label.to_lowercase()));
     }
-    let amount = charge.amount_cents;
+    let amount = charge.amount_cents.get();
     // A charge lowers what an asset account holds (credit) and raises what a card owes (also a
     // credit); interest is the other way round.
     let (reconciled, other) = match charge.kind {
