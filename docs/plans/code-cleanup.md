@@ -72,8 +72,10 @@ Each step is re-measured just before it opens, since feature PRs will have added
 `PaymentInput.amount_cents` and `discount_cents`). Each input is read once with `.get()` where it
 enters the ledger code; the invoice total and the memorized-invoice summary now use checked
 arithmetic. Most of the diff is call sites that build these structs, rewritten from the compiler's
-error spans. Next: sales receipts, estimates and credits (`sales`, `estimates`, `credits`,
-`item_types`).
+error spans. Stage 2b (#382): the sales receipt and estimate inputs (`SalesLineInput.rate_cents`,
+`SalesReceiptInput.discount_cents`, `EstimateInput.discount_cents`), the same way; the receipt and
+estimate totals now use checked arithmetic. Next: `ProductInput.rate_cents` and
+`FormLineInput.amount_cents`, then the credits inputs.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:

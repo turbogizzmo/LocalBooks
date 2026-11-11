@@ -35,7 +35,7 @@ async fn shop() -> Shop {
 fn line(s: &Shop, product: i64, qty: i64, rate: i64) -> SalesOrderLineInput {
     SalesOrderLineInput {
         id: None,
-        line: SalesLineInput { product_service_id: Some(product), description: "ordered".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: s.sales, class_id: None, is_taxable: false, service_date: None },
+        line: SalesLineInput { product_service_id: Some(product), description: "ordered".into(), quantity_e4: qty * 10_000, rate_cents: Cents(rate), income_account_id: s.sales, class_id: None, is_taxable: false, service_date: None },
     }
 }
 
@@ -267,9 +267,9 @@ async fn an_estimate_becomes_an_order_once_and_is_then_invoiced_through_it() {
             estimate_date: d(1),
             expiration_date: None,
             memo: Some("Spring order".into()),
-            lines: vec![est_line(s.widget, 4, 2_500), est_line(s.service, 1, 10_000)],
+            lines: vec![est_line(s.widget, 4, Cents(2_500)), est_line(s.service, 1, Cents(10_000))],
             tax_rate_id: None,
-            discount_cents: 1_000,
+            discount_cents: Cents(1_000),
             details: Default::default(),
         },
     )
