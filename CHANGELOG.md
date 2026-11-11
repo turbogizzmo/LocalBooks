@@ -6,6 +6,14 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Backup safety knows where your copies are.** A copy off this computer now counts only when it
+  is really on another drive, a network share or a synced folder: an offsite backup whose folder
+  is on the same disk as your books no longer silences the reminder, and Backup safety tells you
+  so. The screen shows where the last copy went and which backup was last tested. Test restore
+  also upgrades a throwaway copy of a backup from an older version, so you know a restore of it
+  would work. The reminder still comes after 30 days, which you can change in Preferences ›
+  Reminders.
+
 - **More accurate company-file imports.** Memorized transactions (templates) are no longer
   imported as real ones, which doubled some balances. Files whose description of a line table is
   missing several columns now read those lines, and a payment and deposit that a file keeps as two

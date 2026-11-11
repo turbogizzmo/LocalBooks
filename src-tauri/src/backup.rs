@@ -256,6 +256,47 @@ fn stamp() -> String {
     Local::now().format("%Y%m%d-%H%M%S").to_string()
 }
 
+/// Copies `source` to `staged` and brings the copy to this version's schema; nothing is left at
+/// `staged` when that fails.
+async fn stage_upgraded(source: &Path, staged: &Path) -> Result<(), String> {
+    let _ = std::fs::remove_file(staged);
+    let source_pool = open_read_only(source).await?;
+    // The snapshot code keeps an encrypted backup encrypted, key header and all, and checks the copy.
+    let copied = snapshot(&source_pool, source, staged).await;
+    db::close_pool(&source_pool).await;
+    copied.map_err(|e| format!("RESTORE_COPY: {e}"))?;
+    match db::open(staged).await {
+        Ok(pool) => {
+            db::close_pool(&pool).await;
+            Ok(())
+        }
+        Err(e) => {
+            remove_with_sidecars(staged);
+            Err(format!("RESTORE_UPGRADE: the backup could not be upgraded to this version ({e})"))
+        }
+    }
+}
+
+fn remove_with_sidecars(path: &Path) {
+    let _ = std::fs::remove_file(path);
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let mut side = path.as_os_str().to_owned();
+        side.push(suffix);
+        let _ = std::fs::remove_file(PathBuf::from(side));
+    }
+}
+
+/// The upgrade step of a restore, rehearsed for a test restore (gap R8): a copy of `source` is
+/// made in `scratch`, upgraded to this version's schema as a restore would, and deleted. The open
+/// books are not touched.
+pub async fn rehearse_upgrade(source: &Path, scratch: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(scratch).map_err(|e| format!("BACKUP_DIR: cannot create {}: {e}", scratch.display()))?;
+    let staged = scratch.join(format!(".test-restore-{}.db", std::process::id()));
+    let result = stage_upgraded(source, &staged).await;
+    remove_with_sidecars(&staged);
+    result
+}
+
 /// Replaces the live company file with a verified, upgraded copy of `source`.
 pub async fn restore(db: &Db, source: &Path) -> Result<RestoreResult, String> {
     // A plain backup over encrypted books would quietly turn encryption off (gap R1).
@@ -273,20 +314,7 @@ pub async fn restore(db: &Db, source: &Path) -> Result<RestoreResult, String> {
 
     // 2. Copy the backup off to the side and bring it to the current schema there.
     let staged = dir.join(format!(".restore-staging-{}.db", std::process::id()));
-    let _ = std::fs::remove_file(&staged);
-    let source_pool = open_read_only(source).await?;
-    // The snapshot code keeps an encrypted backup encrypted, key header and all, and checks the copy.
-    let copied = snapshot(&source_pool, source, &staged).await;
-    db::close_pool(&source_pool).await;
-    copied.map_err(|e| format!("RESTORE_COPY: {e}"))?;
-    let upgraded = db::open(&staged).await;
-    match upgraded {
-        Ok(pool) => db::close_pool(&pool).await,
-        Err(e) => {
-            let _ = std::fs::remove_file(&staged);
-            return Err(format!("RESTORE_UPGRADE: the backup could not be upgraded to this version ({e})"));
-        }
-    }
+    stage_upgraded(source, &staged).await?;
 
     // 3. Swap it in under the database write lock.
     db.swap_in(&staged, &safety_path).await?;
