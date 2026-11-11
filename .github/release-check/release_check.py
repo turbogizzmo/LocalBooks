@@ -653,13 +653,19 @@ def upgrade_windows(args, old, new):
         run_new_app(args, exe, "windows-nsis")
 
 
+def rpm_in(root):
+    """rpm acting on the scratch root only. Ubuntu's rpm keeps its database under $HOME unless told
+    otherwise (and sudo changes $HOME), so every call names the same database inside the root."""
+    return ["sudo", "rpm", "--root", str(root), "--dbpath", "/var/lib/rpm"]
+
+
 def upgrade_linux(args, old, new):
     data = [Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / new["identifier"], Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / new["identifier"]]
     kept = snapshot(data)
 
     def status(package, root=None):
         if root:
-            return subprocess.run(["rpm", "--root", str(root), "-q", package], capture_output=True, text=True).returncode == 0
+            return subprocess.run([*rpm_in(root), "-q", package], capture_output=True, text=True).returncode == 0
         out = subprocess.run(["dpkg-query", "-W", "-f=${Status}", package], capture_output=True, text=True)
         return out.returncode == 0 and out.stdout.strip() == "install ok installed"
 
@@ -691,17 +697,17 @@ def upgrade_linux(args, old, new):
     root = Path(args.work) / "rpm-root"
     shutil.rmtree(root, ignore_errors=True)
     root.mkdir(parents=True)
-    subprocess.run(["sudo", "rpm", "--root", str(root), "--initdb"], check=True)
+    subprocess.run([*rpm_in(root), "--initdb"], check=True)
     rpm_flags = ["--nodeps", "--noscripts", "--nosignature"]
-    subprocess.run(["sudo", "rpm", "--root", str(root), "-i", *rpm_flags, str(only(args.previous_dir, ".rpm").resolve())], check=True)
-    expect(rows, f"{old['package']} ({args.previous}) installed", status(old["package"], root), "rpm -i")
+    installed = subprocess.run([*rpm_in(root), "-i", *rpm_flags, str(only(args.previous_dir, ".rpm").resolve())], capture_output=True, text=True)
+    expect(rows, f"{old['package']} ({args.previous}) installed", installed.returncode == 0 and status(old["package"], root), f"rpm -i: {(installed.stderr or installed.stdout).strip()[-300:].replace(chr(10), ' ') or 'ok'}")
     rpm = only(args.release_dir, ".rpm")
-    upgraded = subprocess.run(["sudo", "rpm", "--root", str(root), "-U", *rpm_flags, str(rpm.resolve())], capture_output=True, text=True)
+    upgraded = subprocess.run([*rpm_in(root), "-U", *rpm_flags, str(rpm.resolve())], capture_output=True, text=True)
     expect(rows, f"`rpm -U {rpm.name}` over it", upgraded.returncode == 0, (upgraded.stderr or upgraded.stdout).strip()[-300:].replace("\n", " ") or "ok")
     expect(rows, f"{new['package']} installed", status(new["package"], root), "rpm -q")
     if old["package"] != new["package"]:
         expect(rows, f"{old['package']} removed (Obsoletes)", not status(old["package"], root), "rpm -q", f"{old['package']} is still installed after rpm -U {rpm.name}")
-    listed = subprocess.run(["rpm", "--root", str(root), "-ql", new["package"]], capture_output=True, text=True).stdout.splitlines()
+    listed = subprocess.run([*rpm_in(root), "-ql", new["package"]], capture_output=True, text=True).stdout.splitlines()
     rpm_exe = binary([str(root) + f for f in listed])
     expect(rows, "Executable", bool(rpm_exe), str(rpm_exe))
     report(rows, f"Installer upgrade: {args.previous} → this release (Linux, .rpm)")
