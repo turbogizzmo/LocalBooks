@@ -77,6 +77,17 @@ export const config = {
     await waitForPort(DRIVER_PORT);
   },
 
+  // TEMPORARY (#347 Linux hang): which WebDriver calls return right after launch.
+  async before() {
+    const t0 = Date.now();
+    const log = (what, value) => console.log(`[e2e-debug] +${Date.now() - t0} ms ${what}: ${JSON.stringify(value)}`);
+    log('title', await browser.getTitle().catch((e) => `ERR ${e.message}`));
+    log('url', await browser.getUrl().catch((e) => `ERR ${e.message}`));
+    log('readyState', await browser.execute(() => [document.readyState, location.href, document.querySelectorAll('h1').length]).catch((e) => `ERR ${e.message}`));
+    log('find h1 (xpath)', await browser.findElements('xpath', '//h1').then((r) => r.length).catch((e) => `ERR ${e.message}`));
+    log('find [data-opening] (css)', await browser.findElements('css selector', '[data-opening]').then((r) => r.length).catch((e) => `ERR ${e.message}`));
+  },
+
   async afterTest(test, _context, { passed }) {
     if (passed) return;
     fs.mkdirSync(SCREENSHOTS, { recursive: true });
