@@ -86,7 +86,8 @@ fn terms(name: Option<String>, days: Option<i64>) -> String {
 pub async fn lists_iif(pool: &SqlitePool) -> Result<String, String> {
     let mut out = String::new();
 
-    let accounts: Vec<(String, String, Option<String>, Option<String>, bool)> = sqlx::query_as(
+    type AccountRow = (String, String, Option<String>, Option<String>, bool);
+    let accounts: Vec<AccountRow> = sqlx::query_as(
         "SELECT v.full_name, v.account_type, v.description, v.account_number, v.is_active
          FROM v_chart_of_accounts v JOIN chart_of_accounts c ON c.id = v.id
          WHERE c.merged_into_id IS NULL ORDER BY v.full_name COLLATE NOCASE",
@@ -145,7 +146,8 @@ pub async fn lists_iif(pool: &SqlitePool) -> Result<String, String> {
         row(&mut out, &cells);
     }
 
-    let items: Vec<(String, Option<String>, Option<String>, i64, Option<i64>, String, bool, bool, bool)> = sqlx::query_as(
+    type ItemRow = (String, Option<String>, Option<String>, i64, Option<i64>, String, bool, bool, bool);
+    let items: Vec<ItemRow> = sqlx::query_as(
         "SELECT p.name, p.description, a.full_name, p.rate_cents, p.percent_ppm, p.item_type, p.is_taxable, p.is_active,
                 EXISTS (SELECT 1 FROM inventory_items i WHERE i.product_id = p.id)
          FROM products_services p LEFT JOIN v_chart_of_accounts a ON a.id = p.income_account_id
@@ -190,7 +192,8 @@ pub async fn lists_iif(pool: &SqlitePool) -> Result<String, String> {
 
 /// Every customer's and vendor's name and address as tab-separated text with a header row.
 pub async fn addresses_text(pool: &SqlitePool) -> Result<String, String> {
-    let rows: Vec<(String, String, Option<String>, Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
+    type PartyRow = (String, String, Option<String>, Option<String>, Option<String>, Option<String>);
+    let rows: Vec<PartyRow> = sqlx::query_as(
         "SELECT 'Customer', name, company_name, billing_address, phone, email FROM customers WHERE merged_into_id IS NULL AND is_active = 1
          UNION ALL
          SELECT 'Vendor', name, company_name, address, phone, email FROM vendors WHERE merged_into_id IS NULL AND is_active = 1

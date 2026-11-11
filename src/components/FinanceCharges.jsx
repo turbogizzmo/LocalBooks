@@ -92,7 +92,7 @@ export default function FinanceCharges({ accounts, navigate }) {
       {preview.error && <Notice kind="error" text={preview.error} />}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {settings && !settings.incomeAccountId && (
-        <Notice kind="info" text="Choose the income account for finance charges, and an annual rate, in Settings › Finance charges before assessing." />
+        <Notice kind="info" text="Choose the income account for finance charges, and an annual rate, in Settings › Preferences Console › Finance Charge before assessing." />
       )}
 
       {data && customers.length === 0 && (

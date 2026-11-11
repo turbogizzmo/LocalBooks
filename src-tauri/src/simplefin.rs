@@ -653,7 +653,8 @@ impl SimpleFin {
                 .fetch_one(pool)
                 .await
                 .map_err(db_err)?;
-        let accounts: Vec<(i64, String, Option<String>, String, Option<i64>, Option<String>, Option<i64>, Option<String>, Option<String>)> = sqlx::query_as(
+        type AccountRow = (i64, String, Option<String>, String, Option<i64>, Option<String>, Option<i64>, Option<String>, Option<String>);
+        let accounts: Vec<AccountRow> = sqlx::query_as(
             "SELECT id, name, institution, currency, balance_cents, balance_date, bank_account_id, sync_from, last_synced_at
              FROM simplefin_accounts WHERE connection_id = ?1 ORDER BY institution, name, id",
         )

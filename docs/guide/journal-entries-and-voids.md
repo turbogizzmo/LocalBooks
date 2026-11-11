@@ -19,6 +19,12 @@ to see only them. **Reports › Accountant & Taxes › Adjusting Journal Entries
 lines (see [Accountant & Taxes reports](reports.md#adjusting-journal-entries)). Editing an entry
 keeps its mark unless you untick it.
 
+**Edit…** and **Duplicate** in a row's menu are offered only for entries typed in Make General
+Journal Entries. Other screens also post journal entries: customer refunds and write-offs, vendor
+refunds, bounced checks, sales tax payments, class reclassifications, item receipts and currency
+revaluations. Those are changed or voided from the screen that made them (their row offers only
+**Void**), and the **Manual journal entries** filter leaves them out.
+
 ## Undo a transaction (void)
 
 Posted transactions are never deleted or edited. Voiding posts an exact reversing entry instead, so
@@ -58,3 +64,42 @@ Transactions**. Combine any of:
 The list shows one row per transaction with how many match and their total. Click a column heading
 to sort and a row to open the transaction. The first 500 matches are listed, newest first; narrow
 the filters to see older ones.
+
+## Reclassify transactions
+
+Use **Reclassify Transactions** to move income and expense lines that are already posted to
+another class, many at once: for example, when a month of expenses went to the wrong department.
+It changes classes only. To move an amount to another account, post a journal entry (see [Post a
+manual journal entry](#post-a-manual-journal-entry)).
+
+1. Go to **Accounting › Reclassify Transactions** (or **Company › Reclassify Transactions…**).
+2. Narrow the list:
+   - **From** and **To**: the transaction dates. The default is this year to date.
+   - **Account**: one income or expense account, or **All income and expense accounts** (the
+     default).
+   - **Current class**: **Any class** (the default), one class (its subclasses are included), or
+     **No class** for lines that have none.
+3. The list shows each matching line with its **Date**, **Type**, **No.**, **Account**, **Memo**,
+   current **Class** and **Amount** (income and expenses both as positive amounts). Tick the lines
+   to move, or tick the box in the heading to tick them all. Clicking a row ticks it too.
+4. In **Move ticked lines to**, choose the new class, or **—** for no class. Only active classes
+   are offered; **＋ Add new class…** adds one.
+5. Click **Reclassify**.
+
+Posted lines are never edited. Instead, LocalBooks posts a reclassifying journal entry for each
+date among the ticked lines, with the memo *Reclassify to* and the class name. For each line it
+takes the amount out of the old class and puts it into the new one, on the same account, so
+account balances and totals don't change; only reports by class do. The list then shows the lines
+in their new class, and you can move them again later. Lines already in the chosen class are
+skipped.
+
+To undo a move, void its reclassifying entry in **Accounting › Journal Entries** (see [Undo a
+transaction (void)](#undo-a-transaction-void)). The lines go back to the class they had before.
+
+Some lines aren't listed and can't be moved: voided transactions, void reversals, and the
+reclassifying entries themselves.
+
+All the ticked lines move together, or none do. A reclassifying entry is dated on its lines' own
+date, so lines dated on or before the closing date can't be moved unless you're allowed to post in
+a closed period (see [Close a period](closing-the-books.md#let-your-accountant-work-in-a-closed-period)).
+Untick those lines, or reopen the period first.

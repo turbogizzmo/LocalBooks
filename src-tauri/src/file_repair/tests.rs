@@ -2,6 +2,7 @@ use super::*;
 use crate::db::test_pool;
 use crate::ledger::{post_journal_entry, JournalEntry, JournalLine};
 use chrono::NaiveDate;
+use crate::money::Cents;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -120,13 +121,14 @@ async fn an_invoice_paid_total_out_of_step_with_its_payments_is_reported() {
     let invoice = invoices::create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "Acme".into(),
             issue_date: day,
             due_date: day,
             lines: vec![InvoiceLineInput {
                 description: "Work".into(),
                 quantity_e4: 10_000,
-                rate_cents: 5_000,
+                rate_cents: Cents(5_000),
                 income_account_id: account(&pool, "4000").await,
                 product_service_id: None,
                 class_id: None,
@@ -134,7 +136,7 @@ async fn an_invoice_paid_total_out_of_step_with_its_payments_is_reported() {
             }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -143,12 +145,12 @@ async fn an_invoice_paid_total_out_of_step_with_its_payments_is_reported() {
     invoices::record_payment(
         &pool,
         PaymentInput {
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             payment_method_id: None,
             invoice_id: invoice.id,
             deposit_account_id: account(&pool, "1010").await,
             payment_date: day,
-            amount_cents: 2_000,
+            amount_cents: Cents(2_000),
             payment_method: "CHECK".into(),
             reference: None,
             exchange_rate_e6: None,

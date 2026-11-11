@@ -121,6 +121,10 @@ async fn a_receipt_raises_stock_against_the_clearing_account_not_payables() {
     let rest = receive_items(&s.pool, receive(&s, Some(po), d(8), vec![widgets(&s, Some(lines[0].id), 6)])).await.unwrap();
     assert_eq!(status().await.unwrap(), "CLOSED");
     assert!(receive_items(&s.pool, receive(&s, Some(po), d(9), vec![widgets(&s, Some(lines[0].id), 1)])).await.unwrap_err().starts_with("RECEIPT_ORDER_NOT_OPEN"));
+    // Received in full, it can't be reopened to receive more than was ordered.
+    let reopen = crate::workflows::set_purchase_order_closed(&s.pool, po, false).await.unwrap_err();
+    assert!(reopen.starts_with("PO_RECEIVED_IN_FULL"), "{reopen}");
+    assert_eq!(status().await.unwrap(), "CLOSED");
     crate::ledger::void_transaction(&s.pool, rest.journal_entry_id).await.unwrap();
     assert_eq!(status().await.unwrap(), "OPEN");
     assert_eq!(stock(&s).await, (40_000, 4_000));

@@ -10,5 +10,6 @@ export default {
   updatePurchaseOrder: (id, input) => recordTransaction('update_purchase_order', { id, input }),
   deletePurchaseOrder: (id) => invoke('delete_purchase_order', { id }),
   setPurchaseOrderClosed: (id, closed) => invoke('set_purchase_order_closed', { id, closed }),
-  billPurchaseOrder: (id, billDate, dueDate, billNumber) => invoke('bill_purchase_order', { id, billDate, dueDate, billNumber }),
+  // Checked like Enter Bills: approval rules, and the duplicate number and date warnings to confirm.
+  billPurchaseOrder: (id, billDate, dueDate, billNumber) => recordTransaction('bill_purchase_order', { id, billDate, dueDate, billNumber }),
 };

@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, record_payment, InvoiceInput, InvoiceLineInput, PaymentInput};
+use crate::money::Cents;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
@@ -40,6 +41,7 @@ async fn sales_receipt_debits_cash_and_credits_revenue() {
     let receipt = post_sales_receipt(
         &pool,
         SalesReceiptInput {
+            receipt_number: None,
             payment_method_id: None,
             customer_name: Some("Walk-in Wanda".into()),
             receipt_date: d(12),
@@ -71,6 +73,7 @@ async fn sales_receipt_rejects_non_income_lines_and_rolls_back() {
     let err = post_sales_receipt(
         &pool,
         SalesReceiptInput {
+            receipt_number: None,
             payment_method_id: None,
             customer_name: Some("Nobody".into()),
             receipt_date: d(12),
@@ -108,13 +111,14 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: "acme corp".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 40_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: Cents(40_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -123,13 +127,14 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
     create_customer(&pool, "Acme Corp", None).await.expect_err("duplicate (case-insensitive) customer");
     record_payment(
         &pool,
-        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: checking, payment_date: d(5), amount_cents: 15_000, payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
+        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: checking, payment_date: d(5), amount_cents: Cents(15_000), payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .unwrap();
     post_sales_receipt(
         &pool,
         SalesReceiptInput {
+            receipt_number: None,
             payment_method_id: None,
             customer_name: None,
             receipt_date: d(6),
@@ -153,4 +158,34 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
     let customers = list_customers(&pool).await.unwrap();
     assert_eq!(customers.len(), 1);
     assert_eq!(customers[0].open_balance_cents, 25_000);
+}
+
+#[tokio::test]
+async fn forms_may_post_only_names_on_the_list() {
+    let pool = test_pool().await;
+    create_customer(&pool, "Acme", None).await.unwrap();
+    create_party(&pool, Party::Customer, "Acme:Kitchen", None).await.unwrap();
+    crate::expenses::create_vendor(&pool, "Paper Supply Co", None).await.unwrap();
+
+    // Names on the list pass, in any case and with spaces around a job's colon; a blank name is
+    // left to the form's own rule.
+    require_listed(&pool, Party::Customer, "acme").await.unwrap();
+    require_listed(&pool, Party::Customer, "Acme : Kitchen").await.unwrap();
+    require_listed(&pool, Party::Vendor, " paper supply co ").await.unwrap();
+    require_listed(&pool, Party::Customer, "  ").await.unwrap();
+    require_listed_opt(&pool, Party::Customer, None).await.unwrap();
+    require_listed_payee(&pool, Some("Paper Supply Co")).await.unwrap();
+
+    // A typo is refused with a message that names the list, and nothing is added.
+    let err = require_listed(&pool, Party::Customer, "Acmee").await.unwrap_err();
+    assert_eq!(err, "NAME_NOT_ON_LIST: Acmee isn't on your customer list. Choose a name from the list, or add it first.");
+    let err = require_listed(&pool, Party::Customer, "Acme:Bathroom").await.unwrap_err();
+    assert!(err.contains("Acme:Bathroom isn't on your customer list"), "{err}");
+    let err = require_listed(&pool, Party::Vendor, "Paper Suply Co").await.unwrap_err();
+    assert!(err.contains("isn't on your vendor list"), "{err}");
+    assert!(require_listed_payee(&pool, Some("Nobody")).await.is_err());
+    // A vendor's name doesn't stand for a customer.
+    assert!(require_listed(&pool, Party::Customer, "Paper Supply Co").await.is_err());
+    let customers: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM customers").fetch_one(&pool).await.unwrap();
+    assert_eq!(customers, 2);
 }

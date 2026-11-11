@@ -40,6 +40,7 @@ pub async fn list_bills(db: State<'_, Db>) -> Result<Vec<BillSummary>, String> {
 #[tauri::command]
 pub async fn post_vendor_bill(app: AppHandle, db: State<'_, Db>, input: BillInput, confirmed: Option<Vec<String>>) -> Result<BillSummary, String> {
     let pool = db.pool().await;
+    crate::sales::require_listed(&pool, crate::sales::Party::Vendor, &input.vendor_name).await?;
     crate::approvals::check_not_held(&pool, crate::approvals::Kind::Bill, &input.vendor_name, input.total_cents).await?;
     guards::check(&pool, guards::bill(&input, None), confirmed.as_deref()).await?;
     let bill = expenses::post_vendor_bill(&pool, input).await?;
@@ -78,6 +79,7 @@ pub async fn next_check_number(db: State<'_, Db>, account_id: i64) -> Result<Str
 #[tauri::command]
 pub async fn post_expense(app: AppHandle, db: State<'_, Db>, input: ExpenseInput, to_be_printed: Option<bool>, confirmed: Option<Vec<String>>) -> Result<ExpenseView, String> {
     let pool = db.pool().await;
+    crate::sales::require_listed_payee(&pool, input.payee_name.as_deref()).await?;
     guards::check(&pool, guards::expense(&input, None), confirmed.as_deref()).await?;
     // A check can wait in the print queue (File › Print Forms › Checks) instead of taking a number now.
     let expense = match to_be_printed {

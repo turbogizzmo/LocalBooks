@@ -26,6 +26,7 @@ use crate::credits::{self, ApplyCreditInput, CreditMemoInput};
 use crate::expenses::{self, BillInput, BillLineInput, BillPaymentInput, ExpenseInput, SplitLineInput};
 use crate::invoices::{self, InvoiceInput, InvoiceLineInput, PaymentInput};
 use crate::ledger::{self, ForeignCurrency, JournalEntry, JournalLine};
+use crate::money::Cents;
 use crate::parties::{self, PartyDetailsInput};
 use crate::sales::{self, SalesLineInput};
 use crate::sales_tax::{self, TaxRateInput};
@@ -56,17 +57,17 @@ async fn fresh(path: &Path, name: &str) -> SqlitePool {
 }
 
 fn line(description: &str, quantity_e4: i64, rate_cents: i64, income: i64, taxable: bool) -> InvoiceLineInput {
-    InvoiceLineInput { description: description.into(), quantity_e4, rate_cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: taxable, service_date: None }
+    InvoiceLineInput { description: description.into(), quantity_e4, rate_cents: Cents(rate_cents), income_account_id: income, product_service_id: None, class_id: None, is_taxable: taxable, service_date: None }
 }
 
 fn invoice(customer: &str, date: NaiveDate, lines: Vec<InvoiceLineInput>) -> InvoiceInput {
-    InvoiceInput { customer_name: customer.into(), issue_date: date, due_date: date + chrono::Days::new(30), lines, currency: None, tax_rate_id: None, discount_cents: 0, details: Default::default() }
+    InvoiceInput { invoice_number: None, customer_name: customer.into(), issue_date: date, due_date: date + chrono::Days::new(30), lines, currency: None, tax_rate_id: None, discount_cents: Cents::ZERO, details: Default::default() }
 }
 
 async fn pay(pool: &SqlitePool, invoice_id: i64, bank: i64, date: NaiveDate, cents: i64, method: &str) {
     invoices::record_payment(
         pool,
-        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id, deposit_account_id: bank, payment_date: date, amount_cents: cents, payment_method: method.into(), reference: None, exchange_rate_e6: None },
+        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id, deposit_account_id: bank, payment_date: date, amount_cents: Cents(cents), payment_method: method.into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .expect("record a payment");
@@ -193,21 +194,21 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     pay(&pool, partial.id, checking, d(2024, 7, 1), 100_000, "ACH").await;
     let mut taxed = invoice("Café Olé & Søn's \"Best\" Bakery", d(2024, 12, 31), vec![line("Fractional quantity", 33_333, 333, sales_acct, true), line("Service, not taxed", 10_000, 12_345, services, false)]);
     taxed.tax_rate_id = Some(rate.id);
-    taxed.discount_cents = 101;
+    taxed.discount_cents = Cents(101);
     invoices::create_and_post_invoice(&pool, taxed).await.expect("taxed year-end invoice");
     let mut euro = invoice("A Customer With A Very Long Name That Goes On And On For Testing Layout Ltd", d(2025, 3, 1), vec![line("Export order", 10_000, 250_000, sales_acct, false)]);
     euro.currency = Some(ForeignCurrency { code: "EUR".into(), exchange_rate_e6: 1_080_000 });
     let euro = invoices::create_and_post_invoice(&pool, euro).await.expect("EUR invoice");
     invoices::record_payment(
         &pool,
-        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: euro.id, deposit_account_id: checking, payment_date: d(2025, 4, 1), amount_cents: 100_000, payment_method: "WIRE".into(), reference: Some("SWIFT 123".into()), exchange_rate_e6: Some(1_100_000) },
+        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: euro.id, deposit_account_id: checking, payment_date: d(2025, 4, 1), amount_cents: Cents(100_000), payment_method: "WIRE".into(), reference: Some("SWIFT 123".into()), exchange_rate_e6: Some(1_100_000) },
     )
     .await
     .expect("partial EUR payment at a new rate");
     let credited = invoices::create_and_post_invoice(&pool, invoice("Zed's 50% Off <Outlet>", d(2025, 5, 5), vec![line("Clearance", 20_000, 5_000, sales_acct, false)])).await.expect("invoice to credit");
     let credit = credits::create_credit_memo(
         &pool,
-        CreditMemoInput { form_lines: Vec::new(),
+        CreditMemoInput { credit_number: None, form_lines: Vec::new(),
             customer_name: "Zed's 50% Off <Outlet>".into(),
             credit_date: d(2025, 5, 20),
             memo: Some("Damaged goods".into()),

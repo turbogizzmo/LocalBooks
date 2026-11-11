@@ -243,6 +243,17 @@ function PurchaseOrderPreview({ company, order, accounts }) {
 function BillDialog({ order, onClose, onDone }) {
   const [billDate, setBillDate] = useState(todayIso);
   const [dueDate, setDueDate] = useState(() => addDays(todayIso(), 30));
+  // The due date follows the vendor's terms (or the company's bill preference), as on Enter Bills,
+  // until it is typed over.
+  const [dueTyped, setDueTyped] = useState(false);
+  useEffect(() => {
+    if (dueTyped) return undefined;
+    let live = true;
+    api.getBillDueDate(order.vendorName, billDate).then((d) => live && setDueDate(d)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [order.vendorName, billDate, dueTyped]);
   const [number, setNumber] = useState('');
   const [error, setError] = useState(null);
   const create = async () => {
@@ -250,7 +261,11 @@ function BillDialog({ order, onClose, onDone }) {
       await api.billPurchaseOrder(order.id, billDate, dueDate, number.trim() || null);
       onDone(`PO #${order.poNumber} turned into a bill from ${order.vendorName} for ${formatCents(order.totalCents)}; the bill is posted to Accounts Payable.`);
     } catch (err) {
-      setError(errorText(err));
+      setError(
+        isHeldForApproval(err)
+          ? `${errorText(err)}. A bill from a purchase order can't be submitted from here yet: enter it in Enter Bills and choose Submit for approval, then close this purchase order once the bill is approved.`
+          : errorText(err),
+      );
     }
   };
   return (
@@ -260,11 +275,11 @@ function BillDialog({ order, onClose, onDone }) {
         <div className="grid grid-cols-2 gap-2">
           <label>
             <span className="qb-label">Bill date</span>
-            <DateBox className="qb-input w-full" value={billDate} onChange={(e) => { setBillDate(e.target.value); setDueDate(addDays(e.target.value, 30)); }} />
+            <DateBox className="qb-input w-full" value={billDate} onChange={(e) => setBillDate(e.target.value)} />
           </label>
           <label>
             <span className="qb-label">Due date</span>
-            <DateBox className="qb-input w-full" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            <DateBox className="qb-input w-full" value={dueDate} onChange={(e) => { setDueTyped(true); setDueDate(e.target.value); }} />
           </label>
           <label className="col-span-2">
             <span className="qb-label">Vendor’s bill no.</span>

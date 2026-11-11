@@ -2,13 +2,14 @@
 //! report, recurring (memorized) transactions, purchase orders, finding transactions, and files
 //! attached to transactions.
 
-use chrono::{Months, NaiveDate};
+use chrono::{Datelike, Months, NaiveDate};
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::expenses::{BillInput, BillLineInput, ExpenseInput};
 use crate::invoices::InvoiceInput;
 use crate::ledger::{db_err, format_cents, post_entry_in_tx, rollback, EntrySource, JournalEntry, DISPLAY_SOURCE_TYPE, MAX_LINE_CENTS};
+use crate::money::Cents;
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
@@ -337,6 +338,11 @@ pub struct RecurringInput {
     pub next_date: NaiveDate,
     #[serde(default)]
     pub end_date: Option<NaiveDate>,
+    /// The day of the month later dates fall on: the memorized transaction's own day, when the next
+    /// date is that day moved to a shorter month (a Jan 31 transaction first repeats on Feb 28).
+    /// Left out, or not matching the next date, it is the next date's day.
+    #[serde(default)]
+    pub anchor_day: Option<u32>,
 }
 
 fn one() -> i64 {
@@ -364,16 +370,23 @@ pub struct RecurringView {
     pub payload: String,
 }
 
-/// The date after `date` on a schedule.
-pub fn advance(date: NaiveDate, frequency: &str, every: i64) -> Option<NaiveDate> {
+/// The date after `date` on a schedule. A monthly, quarterly or yearly schedule falls on its
+/// `anchor_day` (the day of the month it started on), or on the last day of a shorter month: from
+/// January 31 it goes to February 28 and then back to March 31, never staying on the 28th.
+pub fn advance(date: NaiveDate, frequency: &str, every: i64, anchor_day: Option<u32>) -> Option<NaiveDate> {
     let n = u32::try_from(every).ok()?;
-    match frequency {
-        "WEEKLY" => date.checked_add_days(chrono::Days::new(7 * u64::from(n))),
-        "MONTHLY" => date.checked_add_months(Months::new(n)),
-        "QUARTERLY" => date.checked_add_months(Months::new(3 * n)),
-        "YEARLY" => date.checked_add_months(Months::new(12 * n)),
-        _ => None,
-    }
+    let months = match frequency {
+        "WEEKLY" => return date.checked_add_days(chrono::Days::new(7 * u64::from(n))),
+        "MONTHLY" => n,
+        "QUARTERLY" => n.checked_mul(3)?,
+        "YEARLY" => n.checked_mul(12)?,
+        _ => return None,
+    };
+    let moved = date.checked_add_months(Months::new(months))?;
+    let Some(day) = anchor_day else { return Some(moved) };
+    let first = moved.with_day(1)?;
+    let last = first.checked_add_months(Months::new(1))?.pred_opt()?.day();
+    first.with_day(day.clamp(1, last))
 }
 
 fn shift(date: NaiveDate, from: NaiveDate, to: NaiveDate) -> NaiveDate {
@@ -425,7 +438,9 @@ fn summary(kind: &str, payload: &str) -> (i64, Option<String>) {
         Ok(Dated::Expense(e)) => (e.lines.iter().map(|l| l.amount_cents).sum(), e.payee_name),
         Ok(Dated::Bill(b)) => (b.total_cents, Some(b.vendor_name)),
         Ok(Dated::Invoice(i)) => (
-            i.lines.iter().map(|l| crate::invoices::line_amount(l.quantity_e4, l.rate_cents).unwrap_or(0)).sum::<i64>() - i.discount_cents,
+            Cents::checked_sum(i.lines.iter().map(|l| Cents(crate::invoices::line_amount(l.quantity_e4, l.rate_cents.get()).unwrap_or(0))))
+                .and_then(|t| t.checked_sub(i.discount_cents))
+                .map_or(0, Cents::get),
             Some(i.customer_name),
         ),
         Err(_) => (0, None),
@@ -453,17 +468,21 @@ pub async fn save_recurring(pool: &SqlitePool, id: Option<i64>, input: Recurring
     if name.is_empty() {
         return Err("REC_NAME_REQUIRED: name the recurring transaction".into());
     }
-    if advance(input.next_date, &input.frequency, input.every).is_none() {
+    if advance(input.next_date, &input.frequency, input.every, None).is_none() {
         return Err("REC_BAD_SCHEDULE: choose weekly, monthly, quarterly or yearly".into());
     }
     let payload = input.payload.to_string();
     dated(&input.kind, &payload, input.next_date)?;
+    // Later dates fall on the next date's day of the month (or the month's last day). Saving a
+    // template without moving its next date keeps the day it already has (a schedule from the 31st
+    // sitting on February 28 stays a month-end schedule).
+    let anchor = i64::from(anchor_day(input.next_date, input.anchor_day));
     let unique = |e: sqlx::Error| {
         let msg = db_err(e);
         if msg.contains("UNIQUE") { format!("REC_DUPLICATE: there is already a recurring transaction named '{name}'") } else { msg }
     };
     match id {
-        None => sqlx::query_scalar("INSERT INTO recurring_templates (name, kind, payload, frequency, every, next_date, end_date) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id")
+        None => sqlx::query_scalar("INSERT INTO recurring_templates (name, kind, payload, frequency, every, next_date, end_date, anchor_day) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id")
             .bind(name)
             .bind(&input.kind)
             .bind(&payload)
@@ -471,10 +490,12 @@ pub async fn save_recurring(pool: &SqlitePool, id: Option<i64>, input: Recurring
             .bind(input.every)
             .bind(input.next_date)
             .bind(input.end_date)
+            .bind(anchor)
             .fetch_one(pool)
             .await
             .map_err(unique),
-        Some(id) => sqlx::query("UPDATE recurring_templates SET name = ?1, kind = ?2, payload = ?3, frequency = ?4, every = ?5, next_date = ?6, end_date = ?7 WHERE id = ?8")
+        Some(id) => sqlx::query("UPDATE recurring_templates SET name = ?1, kind = ?2, payload = ?3, frequency = ?4, every = ?5, next_date = ?6, end_date = ?7,
+                    anchor_day = CASE WHEN next_date = ?6 AND anchor_day IS NOT NULL THEN anchor_day ELSE ?9 END WHERE id = ?8")
             .bind(name)
             .bind(&input.kind)
             .bind(&payload)
@@ -483,6 +504,7 @@ pub async fn save_recurring(pool: &SqlitePool, id: Option<i64>, input: Recurring
             .bind(input.next_date)
             .bind(input.end_date)
             .bind(id)
+            .bind(anchor)
             .execute(pool)
             .await
             .map(|_| id)
@@ -515,12 +537,25 @@ async fn post_occurrence(tx: &mut Transaction<'_, Sqlite>, kind: &str, payload: 
     }
 }
 
+/// The day of the month a schedule falls on: `chosen` when `next` is that day, or the last day of a
+/// month too short for it; otherwise `next`'s own day.
+fn anchor_day(next: NaiveDate, chosen: Option<u32>) -> u32 {
+    let last = next.with_day(1).and_then(|first| first.checked_add_months(Months::new(1))).and_then(|d| d.pred_opt()).map_or(31, |d| d.day());
+    match chosen {
+        Some(day) if (1..=31).contains(&day) && day.min(last) == next.day() => day,
+        _ => next.day(),
+    }
+}
+
+/// A template that may be due: id, kind, payload, frequency, every, next date, end date, anchor day.
+type DueTemplate = (i64, String, String, String, i64, NaiveDate, Option<NaiveDate>, Option<i64>);
+
 /// Enters every occurrence that is due on or before `as_of` for active templates (at most 120 in
 /// one go), moving each template's next date along its schedule. Returns how many were entered.
 pub async fn enter_due(pool: &SqlitePool, as_of: NaiveDate, only: Option<i64>) -> Result<usize, String> {
     run(pool, async |tx| {
-        let templates: Vec<(i64, String, String, String, i64, NaiveDate, Option<NaiveDate>)> = sqlx::query_as(
-            "SELECT id, kind, payload, frequency, every, next_date, end_date FROM recurring_templates
+        let templates: Vec<DueTemplate> = sqlx::query_as(
+            "SELECT id, kind, payload, frequency, every, next_date, end_date, anchor_day FROM recurring_templates
              WHERE is_active = 1 AND next_date <= ?1 AND (?2 IS NULL OR id = ?2)",
         )
         .bind(as_of)
@@ -529,12 +564,13 @@ pub async fn enter_due(pool: &SqlitePool, as_of: NaiveDate, only: Option<i64>) -
         .await
         .map_err(db_err)?;
         let mut entered = 0;
-        for (id, kind, payload, frequency, every, mut next, end) in templates {
+        for (id, kind, payload, frequency, every, mut next, end, anchor) in templates {
+            let anchor = anchor.and_then(|d| u32::try_from(d).ok());
             while next <= as_of && end.is_none_or(|e| next <= e) && entered < 120 {
                 let entry = post_occurrence(tx, &kind, &payload, next).await?;
                 sqlx::query("INSERT INTO recurring_runs (template_id, run_date, journal_entry_id) VALUES (?1, ?2, ?3)").bind(id).bind(next).bind(entry).execute(&mut **tx).await.map_err(db_err)?;
                 entered += 1;
-                next = advance(next, &frequency, every).ok_or("REC_BAD_SCHEDULE: the schedule cannot advance")?;
+                next = advance(next, &frequency, every, anchor).ok_or("REC_BAD_SCHEDULE: the schedule cannot advance")?;
             }
             let finished = end.is_some_and(|e| next > e);
             sqlx::query("UPDATE recurring_templates SET next_date = ?1, is_active = CASE WHEN ?2 THEN 0 ELSE is_active END WHERE id = ?3")
@@ -779,6 +815,15 @@ pub async fn delete_purchase_order(pool: &SqlitePool, id: i64) -> Result<(), Str
 
 /// Closes an open order without billing it, or reopens a closed one.
 pub async fn set_purchase_order_closed(pool: &SqlitePool, id: i64, closed: bool) -> Result<(), String> {
+    // An order closed because everything on it arrived stays closed: reopened, it would show as
+    // open with nothing to receive, and Receive Items would take more than was ordered.
+    if !closed {
+        let mut conn = pool.acquire().await.map_err(db_err)?;
+        if crate::item_receipts::received_in_full(&mut conn, id).await? {
+            let number: i64 = sqlx::query_scalar("SELECT po_number FROM purchase_orders WHERE id = ?1").bind(id).fetch_one(&mut *conn).await.map_err(db_err)?;
+            return Err(format!("PO_RECEIVED_IN_FULL: everything on purchase order #{number} has been received; void a receipt to receive it again"));
+        }
+    }
     let done = sqlx::query("UPDATE purchase_orders SET status = ?1 WHERE id = ?2 AND status = ?3")
         .bind(if closed { "CLOSED" } else { "OPEN" })
         .bind(id)
@@ -792,51 +837,74 @@ pub async fn set_purchase_order_closed(pool: &SqlitePool, id: i64, closed: bool)
     Ok(())
 }
 
-/// Turns an open purchase order into a posted bill with the same lines; returns the bill id.
-pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDate, due_date: NaiveDate, bill_number: Option<String>) -> Result<i64, String> {
+/// A purchase order's vendor, total, status, memo, number and the vendor's terms.
+type OrderHead = (String, i64, String, Option<String>, i64, Option<i64>);
+
+/// The bill an open purchase order becomes, with the same lines, discounts and charges, and the
+/// vendor's terms (so Pay Bills offers its early-payment discount). Nothing is written: the screen's
+/// command runs the bill checks and approval rules on it first, as Enter Bills does.
+pub async fn purchase_order_bill(pool: &SqlitePool, id: i64, bill_date: NaiveDate, due_date: NaiveDate, bill_number: Option<String>) -> Result<BillInput, String> {
+    let head: Option<OrderHead> = sqlx::query_as(
+        "SELECT v.name, o.total_cents, o.status, o.memo, o.po_number, v.terms_id FROM purchase_orders o JOIN vendors v ON v.id = o.vendor_id WHERE o.id = ?1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    let (vendor, total, status, memo, number, terms_id) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
+    if status != "OPEN" {
+        return Err("PO_NOT_OPEN: only an open purchase order can be billed".into());
+    }
     let lines = purchase_order_lines(pool, id).await?;
     // Its discounts and charges come over too, so the bill totals what the order did.
     let form_lines = crate::purchase_lines::inputs_of(&crate::purchase_lines::lines_of(pool, crate::purchase_lines::PurchaseDoc::PurchaseOrder, id).await?);
+    Ok(BillInput {
+        terms_id,
+        vendor_name: vendor,
+        bill_number: clean(bill_number.as_deref()).map(str::to_string),
+        bill_date,
+        due_date,
+        memo: Some(memo.unwrap_or_else(|| format!("PO #{number}"))),
+        total_cents: total,
+        lines: lines
+            .iter()
+            .map(|l| BillLineInput {
+                account_id: l.account_id,
+                amount_cents: l.amount_cents,
+                memo: l.description.clone(),
+                quantity_e4: l.quantity_e4,
+                rate_cents: l.rate_cents,
+                product_service_id: l.product_service_id,
+                class_id: l.class_id,
+                customer_id: l.customer_id,
+                billable: None,
+            })
+            .collect(),
+        form_lines,
+    })
+}
+
+/// Turns an open purchase order into a posted bill with the same lines; returns the bill id. The
+/// screen's command builds, checks and posts in steps instead.
+#[cfg(test)]
+pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDate, due_date: NaiveDate, bill_number: Option<String>) -> Result<i64, String> {
+    let bill = purchase_order_bill(pool, id, bill_date, due_date, bill_number).await?;
+    post_purchase_order_bill(pool, id, &bill).await
+}
+
+/// Posts `bill` (from [`purchase_order_bill`]) and marks the order billed, if it is still open
+/// with nothing received.
+pub async fn post_purchase_order_bill(pool: &SqlitePool, id: i64, bill: &BillInput) -> Result<i64, String> {
     run(pool, async |tx| {
-        let head: Option<(String, i64, String, Option<String>, i64)> = sqlx::query_as(
-            "SELECT v.name, o.total_cents, o.status, o.memo, o.po_number FROM purchase_orders o JOIN vendors v ON v.id = o.vendor_id WHERE o.id = ?1",
-        )
-        .bind(id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
-        let (vendor, total, status, memo, number) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
+        let head: Option<(String, i64)> = sqlx::query_as("SELECT status, po_number FROM purchase_orders WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+        let (status, number) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
         if status != "OPEN" {
             return Err("PO_NOT_OPEN: only an open purchase order can be billed".into());
         }
         if crate::item_receipts::order_has_receipts(tx, id).await? {
             return Err(format!("PO_HAS_RECEIPTS: items on purchase order #{number} have been received; enter the bill from Enter Bill for Received Items"));
         }
-        let bill = BillInput {
-            terms_id: None,
-            vendor_name: vendor,
-            bill_number: clean(bill_number.as_deref()).map(str::to_string),
-            bill_date,
-            due_date,
-            memo: Some(memo.unwrap_or_else(|| format!("PO #{number}"))),
-            total_cents: total,
-            lines: lines
-                .iter()
-                .map(|l| BillLineInput {
-                    account_id: l.account_id,
-                    amount_cents: l.amount_cents,
-                    memo: l.description.clone(),
-                    quantity_e4: l.quantity_e4,
-                    rate_cents: l.rate_cents,
-                    product_service_id: l.product_service_id,
-                    class_id: l.class_id,
-                    customer_id: l.customer_id,
-                    billable: None,
-                })
-                .collect(),
-            form_lines: form_lines.clone(),
-        };
-        let bill_id = crate::expenses::write_bill(tx, &bill).await?;
+        let bill_id = crate::expenses::write_bill(tx, bill).await?;
         sqlx::query("UPDATE purchase_orders SET status = 'BILLED', bill_id = ?1 WHERE id = ?2").bind(bill_id).bind(id).execute(&mut **tx).await.map_err(db_err)?;
         Ok(bill_id)
     })

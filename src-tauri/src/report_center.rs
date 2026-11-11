@@ -382,7 +382,8 @@ pub struct InventoryValuation {
 /// Inactive items are left out unless they still have stock or value.
 pub async fn inventory_valuation(pool: &SqlitePool, as_of: NaiveDate) -> Result<InventoryValuation, String> {
     let names = crate::preferences::ItemNames::load(pool).await?;
-    let items: Vec<(i64, String, Option<String>, Option<String>, i64, bool, i64, i64)> = sqlx::query_as(
+    type ItemRow = (i64, String, Option<String>, Option<String>, i64, bool, i64, i64);
+    let items: Vec<ItemRow> = sqlx::query_as(
         "SELECT i.id, p.name, i.sku, p.description, p.rate_cents, p.is_active,
                 COALESCE(SUM(s.qty_change_e4), 0), COALESCE(SUM(s.value_change_cents), 0)
          FROM inventory_items i JOIN products_services p ON p.id = i.product_id
@@ -547,7 +548,8 @@ pub async fn stock_status(pool: &SqlitePool, start_date: NaiveDate, end_date: Na
         return Err("RPT_BAD_RANGE: the end date is before the start date".into());
     }
     let names = crate::preferences::ItemNames::load(pool).await?;
-    let items: Vec<(i64, i64, String, Option<String>, Option<String>, bool, i64, i64, Option<NaiveDate>, i64)> = sqlx::query_as(
+    type ItemRow = (i64, i64, String, Option<String>, Option<String>, bool, i64, i64, Option<NaiveDate>, i64);
+    let items: Vec<ItemRow> = sqlx::query_as(
         "SELECT i.id, i.product_id, p.name, i.sku, p.description, p.is_active,
                 COALESCE((SELECT SUM(s.qty_change_e4) FROM stock_ledger_entries s WHERE s.item_id = i.id AND s.movement_date <= ?2), 0),
                 COALESCE((SELECT SUM(l.quantity_e4) FROM purchase_order_lines l JOIN purchase_orders o ON o.id = l.purchase_order_id

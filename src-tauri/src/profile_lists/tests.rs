@@ -2,6 +2,7 @@ use super::*;
 use crate::db::test_pool;
 use crate::expenses::{post_vendor_bill, BillInput, BillLineInput};
 use crate::invoices::{create_and_post_invoice, InvoiceInput, InvoiceLineInput};
+use crate::money::Cents;
 use crate::sales::{post_sales_receipt, SalesLineInput, SalesReceiptInput};
 use crate::sales_lists::{document_details, SalesDetails, SalesDoc};
 
@@ -23,13 +24,14 @@ async fn account_of_type(pool: &SqlitePool, account_type: &str) -> i64 {
 
 fn invoice(customer: &str, income: i64, cents: i64, details: SalesDetails) -> InvoiceInput {
     InvoiceInput {
+        invoice_number: None,
         customer_name: customer.into(),
         issue_date: d(10, 1),
         due_date: d(10, 31),
         lines: vec![InvoiceLineInput {
             description: "Work".into(),
             quantity_e4: 10_000,
-            rate_cents: cents,
+            rate_cents: Cents(cents),
             income_account_id: income,
             product_service_id: None,
             class_id: None,
@@ -37,7 +39,7 @@ fn invoice(customer: &str, income: i64, cents: i64, details: SalesDetails) -> In
         }],
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details,
     }
 }
@@ -162,6 +164,7 @@ async fn an_invoice_and_a_bill_keep_their_term_and_early_payment_discount() {
 
     // Only invoices carry a term.
     let receipt = SalesReceiptInput {
+        receipt_number: None,
         customer_name: None,
         receipt_date: d(10, 1),
         deposit_account_id: account_of_type(&pool, "BANK").await,
@@ -207,6 +210,7 @@ async fn payment_methods_name_a_kind_of_payment() {
     let services = account(&pool, "4100").await;
     let bank = account_of_type(&pool, "BANK").await;
     let receipt = |method: Option<i64>, kind: &str| SalesReceiptInput {
+        receipt_number: None,
         customer_name: None,
         receipt_date: d(10, 1),
         deposit_account_id: bank,
@@ -241,7 +245,7 @@ async fn payment_methods_name_a_kind_of_payment() {
     assert_eq!(stored, ("CHECK".into(), None));
     // A sales receipt's details (no terms column) save with a customer message.
     let thanks = create_profile_entry(&pool, ProfileList::CustomerMessage, "Thanks!").await.unwrap();
-    let with_message = SalesReceiptInput { details: SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() }, ..receipt(None, "CASH") };
+    let with_message = SalesReceiptInput { receipt_number: None, details: SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() }, ..receipt(None, "CASH") };
     let sold = post_sales_receipt(&pool, with_message).await.unwrap();
     assert_eq!(document_details(&pool, SalesDoc::SalesReceipt, sold.id).await.unwrap().customer_message.as_deref(), Some("Thanks!"));
     let unused = create_payment_method(&pool, PaymentMethodInput { name: "Venmo".into(), kind: "OTHER".into() }).await.unwrap();

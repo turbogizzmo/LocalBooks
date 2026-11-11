@@ -31,6 +31,8 @@ pub struct SignInState {
     pub auto_lock_minutes: u32,
     /// This computer remembers a sign-in for this company file.
     pub remembered_here: bool,
+    /// The whole file is encrypted (gap R1): there is no "remove all users" way back.
+    pub encrypted: bool,
 }
 
 /// Sign-ins remembered on this computer ("Remember me on this computer"), one per company file, keyed by
@@ -86,7 +88,7 @@ pub async fn get_sign_in_state(app: AppHandle, db: State<'_, Db>) -> Result<Opti
             Some(id) => remembered_sign_ins(&app)?.get(&id).await.ok().flatten().is_some(),
             None => false,
         };
-        return Ok(Some(SignInState { users_enabled: true, user: None, auto_lock_minutes: users::DEFAULT_AUTO_LOCK_MINUTES, remembered_here }));
+        return Ok(Some(SignInState { users_enabled: true, user: None, auto_lock_minutes: users::DEFAULT_AUTO_LOCK_MINUTES, remembered_here, encrypted: true }));
     }
     let users_enabled = users::users_enabled(&pool).await?;
     let user = session.lock().await.as_ref().map(|s| s.user.clone());
@@ -95,7 +97,7 @@ pub async fn get_sign_in_state(app: AppHandle, db: State<'_, Db>) -> Result<Opti
         Some(id) if users_enabled => remembered_sign_ins(&app)?.get(&id).await.ok().flatten().is_some(),
         _ => false,
     };
-    Ok(Some(SignInState { users_enabled, user, auto_lock_minutes, remembered_here }))
+    Ok(Some(SignInState { users_enabled, user, auto_lock_minutes, remembered_here, encrypted: db.is_encrypted().await }))
 }
 
 /// Startup with users on: signs in with the sign-in this computer remembers for the file, once per
