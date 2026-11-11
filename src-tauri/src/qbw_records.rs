@@ -13,7 +13,7 @@
 //!   row's length. Rows written before trailing columns were added are shorter; those columns
 //!   are dropped one at a time until the walk fits.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 
@@ -23,6 +23,20 @@ use crate::qbw_pages::LogicalPage;
 pub const CHUNK_KINDS: std::ops::RangeInclusive<u8> = 0x10..=0x14;
 /// Older rows lack at most this many trailing columns.
 const MAX_DROPPED_COLUMNS: usize = 16;
+
+/// The domain of a column the catalog is missing: its id falls between columns the catalog does
+/// define, but the row defining it was not read (a damaged catalog page). Rows still store it.
+pub const MISSING_DOMAIN: u16 = 0;
+
+/// What a missing column most often is, tried in this order after "not stored at all": a nullable
+/// 4-byte id (or date, stored the same way), a nullable 2-byte code, a 1-byte flag, and a 4-byte id
+/// that is never null. Only fixed widths: a text or amount guess takes as many bytes as its length
+/// byte says, so it could make a damaged row read through to its end with every value shifted.
+const MISSING_COLUMN_GUESSES: [(u16, bool, u32); 4] = [(2, true, 4), (1, true, 2), (24, false, 1), (2, false, 4)];
+
+/// A table with more missing columns than this is walked as if they were not stored: guessing
+/// each would multiply the walks per row.
+const MAX_GUESSED_COLUMNS: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Column {
@@ -275,9 +289,27 @@ pub fn read_catalog(pages: &[LogicalPage]) -> Catalog {
         columns.entry(table).or_default().push(Column { id, name, domain, nullable, width });
     }
     for cols in columns.values_mut() {
-        cols.sort_by_key(|c| c.id);
+        fill_missing_columns(cols);
     }
     Catalog { names, columns }
+}
+
+/// Sorts a table's columns by id and puts a placeholder (`MISSING_DOMAIN`) where an id is
+/// missing: ids are numbered from 1 without gaps, so a gap is a column whose definition was lost.
+/// A table with more gaps than the walk would guess (a damaged definition can carry a wild id) is
+/// left as it is.
+fn fill_missing_columns(cols: &mut Vec<Column>) {
+    cols.sort_by_key(|c| c.id);
+    let defined: HashSet<u32> = cols.iter().map(|c| c.id).collect();
+    let last = cols.last().map_or(0, |c| c.id);
+    let gaps = (last as usize).saturating_sub(1).saturating_sub(defined.iter().filter(|id| (1..last).contains(*id)).count());
+    if gaps == 0 || gaps > MAX_GUESSED_COLUMNS as usize {
+        return;
+    }
+    for id in (1..last).filter(|id| !defined.contains(id)) {
+        cols.push(Column { id, name: format!("column_{id}"), domain: MISSING_DOMAIN, nullable: false, width: 0 });
+    }
+    cols.sort_by_key(|c| c.id);
 }
 
 /// Reads one value at `o`; returns it and the offset after it, or `None` when the bytes cannot
@@ -370,7 +402,8 @@ pub fn walk_prefix(row: &[u8], cols: &[Column]) -> (Vec<(String, Value)>, usize)
     let bitmap_len = nullable.div_ceil(8);
     let Some(bitmap) = r.get(3..3 + bitmap_len) else { return (Vec::new(), 0) };
     let (mut o, mut bit, mut out) = (3 + bitmap_len, 0, Vec::new());
-    for col in cols {
+    // A column the catalog lost is taken as not stored, as the first reading of `walk_row` does.
+    for col in cols.iter().filter(|c| c.domain != MISSING_DOMAIN) {
         if col.nullable {
             let present = bitmap[bit / 8] >> (7 - bit % 8) & 1 == 1;
             bit += 1;
@@ -391,9 +424,32 @@ pub fn walk_prefix(row: &[u8], cols: &[Column]) -> (Vec<(String, Value)>, usize)
 }
 
 /// Decodes a row, dropping trailing columns for rows written under an older, shorter schema.
+/// Columns the catalog is missing are first taken as not stored, then as each likely type in
+/// turn; the first reading that ends exactly on the row's length wins.
 pub fn walk_row(row: &[u8], cols: &[Column]) -> Option<HashMap<String, Value>> {
     let row = strip_extra(row);
-    (0..=MAX_DROPPED_COLUMNS.min(cols.len())).find_map(|drop| walk_columns(&row, &cols[..cols.len() - drop]))
+    let missing: Vec<usize> = cols.iter().enumerate().filter(|(_, c)| c.domain == MISSING_DOMAIN).map(|(i, _)| i).collect();
+    if missing.is_empty() {
+        return (0..=MAX_DROPPED_COLUMNS.min(cols.len())).find_map(|drop| walk_columns(&row, &cols[..cols.len() - drop]));
+    }
+    let options = MISSING_COLUMN_GUESSES.len() + 1;
+    let tries = if missing.len() as u32 > MAX_GUESSED_COLUMNS { 1 } else { options.pow(missing.len() as u32) };
+    (0..tries).find_map(|n| {
+        let mut guess = n;
+        let mut chosen = Vec::with_capacity(cols.len());
+        for (i, col) in cols.iter().enumerate() {
+            if !missing.contains(&i) {
+                chosen.push(col.clone());
+                continue;
+            }
+            let choice = guess % options;
+            guess /= options;
+            if let Some(&(domain, nullable, width)) = choice.checked_sub(1).and_then(|c| MISSING_COLUMN_GUESSES.get(c)) {
+                chosen.push(Column { domain, nullable, width, ..col.clone() });
+            }
+        }
+        (0..=MAX_DROPPED_COLUMNS.min(chosen.len())).find_map(|drop| walk_columns(&row, &chosen[..chosen.len() - drop]))
+    })
 }
 
 /// Every row of a table that decodes, with counts of rows that do not.

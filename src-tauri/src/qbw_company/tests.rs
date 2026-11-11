@@ -450,3 +450,14 @@ fn item_type_codes_map_to_kinds_and_the_rest_are_left_off() {
     );
     assert_eq!(item_kind(None), Some("Item"));
 }
+
+/// Each table of inventory cost rows is read with the line table of its own form, bills included
+/// (a bill that changes the cost of stock already sold keeps its cost rows there).
+#[test]
+fn inventory_cost_tables_pair_with_their_forms() {
+    for (cost, lines) in INVENTORY_COST_TABLES {
+        let form = cost.strip_suffix("_inventory_lineitem").expect("a cost table");
+        assert!(lines.starts_with(&form.replace("sale_receipt", "sales_receipt")), "{cost} pairs with {lines}");
+    }
+    assert!(INVENTORY_COST_TABLES.contains(&("abmc_bill_inventory_lineitem", "abmc_bill_lineitem")));
+}

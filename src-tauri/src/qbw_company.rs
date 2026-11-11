@@ -58,9 +58,11 @@ const TRANSACTION_TABLES: [(&str, &str); 16] = [
 
 /// Where the cost of inventory sold on a form is kept, and the form's line table. Each sold
 /// line has a pair of cost rows, cost of goods sold and the inventory asset it came out of,
-/// keyed by the form line's `target_id` rather than by transaction.
-const INVENTORY_COST_TABLES: [(&str, &str); 3] = [
+/// keyed by the form line's `target_id` rather than by transaction. A bill has them too, when it
+/// changes the cost of stock already sold (the cost moves between the two accounts).
+const INVENTORY_COST_TABLES: [(&str, &str); 4] = [
     ("abmc_invoice_inventory_lineitem", "abmc_invoice_lineitem"),
+    ("abmc_bill_inventory_lineitem", "abmc_bill_lineitem"),
     ("abmc_sale_receipt_inventory_lineitem", "abmc_sales_receipt_lineitem"),
     ("abmc_credit_memo_inventory_lineitem", "abmc_credit_memo_lineitem"),
 ];

@@ -44,6 +44,10 @@ people using LocalBooks.
 - **Credit memo numbers don't skip.** An overpayment kept as credit no longer takes the next credit
   memo number, so credit memos number 1, 2, 3 in a row. Registers and custom reports show such a
   payment by its reference.
+- **Inventory adjustments come in from company files.** Some files had lost part of the
+  description of their inventory adjustment lines, so none of the adjustments were read and
+  Inventory Asset and Cost of Goods Sold came out wrong. LocalBooks now reads those lines, and the
+  cost of inventory recorded on bills comes in too.
 - **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
   "Company default" start at it on new sales forms. Before, once a company had two or more rates,
   those customers got no tax unless someone picked a rate on each form.
