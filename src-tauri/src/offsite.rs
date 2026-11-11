@@ -339,6 +339,17 @@ pub async fn back_up_now(db: &Db, store: &SecretStore) -> Result<OffsiteCopy, St
         .execute(&pool)
         .await
         .map_err(db_err)?;
+    // Counts toward Backup safety (gap R8) only when the folder is off the company file's disk. The
+    // copy is made either way: failing to note it never turns it into a failed backup.
+    if let Ok(copy) = &result {
+        let noted = match db.path().await {
+            Ok(company) => crate::backup_safety::saved_copy(&pool, Path::new(&copy.path), &company, crate::backup_safety::Source::Offsite).await.map(|_| ()),
+            Err(e) => Err(e),
+        };
+        if let Err(e) = noted {
+            crate::diagnostics::log(&format!("backup safety: could not note the offsite copy: {e}"));
+        }
+    }
     result
 }
 
@@ -410,9 +421,26 @@ where
 /// Opens a copy and checks it as a restore would, without changing the books. Records the time
 /// when it passes.
 pub async fn test_restore(db: &Db, path: &Path, password: &str) -> Result<CompanyFileInfo, String> {
-    let info = with_decrypted(db, path, password, |tmp| async move { backup::inspect(&tmp).await }).await?;
+    let scratch = db.backups_dir().to_path_buf();
+    let info = with_decrypted(db, path, password, |tmp| async move {
+        let info = backup::inspect(&tmp).await?;
+        // A copy from an older version: its upgrade is rehearsed too, as a restore would run it.
+        if info.needs_upgrade {
+            backup::rehearse_upgrade(&tmp, &scratch).await?;
+        }
+        Ok(info)
+    })
+    .await?;
     if db.is_open().await {
-        sqlx::query("UPDATE offsite_backup SET last_test_restore_at = ?1 WHERE id = 1").bind(now()).execute(&db.pool().await).await.map_err(db_err)?;
+        let pool = db.pool().await;
+        sqlx::query("UPDATE offsite_backup SET last_test_restore_at = ?1 WHERE id = 1").bind(now()).execute(&pool).await.map_err(db_err)?;
+        // Backup safety (gap R8): a passing test of a copy of these books.
+        // A passing test stays passed if noting it fails.
+        if crate::backup_safety::is_these_books(&pool, &info).await {
+            if let Err(e) = crate::backup_safety::record(&pool, crate::backup_safety::Kind::TestRestore, crate::backup_safety::Source::Offsite, Some(path)).await {
+                crate::diagnostics::log(&format!("backup safety: could not note the test restore: {e}"));
+            }
+        }
     }
     Ok(info)
 }

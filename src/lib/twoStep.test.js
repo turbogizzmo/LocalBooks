@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { codeReady, needsCode, POLICIES, qrImageSource } from './twoStep.js';
+import { codeReady, computerCheckName, needsCode, POLICIES, qrImageSource } from './twoStep.js';
 
 test('the code step follows a right password', () => {
   assert.equal(needsCode('MFA_CODE_REQUIRED: enter the 6-digit code'), true);
@@ -24,4 +24,11 @@ test('the QR code becomes an image source without markup', () => {
 
 test('two-step sign-in is off by default, listed first', () => {
   assert.deepEqual(POLICIES.map((p) => p[0]), ['OFF', 'OPTIONAL', 'ADMINS', 'ALL']);
+});
+
+test("this computer's check is named for its system, and Linux has none", () => {
+  assert.equal(computerCheckName('TOUCH_ID'), 'Touch ID');
+  assert.equal(computerCheckName('WINDOWS_HELLO'), 'Windows Hello');
+  assert.equal(computerCheckName('NONE'), null);
+  assert.equal(computerCheckName(null), null);
 });

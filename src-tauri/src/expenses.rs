@@ -11,7 +11,7 @@ use crate::ledger::{convert_lines, db_err, format_cents, post_entry_in_tx, rollb
 use crate::money::Cents;
 use crate::sales::{create_party, find_or_create_named, Party, PartyView};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BillLineInput {
     pub account_id: i64,
@@ -39,7 +39,7 @@ pub struct BillLineInput {
     pub billable: Option<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BillInput {
     pub vendor_name: String,

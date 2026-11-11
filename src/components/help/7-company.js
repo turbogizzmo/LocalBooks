@@ -190,8 +190,8 @@ export const topics = [
   {
     id: 'users', area: 'company', views: ['settings/users', 'expenses/vendors'],
     title: 'Users, passwords and sensitive data',
-    body: 'Turn on users so everyone signs in with their own password and a role: Admin (everything, including users, settings, imports and restores), Standard (day-to-day bookkeeping), View only (looks and runs reports, changes nothing) or External Accountant (your outside accountant: like Standard, may post in closed periods, never sees sensitive data). Tillhouse checks the role before every action. Vendor tax IDs and bank details are then encrypted and shown in full only to users allowed to see sensitive data. Everyone is signed out after 15 minutes without typing or clicking (an Admin can change this under Sign out when idle). Remember me on this computer skips the sign-in once per opening. An Admin can turn on two-step sign-in (off by default): users then also enter a 6-digit code from an authenticator app on their phone, with backup codes, an Admin reset or the recovery key if the phone is lost. Save the recovery key you are given: it is the only way back in if every Admin forgets their password. An Admin can also encrypt the whole company file and its backups (off unless turned on): then losing every Admin password and the recovery key means losing the books. Otherwise only those sensitive values are encrypted: use FileVault or BitLocker for the rest of the file and its backups.',
-    keywords: 'whole file encryption encrypted company file sqlcipher at rest user users password sign in login log in role admin permission security encrypt encryption ssn ein tax id sensitive recovery key forgot lock idle remember two-step two factor 2fa mfa multi-factor authenticator totp one-time code backup codes',
+    body: 'Turn on users so everyone signs in with their own password and a role: Admin (everything, including users, settings, imports and restores), Standard (day-to-day bookkeeping), View only (looks and runs reports, changes nothing) or External Accountant (your outside accountant: like Standard, may post in closed periods, never sees sensitive data). Tillhouse checks the role before every action. Vendor tax IDs and bank details are then encrypted and shown in full only to users allowed to see sensitive data. Everyone is signed out after 15 minutes without typing or clicking (an Admin can change this under Sign out when idle). Remember me on this computer skips the sign-in once per opening. An Admin can turn on two-step sign-in (off by default): users then also enter a 6-digit code from an authenticator app on their phone, with backup codes, an Admin reset or the recovery key if the phone is lost. On a Mac or Windows computer a user with the app can also add that computer, which then confirms them with Touch ID or Windows Hello instead of the code (not on Linux). Save the recovery key you are given: it is the only way back in if every Admin forgets their password. An Admin can also encrypt the whole company file and its backups (off unless turned on): then losing every Admin password and the recovery key means losing the books. Otherwise only those sensitive values are encrypted: use FileVault or BitLocker for the rest of the file and its backups.',
+    keywords: 'whole file encryption encrypted company file sqlcipher at rest user users password sign in login log in role admin permission security encrypt encryption ssn ein tax id sensitive recovery key forgot lock idle remember two-step two factor 2fa mfa multi-factor authenticator totp one-time code backup codes touch id windows hello fingerprint face passkey biometric',
     go: { label: 'Go to Users & Passwords', view: 'settings/users' },
     guide: 'users-and-passwords',
   },
@@ -229,7 +229,7 @@ export const topics = [
   {
     id: 'backup-safety', area: 'company', views: ['settings/data', 'dashboard'],
     title: 'Keep a backup off this computer, and test that it restores',
-    body: 'Backup safety in File & Data Controls shows when a backup was last copied off this computer (Back up to… on another drive, a network or synced folder, or the offsite backup) and last test-restored. Test beside a snapshot, or Test restore a backup…, opens a backup and checks it as a restore would without replacing your books. Reminders lists either one after 30 days; change the days in Preferences › Reminders.',
+    body: 'Backup safety in File & Data Controls shows when, and where, a backup was last copied off this computer (Back up to… on another drive, a network or synced folder, or the offsite backup when its folder is on another drive or synced) and last test-restored. Tillhouse compares the drive the copy is on with the company file’s; nothing is sent anywhere. Test beside a snapshot, or Test restore a backup…, opens a backup and checks it as a restore would, upgrading a throwaway copy of an older one, without replacing your books. Reminders lists either one after 30 days (a monthly routine); change the days in Preferences › Reminders.',
     keywords: 'backup safety offsite another drive usb test restore verify check reminder disk failure',
     go: { label: 'Go to File & Data Controls', view: 'settings/data' },
     guide: 'backups-and-company-files',
@@ -317,10 +317,18 @@ export const topics = [
   {
     id: 'shortcuts', area: 'company', views: [],
     title: 'Keyboard shortcuts',
-    body: 'Press Ctrl+Alt+N (⌘⌥N on a Mac) to open + New from anywhere, Ctrl+Shift+N (⇧⌘N) to open a new window, and F1 to open or close Help. Esc closes Help and other panels.',
+    body: 'Press Ctrl+Alt+N (⌘⌥N on a Mac) to open + New from anywhere, Ctrl+Shift+N (⇧⌘N) to open a new window, F1 to open or close Help, and F6 to move between the sidebar, the toolbar and the window you are working in. Esc closes Help and other panels.',
     keywords: 'keyboard shortcut hotkey keys f1 new window',
     go: null,
     guide: 'troubleshooting',
+  },
+  {
+    id: 'keyboard', area: 'company', views: [],
+    title: 'Use Tillhouse from the keyboard',
+    body: 'Every page, form, list and dialog works without a mouse. F6 moves between the sidebar, the toolbar and the window you are working in (Shift+F6 goes back); Tab moves through the fields and buttons of that part, and in a window it goes round that window’s own fields. In the sidebar, Tab to a page and press Enter to open it. Ctrl+F6 brings the next window to the front and Esc closes the active one. Tillhouse aims to meet WCAG 2.1 AA, and every page is checked automatically for names, contrast and focus.',
+    keywords: 'keyboard accessibility accessible screen reader no mouse without mouse f6 tab focus sidebar toolbar wcag contrast navigate',
+    go: null,
+    guide: 'keyboard',
   },
   {
     id: 'whats-new', area: 'company', views: [],

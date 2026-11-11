@@ -28,6 +28,9 @@ const qb = {
   headerBg: '#eceeed',
   negative: '#b42318',
   warning: '#b54708',
+  // Orange text (`text-qb-warning-ink`, gap R19). The Spruce & Brass warning already meets WCAG AA
+  // (4.5:1) on white, so the ink is the same colour.
+  warningInk: '#b54708',
   info: '#22609e',
 };
 
@@ -69,7 +72,7 @@ export default {
           },
           brass: qb.brass,
           negative: qb.negative,
-          warning: qb.warning,
+          warning: { DEFAULT: qb.warning, ink: qb.warningInk },
           info: qb.info,
         },
       },

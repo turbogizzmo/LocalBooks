@@ -19,7 +19,7 @@ pub async fn export_company_file(app_handle: AppHandle, destination_path: String
     let (pool, live) = (db.pool().await, db.path().await?);
     backup::snapshot(&pool, &live, &destination).await?;
     // A copy on another drive, a network share or a synced folder survives this disk (gap R8).
-    if crate::backup_safety::saved_copy(&pool, &destination, &live).await? {
+    if crate::backup_safety::saved_copy(&pool, &destination, &live, crate::backup_safety::Source::BackUpTo).await? {
         notify(&app_handle);
     }
     backup::describe_export(&destination)

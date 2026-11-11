@@ -163,7 +163,7 @@ async fn a_purchase_orders_lines_carry_to_its_bill() {
     .unwrap();
     let id = crate::workflows::create_purchase_order(&pool, order).await.unwrap();
     let po = crate::workflows::list_purchase_orders(&pool).await.unwrap().into_iter().find(|o| o.id == id).unwrap();
-    assert_eq!(po.total_cents, 31_500);
+    assert_eq!(po.total_cents.get(), 31_500);
     let d = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
     let bill_id = crate::workflows::bill_purchase_order(&pool, id, d, d, None).await.unwrap();
     let carried = lines_of(&pool, PurchaseDoc::Bill, bill_id).await.unwrap();
@@ -215,4 +215,39 @@ fn a_fixed_discount_too_big_for_a_part_shipment_waits() {
     assert_eq!(placed(fit_carried(twice(1, 2), &[3_000, 8_000])), [(1, false), (2, true), (2, false)], "too big for line 1, so it goes after line 2");
     assert_eq!(placed(fit_carried(twice(1, 2), &[6_000, 8_000])), [(1, true), (1, false), (2, false)], "once, after the first");
     assert_eq!(placed(fit_carried(twice(1, 2), &[3_000, 4_000])), [(1, false), (2, false)], "neither can take it: it waits");
+}
+
+#[tokio::test]
+async fn editing_a_bill_reposts_its_discount_from_the_items_purchase_account_once() {
+    let pool = test_pool().await;
+    let (rent, services, office) = (account(&pool, "6400").await, account(&pool, "4100").await, account(&pool, "6500").await);
+    // A Discount item whose income account is used on sales forms and whose purchase account,
+    // here an expense account, is used on bills.
+    let rebate = crate::sales::create_item(
+        &pool,
+        crate::sales::ProductInput { name: "Vendor rebate".into(), description: None, rate_cents: Cents::ZERO, income_account_id: services, is_taxable: false },
+        crate::sales::ItemKind { item_type: "DISCOUNT".into(), percent_ppm: Some(50_000), expense_account_id: Some(office) },
+    )
+    .await
+    .unwrap();
+    let bill = |amount: i64, total: i64| -> crate::expenses::BillInput {
+        serde_json::from_value(json!({
+            "vendorName": "Supplier", "billNumber": "B-7", "billDate": "2026-05-01", "dueDate": "2026-05-31", "memo": null, "totalCents": total,
+            "lines": [{ "accountId": rent, "amountCents": amount, "memo": null }],
+            "formLines": [{ "afterLine": 1, "kind": "DISCOUNT", "percentPpm": 50_000, "accountId": rebate.expense_account_id.unwrap(), "productServiceId": rebate.id }]
+        }))
+        .unwrap()
+    };
+    // 200.00 less 5% = 190.00.
+    let first = crate::expenses::post_vendor_bill(&pool, bill(20_000, 19_000)).await.unwrap();
+    assert_eq!((payable(&pool).await, balance(&pool, office).await), (-19_000, -1_000), "the discount is credited to the item's purchase account");
+    assert_eq!(balance(&pool, services).await, 0, "not to its income account");
+
+    // Edited to 300.00 less 5% = 285.00: the old bill's entry is voided, so each account counts once.
+    let edited = crate::edits::replace_bill(&pool, first.id, bill(30_000, 28_500)).await.unwrap();
+    assert_ne!(edited, first.id);
+    assert_eq!((payable(&pool).await, balance(&pool, rent).await, balance(&pool, office).await), (-28_500, 30_000, -1_500));
+    let stored = lines_of(&pool, PurchaseDoc::Bill, edited).await.unwrap();
+    assert_eq!(stored.iter().map(|l| (l.kind.as_str(), l.product_service_id, l.percent_ppm, l.amount_cents)).collect::<Vec<_>>(), [("DISCOUNT", Some(rebate.id), Some(50_000), 1_500)]);
+    assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
 }

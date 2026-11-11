@@ -326,6 +326,8 @@ function ChildFrame({ win, name, active, maximized, hidden, covered = false, z, 
       style={style}
       aria-label={name}
       aria-hidden={hidden || undefined}
+      // F6 comes here from the sidebar and the toolbar (regionKeys.js), to the active window only.
+      data-f6-region={active ? '' : undefined}
       ref={frameRef}
       {...(hidden || covered ? { inert: '' } : {})}
       onPointerDownCapture={() => !active && manager.focus(win.id)}

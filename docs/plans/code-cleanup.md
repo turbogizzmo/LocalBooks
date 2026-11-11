@@ -77,7 +77,14 @@ error spans. Stage 2b (#382): the sales receipt and estimate inputs (`SalesLineI
 estimate totals now use checked arithmetic. Stage 2c (#384): `ProductInput.rate_cents` and
 `FormLineInput.amount_cents` (a re-edited discount is negated with `checked_neg`). Stage 2d: the
 credits inputs (`ApplyCreditInput`, `RefundCreditInput`, `UnappliedPaymentInput` and
-`VendorCreditLineInput`, each `amount_cents`). Next: the bills, checks and expenses inputs.
+`VendorCreditLineInput`, each `amount_cents`). Stages 2e–2h (batch fifteen, #396): bills, checks,
+expenses, item receipts, deposits, transfers, bill payments and reconcile. Stage 2i: the purchase
+order inputs and views (`PurchaseOrderLineInput.rate_cents` and `amount_cents`,
+`PurchaseOrderView.total_cents`, `PurchaseOrderLineView.rate_cents` and `amount_cents`); a bill made
+from an order now copies the line amounts as they are. That finishes step 1 for the modules it
+lists; 27 `Deserialize` cents fields in other modules (bounced checks, statement charges, mileage,
+vouchers, register entry, cleanup and others) wait for step 4. Next: step 2,
+the document views of invoices, sales, bills and expenses, then step 3 (reports).
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:

@@ -2,19 +2,30 @@ import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
-import { codeReady, POLICIES, qrImageSource } from '../lib/twoStep.js';
+import { codeReady, computerCheckName, POLICIES, qrImageSource } from '../lib/twoStep.js';
 
 /**
  * Two-step sign-in (gap R26). Optional and off by default: an Admin turns it on for the company,
  * and each user may then add an authenticator app. What it protects is said plainly on screen: it
  * stops someone with a password but not the phone from signing in to Tillhouse; it doesn't stop
  * someone who copies the company file.
+ *
+ * Beside the app, a user may add this computer (gap R29): Touch ID or Windows Hello then stands in
+ * for the code here. The app stays, for every other computer and for copies of the file.
  */
 
 /** The code step of signing in, after a right password. */
 export function CodeStep({ username, busy, run, onBack }) {
   const [code, setCode] = useState('');
   const [backup, setBackup] = useState(false);
+  // Touch ID or Windows Hello, when this computer was added for this user (gap R29).
+  const [computer, setComputer] = useState(null);
+  useEffect(() => {
+    api.getTwoStepComputerSignIn().then(
+      (kind) => setComputer(computerCheckName(kind)),
+      () => setComputer(null),
+    );
+  }, [username]);
   return (
     <form
       className="flex flex-col gap-2"
@@ -31,6 +42,14 @@ export function CodeStep({ username, busy, run, onBack }) {
         ) : null}
         {backup ? 'Enter one of the backup codes you saved when you set it up. Each works once.' : 'Enter the 6-digit code your authenticator app shows for Tillhouse.'}
       </p>
+      {computer && !backup && (
+        <div className="flex items-center justify-between gap-2 rounded-xs border border-qb-border bg-qb-canvas p-2 text-sm">
+          <span>This computer can confirm it’s you with {computer}.</span>
+          <button type="button" className="qb-btn qb-btn-primary flex-none" disabled={busy} onClick={() => run(() => api.finishTwoStepSignInWithComputer())}>
+            Use {computer}
+          </button>
+        </div>
+      )}
       <label className="block">
         <span className="qb-label">{backup ? 'Backup code' : 'Code'}</span>
         <input
@@ -284,6 +303,7 @@ export function TwoStepSettings({ me }) {
             )}
           </div>
         )}
+        {mine.policy !== 'OFF' && mine.enabled && mode === null && <ThisComputer />}
         {mode === 'setup' && (
           <TwoStepSetup
             onCancel={() => setMode(null)}
@@ -324,5 +344,112 @@ export function TwoStepSettings({ me }) {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * The computers that sign you in with Touch ID or Windows Hello in place of the code (gap R29), and
+ * adding this one. Offered only beside the authenticator app; Linux has no such check.
+ */
+function ThisComputer() {
+  const [info, setInfo] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const load = () => api.getMyTwoStepComputers().then(setInfo, (err) => setError(errorText(err)));
+  useEffect(() => {
+    load();
+  }, []);
+
+  const run = async (action) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!info) return error ? <Notice kind="error" text={error} /> : null;
+  const check = computerCheckName(info.kind);
+  const here = info.computers.some((c) => c.here);
+
+  return (
+    <div className="flex flex-col gap-1 border-t border-qb-border pt-2" data-testid="two-step-computers">
+      <span className="qb-label">Computers that sign you in without the code</span>
+      {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
+      {info.computers.length === 0 && <span className="text-xs text-qb-ink-muted">None yet.</span>}
+      {info.computers.map((c) => (
+        <div key={c.id} className="flex items-center gap-2">
+          <span>
+            {c.label} · {computerCheckName(c.kind)}
+            {c.here ? ' (this computer)' : ''}
+          </span>
+          <span className="text-xs text-qb-ink-muted">{c.lastUsedAt ? `last used ${c.lastUsedAt.slice(0, 10)}` : 'not used yet'}</span>
+          <button
+            type="button"
+            className="qb-btn qb-btn-secondary h-row flex-none px-2 text-xs"
+            disabled={busy}
+            onClick={() =>
+              run(async () => {
+                if (!(await askConfirm(`Remove ${c.label}? Signing in there asks for the code from your authenticator app again.`, { confirmLabel: 'Remove' }))) return;
+                await api.removeTwoStepComputer(c.id);
+                await load();
+              })
+            }
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      {!check ? (
+        <p className="text-xs text-qb-ink-muted">This computer has no Touch ID or Windows Hello that Tillhouse can use, so it always asks for the code from your authenticator app.</p>
+      ) : !info.available ? (
+        <p className="text-xs text-qb-ink-muted">Set up {check} in your computer’s settings first; then you can add this computer here.</p>
+      ) : (
+        !here &&
+        !adding && (
+          <button type="button" className="qb-btn qb-btn-secondary h-row self-start px-2 text-xs" onClick={() => setAdding(true)}>
+            Use {check} on This Computer…
+          </button>
+        )
+      )}
+      {adding && (
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(async () => {
+              await api.addThisComputerTwoStep(password);
+              setPassword('');
+              setAdding(false);
+              await load();
+            });
+          }}
+        >
+          <p className="text-xs text-qb-ink-muted">
+            {info.computerName} will sign you in with {check} in place of the code. It keeps a secret in its own {info.kind === 'TOUCH_ID' ? 'Keychain' : 'Credential Manager'}, not in the company
+            file, so copies of the file and other computers still ask for the code. {check}’s own fallback (your computer’s password or PIN) works too.
+          </p>
+          <label className="block">
+            <span className="qb-label">Your password</span>
+            <input type="password" className="qb-input w-full" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus disabled={busy} />
+          </label>
+          <div className="flex justify-end gap-2">
+            <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setAdding(false)} disabled={busy}>
+              Cancel
+            </button>
+            <button type="submit" className="qb-btn qb-btn-primary" disabled={busy || !password}>
+              {busy ? `Waiting for ${check}…` : 'Continue'}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }

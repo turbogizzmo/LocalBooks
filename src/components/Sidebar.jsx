@@ -166,7 +166,7 @@ export default function Sidebar({ current, onSelect, onNew, companyName, storage
     });
 
   return (
-    <nav className="qb-sidebar no-print flex flex-none flex-col" aria-label="Main">
+    <nav className="qb-sidebar no-print flex flex-none flex-col" aria-label="Main" data-f6-region="">
       <div className="flex h-toolbar items-center gap-2 border-b border-white/10 px-3">
         <BrandMark />
         <span className="truncate text-md font-semibold text-white" title={companyName}>{companyName}</span>

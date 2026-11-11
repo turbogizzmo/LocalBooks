@@ -3,7 +3,16 @@
 use super::prelude::*;
 use crate::approvals::{self, ApprovalRequest, ApprovalRule, Kind, RuleInput};
 
-handlers![list_approval_rules, add_approval_rule, delete_approval_rule, submit_for_approval, list_approval_requests, approve_request, reject_request];
+handlers![
+    list_approval_rules,
+    add_approval_rule,
+    delete_approval_rule,
+    submit_for_approval,
+    submit_purchase_order_bill_for_approval,
+    list_approval_requests,
+    approve_request,
+    reject_request,
+];
 
 /// Who is acting: the signed-in user's name, or "this computer" in a file without users.
 async fn who(db: &Db) -> Result<String, String> {
@@ -35,6 +44,25 @@ pub async fn delete_approval_rule(app: AppHandle, db: State<'_, Db>, id: i64) ->
 pub async fn submit_for_approval(app: AppHandle, db: State<'_, Db>, kind: Kind, input: serde_json::Value) -> Result<ApprovalRequest, String> {
     let by = who(&db).await?;
     let request = approvals::submit(&db.pool().await, kind, &input, &by).await?;
+    notify(&app);
+    Ok(request)
+}
+
+/// Create Bill on a purchase order, when an approval rule holds the bill: builds the bill as
+/// Create Bill would and holds it. Approving it posts the bill and marks the order billed.
+#[tauri::command]
+pub async fn submit_purchase_order_bill_for_approval(
+    app: AppHandle,
+    db: State<'_, Db>,
+    id: i64,
+    bill_date: NaiveDate,
+    due_date: NaiveDate,
+    bill_number: Option<String>,
+) -> Result<ApprovalRequest, String> {
+    let by = who(&db).await?;
+    let pool = db.pool().await;
+    let bill = workflows::purchase_order_bill(&pool, id, bill_date, due_date, bill_number).await?;
+    let request = approvals::submit_purchase_order_bill(&pool, id, &bill, &by).await?;
     notify(&app);
     Ok(request)
 }

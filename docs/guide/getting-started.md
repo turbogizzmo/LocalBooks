@@ -286,7 +286,7 @@ These company preferences (Admins only) change how Tillhouse works out tax, time
 | **Items & Inventory** | **Inventory and purchase orders are active** | Off hides Purchase Orders and **Track stock**; items already tracked keep their stock | On |
 | **Items & Inventory** | **Not enough stock**: warn, don't allow the sale, or say nothing | When an invoice or sales receipt would take a tracked item below zero | Warn |
 | **Checking** | **Print the vendor's account number in the check memo** | A check left without a memo gets "Acct #…" from the vendor's **Account no.** | Off |
-| **Checking** | **Change the check date when a check is printed** | A check waiting in **File › Print Forms › Checks** takes the date it prints | Off |
+| **Checking** | **Change the check date when a check is printed** | A check waiting in **File › Print Forms › Checks**, from Write Checks or Pay Bills, takes the date it prints | Off |
 
 **Checking › My Preferences** sets the account **Write Checks**, **Pay Bills** and **Make
 Deposits** open with, on this computer.
@@ -310,7 +310,9 @@ but not to a bank, asset or liability account.
 A cost on an expense or check in another currency is billed in your home currency, at the
 exchange rate the expense was entered with, so the reimbursement takes off exactly what the expense
 put on. **Bill Costs** shows the original amount under the home amount, and the invoice line says
-it (for example *EUR 200.00*).
+it (for example *EUR 200.00*). The invoice itself is always in the home currency: billing costs on
+an invoice in another currency would convert them again at the invoice's rate, and the
+reimbursement would no longer match what the expense put on.
 
 When reimbursed expenses count as income, each expense account can send its reimbursements to an
 income account of its own: open the expense account in the **Chart of Accounts** and choose it
@@ -596,7 +598,9 @@ row. On **Print ▾** and **Email ▾**, press **Enter** or **Down** to open the
 
 ## Work without a mouse
 
-Every list, form and dialog can be used from the keyboard. **Tab** moves through a form's fields
+Every list, form and dialog can be used from the keyboard. **F6** moves between the sidebar, the
+toolbar and the window you are working in (**Shift+F6** goes back); all the keys are in
+[Use Tillhouse from the keyboard](keyboard.md). **Tab** moves through a form's fields
 and buttons in reading order, and through a line grid's columns in the order you chose (see
 "Choose a list's columns"). In a list, each row's **▾** button opens its menu (**Open**,
 **Edit…**, **Void**, **QuickReport** and the rest): Tab to it and press **Enter** or **Space**,

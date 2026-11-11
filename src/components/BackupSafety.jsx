@@ -43,12 +43,24 @@ export default function BackupSafety() {
   return (
     <Group title="Backup safety">
       <p className="text-sm">
-        Last copy off this computer: <b>{when(data?.lastOffDisk)}</b> · Last test restore: <b>{when(data?.lastTestRestore)}</b>
+        Last copy off this computer: <b>{when(data?.lastOffDisk)}</b>
+        {data?.lastOffDiskLocation && <span className="text-qb-ink-muted break-all"> to {data.lastOffDiskLocation}</span>}
       </p>
+      <p className="text-sm">
+        Last test restore: <b>{when(data?.lastTestRestore)}</b>
+        {data?.lastTestRestoreLocation && <span className="text-qb-ink-muted break-all"> of {data.lastTestRestoreLocation}</span>}
+      </p>
+      {data?.offsiteOnSameDisk && (
+        <Notice
+          kind="error"
+          text="The offsite backup folder is on the same disk as these books, so its copies would be lost with it and don't count as a copy off this computer. Choose a folder on another drive or a synced folder under Offsite backup."
+        />
+      )}
       <p className="text-xs text-qb-ink-muted">
-        A copy counts as off this computer when it is saved with Back up to… on another drive, a network share or a synced folder, or made by the offsite
-        backup. A test restore opens a backup and checks it as a restore would, without replacing your books. Reminders lists either when it is overdue
-        (Edit › Preferences › Reminders sets how many days).
+        A copy counts as off this computer when it is saved with Back up to…, or made by the offsite backup, on another drive, a network share or a synced
+        folder (Tillhouse compares the drive with the company file’s; nothing is sent anywhere). A test restore opens a backup and checks it as a restore
+        would, upgrading a throwaway copy of one from an older version, without replacing your books. Reminders lists either when it is overdue (Edit ›
+        Preferences › Reminders sets how many days; 30 to start).
       </p>
       <div className="flex gap-2">
         <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={choose} disabled={busy}>

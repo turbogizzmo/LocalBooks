@@ -4,7 +4,7 @@
 
 use chrono::{Datelike, Months, NaiveDate};
 use serde::{Deserialize, Serialize};
-use sqlx::{Sqlite, SqlitePool, Transaction};
+use sqlx::{Sqlite, SqliteConnection, SqlitePool, Transaction};
 
 use crate::expenses::{BillInput, BillLineInput, ExpenseInput};
 use crate::invoices::InvoiceInput;
@@ -734,8 +734,8 @@ pub struct PurchaseOrderLineInput {
     #[serde(default)]
     pub quantity_e4: Option<i64>,
     #[serde(default)]
-    pub rate_cents: Option<i64>,
-    pub amount_cents: i64,
+    pub rate_cents: Option<Cents>,
+    pub amount_cents: Cents,
     #[serde(default)]
     pub class_id: Option<i64>,
     /// The customer or job the line is for; it carries over to the bill.
@@ -767,9 +767,11 @@ pub struct PurchaseOrderView {
     pub po_date: String,
     pub expected_date: Option<String>,
     pub memo: Option<String>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
     pub status: String,
     pub bill_id: Option<i64>,
+    /// A bill from it (Create Bill) is waiting for approval.
+    pub awaiting_approval: bool,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -779,13 +781,14 @@ pub struct PurchaseOrderLineView {
     pub product_service_id: Option<i64>,
     pub description: Option<String>,
     pub quantity_e4: Option<i64>,
-    pub rate_cents: Option<i64>,
-    pub amount_cents: i64,
+    pub rate_cents: Option<Cents>,
+    pub amount_cents: Cents,
     pub class_id: Option<i64>,
     pub customer_id: Option<i64>,
 }
 
-const PO_SELECT: &str = "SELECT o.id, o.po_number, o.vendor_id, v.name AS vendor_name, o.po_date, o.expected_date, o.memo, o.total_cents, o.status, o.bill_id
+const PO_SELECT: &str = "SELECT o.id, o.po_number, o.vendor_id, v.name AS vendor_name, o.po_date, o.expected_date, o.memo, o.total_cents, o.status, o.bill_id,
+ EXISTS (SELECT 1 FROM approval_requests a WHERE a.from_purchase_order_id = o.id AND a.status = 'PENDING') AS awaiting_approval
  FROM purchase_orders o JOIN vendors v ON v.id = o.vendor_id";
 
 pub async fn list_purchase_orders(pool: &SqlitePool) -> Result<Vec<PurchaseOrderView>, String> {
@@ -819,12 +822,12 @@ pub fn validate_purchase_order(input: &PurchaseOrderInput) -> Result<i64, String
     }
     let mut total: i64 = 0;
     for (idx, line) in input.lines.iter().enumerate() {
-        if !(1..=MAX_LINE_CENTS).contains(&line.amount_cents) {
+        if !(1..=MAX_LINE_CENTS).contains(&line.amount_cents.get()) {
             return Err(format!("PO_BAD_AMOUNT: line {} needs an amount above zero", idx + 1));
         }
-        total = total.checked_add(line.amount_cents).filter(|t| *t <= MAX_LINE_CENTS).ok_or_else(|| format!("PO_TOO_LARGE: the order exceeds {}", format_cents(MAX_LINE_CENTS)))?;
+        total = total.checked_add(line.amount_cents.get()).filter(|t| *t <= MAX_LINE_CENTS).ok_or_else(|| format!("PO_TOO_LARGE: the order exceeds {}", format_cents(MAX_LINE_CENTS)))?;
     }
-    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents.get()).collect();
     let (_, total) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "PO")?;
     Ok(total)
 }
@@ -832,7 +835,7 @@ pub fn validate_purchase_order(input: &PurchaseOrderInput) -> Result<i64, String
 /// Writes a validated purchase order (`total` from [`validate_purchase_order`]) in `tx`.
 pub(crate) async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, input: &PurchaseOrderInput, total: i64) -> Result<i64, String> {
     {
-        let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+        let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents.get()).collect();
         let (form_amounts, _) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "PO")?;
         crate::purchase_lines::check(tx, &input.form_lines, "PO").await?;
         let vendor = crate::sales::find_or_create_named(tx, crate::sales::Party::Vendor, &input.vendor_name).await?;
@@ -888,6 +891,10 @@ async fn changeable_order(tx: &mut Transaction<'_, Sqlite>, id: i64, verb: &str)
     if status == "BILLED" {
         return Err(format!("PO_BILLED: purchase order #{number} has been billed and can't be {verb}; void the bill first"));
     }
+    // The held bill was made from the order as it is now; approving it must bill that order.
+    if awaiting_approval(tx, id).await?.is_some() {
+        return Err(format!("PO_AWAITING_APPROVAL: a bill from purchase order #{number} is waiting for approval, so it can't be {verb}; reject the request under Expenses › Approvals first"));
+    }
     // Any receipt against it, even a voided one, still points at the order and its lines.
     let received: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM item_receipts WHERE purchase_order_id = ?1)").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
     if received {
@@ -907,7 +914,7 @@ pub async fn update_purchase_order(pool: &SqlitePool, id: i64, input: PurchaseOr
         if status != "OPEN" {
             return Err(format!("PO_NOT_OPEN: purchase order #{number} is closed; reopen it to change it"));
         }
-        let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+        let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents.get()).collect();
         let (form_amounts, _) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "PO")?;
         crate::purchase_lines::check(tx, &input.form_lines, "PO").await?;
         let vendor = crate::sales::find_or_create_named(tx, crate::sales::Party::Vendor, &input.vendor_name).await?;
@@ -1004,10 +1011,10 @@ pub async fn purchase_order_bill(pool: &SqlitePool, id: i64, bill_date: NaiveDat
             .iter()
             .map(|l| BillLineInput {
                 account_id: l.account_id,
-                amount_cents: Cents(l.amount_cents),
+                amount_cents: l.amount_cents,
                 memo: l.description.clone(),
                 quantity_e4: l.quantity_e4,
-                rate_cents: l.rate_cents.map(Cents),
+                rate_cents: l.rate_cents,
                 product_service_id: l.product_service_id,
                 class_id: l.class_id,
                 customer_id: l.customer_id,
@@ -1030,19 +1037,34 @@ pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDat
 /// with nothing received.
 pub async fn post_purchase_order_bill(pool: &SqlitePool, id: i64, bill: &BillInput) -> Result<i64, String> {
     run(pool, async |tx| {
-        let head: Option<(String, i64)> = sqlx::query_as("SELECT status, po_number FROM purchase_orders WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
-        let (status, number) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
-        if status != "OPEN" {
-            return Err("PO_NOT_OPEN: only an open purchase order can be billed".into());
+        if let Some(request) = awaiting_approval(tx, id).await? {
+            return Err(format!("PO_AWAITING_APPROVAL: a bill from this purchase order is waiting for approval (request {request}); approve or reject it under Expenses › Approvals"));
         }
-        if crate::item_receipts::order_has_receipts(tx, id).await? {
-            return Err(format!("PO_HAS_RECEIPTS: items on purchase order #{number} have been received; enter the bill from Enter Bill for Received Items"));
-        }
-        let bill_id = crate::expenses::write_bill(tx, bill).await?;
-        sqlx::query("UPDATE purchase_orders SET status = 'BILLED', bill_id = ?1 WHERE id = ?2").bind(bill_id).bind(id).execute(&mut **tx).await.map_err(db_err)?;
-        Ok(bill_id)
+        bill_order_in_tx(tx, id, bill).await
     })
     .await
+}
+
+/// The pending approval request holding a bill from order `id`, if any.
+pub async fn awaiting_approval(conn: &mut SqliteConnection, id: i64) -> Result<Option<i64>, String> {
+    sqlx::query_scalar("SELECT id FROM approval_requests WHERE from_purchase_order_id = ?1 AND status = 'PENDING'").bind(id).fetch_optional(&mut *conn).await.map_err(db_err)
+}
+
+/// Inside a write transaction: refuses unless order `id` is open with nothing received, then
+/// posts `bill` and marks the order billed with the bill's id. Used by Create Bill and by
+/// approving a bill that Create Bill submitted for approval.
+pub async fn bill_order_in_tx(tx: &mut Transaction<'_, Sqlite>, id: i64, bill: &BillInput) -> Result<i64, String> {
+    let head: Option<(String, i64)> = sqlx::query_as("SELECT status, po_number FROM purchase_orders WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let (status, number) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
+    if status != "OPEN" {
+        return Err(format!("PO_NOT_OPEN: only an open purchase order can be billed, and #{number} is {}", status.to_lowercase()));
+    }
+    if crate::item_receipts::order_has_receipts(tx, id).await? {
+        return Err(format!("PO_HAS_RECEIPTS: items on purchase order #{number} have been received; enter the bill from Enter Bill for Received Items"));
+    }
+    let bill_id = crate::expenses::write_bill(tx, bill).await?;
+    sqlx::query("UPDATE purchase_orders SET status = 'BILLED', bill_id = ?1 WHERE id = ?2").bind(bill_id).bind(id).execute(&mut **tx).await.map_err(db_err)?;
+    Ok(bill_id)
 }
 
 // ------------------------------------------------------------------------------------------------

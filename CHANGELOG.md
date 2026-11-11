@@ -18,6 +18,32 @@ becomes its release notes on GitHub and in the app's update window (see
 - **Clearer colors.** A deep spruce green and dark sidebar replace the old bright green, and every
   label and button meets the WCAG AA contrast guideline. Invoice and estimate designs you already
   made keep their colors; new ones start in spruce.
+- **Create Bill on a purchase order works with approval rules.** When an approval rule holds the
+  bill, Create Bill now sends it for approval instead of asking you to re-enter it in Enter Bills.
+  The order shows "bill awaiting approval"; approving posts the bill and marks the order billed with
+  it, and rejecting leaves the order open.
+- **Pay Bills checks take the print date.** With **Change the check date when a check is printed**
+  on in Preferences › Checking, a check from Pay Bills waiting in File › Print Forms › Checks is now
+  re-dated to the day it prints, as checks from Write Checks already were. Each bill payment on it
+  is voided and paid again on that date, and both stay in the audit log.
+- **Backup safety knows where your copies are.** A copy off this computer now counts only when it
+  is really on another drive, a network share or a synced folder: an offsite backup whose folder
+  is on the same disk as your books no longer silences the reminder, and Backup safety tells you
+  so. The screen shows where the last copy went and which backup was last tested. Test restore
+  also upgrades a throwaway copy of a backup from an older version, so you know a restore of it
+  would work. The reminder still comes after 30 days, which you can change in Preferences ›
+  Reminders.
+- **Keyboard and contrast fixes across LocalBooks.** **F6** now moves between the sidebar, the
+  toolbar and the window you are working in (**Shift+F6** goes back), so you can always get back to
+  the sidebar without a mouse, and a list or panel that scrolls with nothing in it to Tab to now
+  takes focus itself, so the arrow keys can scroll it. Pale grey, blue, orange and red text is a little darker so it's
+  easier to read, and the Preferences categories, the Custom Forms preview and the Import steps
+  work better with screen readers. Every page, form and Help is now checked automatically for
+  accessibility (WCAG 2.1 AA), and Help has a new guide, Use Tillhouse from the keyboard.
+- **Touch ID and Windows Hello for two-step sign-in.** If you use two-step sign-in with an
+  authenticator app, you can now add your Mac or Windows computer in Settings › Users & Passwords:
+  signing in there then asks for Touch ID or Windows Hello instead of the code. The app still works
+  everywhere else, and nothing changes unless you add a computer. Not available on Linux.
 - **More accurate company-file imports.** Memorized transactions (templates) are no longer
   imported as real ones, which doubled some balances. Files whose description of a line table is
   missing several columns now read those lines, and a payment and deposit that a file keeps as two

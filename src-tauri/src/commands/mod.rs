@@ -147,6 +147,7 @@ features![
     statements,
     tax_and_time,
     timesheet,
+    two_step_computer,
     txf,
     unapplied_payments,
     users,

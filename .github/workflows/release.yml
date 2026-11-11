@@ -17,6 +17,10 @@
 # which only the build job uses; installer builds fail without them. The frontend is built in its
 # own step without the key, and npm install scripts are skipped, so the build tools never see it.
 #
+# Re-running a Build job (for example one platform failed) is safe before and after the release is
+# published: the "Find the release" step hands tauri-action the existing release (draft or
+# published), and latest.json keeps the other platforms' entries. Procedure: docs/dev/releasing.md.
+#
 # Code signing is not configured: macOS Gatekeeper and Windows SmartScreen will warn on the
 # resulting installers until Apple Developer ID / Windows signing secrets are added.
 
@@ -233,11 +237,71 @@ jobs:
           if [ -z "$(echo "$notes" | tr -d '[:space:]')" ]; then
             echo "::warning::CHANGELOG.md has no section for $version; the release notes list downloads only"
           fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           {
             echo 'body<<NOTES_END'
             echo "$notes"
             echo 'NOTES_END'
           } >> "$GITHUB_OUTPUT"
+
+      - name: Find the release for this tag
+        # tauri-action reuses a release only while it is a draft: for a published one it creates a
+        # second draft (v0.15.0's Linux re-run did). So look the tag up here, draft or published,
+        # and pass its id; with no release yet, tauri-action creates the draft as before. The
+        # platforms already in its latest.json are recorded for the check after the upload.
+        if: github.ref_type == 'tag'
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          node <<'JS'
+          const fs = require('node:fs');
+          const { GITHUB_API_URL, GITHUB_REPOSITORY, GITHUB_TOKEN, GITHUB_OUTPUT, TAG } = process.env;
+          const api = async (path, accept = 'application/vnd.github+json') => {
+            const res = await fetch(`${GITHUB_API_URL}${path}`, {
+              headers: { authorization: `Bearer ${GITHUB_TOKEN}`, accept, 'x-github-api-version': '2022-11-28' },
+            });
+            if (!res.ok) throw new Error(`GET ${path}: HTTP ${res.status}`);
+            return res;
+          };
+          (async () => {
+            // A draft can't be fetched by tag, so search the list (drafts included).
+            const matches = [];
+            for (let page = 1; ; page++) {
+              const list = await (await api(`/repos/${GITHUB_REPOSITORY}/releases?per_page=100&page=${page}`)).json();
+              matches.push(...list.filter((r) => r.tag_name === TAG));
+              if (list.length < 100) break;
+            }
+            const published = matches.filter((r) => !r.draft);
+            const drafts = matches.filter((r) => r.draft);
+            let release;
+            if (published.length > 0) {
+              release = published[0];
+              if (drafts.length > 0) {
+                console.log(`::warning::${TAG} also has draft release(s) ${drafts.map((r) => r.id).join(', ')}; uploading to the published release ${release.id}. Delete the drafts (docs/dev/releasing.md).`);
+              }
+            } else if (drafts.length === 1) {
+              release = drafts[0];
+            } else if (drafts.length > 1) {
+              throw new Error(`${TAG} has ${drafts.length} draft releases (${drafts.map((r) => r.id).join(', ')}). Delete all but one, then re-run (docs/dev/releasing.md).`);
+            }
+            let platforms = [];
+            if (release) {
+              console.log(`Uploading to the ${release.draft ? 'draft' : 'published'} release ${release.id} (${release.html_url}).`);
+              const asset = release.assets.find((a) => a.name === 'latest.json');
+              if (asset) {
+                const json = await (await api(`/repos/${GITHUB_REPOSITORY}/releases/assets/${asset.id}`, 'application/octet-stream')).json();
+                platforms = Object.keys(json.platforms || {}).sort();
+                console.log(`latest.json lists: ${platforms.join(' ') || '(none)'}`);
+              }
+            } else {
+              console.log(`No release for ${TAG} yet; tauri-action creates the draft.`);
+            }
+            fs.appendFileSync(GITHUB_OUTPUT, `id=${release ? release.id : ''}\nplatforms=${platforms.join(' ')}\n`);
+          })().catch((e) => { console.log(`::error::${e.message}`); process.exit(1); });
+          JS
 
       - name: Build and package with Tauri
         id: tauri
@@ -250,9 +314,14 @@ jobs:
         with:
           # Only tag builds create a release; manual branch builds upload workflow artifacts below.
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-          releaseName: Tillhouse v__VERSION__
+          # Set when the release already exists (a re-run): upload to it, draft or published. Its
+          # name and notes are left as they are.
+          releaseId: ${{ steps.release.outputs.id }}
+          # The version is written out, not __VERSION__: with releaseId set, tauri-action doesn't
+          # fill that in, and the body becomes the notes in latest.json.
+          releaseName: Tillhouse v${{ steps.notes.outputs.version }}
           releaseBody: |
-            Tillhouse v__VERSION__: local-first, double-entry accounting.
+            Tillhouse v${{ steps.notes.outputs.version }}: local-first, double-entry accounting.
 
             **What's new**
             ${{ steps.notes.outputs.body }}
@@ -280,6 +349,61 @@ jobs:
           # The frontend was built above without secrets; skip beforeBuildCommand (npm run build) so
           # Vite, PostCSS and Tailwind do not run again with the signing key in the environment.
           args: ${{ matrix.args }} --verbose --config '{"build":{"beforeBuildCommand":""}}'
+
+      - name: Check latest.json kept every platform
+        # tauri-action merges this build's platforms into the release's latest.json. Fail if an
+        # entry recorded before the build is gone, this platform's is missing, or a URL points
+        # outside this release; the manual fix is in docs/dev/releasing.md.
+        if: github.ref_type == 'tag'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.release.outputs.id || steps.tauri.outputs.releaseId }}
+          BEFORE: ${{ steps.release.outputs.platforms }}
+          VERSION: ${{ steps.notes.outputs.version }}
+          OWN: ${{ runner.os == 'macOS' && 'darwin-aarch64 darwin-x86_64' || runner.os == 'Windows' && 'windows-x86_64' || 'linux-x86_64' }}
+        shell: bash
+        run: |
+          node <<'JS'
+          const { GITHUB_API_URL, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_ID, BEFORE, VERSION, OWN } = process.env;
+          const api = async (path, accept = 'application/vnd.github+json') => {
+            const res = await fetch(`${GITHUB_API_URL}${path}`, {
+              headers: { authorization: `Bearer ${GITHUB_TOKEN}`, accept, 'x-github-api-version': '2022-11-28' },
+            });
+            if (!res.ok) throw new Error(`GET ${path}: HTTP ${res.status}`);
+            return res;
+          };
+          const check = async () => {
+            if (!RELEASE_ID) return ['no release id from the lookup or from tauri-action'];
+            const release = await (await api(`/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}`)).json();
+            const asset = release.assets.find((a) => a.name === 'latest.json');
+            if (!asset) return [`release ${RELEASE_ID} has no latest.json`];
+            const json = await (await api(`/repos/${GITHUB_REPOSITORY}/releases/assets/${asset.id}`, 'application/octet-stream')).json();
+            const platforms = json.platforms || {};
+            const assetIds = new Set(release.assets.map((a) => String(a.id)));
+            const problems = [];
+            if (json.version !== VERSION) problems.push(`version is ${json.version}, expected ${VERSION}`);
+            const wanted = [...BEFORE.split(' '), ...OWN.split(' ')].filter(Boolean);
+            for (const key of wanted) if (!platforms[key]) problems.push(`no entry for ${key}`);
+            for (const [key, entry] of Object.entries(platforms)) {
+              const id = String(entry.url || '').match(/\/releases\/assets\/(\d+)$/)?.[1];
+              if (!id || !assetIds.has(id)) problems.push(`${key} URL ${entry.url} is not an asset of release ${RELEASE_ID}`);
+            }
+            if (problems.length === 0) console.log(`latest.json for ${VERSION}: ${Object.keys(platforms).sort().join(' ')}`);
+            return problems;
+          };
+          (async () => {
+            // The other platforms' jobs may be replacing latest.json at this moment: retry a few times.
+            let problems = [];
+            for (let attempt = 1; attempt <= 5; attempt++) {
+              problems = await check().catch((e) => [e.message]);
+              if (problems.length === 0) return;
+              console.log(`Attempt ${attempt}: ${problems.join('; ')}`);
+              if (attempt < 5) await new Promise((r) => setTimeout(r, 15000));
+            }
+            for (const p of problems) console.log(`::error::latest.json: ${p}`);
+            process.exit(1);
+          })();
+          JS
 
       - name: Collect installer paths
         if: github.ref_type != 'tag'

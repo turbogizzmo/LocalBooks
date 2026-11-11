@@ -152,6 +152,13 @@ async fn keep_applied(tx: &mut Transaction<'_, Sqlite>, to: AppliedTo, old_id: i
 }
 
 /// The ledger audit trail's record of a replacement: both versions and what moved between them.
+/// Links a document replaced outside this module (a re-dated Pay Bills check) to its replacement,
+/// as an edit here would: `transaction_edits`, attachments and the audit log.
+pub(crate) async fn record_replacement(tx: &mut Transaction<'_, Sqlite>, document: &str, old: (i64, i64), new: (i64, i64)) -> Result<(), String> {
+    record(tx, old.1, new.1).await?;
+    audit(tx, document, old, new, &[]).await
+}
+
 async fn audit(tx: &mut Transaction<'_, Sqlite>, document: &str, (old_id, old_entry): (i64, i64), (new_id, new_entry): (i64, i64), moved: &[Relinked]) -> Result<(), String> {
     let payload = serde_json::json!({
         "document": document,

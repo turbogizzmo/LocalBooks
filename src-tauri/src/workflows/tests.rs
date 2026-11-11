@@ -102,7 +102,7 @@ async fn recurring_purchase_orders_search_attachments_and_budgets() {
     assert!(!list_recurring(&pool).await.unwrap()[0].is_active);
 
     let po = create_purchase_order(&pool, PurchaseOrderInput { form_lines: Vec::new(), vendor_name: "Staples".into(), po_date: d(5, 1), expected_date: None, memo: None,
-        lines: vec![PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: Some("Paper".into()), quantity_e4: Some(20_000), rate_cents: Some(2_500), amount_cents: 5_000, class_id: None, customer_id: None }] }).await.unwrap();
+        lines: vec![PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: Some("Paper".into()), quantity_e4: Some(20_000), rate_cents: Some(Cents(2_500)), amount_cents: Cents(5_000), class_id: None, customer_id: None }] }).await.unwrap();
     assert_eq!(balance(&pool, supplies).await, 0, "a purchase order posts nothing");
     let bill = bill_purchase_order(&pool, po, d(5, 9), d(6, 8), Some("INV-77".into())).await.unwrap();
     assert_eq!(balance(&pool, supplies).await, 5_000);
@@ -188,7 +188,7 @@ async fn the_1099_report_follows_the_account_mapping_and_the_threshold_by_year()
 async fn an_open_purchase_order_can_be_changed_or_deleted_until_something_is_received_or_billed() {
     let pool = test_pool().await;
     let supplies = account(&pool, "6250").await;
-    let line = |cents: i64| PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: Some("Paper".into()), quantity_e4: None, rate_cents: None, amount_cents: cents, class_id: None, customer_id: None };
+    let line = |cents: i64| PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: Some("Paper".into()), quantity_e4: None, rate_cents: None, amount_cents: Cents(cents), class_id: None, customer_id: None };
     let input = |vendor: &str, lines: Vec<PurchaseOrderLineInput>| PurchaseOrderInput { form_lines: Vec::new(), vendor_name: vendor.into(), po_date: d(5, 1), expected_date: None, memo: None, lines };
     let po = create_purchase_order(&pool, input("Staples", vec![line(5_000)])).await.unwrap();
     let number = |pool: SqlitePool| async move { list_purchase_orders(&pool).await.unwrap()[0].po_number };
@@ -197,7 +197,7 @@ async fn an_open_purchase_order_can_be_changed_or_deleted_until_something_is_rec
     // Changed in place: another vendor and two lines, the same number, nothing posted.
     update_purchase_order(&pool, po, input("Office Depot", vec![line(2_000), line(3_500)])).await.unwrap();
     let order = &list_purchase_orders(&pool).await.unwrap()[0];
-    assert_eq!((order.po_number, order.vendor_name.as_str(), order.total_cents), (before, "Office Depot", 5_500));
+    assert_eq!((order.po_number, order.vendor_name.as_str(), order.total_cents.get()), (before, "Office Depot", 5_500));
     assert_eq!(purchase_order_lines(&pool, po).await.unwrap().len(), 2);
     assert_eq!(balance(&pool, supplies).await, 0);
 
@@ -440,7 +440,7 @@ async fn a_bill_from_a_purchase_order_takes_the_vendors_terms_and_the_bill_check
     let terms: i64 = sqlx::query_scalar("INSERT INTO terms (name, net_days, discount_ppm, discount_days) VALUES ('2% 10 Net 30', 30, 20000, 10) RETURNING id").fetch_one(&pool).await.unwrap();
     let order = |pool: SqlitePool| async move {
         create_purchase_order(&pool, PurchaseOrderInput { form_lines: Vec::new(), vendor_name: "Staples".into(), po_date: d(5, 1), expected_date: None, memo: None,
-            lines: vec![PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: Some("Paper".into()), quantity_e4: Some(10_000), rate_cents: Some(10_000), amount_cents: 10_000, class_id: None, customer_id: None }] }).await.unwrap()
+            lines: vec![PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: Some("Paper".into()), quantity_e4: Some(10_000), rate_cents: Some(Cents(10_000)), amount_cents: Cents(10_000), class_id: None, customer_id: None }] }).await.unwrap()
     };
     let po = order(pool.clone()).await;
     sqlx::query("UPDATE vendors SET terms_id = ?1 WHERE name = 'Staples'").bind(terms).execute(&pool).await.unwrap();

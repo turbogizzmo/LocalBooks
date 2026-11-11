@@ -19,3 +19,10 @@ export const POLICIES = [
   ['ADMINS', 'Required for Admins and External Accountants', 'They set one up at their next sign-in; anyone else may.'],
   ['ALL', 'Required for everyone', 'Every user sets one up at their next sign-in.'],
 ];
+
+/** What this computer's own check is called (gap R29): `TOUCH_ID`, `WINDOWS_HELLO`, else null. */
+export function computerCheckName(kind) {
+  if (kind === 'TOUCH_ID') return 'Touch ID';
+  if (kind === 'WINDOWS_HELLO') return 'Windows Hello';
+  return null;
+}
