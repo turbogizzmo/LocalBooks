@@ -96,20 +96,23 @@ mail program.
 When the vendor's bill arrives for an order you haven't received items on:
 
 1. Choose **Create bill…** in the order's **▾** menu, or open it and click **Create Bill**.
-2. Enter the **Bill date** (today to start) and the **Due date**. The due date starts 30 days after
-   the bill date and moves when you change the bill date; type another if the vendor's bill says
-   so. It can't be before the bill date.
+2. Enter the **Bill date** (today to start) and the **Due date**. The due date follows the vendor's
+   terms, or **Preferences › Bills › Bills are due** when the vendor has none, and moves when you
+   change the bill date until you type another. It can't be before the bill date.
 3. Enter the **Vendor's bill no.**, if any.
 4. Click **Create bill**.
 
 LocalBooks posts the bill at once, for the order's total: each line keeps its account, item,
 description, quantity, rate, class and **Customer:Job**, and the discounts and charges come over
 too. The bill debits the lines' accounts and credits **Accounts Payable**, like a bill you enter by
-hand. Its memo is the order's message, or *PO #* and the number when there is none. The order
-becomes **Billed** and can't be billed again.
+hand, and takes the vendor's terms, so **Pay Bills** offers any early-payment discount they give.
+Its memo is the order's message, or *PO #* and the number when there is none. The order becomes
+**Billed** and can't be billed again.
 
-A bill made from an order is never held for approval, even if it matches a bill rule: the order was
-already approved (or didn't need to be).
+Creating the bill runs the same checks as **Enter Bills**: if the vendor's bill number was used
+before, or the date is far from today, LocalBooks asks first and **Save anyway** goes ahead. If an
+approval rule for bills covers it, the bill isn't created: enter it in **Expenses › Enter Bills**
+and choose **Submit for approval**, then close the order once the bill is approved.
 
 Only an **Open** order can be billed this way. Once any of its items have been received, enter the
 bill from **Vendors › Enter Bill for Received Items** instead.
@@ -126,7 +129,8 @@ bill](bills.md#receive-items-before-the-bill).
 When you no longer expect the rest of an order (the vendor can't supply it, or you cancelled),
 choose **Close without billing** in its **▾** menu, or open it and click **Close PO**. A closed
 order leaves the open-order reports and can't be received or billed. **Reopen** brings it back as
-an open order.
+an open order. An order closed because everything on it was received can't be reopened; void a
+receipt on it if you need to receive it again.
 
 Purchase orders can't be deleted or voided. Close the ones you don't need.
 
@@ -165,6 +169,7 @@ item's quantity on open purchase orders.
 
 Purchase orders belong with inventory. Turning off **Inventory** in **Preferences › Items &
 Inventory** (see [Preferences](preferences.md#items--inventory)) takes **Purchase Orders** and
-**Receive Items** out of the side bar. Orders you already saved are kept, and you can still open,
+**Receive Items** out of the side bar and **+ New**, and greys out **Vendors › Create Purchase
+Orders** in the menu bar. Orders you already saved are kept, and you can still open,
 print, bill and close them on **Expenses › Purchase Orders**, but LocalBooks won't save a new one or
 duplicate an old one until inventory is on again.

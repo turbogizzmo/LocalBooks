@@ -72,8 +72,10 @@ per customer](custom-forms.md#styles-several-designs-one-per-customer)).
 3. Check the address, subject and message, and send it (see [Email it](custom-forms.md#email-it)).
 
 The statement sent is for the period on screen. Statements can't be marked **Email later**,
-because their period is chosen when you send them. A **✉** beside a customer's name shows a
-statement was emailed to them; point at it to see when and to whom.
+because their period is chosen when you send them. A **✉** beside a customer's name shows their
+statement for the period on screen (the same end date) was emailed; point at it to see when and to
+whom. Change the dates and the mark shows for that period's statement instead. Statements emailed
+before version 0.15 have no period recorded, so they show no mark.
 
 ### Statement contacts
 
@@ -85,7 +87,8 @@ vendor](customers-and-products.md#add-a-customer-or-vendor).
 ## Statements for a customer group
 
 Choose a group under **Customer group** and its customers who have a statement for the period are
-ticked for you. With **All customers** (the default), tick the customers yourself.
+ticked for you. With **All customers** (the default), tick the customers yourself; going back to
+**All customers** from a group clears the group's ticks.
 
 When the group has a statement reminder, **Mark sent** appears beside it. Print or email the
 statements, then click **Mark sent** to start the wait for the next reminder. Clicking **Statements

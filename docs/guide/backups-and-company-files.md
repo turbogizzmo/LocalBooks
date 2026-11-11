@@ -10,8 +10,10 @@ Controls**.
   General › Company Preferences**, under **Automatic backups**.
 - **Right now:** click **Back up now**.
 - **To a file you choose** (a USB drive or cloud folder): click **Backup Company File…** and pick
-  where to save it. It's saved as a `.localbooks` file and checked after writing. This copy isn't
-  encrypted; for copies that leave this computer, use [Offsite backup](#offsite-backup-encrypted).
+  where to save it. It's saved as a `.localbooks` file and checked after writing. This copy is
+  encrypted only if the whole company file is (see [Encrypt the whole company
+  file](users-and-passwords.md#encrypt-the-whole-company-file)); otherwise, for copies that leave
+  this computer, use [Offsite backup](#offsite-backup-encrypted).
 
 ## Offsite backup (encrypted)
 
@@ -73,6 +75,11 @@ hasn't been done in 30 days. Change the days, or turn it off, under **Backup saf
    a newer version.
 3. Read the summary, then click **Replace current books**. Your current books are saved as a
    "Before restore" snapshot first.
+
+When the whole company file is encrypted, its backups are too and restore as usual. A backup made
+before you turned encryption on can't be restored over the encrypted books, because that would turn
+encryption off: turn it off first in **Settings › Users & Passwords**, or restore a backup made since it was
+turned on.
 
 > **Important:** a restore replaces the whole company file with the backup. Anything entered after
 > the backup was taken isn't kept. To undo just one desktop migration import, use **Reverse posted

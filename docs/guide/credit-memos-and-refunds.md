@@ -185,7 +185,8 @@ batch](invoices.md#print-other-forms-in-a-batch)).
 ## Copy a credit memo (Duplicate)
 
 Choose **Duplicate** in a row's **▾** menu, or in the toolbar of an open one. A new, unsaved form
-opens with the original's customer, memo, lines, sales tax rate and (for a refund receipt) the
+opens with the original's customer, memo, lines (with its subtotal, discount, charge and group
+lines, so it totals the same), sales tax rate and (for a refund receipt) the
 **Refund from** account. It is dated today and gets the next number when you save it. Check it,
 change what differs, and save.
 

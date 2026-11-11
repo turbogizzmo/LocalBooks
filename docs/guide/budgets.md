@@ -8,13 +8,12 @@ never change your books: they are only compared with them in reports.
 
 1. Go to **Accounting › Budgets** (or **Company › Planning & Budgeting › Set Up Budgets**).
 2. Click **New budget…**.
-3. Enter a **Name**. It starts as *FY2026 Budget* for the current year; each name can be used once.
-4. Choose the **Fiscal year containing**: last year, this year or one of the next two. The budget
-   covers the twelve months of the fiscal year that contains June 30 of that year. Your fiscal
-   year starts in the **First month of fiscal year** preference (see [Choose your accounting
-   settings](getting-started.md#choose-your-accounting-settings)). With a calendar year, 2026 means
-   January to December 2026; with a year starting in July, 2026 means July 2025 to June 2026.
-   The **Budget** list shows the start date, so check it after you create the budget.
+3. Enter a **Name**. It starts as *FY* and the year the current fiscal year starts, such as
+   *FY2026 Budget*; each name can be used once.
+4. Choose the **Fiscal year**. The list shows each year by its months, such as *Jan – Dec 2026* or
+   *Jul 2026 – Jun 2027*: last year, this year (marked *this year*, and chosen to start) and the
+   next two. Your fiscal year starts in the **First month of fiscal year** preference (see [Choose
+   your accounting settings](getting-started.md#choose-your-accounting-settings)).
 5. Click **Create budget**.
 
 You can keep several budgets for the same year, such as a plan and a stretch target. Choose which
@@ -39,7 +38,9 @@ A budget is by account and month. Budgets by class or by customer or job aren't 
 Amounts are entered in your home currency. An amount that isn't a number is outlined in red, and
 **Save** stays off until you fix it. Clearing a box, or entering 0, removes that month's amount.
 
-While there are unsaved changes, you can't switch to another budget: save them first.
+While there are unsaved changes, you can't switch to another budget: save them first. If you
+click **New budget…**, close the window or quit LocalBooks with amounts not saved, LocalBooks asks
+before they are lost.
 
 ## Delete a budget
 

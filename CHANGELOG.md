@@ -41,7 +41,6 @@ people using LocalBooks.
   marked every period as sent. Statements emailed before this update show no mark.
 - Choosing **All customers** after a customer group clears the group's ticks, so Print no longer
   prints only that group.
-## [0.14.1]
 - **Help for every screen, setting and menu command.** F1 now explains every page in the sidebar,
   including Approvals, Payout Feeds, the Attachments Library, Reps, Ship Via & Fields and each
   Settings tab. New step-by-step guides cover credit memos and refunds, customer statements,
@@ -56,19 +55,6 @@ people using LocalBooks.
 - **Clearer fiscal years for new budgets.** New budget… lists each fiscal year by its months (for
   example "Jul 2026 – Jun 2027") and marks the current one. Before, a bare year could create the
   budget for the wrong fiscal year when it doesn't start in January.
-
-## [0.14.0]
-
-- **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a
-  state rate plus a city rate, say) now splits the payment among its rates, in proportion to their
-  percentages, and pays down each rate's own liability account in one entry. The sales tax return
-  lists the payment under each agency instead of "No agency". A payment for a combined rate
-  recorded in 0.14.0 went entirely to its first rate's account; the return now lists it under that
-  rate's agency. To spread it across the agencies, void it and record it again.
-- **Duplicating a credit memo keeps its discounts.** Duplicate on a credit memo or refund receipt
-  now copies its subtotals, discount lines, percentage charges and groups, so the copy credits the
-  same amount as the original. Before, the copy left them out and credited the full amount of the
-  item lines.
 - **Diagnostics say why starting was slow.** The log in Help › Save Diagnostics now records how
   long LocalBooks took to start and which steps were slow, such as opening the company file.
 - **No more surprise customers and vendors.** A name typed on a form that isn't on your list is no
@@ -85,14 +71,28 @@ people using LocalBooks.
 - **An edited invoice keeps its number.** Saving changes to a posted invoice used to post the
   corrected invoice under a new number; it now keeps the original's number, so customers,
   statements, payments and reports go on showing the same one.
-
-## [0.14.0]
 - **Encrypt the whole company file.** An Admin can now encrypt the whole company file, its
   attachments and every backup made from it (Settings › Users & Passwords). It is off unless you turn
   it on. With it on, a copy that leaves your computer shows nothing readable without a password or
   the recovery key, the file opens on the sign-in screen, and signing out closes it again. **Read the
   warning first:** if every Admin forgets their password and the recovery key is lost, nobody can
   open those books or their backups.
+
+## [0.14.1]
+
+- **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a
+  state rate plus a city rate, say) now splits the payment among its rates, in proportion to their
+  percentages, and pays down each rate's own liability account in one entry. The sales tax return
+  lists the payment under each agency instead of "No agency". A payment for a combined rate
+  recorded in 0.14.0 went entirely to its first rate's account; the return now lists it under that
+  rate's agency. To spread it across the agencies, void it and record it again.
+- **Duplicating a credit memo keeps its discounts.** Duplicate on a credit memo or refund receipt
+  now copies its subtotals, discount lines, percentage charges and groups, so the copy credits the
+  same amount as the original. Before, the copy left them out and credited the full amount of the
+  item lines.
+
+## [0.14.0]
+
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
   job carries over to the bill, and Open Purchase Orders by Job lists what is still on order for
   each job.
