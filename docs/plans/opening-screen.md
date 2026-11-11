@@ -54,7 +54,7 @@ startup waits for that open to finish, then opens its own file. It never races i
    moves the result into the managed `Db` (`Db::adopt`), refreshes the gate, and only then drops
    the guard.
 5. If the open fails, the task manages `StartupFailure` *before* dropping the guard. The window
-   reloads into the failure screen exactly as it does today.
+   shows the failure screen exactly as it does today.
 6. When nothing is to be opened (the company was closed at last quit), no guard is taken, and the
    window goes straight to No Company Open.
 
@@ -73,11 +73,14 @@ window title and recent list (`company_changed`), and the daily automatic backup
 
 - At launch, `main.jsx` asks `get_opening_state` before anything else. While a file is opening it
   shows *Opening <name>…* with the step and a spinner. It subscribes to `company-opening` before
-  asking, so the end can't be missed. When the open ends, the window reloads and starts as usual:
+  asking, so the end can't be missed. When the open ends, the window starts as usual, in place:
   - the failure screen, if it failed;
   - sign-in or unlock, if the file has users (or is encrypted, #338: an encrypted file opens locked
     and its unlock happens at sign-in, after this screen);
   - otherwise the app.
+
+  It does not reload the page for this: a reload landing in the middle of a WebDriver command
+  leaves WebKit's driver (Linux end-to-end tests) waiting on it for good.
 - For in-app opens, a small overlay on every screen shows the same *Opening <name>…* panel while a
   `company-opening` state is set. It blocks clicks so nothing is changed in the company being
   closed. The window already reloads on `company-file-changed` once the new file is live. On

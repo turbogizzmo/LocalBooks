@@ -29,9 +29,9 @@ async function app() {
 }
 
 async function firstScreen() {
-  // The company file is still opening (gap R28): say so, then reload once it is open.
+  // The company file is still opening (gap R28): say so, then start as usual once it is open.
   const opening = await api.getOpeningState().catch(() => null);
-  if (opening) return <OpeningScreen initial={opening} />;
+  if (opening) return <OpeningScreen initial={opening} onOpened={start} />;
   const failure = await api.getStartupFailure().catch(() => null);
   if (failure) return <StartupFailure failure={failure} />;
   const status = await api.getStorageStatus().catch(() => undefined);
@@ -46,11 +46,15 @@ async function firstScreen() {
 }
 
 // Opens from inside the app show Opening <name>… over whatever screen is up.
-firstScreen().then((screen) =>
-  root.render(
-    <React.StrictMode>
-      {screen}
-      {screen.type !== OpeningScreen && <OpeningOverlay />}
-    </React.StrictMode>,
-  ),
-);
+function start() {
+  firstScreen().then((screen) =>
+    root.render(
+      <React.StrictMode>
+        {screen}
+        {screen.type !== OpeningScreen && <OpeningOverlay />}
+      </React.StrictMode>,
+    ),
+  );
+}
+
+start();

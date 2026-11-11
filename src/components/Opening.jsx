@@ -19,21 +19,21 @@ function OpeningPanel({ state }) {
 }
 
 /**
- * At launch, while the company file opens (gap R28): shown until the open ends, then the window
- * reloads and starts as usual (the failure screen, sign-in or the app).
+ * At launch, while the company file opens (gap R28): shown until the open ends, then `onOpened`
+ * starts the window as usual (the failure screen, sign-in or the app), in place.
  */
-export function OpeningScreen({ initial }) {
+export function OpeningScreen({ initial, onOpened }) {
   const [state, setState] = useState(initial);
   useEffect(() => {
     let stop = null;
     let gone = false;
-    // Once only: the end can arrive both as the event and from the check below, and a second
-    // reload cancels the first one's navigation, which WebKit's WebDriver then waits on for good.
-    let reloading = false;
+    // Once only: the end can arrive both as the event and from the check below. No reload: a page
+    // reloading under a WebDriver command leaves WebKit's driver waiting on it for good (Linux E2E).
+    let done = false;
     const reload = () => {
-      if (reloading) return;
-      reloading = true;
-      window.location.reload();
+      if (done) return;
+      done = true;
+      onOpened();
     };
     listen(COMPANY_OPENING, (event) => {
       if (event.payload) setState(event.payload);
@@ -48,7 +48,7 @@ export function OpeningScreen({ initial }) {
       gone = true;
       stop?.();
     };
-  }, []);
+  }, [onOpened]);
   return (
     <div className="flex h-full items-center justify-center bg-qb-canvas p-4">
       <OpeningPanel state={state} />
