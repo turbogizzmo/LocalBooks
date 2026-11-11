@@ -161,9 +161,13 @@ mod tests {
         assert_eq!(check(&path), Ok(()));
         pool.close().await;
 
-        // The same file with a crafted log beside it: opening it is refused before SQLite reads it.
-        std::fs::write(wal_path(&path), wal_header(1024)).unwrap();
-        let err = crate::db::open(&path).await.map(|_| ()).unwrap_err();
+        // A copy of the file with a crafted log beside it: opening it is refused before SQLite reads
+        // it. The copy has a name no connection has used, so a connection of the pool above that
+        // finishes closing late (checkpointing and deleting its own log) can't remove this one.
+        let copy = dir.join("Copy.localbooks");
+        std::fs::copy(&path, &copy).unwrap();
+        std::fs::write(wal_path(&copy), wal_header(1024)).unwrap();
+        let err = crate::db::open(&copy).await.map(|_| ()).unwrap_err();
         assert!(err.starts_with("FILE_WAL_MISMATCH"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
