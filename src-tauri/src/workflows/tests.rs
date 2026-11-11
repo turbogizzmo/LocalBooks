@@ -262,6 +262,38 @@ async fn memorizing_a_transaction_from_the_31st_keeps_its_day_though_it_first_re
 }
 
 #[tokio::test]
+async fn enter_all_due_skips_a_copy_in_a_closed_period_lists_it_and_enters_the_rest() {
+    let pool = test_pool().await;
+    let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
+    let check = |date: &str| serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": date,
+        "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 1_000, "memo": null }] });
+    let schedule = |name: &str, next: NaiveDate| RecurringInput { anchor_day: None, name: name.into(), kind: "EXPENSE".into(), payload: check("2026-01-01"), frequency: "MONTHLY".into(), every: 1, next_date: next, end_date: None };
+    let late = save_recurring(&pool, None, schedule("Old rent", d(2, 15))).await.unwrap();
+    let ok = save_recurring(&pool, None, schedule("New rent", d(4, 1))).await.unwrap();
+    // The books are closed through March 31: February and March's copies of Old rent can't post.
+    crate::closing::set_closing_date(&pool, &crate::closing::ClosingInput { lock_date: Some(d(3, 31)), current_passcode: None, new_passcode: None }).await.unwrap();
+
+    let report = enter_due_report(&pool, d(4, 20), None).await.unwrap();
+    assert_eq!(report.entered, 1, "New rent's April copy");
+    assert_eq!(report.skipped.len(), 1);
+    assert_eq!((report.skipped[0].template_id, report.skipped[0].name.as_str(), report.skipped[0].date), (late, "Old rent", d(2, 15)));
+    assert!(!report.skipped[0].reason.is_empty());
+    let next = |id: i64| {
+        let pool = pool.clone();
+        async move { sqlx::query_scalar::<_, NaiveDate>("SELECT next_date FROM recurring_templates WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap() }
+    };
+    assert_eq!((next(late).await, next(ok).await), (d(2, 15), d(5, 1)), "the skipped schedule waits on the copy it couldn't enter");
+    assert_eq!(balance(&pool, rent).await, 1_000, "nothing half-entered");
+
+    // Edit…: rename Old rent and move it past the closed period; Enter all due then enters it.
+    edit_recurring_schedule(&pool, late, &ScheduleInput { name: "Storage rent".into(), frequency: "MONTHLY".into(), every: 1, next_date: d(4, 15), end_date: None, anchor_day: None }).await.unwrap();
+    let again = enter_due_report(&pool, d(4, 20), None).await.unwrap();
+    assert_eq!((again.entered, again.skipped.len()), (1, 0));
+    assert_eq!(list_recurring(&pool).await.unwrap().iter().find(|t| t.id == late).unwrap().name, "Storage rent");
+    assert!(edit_recurring_schedule(&pool, late, &ScheduleInput { name: " ".into(), frequency: "MONTHLY".into(), every: 1, next_date: d(5, 15), end_date: None, anchor_day: None }).await.unwrap_err().starts_with("REC_NAME_REQUIRED"));
+}
+
+#[tokio::test]
 async fn a_bill_from_a_purchase_order_takes_the_vendors_terms_and_the_bill_checks() {
     let pool = test_pool().await;
     let supplies = account(&pool, "6250").await;

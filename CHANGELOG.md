@@ -24,6 +24,11 @@ people using LocalBooks.
 - **Edit and delete purchase orders.** An open purchase order can be changed with Edit… (from its
   row or the saved order) and keeps its number. Delete removes one nothing was received or billed
   against. Neither changes the books, as a purchase order posts nothing.
+- **Edit memorized transactions.** Recurring Transactions has Edit… to change a memorized
+  transaction's name, how often it repeats, its next date and its end date.
+- **Enter all due enters what it can.** A copy that can't be entered, such as one dated in a
+  closed period, is listed with the reason and stays due, and the others are entered. Before,
+  one such copy stopped all of them.
 - **A default sales tax rate.** Sales › Sales Tax has a **Default rate**. Customers set to
   "Company default" start at it on new sales forms. Before, once a company had two or more rates,
   those customers got no tax unless someone picked a rate on each form.
