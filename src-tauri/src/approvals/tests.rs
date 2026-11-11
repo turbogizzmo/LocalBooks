@@ -94,6 +94,6 @@ async fn purchase_orders_wait_out_of_open_orders_until_approved() {
     assert!(crate::workflows::list_purchase_orders(&pool).await.unwrap().is_empty(), "not an open order yet");
     let approved = approve(&pool, request.id, "Alex").await.unwrap();
     let orders = crate::workflows::list_purchase_orders(&pool).await.unwrap();
-    assert_eq!((orders.len(), Some(orders[0].id), orders[0].total_cents), (1, approved.purchase_order_id, 80_000));
+    assert_eq!((orders.len(), Some(orders[0].id), orders[0].total_cents.get()), (1, approved.purchase_order_id, 80_000));
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM journal_entries").await, 0, "a purchase order posts nothing");
 }
