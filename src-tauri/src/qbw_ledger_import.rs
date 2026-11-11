@@ -1485,7 +1485,8 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
     .await
     .map_err(db_err)?;
     // (account, cents, memo, class name); the class becomes an id once the classes are in.
-    let mut lines: BTreeMap<i64, Vec<(i64, i64, Option<String>, Option<String>)>> = BTreeMap::new();
+    type LineFields = (i64, i64, Option<String>, Option<String>);
+    let mut lines: BTreeMap<i64, Vec<LineFields>> = BTreeMap::new();
     for (txn, account, cents, memo, class) in sqlx::query_as::<_, (i64, i64, i64, Option<String>, Option<String>)>(
         "SELECT source_txn_id, source_account_id, cents, memo, class_name FROM ledger_import_lines WHERE batch_id = ?1 ORDER BY source_txn_id, line_no",
     )

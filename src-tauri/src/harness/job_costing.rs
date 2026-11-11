@@ -20,6 +20,7 @@ use crate::estimates::EstimateInput;
 use crate::expenses::{BillInput, BillLineInput, ExpenseInput, SplitLineInput};
 use crate::invoices::{InvoiceInput, InvoiceLineInput};
 use crate::job_reports::{self, Breakdown, JobFilter, JobReport, JobReportKind, JobReportParams};
+use crate::money::Cents;
 use crate::sales::{SalesLineInput, SalesReceiptInput};
 
 const LAKEVIEW: &str = "Kestrel Homes:Lakeview Remodel";
@@ -70,7 +71,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     let invoice_line = |l: SalesLineInput| InvoiceLineInput {
         description: l.description,
         quantity_e4: l.quantity_e4,
-        rate_cents: l.rate_cents,
+        rate_cents: Cents(l.rate_cents),
         income_account_id: l.income_account_id,
         product_service_id: l.product_service_id,
         class_id: None,
@@ -105,6 +106,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
 
     // Lakeview: estimate $7,000, invoiced in full from the estimate.
     let estimate = |name: &str, date, lines, discount_cents| EstimateInput {
+        estimate_number: None,
         customer_name: name.into(),
         estimate_date: date,
         expiration_date: None,
@@ -128,13 +130,14 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
         .await
         .expect("estimate");
     let invoice = |name: &str, date, lines: Vec<SalesLineInput>| InvoiceInput {
+        invoice_number: None,
         customer_name: name.into(),
         issue_date: date,
         due_date: date + chrono::Days::new(30),
         lines: lines.into_iter().map(invoice_line).collect(),
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     crate::invoices::create_and_post_invoice(p, invoice(MAPLE, d(2025, 11, 15), vec![sale(labor, "Framing, first draw", 30, 8_500, services)])).await.expect("invoice");
@@ -191,13 +194,14 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     .expect("vendor credit");
     crate::credits::create_credit_memo(
         p,
-        CreditMemoInput { form_lines: Vec::new(), customer_name: LAKEVIEW.into(), credit_date: d(2025, 11, 28), memo: None, refund_account_id: None, lines: vec![sale(labor, "Billing correction", 2, 8_500, services)], tax_rate_id: None, header: Default::default() },
+        CreditMemoInput { credit_number: None, form_lines: Vec::new(), customer_name: LAKEVIEW.into(), credit_date: d(2025, 11, 28), memo: None, refund_account_id: None, lines: vec![sale(labor, "Billing correction", 2, 8_500, services)], tax_rate_id: None, header: Default::default() },
     )
     .await
     .expect("credit memo");
     crate::sales::post_sales_receipt(
         p,
         SalesReceiptInput {
+            receipt_number: None,
             payment_method_id: None,
             customer_name: Some(MAPLE.into()),
             receipt_date: d(2025, 12, 2),

@@ -327,6 +327,8 @@ function FileAndData({ companyName, isAdmin, navigate }) {
     PRE_IMPORT: 'Before import',
     PRE_REBUILD: 'Before rebuild',
     PRE_CONDENSE: 'Before condense',
+    PRE_ENCRYPTION: 'Before encryption',
+    PRE_DECRYPTION: 'Before turning encryption off',
     ARCHIVE: 'Archive (read-only)',
     EXPORT: 'Exported',
   };

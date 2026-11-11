@@ -64,7 +64,8 @@ async fn inherited<'e, E: sqlx::SqliteExecutor<'e>>(
     executor: E,
     customer_id: i64,
 ) -> Result<(String, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>), String> {
-    let row: Option<(String, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>)> = sqlx::query_as(
+    type HeaderRow = (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>);
+    let row: Option<HeaderRow> = sqlx::query_as(
         "WITH RECURSIVE up (id, parent_id, depth) AS (
              SELECT id, parent_id, 0 FROM customers WHERE id = ?1
              UNION ALL SELECT c.id, c.parent_id, up.depth + 1 FROM customers c JOIN up ON c.id = up.parent_id WHERE up.depth < 32
@@ -162,7 +163,8 @@ pub(crate) async fn write(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64
 /// addresses are `None` only on documents written before they were kept.
 pub async fn read<'e, E: sqlx::SqliteExecutor<'e>>(executor: E, table: &str, id: i64) -> Result<SalesHeader, String> {
     debug_assert!(matches!(table, "invoices" | "sales_receipts" | "estimates" | "credit_memos" | "sales_orders"));
-    let row: Option<(Option<String>, Option<String>, Option<String>, Option<String>)> =
+    type AddressRow = (Option<String>, Option<String>, Option<String>, Option<String>);
+    let row: Option<AddressRow> =
         sqlx::query_as(&format!("SELECT bill_to, ship_to, po_number, fob FROM {table} WHERE id = ?1")).bind(id).fetch_optional(executor).await.map_err(db_err)?;
     let (bill_to, ship_to, po_number, fob) = row.unwrap_or_default();
     Ok(SalesHeader { bill_to, ship_to, po_number, fob })

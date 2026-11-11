@@ -19,7 +19,6 @@ use crate::secrets::SecretStore;
 
 /// The Admin API version LocalBooks speaks (types it doesn't know come back as ADJUSTMENT).
 pub const API_VERSION: &str = "2026-10";
-const PAGE: usize = 100;
 /// Most pages read in one fetch; past that the fetch is refused, not cut short.
 const MAX_PAGES: usize = 200;
 /// How long before a payout its transactions may have happened.

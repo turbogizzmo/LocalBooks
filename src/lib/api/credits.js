@@ -10,11 +10,11 @@ export default {
   applyOpenCreditsToInvoice: (invoiceId, appliedDate) => invoke('apply_open_credits_to_invoice', { invoiceId, appliedDate }),
   listCustomerCreditApplications: (creditId) => invoke('list_customer_credit_applications', { creditId }),
   removeCustomerCredit: (applicationId) => invoke('remove_customer_credit', { applicationId }),
-  refundCustomerCredit: (input) => invoke('refund_customer_credit', { input }),
+  refundCustomerCredit: (input) => recordTransaction('refund_customer_credit', { input }),
   listVendorCredits: () => invoke('list_vendor_credits'),
   createVendorCredit: (input) => recordTransaction('create_vendor_credit', { input }),
   applyVendorCredit: (input) => invoke('apply_vendor_credit', { input }),
   listVendorCreditApplications: (creditId) => invoke('list_vendor_credit_applications', { creditId }),
   removeVendorCredit: (applicationId) => invoke('remove_vendor_credit', { applicationId }),
-  refundVendorCredit: (input) => invoke('refund_vendor_credit', { input }),
+  refundVendorCredit: (input) => recordTransaction('refund_vendor_credit', { input }),
 };

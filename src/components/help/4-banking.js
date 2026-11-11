@@ -19,6 +19,10 @@ export const screens = {
     help: 'Match your books to a bank or card statement and lock the matched transactions so the reconciled balance can never change.',
     guide: 'reconciling',
   },
+  'banking/payouts': {
+    help: 'Connect Stripe, PayPal or Shopify Payments and bring each payout to your bank in as one deposit: the sales it carried, less fees, refunds and chargebacks, so it matches the bank line. An Admin can have each feed fetch on a schedule while LocalBooks is open.',
+    guide: 'bank-feeds',
+  },
 };
 
 /**

@@ -119,6 +119,11 @@ export default function App() {
   useEffect(() => {
     if (salesOrdersOn !== null) api.setMenuViewEnabled('sales/orders', salesOrdersOn).catch(() => {});
   }, [salesOrdersOn]);
+  // And Create Purchase Orders while inventory and purchase orders are off.
+  const inventoryOn = prefs.data ? prefs.data.inventory_enabled !== 'false' : null;
+  useEffect(() => {
+    if (inventoryOn !== null) api.setMenuViewEnabled('expenses/purchase-orders', inventoryOn).catch(() => {});
+  }, [inventoryOn]);
   const companyName = prefs.data?.company_name ?? 'LocalBooks';
   // Which company is open, as the window title shows it: its name, or the file's name until it is named.
   const openCompany = storage.data?.companyName ?? null;

@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -26,7 +27,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: &str, due: &str, cent
 async fn credit_memo(pool: &SqlitePool, customer: &str, date: &str, cents: i64) -> i64 {
     let services = account(pool, "4100").await;
     let line = SalesLineInput { product_service_id: None, description: "Credit".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
-    crate::credits::create_credit_memo(pool, CreditMemoInput { form_lines: Vec::new(), customer_name: customer.into(), credit_date: d(date), memo: None, refund_account_id: None, lines: vec![line], tax_rate_id: None, header: Default::default() })
+    crate::credits::create_credit_memo(pool, CreditMemoInput { credit_number: None, form_lines: Vec::new(), customer_name: customer.into(), credit_date: d(date), memo: None, refund_account_id: None, lines: vec![line], tax_rate_id: None, header: Default::default() })
         .await
         .unwrap()
         .id
@@ -140,12 +141,12 @@ async fn double_deposit(pool: &SqlitePool) -> (i64, i64, i64) {
     let (checking, undeposited, services) = (account(pool, "1010").await, account(pool, "1300").await, account(pool, "4100").await);
     let inv = invoice(pool, "Acme", "2026-03-01", "2026-03-31", 12_000).await;
     let pay = crate::invoices::PaymentInput {
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         payment_method_id: None,
         invoice_id: inv,
         deposit_account_id: undeposited,
         payment_date: d("2026-03-10"),
-        amount_cents: 12_000,
+        amount_cents: Cents(12_000),
         payment_method: "CHECK".into(),
         reference: Some("1001".into()),
         exchange_rate_e6: None,
@@ -263,7 +264,7 @@ async fn old_invoices_are_written_off_with_applied_credit_memos() {
     let checking = account(&pool, "1010").await;
     crate::invoices::record_payment(
         &pool,
-        crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: small, deposit_account_id: checking, payment_date: d("2025-07-01"), amount_cents: 49_750, payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
+        crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: small, deposit_account_id: checking, payment_date: d("2025-07-01"), amount_cents: Cents(49_750), payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .unwrap();

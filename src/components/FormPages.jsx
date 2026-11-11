@@ -92,8 +92,8 @@ export function sentText(record) {
 }
 
 /** Each form's email status (last send, Email later) by document id, kept live. */
-export function useEmailStatuses(kind) {
-  const { data } = useLedgerQuery(useCallback(() => api.listEmailStatuses(kind), [kind]));
+export function useEmailStatuses(kind, periodEnd = null) {
+  const { data } = useLedgerQuery(useCallback(() => api.listEmailStatuses(kind, periodEnd), [kind, periodEnd]));
   return new Map((data ?? []).map((s) => [s.documentId, s]));
 }
 
