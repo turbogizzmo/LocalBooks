@@ -10,7 +10,8 @@ import { useVoucherActions } from './VoucherPrint.jsx';
 import { byDateThenNumber, stepButtons } from '../lib/formStep.js';
 import { SaveButtons, useFormFlow, useLineCommands } from '../lib/formFlow.jsx';
 import { pasteLineAt } from '../lib/formKeys.js';
-import { MemorizeDialog } from './Recurring.jsx';
+import { MemorizeDialog, saveMemorizedTransaction } from './Recurring.jsx';
+import { journalSource } from '../lib/memorizedEdit.js';
 import Attachments from './Attachments.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import TransactionHistory, { useTransactionReports } from './TransactionHistory.jsx';
@@ -36,7 +37,9 @@ const blankRow = () => ({ key: nextKey++, accountId: null, classId: null, debit:
  */
 function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, copyOf = null, onDuplicate, saved = [], onOpenSaved }) {
   const source = editing ?? copyOf;
-  const [date, setDate] = useTransactionDate(editing?.entry.entryDate ?? (copyOf ? todayIso() : undefined));
+  // Edit transaction… on Recurring Transactions: the memorized entry, saved back to its template.
+  const memorized = copyOf?.memorized ?? null;
+  const [date, setDate] = useTransactionDate(editing?.entry.entryDate ?? (memorized ? copyOf.date : copyOf ? todayIso() : undefined));
   const [memo, setMemo] = useState(source?.entry.memo ?? '');
   const [adjusting, setAdjusting] = useState(source?.entry.isAdjusting ?? false);
   const [rows, setRows] = useState(() =>
@@ -95,7 +98,9 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, copy
   const ready = used.length >= 2 && invalid === 0 && difference === 0 && totalDebit > 0;
 
   const [memorizing, setMemorizing] = useState(null);
-  const save = async (mode) => {
+  const save = async (requested) => {
+    // A memorized entry is saved back to its template, whichever Save is used.
+    const mode = memorized ? 'memorize' : requested;
     if (invalid > 0) return setError(`${invalid} line(s) need an account and exactly one of debit or credit.`);
     if (used.length < 2) return setError('A journal entry needs at least two lines.');
     if (difference !== 0) return setError(`Debits and credits are out of balance by ${formatCents(Math.abs(difference))}.`);
@@ -105,6 +110,17 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, copy
     );
     const warning = formClass.missing(lines, 'class_id');
     if (warning) return setError(warning);
+    if (mode === 'memorize' && memorized) {
+      setBusy(true);
+      try {
+        onPosted(await saveMemorizedTransaction(memorized, { id: null, date, description: memo.trim(), lines }));
+      } catch (err) {
+        setError(errorText(err));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (mode === 'memorize') return setMemorizing({ id: null, date, description: memo.trim(), lines });
     setBusy(true);
     try {
@@ -200,7 +216,7 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, copy
         </div>
       )}
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
-        <h2 className="mr-2 self-center text-md font-semibold">{editing ? `Edit journal entry #${editing.entry.entryNumber}` : 'Journal entry'}</h2>
+        <h2 className="mr-2 self-center text-md font-semibold">{editing ? `Edit journal entry #${editing.entry.entryNumber}` : memorized ? `Memorized: ${memorized.name}` : 'Journal entry'}</h2>
         <label>
           <span className="qb-label">Journal date</span>
           <DateBox ref={dateRef} className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -330,13 +346,25 @@ export function EntryLines({ entryId }) {
 
 export default function JournalEntries({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listJournalEntries);
-  const [composing, setComposing] = useState(intent?.action === 'journal-entry');
+  const [composing, setComposing] = useState(intent?.action === 'journal-entry' || intent?.action === 'edit-memorized');
   const [expanded, setExpanded] = useState(intent?.action === 'open-entry' ? intent.data.entryId : null);
   const [filter, setFilter] = useState('ALL');
   const [notice, setNotice] = useState(null);
   const [editing, setEditing] = useState(null); // { entry, lines }
   // Duplicate: the saved entry the new one on the form was copied from ({ entry, lines, n }).
-  const [copy, setCopy] = useState(null);
+  const [copy, setCopy] = useState(() =>
+    intent?.action === 'edit-memorized' && intent.data?.template
+      ? { ...journalSource(intent.data.template.payload), date: intent.data.template.payload.date, memorized: intent.data.template, n: Date.now() }
+      : null,
+  );
+  // Edit transaction… arriving while this window is already open.
+  useEffect(() => {
+    const template = intent?.action === 'edit-memorized' ? intent.data?.template : null;
+    if (!template) return;
+    setEditing(null);
+    setCopy({ ...journalSource(template.payload), date: template.payload.date, memorized: template, n: Date.now() });
+    setComposing(true);
+  }, [intent]);
   const duplicate = (from) => {
     setEditing(null);
     setCopy({ ...from, n: Date.now() });

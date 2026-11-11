@@ -7,6 +7,8 @@ import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import DateBox from './DateBox.jsx';
 import { enteredText, skippedLines } from '../lib/recurringReport.js';
+import { MEMORIZED_VIEW, templateInput } from '../lib/memorizedEdit.js';
+import { useOpenFromList } from '../lib/windows.js';
 
 const KIND_LABEL = { JOURNAL: 'Journal entry', EXPENSE: 'Expense / check', BILL: 'Bill', INVOICE: 'Invoice' };
 const FREQUENCIES = [
@@ -184,6 +186,15 @@ function ScheduleDialog({ template, onClose, onSaved }) {
   );
 }
 
+/**
+ * Saves a memorized transaction's changed transaction (from its form, opened by Edit transaction…)
+ * back to the template; its name and schedule stay. Returns the message the form shows.
+ */
+export async function saveMemorizedTransaction(template, payload) {
+  await api.saveRecurring(template.id, templateInput(template, payload));
+  return `“${template.name}” saved: copies entered from now on use the changed transaction; those already entered stay as they are.`;
+}
+
 /** How many active templates are due on or before today (for the reminder in the header). */
 export function useDueRecurring() {
   const { data } = useLedgerQuery(api.listRecurring);
@@ -225,6 +236,7 @@ export default function Recurring() {
     return enteredText(report);
   };
   const [editing, setEditing] = useState(null);
+  const openFromList = useOpenFromList();
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -308,7 +320,16 @@ export default function Recurring() {
                       label={`Actions for ${t.name}`}
                       items={[
                         { label: 'Enter now (through date above)', disabled: !isDue, onSelect: () => act(() => api.enterRecurring(asOf, t.id), entered) },
-                        { label: 'Edit…', onSelect: () => setEditing(t) },
+                        { label: 'Edit schedule…', onSelect: () => setEditing(t) },
+                        {
+                          label: 'Edit transaction…',
+                          hint: 'Change its lines, amounts and accounts; copies already entered stay as they are',
+                          onSelect: () =>
+                            api.getRecurring(t.id).then(
+                              (template) => openFromList(MEMORIZED_VIEW[template.kind], 'edit-memorized', { template }),
+                              (err) => setNotice({ kind: 'error', text: errorText(err) }),
+                            ),
+                        },
                         t.isActive
                           ? { label: 'Pause', onSelect: () => act(() => api.setRecurringActive(t.id, false), `“${t.name}” paused.`) }
                           : { label: 'Resume', onSelect: () => act(() => api.setRecurringActive(t.id, true), `“${t.name}” resumed.`) },

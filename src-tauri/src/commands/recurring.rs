@@ -4,12 +4,19 @@ use super::prelude::*;
 
 handlers![
     list_recurring,
+    get_recurring,
     save_recurring,
     set_recurring_active,
     delete_recurring,
     enter_recurring,
     edit_recurring_schedule,
 ];
+
+/// A memorized transaction with the transaction it enters, for Edit transaction….
+#[tauri::command]
+pub async fn get_recurring(db: State<'_, Db>, id: i64) -> Result<workflows::RecurringTemplate, String> {
+    workflows::get_recurring(&db.pool().await, id).await
+}
 
 #[tauri::command]
 pub async fn list_recurring(db: State<'_, Db>) -> Result<Vec<RecurringView>, String> {

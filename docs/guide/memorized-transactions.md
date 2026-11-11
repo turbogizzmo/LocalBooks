@@ -94,6 +94,9 @@ From a row's **▾** menu:
 
 - **Edit schedule…** changes its name, how often it repeats, its next date and its end date.
   Moving the next date makes its day of the month the one later copies fall on.
+- **Edit transaction…** opens the memorized check, expense, bill, invoice or journal entry in its
+  form. Change its lines, amounts, accounts or anything else and save: the copies entered from then
+  on use the changes, and copies already entered stay as they were.
 
 - **Pause** stops it from coming due or showing in reminders. **Resume** brings it back with the
   next date it had; if that date has passed, the missed copies are due at once.

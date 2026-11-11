@@ -447,6 +447,34 @@ fn summary(kind: &str, payload: &str) -> (i64, Option<String>) {
     }
 }
 
+/// A memorized transaction with the transaction itself, as its form posts it: Edit transaction…
+/// reopens the form with it and saves the changed transaction back with [`save_recurring`].
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecurringTemplate {
+    pub id: i64,
+    pub name: String,
+    pub kind: String,
+    pub frequency: String,
+    pub every: i64,
+    pub next_date: NaiveDate,
+    pub end_date: Option<NaiveDate>,
+    pub anchor_day: Option<i64>,
+    pub payload: serde_json::Value,
+}
+
+pub async fn get_recurring(pool: &SqlitePool, id: i64) -> Result<RecurringTemplate, String> {
+    type Row = (i64, String, String, String, i64, NaiveDate, Option<NaiveDate>, Option<i64>, String);
+    let row: Option<Row> = sqlx::query_as("SELECT id, name, kind, frequency, every, next_date, end_date, anchor_day, payload FROM recurring_templates WHERE id = ?1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
+    let (id, name, kind, frequency, every, next_date, end_date, anchor_day, payload) = row.ok_or("REC_NOT_FOUND: that recurring transaction no longer exists")?;
+    let payload = serde_json::from_str(&payload).map_err(|e| format!("REC_BAD_PAYLOAD: {e}"))?;
+    Ok(RecurringTemplate { id, name, kind, frequency, every, next_date, end_date, anchor_day, payload })
+}
+
 pub async fn list_recurring(pool: &SqlitePool) -> Result<Vec<RecurringView>, String> {
     let mut rows: Vec<RecurringView> = sqlx::query_as(
         "SELECT t.id, t.name, t.kind, t.frequency, t.every, t.next_date, t.end_date, t.is_active, t.payload,
