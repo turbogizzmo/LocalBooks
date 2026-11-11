@@ -135,6 +135,7 @@ features![
     sales_orders,
     sales_prefs,
     sales_tax,
+    sales_tax_adjustments,
     search,
     statement_charges,
     sheet_import,

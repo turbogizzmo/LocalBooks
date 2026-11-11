@@ -102,6 +102,7 @@ pub const TRANSACTION_TABLES: &[(&str, &[&str])] = &[
     ("sales_receipt_form_lines", &[]),
     ("sales_receipt_lines", &[]),
     ("sales_receipts", &["receipt_date"]),
+    ("sales_tax_adjustments", &["adjustment_date"]),
     ("sales_tax_payment_parts", &[]),
     ("sales_tax_payments", &["payment_date"]),
     ("statement_charge_invoices", &[]),

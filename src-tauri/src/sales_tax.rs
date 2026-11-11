@@ -12,6 +12,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::ledger::{db_err, mul_div_round, post_entry_in_tx, rollback, Cents, EntrySource, JournalEntry, JournalLine, MAX_LINE_CENTS};
 
+pub mod adjustments;
 pub mod combined;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]

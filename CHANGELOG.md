@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Sales tax adjustments.** Adjust… on Sales › Sales Tax raises or lowers what is owed on a rate,
+  for example a discount for filing on time, a penalty or a rounding difference, against an income
+  or expense account. The sales tax return shows it under the rate's agency. Before, this took a
+  journal entry, which changed what was owed but not the return.
+
 ## [0.14.1]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a

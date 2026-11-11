@@ -263,6 +263,15 @@ paid that agency in it. Choose **Accrual** (tax owed when you invoice) or **Cash
 paid; an invoice counts in proportion to what was paid on it in the period); it starts on the basis
 set in Preferences › Sales Tax. A payment counts for the agency of the rate it was recorded against.
 
+**Adjust…** (next to Pay sales tax) corrects what is owed on one rate without a sale: a discount
+the agency gives for filing on time, a penalty or interest, rounding on the return, or tax owed on
+a sale that wasn't taxed. Choose the rate, the date, **Reduce** or **Increase**, the amount and the
+account on the other side (an income account for a reduction, an expense account for an
+increase). It posts to the rate's liability account, and the sales tax return shows it in that
+rate's tax, marked *adj.*, under its agency for the period it is dated in. A combined rate is
+adjusted one part at a time, so each agency's figure is right. To undo one, choose **Void** on it
+in the Adjustments list.
+
 **Pay sales tax** for a combined rate splits the payment among its rates in proportion to their
 percentages (any rounding cent going to the largest) and pays down each rate's liability account,
 all in one entry from the account you pay from; the return lists each share under its rate's
