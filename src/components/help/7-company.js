@@ -261,8 +261,8 @@ export const topics = [
   {
     id: 'qbw-import', area: 'company', views: ['settings/import'],
     title: 'Import a desktop company file (.qbw)',
-    body: 'Choose a .qbw company file or .qbb backup: Tillhouse reads it without changing it and brings in its accounts, lists and transactions. Step 2 compares each account’s total with the balance the file stores, and lists any account that does not match with the file’s balance, the imported balance and the difference; the list stays after you post. Choose a Tillhouse account for each, then post.',
-    keywords: 'qbw qbb qbm migrate migration wizard desktop company file convert move import extractor balance differs difference match',
+    body: 'Choose a .qbw company file or .qbb backup: Tillhouse reads it without changing it and brings in its accounts, lists and transactions. Step 2 compares each account’s total with the balance the file stores, and lists any account that does not match with the file’s balance, the imported balance and the difference; the list stays after you post. Choose a Tillhouse account for each, then post. A full import also tracks each inventory item with the quantity on hand and value its purchases, sales, adjustments and assembly builds gave it in the file; step 2 lists any item whose quantity or value does not match the file, and why.',
+    keywords: 'qbw qbb qbm migrate migration wizard desktop company file convert move import extractor balance differs difference match inventory quantity on hand stock assembly build',
     go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
     guide: 'desktop-migration',
   },

@@ -295,7 +295,7 @@ fn inventory_cost_joins_the_form_it_was_sold_on() {
     // Invoice 1: receivable 120.00 debit, income 120.00 credit. Accounts: 4 receivable, 26
     // income, 30 cost of goods sold, 6 inventory asset.
     let mut txns: BTreeMap<i64, SourceTransaction> = [(1, txn(1, vec![line(4, -12_000), line(26, 12_000)]))].into_iter().collect();
-    let form_lines: HashMap<i64, (i64, Option<String>)> = [(501, (1, Some("Remodel".to_string()))), (502, (1, None)), (503, (9, None))].into_iter().collect();
+    let form_lines: FormLines = [(501, (1, Some("Remodel".to_string()), None)), (502, (1, None, None)), (503, (9, None, None))].into_iter().collect();
     let known: HashSet<i64> = [4, 26, 30, 6].into_iter().collect();
     let rows = [
         // Line 501 sold stock that cost 73.50: debit cost of goods sold, credit inventory.
@@ -311,7 +311,7 @@ fn inventory_cost_joins_the_form_it_was_sold_on() {
         cost_row(504, 30, 0),
     ];
     let mut quality = LedgerQuality::default();
-    add_inventory_cost(&mut txns, &form_lines, &rows, &known, &mut quality);
+    add_inventory_cost(&mut txns, &form_lines, &rows, &known, &mut quality, &mut crate::qbw_stock::SourceStock::default(), true);
 
     let invoice = &txns[&1];
     assert_eq!(invoice.imbalance_cents(), 0);
@@ -322,6 +322,58 @@ fn inventory_cost_joins_the_form_it_was_sold_on() {
     assert_eq!(quality.rejected_lines, 4);
     assert_eq!(quality.rejected_by_reason["inventory cost is not pairs that net to zero"], 2);
     assert_eq!(quality.rejected_by_reason["inventory cost of a form line that was not read"], 2);
+}
+
+/// The cost rows used for a sold line of an item the file tracks take its stock out (with their
+/// quantity, signed as the file signs it: positive = out); a bill's rows change only the value.
+/// A sold line whose rows can't be used is counted against its item, unless its form was not
+/// read at all.
+#[test]
+fn sold_stock_moves_with_its_cost_rows() {
+    let with_qty = |target: i64, account: i64, cents: i64, units: i64| {
+        let mut row = cost_row(target, account, cents);
+        let q = crate::qbw_records::Numeric { coefficient: units.unsigned_abs() as u128, exponent: 0, negative: units < 0 };
+        row.values.insert("quantity_qnty".to_string(), Value::Numeric(q));
+        row
+    };
+    let stock = || crate::qbw_stock::SourceStock {
+        items: vec![crate::qbw_stock::SourceStockItem {
+            item_id: 19,
+            asset_account_id: 6,
+            cogs_account_id: Some(30),
+            stored_qty_e4: None,
+            stored_value_cents: None,
+            pending_builds_e4: 0,
+        }],
+        ..Default::default()
+    };
+    let known: HashSet<i64> = [4, 26, 30, 6].into_iter().collect();
+    let form_lines: FormLines = [(501, (1, None, Some(19))), (502, (1, None, Some(19))), (503, (9, None, Some(19))), (504, (1, None, Some(77)))].into_iter().collect();
+    let rows = [
+        // 3 sold at 105.80: the inventory row carries the units out.
+        with_qty(501, 30, -10_580, -3),
+        with_qty(501, 6, 10_580, 3),
+        // A pair that doesn't net to zero: rejected, and counted against the item.
+        with_qty(502, 30, -1_000, -1),
+        with_qty(502, 6, 900, 1),
+        // A form that was not read (a memorized one): rejected, not counted.
+        with_qty(503, 30, -500, -1),
+        with_qty(503, 6, 500, 1),
+        // An item the file doesn't track moves nothing.
+        with_qty(504, 30, -200, -1),
+        with_qty(504, 6, 200, 1),
+    ];
+    let mut txns: BTreeMap<i64, SourceTransaction> = [(1, txn(1, vec![line(4, -12_000), line(26, 12_000)]))].into_iter().collect();
+    let mut sold = stock();
+    add_inventory_cost(&mut txns, &form_lines, &rows, &known, &mut LedgerQuality::default(), &mut sold, true);
+    assert_eq!(sold.moves, [crate::qbw_stock::SourceStockMove { transaction_id: 1, item_id: 19, qty_e4: -30_000, value_cents: -10_580 }]);
+    assert_eq!(sold.unread_sales, HashMap::from([(19, 1)]));
+
+    // On a bill the same rows change the value only.
+    let mut txns: BTreeMap<i64, SourceTransaction> = [(1, txn(1, vec![line(4, -12_000), line(26, 12_000)]))].into_iter().collect();
+    let mut billed = stock();
+    add_inventory_cost(&mut txns, &form_lines, &rows[..2], &known, &mut LedgerQuality::default(), &mut billed, false);
+    assert_eq!(billed.moves, [crate::qbw_stock::SourceStockMove { transaction_id: 1, item_id: 19, qty_e4: 0, value_cents: -10_580 }]);
 }
 
 /// Synthetic pages for `repair_pages`: a table list, a column list whose second column's row
@@ -404,7 +456,7 @@ fn cost_record(record: i64, target_type: i64, target: i64, account: i64, cents: 
 #[test]
 fn inventory_cost_rows_are_counted_once_and_summed_with_checks() {
     let mut txns: BTreeMap<i64, SourceTransaction> = [(1, txn(1, vec![line(4, -12_000), line(26, 12_000)]))].into_iter().collect();
-    let form_lines: HashMap<i64, (i64, Option<String>)> = [601, 602, 603, 604, 605].into_iter().map(|t| (t, (1, None))).collect();
+    let form_lines: FormLines = [601, 602, 603, 604, 605].into_iter().map(|t| (t, (1, None, None))).collect();
     let known: HashSet<i64> = [4, 26, 30, 6].into_iter().collect();
     let rows = [
         // Line 601's pair, then the same two records again (read twice from a re-solved page).
@@ -434,7 +486,7 @@ fn inventory_cost_rows_are_counted_once_and_summed_with_checks() {
         cost_row(605, 6, 500),
     ];
     let mut quality = LedgerQuality::default();
-    add_inventory_cost(&mut txns, &form_lines, &rows, &known, &mut quality);
+    add_inventory_cost(&mut txns, &form_lines, &rows, &known, &mut quality, &mut crate::qbw_stock::SourceStock::default(), true);
 
     let cents: Vec<i64> = txns[&1].lines[2..].iter().map(|l| l.cents).collect();
     assert_eq!(cents, [-2_000, 2_000, -300, 300, -450, 450, -500, 500, -500, 500]);
@@ -477,11 +529,11 @@ fn item_type_codes_map_to_kinds_and_the_rest_are_left_off() {
 /// (a bill that changes the cost of stock already sold keeps its cost rows there).
 #[test]
 fn inventory_cost_tables_pair_with_their_forms() {
-    for (cost, lines) in INVENTORY_COST_TABLES {
+    for (cost, lines, _) in INVENTORY_COST_TABLES {
         let form = cost.strip_suffix("_inventory_lineitem").expect("a cost table");
         assert!(lines.starts_with(&form.replace("sale_receipt", "sales_receipt")), "{cost} pairs with {lines}");
     }
-    assert!(INVENTORY_COST_TABLES.contains(&("abmc_bill_inventory_lineitem", "abmc_bill_lineitem")));
+    assert!(INVENTORY_COST_TABLES.contains(&("abmc_bill_inventory_lineitem", "abmc_bill_lineitem", false)), "a bill's cost rows move value, not quantity");
 }
 
 /// Item groups are the type-7 items; their items come from the grouped-items rows in the order
@@ -560,4 +612,47 @@ fn split_halves_of_one_movement_are_joined() {
     assert_eq!((txns[&62].lines.len(), txns[&62].imbalance_cents()), (2, 0));
     assert_eq!(txns[&62].memo.as_deref(), Some("Read together with transaction 77 of the file, which held the other half"));
     assert_eq!(txns.values().filter(|t| t.imbalance_cents() != 0).count(), 7);
+}
+
+/// Prints the tables that hold item quantities (item list, inventory record and build tables)
+/// with their columns and row counts, to find where a file keeps its stock. Set
+/// LOCALBOOKS_QBW_CHECK and run with `--ignored --nocapture`. LOCALBOOKS_QBW_SHOW lists tables
+/// whose rows to print, comma-separated, each optionally `table=column:text` to print only rows
+/// whose column's value contains the text; LOCALBOOKS_QBW_SHOW_N caps the rows (6).
+#[test]
+#[ignore]
+fn explores_inventory_tables() {
+    let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
+    let (pages, catalog, _, _) = read_pages(std::path::Path::new(&path)).unwrap();
+    let mut names: Vec<&String> = catalog
+        .names
+        .values()
+        .filter(|n| n.contains("item") || n.contains("inventory") || n.contains("assembl") || n.contains("build") || n.contains("lot") || n.contains("stock"))
+        .collect();
+    names.sort();
+    for name in names {
+        let id = catalog.table_id(name).unwrap();
+        let Some(cols) = catalog.columns.get(&id) else { continue };
+        let cols: Vec<&str> = cols.iter().map(|c| c.name.as_str()).collect();
+        let rows = rows_of(&pages, &catalog, name);
+        if rows.is_empty() {
+            continue;
+        }
+        println!("{name} ({} rows): {}", rows.len(), cols.join(", "));
+    }
+    let show = std::env::var("LOCALBOOKS_QBW_SHOW").unwrap_or_default();
+    for table in show.split(',').filter(|t| !t.is_empty()) {
+        let (table, filter) = table.split_once('=').map(|(t, f)| (t, Some(f))).unwrap_or((table, None));
+        for r in rows_of(&pages, &catalog, table).iter().filter(|r| filter.is_none_or(|f| {
+            let (c, v) = f.split_once(':').unwrap();
+            format!("{:?}", r.get(c)).contains(v)
+        })).take(std::env::var("LOCALBOOKS_QBW_SHOW_N").ok().and_then(|n| n.parse().ok()).unwrap_or(6)) {
+            let mut v: Vec<(&String, &crate::qbw_records::Value)> = r.values.iter().filter(|(_, v)| !matches!(v, crate::qbw_records::Value::Null)).collect();
+            v.sort_by_key(|(k, _)| k.as_str());
+            println!("--- {table}");
+            for (k, v) in v {
+                println!("   {k} = {v:?}");
+            }
+        }
+    }
 }

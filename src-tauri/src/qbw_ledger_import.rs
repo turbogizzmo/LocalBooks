@@ -183,6 +183,7 @@ pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i6
         .await
         .map_err(db_err)?;
     }
+    crate::qbw_stock_import::stage(&mut tx, batch_id, &ledger.stock).await?;
     for (kind, names) in [("REP", &ledger.sales_lists.reps), ("SHIP_METHOD", &ledger.sales_lists.ship_methods)] {
         for (name, active) in names {
             sqlx::query("INSERT OR IGNORE INTO ledger_import_sales_lists (batch_id, kind, name, is_active) VALUES (?1, ?2, ?3, ?4)")
@@ -383,6 +384,9 @@ pub struct LedgerBatchSummary {
     pub lists_only: bool,
     /// A lists-only batch whose lists were added and not reversed since.
     pub lists_added: bool,
+    /// The items the file tracks in stock, compared with the quantity and value the import
+    /// brings in (after a full import, what LocalBooks holds).
+    pub stock: crate::qbw_stock_import::StockSummary,
 }
 
 /// One account whose imported balance does not match the file's own balance. Amounts are
@@ -554,7 +558,9 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
     .map_err(db_err)?;
     // A file of lists only has stored balances but no lines to compare them with.
     let balance_differences = if transaction_count == 0 { Vec::new() } else { balance_differences(&accounts)? };
+    let stock = crate::qbw_stock_import::summary(pool, batch_id).await?;
     Ok(LedgerBatchSummary {
+        stock,
         balance_differences,
         lists_only: transaction_count == 0,
         lists_added: head.lists_added != 0,
@@ -1374,6 +1380,8 @@ pub struct PostLedgerResult {
     pub lists: Option<ImportListsResult>,
     /// What became of the file's classes, when it has any.
     pub classes: Option<ClassesResult>,
+    /// What a full import did with the quantities of the items the file tracks in stock.
+    pub stock: Option<crate::qbw_stock_import::StockResult>,
 }
 
 /// What an import did with the file's classes.
@@ -1709,6 +1717,13 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
         result.entries_posted += o.entries;
         result.lines_posted += line_counts[&o.source_id] as i64;
     }
+    // Stock moves with the entries just posted, so it comes after them.
+    if input.mode == ImportMode::Full {
+        match crate::qbw_stock_import::post(&mut tx, batch_id).await {
+            Ok(stock) => result.stock = stock,
+            Err(err) => return Err(ledger::rollback(tx, err).await),
+        }
+    }
     if let Err(e) = sqlx::query("UPDATE ledger_import_batches SET mode = ?2 WHERE id = ?1")
         .bind(batch_id)
         .bind(if input.mode == ImportMode::Full { "FULL" } else { "JOURNAL" })
@@ -1891,6 +1906,8 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
         "DELETE FROM ledger_import_price_levels WHERE batch_id = ?1",
         "DELETE FROM ledger_import_item_groups WHERE batch_id = ?1",
         "DELETE FROM ledger_import_classes WHERE batch_id = ?1",
+        "DELETE FROM ledger_import_stock_moves WHERE batch_id = ?1",
+        "DELETE FROM ledger_import_stock_items WHERE batch_id = ?1",
         "DELETE FROM ledger_import_transactions WHERE batch_id = ?1",
         "DELETE FROM ledger_import_accounts WHERE batch_id = ?1",
         "DELETE FROM ledger_import_batches WHERE id = ?1",

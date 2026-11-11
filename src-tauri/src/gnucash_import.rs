@@ -630,7 +630,7 @@ pub fn ledger(book: &Book) -> Ledger {
 
     let (transactions, unbalanced): (Vec<_>, Vec<_>) = transactions.into_iter().partition(|t| t.imbalance_cents() == 0);
     let (customers, vendors) = cx.parties.into_lists();
-    Ledger { accounts, customers, vendors, items: Vec::new(), transactions, unbalanced, unreadable, quality, sales_lists: Default::default(), classes: Vec::new() }
+    Ledger { accounts, customers, vendors, items: Vec::new(), transactions, unbalanced, unreadable, quality, sales_lists: Default::default(), classes: Vec::new(), stock: Default::default() }
 }
 
 /// The book's customers (with their jobs as sub-customers) and vendors, as ledger parties.

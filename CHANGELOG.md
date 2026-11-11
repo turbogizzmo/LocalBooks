@@ -23,6 +23,12 @@ becomes its release notes on GitHub and in the app's update window (see
   missing several columns now read those lines, and a payment and deposit that a file keeps as two
   halves of one movement come in as one. Every sample company in the test kit was checked; what
   still differs is listed in the import, for entry by hand.
+- **Inventory quantities come in from QuickBooks Desktop.** A full import of a company file now
+  tracks each inventory part and assembly with the quantity on hand and value its purchases,
+  sales, inventory adjustments and assembly builds gave it, so stock starts where the original
+  program's stock status report left it, instead of at zero. Each change is a stock movement on
+  the transaction that made it, so voiding an imported invoice or bill puts its stock back. Step 2
+  of the import lists any item whose quantity or value doesn't match the file, and why.
 
 ## [0.15.0]
 

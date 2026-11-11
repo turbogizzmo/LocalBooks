@@ -510,9 +510,19 @@ full ledger brings, besides accounts, customers, vendors, items and classes:
 - **Cost of goods sold.** An invoice or sales receipt that sold inventory brings the cost of what it
   sold, moved from Inventory Asset to Cost of Goods Sold as the original program recorded it.
 - **Inventory adjustments**, and the cost changes a bill made to stock already sold, come in, so
-  Inventory Asset and Cost of Goods Sold match the file. Item quantities on hand and assembly
-  builds don't come in yet: adjust quantities after the import (see
-  [Count and correct stock](inventory.md#count-and-correct-stock)).
+  Inventory Asset and Cost of Goods Sold match the file.
+- **Quantities on hand.** In a full import, each inventory part and assembly the file tracks is
+  tracked in Tillhouse too, with the quantity and value its purchases, sales, adjustments and
+  assembly builds gave it, so it starts with the quantity and value the original program's stock
+  status report shows. Each change is a stock movement on the transaction that made it, so
+  voiding an imported invoice or bill later puts its stock back. An assembly build comes in as an
+  entry whose lines move value within Inventory Asset; a pending build moves nothing, as in the
+  original program. A journal import doesn't track stock.
+- **Items whose quantity doesn't match** the file are listed in step 2, before and after you post,
+  with the file's quantity and value, the imported ones and why they differ: a transaction that
+  could not be read completely, an item Tillhouse already tracked before the import (its stock is
+  left as it was), or an inventory account that isn't an Other Current Asset account. Correct them
+  with [Count and correct stock](inventory.md#count-and-correct-stock).
 - **Discounts and subtotals.** The file's discount items become Tillhouse discount items (a percent
   discount keeps its percent). In a full import, an invoice's or sales receipt's subtotal and
   discount lines stay where they were on the form, rather than one amount off the whole form.

@@ -168,6 +168,8 @@ pub const KEPT_TABLES: &[&str] = &[
     "ledger_import_parties",
     "ledger_import_price_levels",
     "ledger_import_sales_lists",
+    "ledger_import_stock_items",
+    "ledger_import_stock_moves",
     "ledger_import_unreadable",
     "mileage_rates",
     "mileage_trips",

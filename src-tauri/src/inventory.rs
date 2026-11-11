@@ -56,7 +56,7 @@ async fn item_for_product(tx: &mut Transaction<'_, Sqlite>, product_id: i64) -> 
 }
 
 /// 15_000 → "1.5", -20_000 → "-2".
-fn format_qty(qty_e4: i64) -> String {
+pub(crate) fn format_qty(qty_e4: i64) -> String {
     let sign = if qty_e4 < 0 { "-" } else { "" };
     let abs = qty_e4.unsigned_abs();
     let frac = format!("{:04}", abs % 10_000);
@@ -356,6 +356,37 @@ async fn remember_unit_cost(tx: &mut Transaction<'_, Sqlite>, item_id: i64, qty_
         .await
         .map(|_| ())
         .map_err(db_err)
+}
+
+/// Starts tracking a product an import brought in, at zero on hand (see `qbw_stock_import`).
+pub(crate) async fn track_imported(tx: &mut Transaction<'_, Sqlite>, product_id: i64, asset_account_id: i64, cogs_account_id: i64) -> Result<i64, String> {
+    sqlx::query_scalar("INSERT INTO inventory_items (product_id, asset_account_id, cogs_account_id) VALUES (?1, ?2, ?3) RETURNING id")
+        .bind(product_id)
+        .bind(asset_account_id)
+        .bind(cogs_account_id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)
+}
+
+/// A movement read from another program's file, recorded against the entry its transaction
+/// became: the quantity and value are the file's own, not worked out here. A purchase into stock
+/// also sets the item's last unit cost. Refuses a movement that would leave quantity and value of
+/// different signs, as every movement does.
+pub(crate) async fn record_imported(
+    tx: &mut Transaction<'_, Sqlite>,
+    item_id: i64,
+    date: NaiveDate,
+    kind: &str,
+    qty_change_e4: i64,
+    value_change_cents: i64,
+    journal_entry_id: i64,
+) -> Result<(), String> {
+    record_movement(tx, Movement { item_id, date, kind, qty_change_e4, value_change_cents, journal_entry_id, reverses_id: None }).await?;
+    if kind == "PURCHASE" && qty_change_e4 > 0 && value_change_cents >= 0 {
+        remember_unit_cost(tx, item_id, qty_change_e4, value_change_cents).await?;
+    }
+    Ok(())
 }
 
 /// Reverses every stock movement carried by a journal entry being voided.
