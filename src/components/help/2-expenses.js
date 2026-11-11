@@ -31,7 +31,7 @@ export const screens = {
     guide: 'expenses-and-checks',
   },
   'expenses/purchase-orders': {
-    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines (and each line’s Customer:Job) in one step, or receive the goods first with Receive Items.',
+    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines (and each line’s Customer:Job) in one step, or receive the goods first with Receive Items. An order received in full closes and can’t be reopened (void a receipt to receive again). Purchase orders are offered only while inventory and purchase orders are on in Preferences › Items & Inventory.',
   },
   'expenses/item-receipts': {
     help: 'Goods received from a purchase order before the vendor’s bill: the stock is on hand, and its cost waits in Items Received Not Billed until you enter the bill here.',

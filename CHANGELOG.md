@@ -6,6 +6,16 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **A purchase order received in full stays closed.** Reopening it is refused, so Receive Items
+  can't take more than was ordered. Voiding a receipt still reopens the order.
+- **Vendor credits, credit memos and credit refunds get the usual save checks.** An unusual date
+  or a posting to Retained Earnings now asks before saving, as on other forms.
+- **Purchase orders follow the inventory preference.** With inventory and purchase orders turned
+  off, Create Purchase Orders is greyed out in the menu and left off the side bar and + New.
+- The vendor credit grid no longer shows a Bill? box. A credit can't be billed to a customer, and
+  the tick was never saved.
+- New company setup says "First month of fiscal year", as Preferences does.
+
 ## [0.14.1]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a
