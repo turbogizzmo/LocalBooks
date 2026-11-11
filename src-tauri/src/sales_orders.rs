@@ -35,6 +35,9 @@ pub struct SalesOrderLineInput {
 #[serde(rename_all = "camelCase")]
 pub struct SalesOrderInput {
     pub customer_name: String,
+    /// The number typed in the form's number box; `None` takes the next one; ignored when an order is changed, which keeps its number (`doc_numbers`).
+    #[serde(default)]
+    pub order_number: Option<i64>,
     pub order_date: NaiveDate,
     #[serde(default)]
     pub expected_date: Option<NaiveDate>,
@@ -221,12 +224,14 @@ async fn order_lines(conn: &mut sqlx::SqliteConnection, id: i64) -> Result<Vec<S
 pub async fn create(pool: &SqlitePool, input: &SalesOrderInput) -> Result<SalesOrderSummary, String> {
     run(pool, async |tx| {
         let customer_id = find_or_create_named(tx, Party::Customer, &input.customer_name).await?;
+        let number = crate::doc_numbers::take_number(tx, crate::doc_numbers::DocKind::SalesOrder, input.order_number).await?;
         let id: i64 = sqlx::query_scalar(
             "INSERT INTO sales_orders (order_number, customer_id, order_date)
-             VALUES ((SELECT COALESCE(MAX(order_number), 0) + 1 FROM sales_orders), ?1, ?2) RETURNING id",
+             VALUES (?3, ?1, ?2) RETURNING id",
         )
         .bind(customer_id)
         .bind(input.order_date)
+        .bind(number)
         .fetch_one(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -317,6 +322,7 @@ async fn write_from_estimate(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64,
     }
     let details = crate::sales_lists::details_in_tx(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
     let input = SalesOrderInput {
+        order_number: None,
         customer_name,
         order_date,
         expected_date: None,
@@ -331,11 +337,12 @@ async fn write_from_estimate(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64,
     let customer_id = find_or_create_named(tx, Party::Customer, &input.customer_name).await?;
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO sales_orders (order_number, customer_id, order_date, estimate_id)
-         VALUES ((SELECT COALESCE(MAX(order_number), 0) + 1 FROM sales_orders), ?1, ?2, ?3) RETURNING id",
+         VALUES (?4, ?1, ?2, ?3) RETURNING id",
     )
     .bind(customer_id)
     .bind(order_date)
     .bind(estimate_id)
+    .bind(crate::doc_numbers::next_number(tx, crate::doc_numbers::DocKind::SalesOrder).await?)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;

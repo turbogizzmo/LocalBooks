@@ -38,7 +38,7 @@ use std::path::{Path, PathBuf};
 use chrono::{Datelike, Local, NaiveDate};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::{Connection, SqliteConnection, SqlitePool};
 
 use crate::backup::{self, BackupFile};
@@ -525,7 +525,8 @@ async fn plan(conn: &mut SqliteConnection, cutoff: NaiveDate) -> Result<Plan, St
 
     // A group that leaves a balance in A/R, A/P or Undeposited Funds holds an open item.
     let je = nodes.table("journal_entries").expect("journal entries");
-    let lines: Vec<(i64, String, i64, Option<i64>, i64, i64, Option<i64>, Option<String>, bool)> = sqlx::query_as(
+    type LineRow = (i64, String, i64, Option<i64>, i64, i64, Option<i64>, Option<String>, bool);
+    let lines: Vec<LineRow> = sqlx::query_as(
         "SELECT l.journal_entry_id, e.entry_date, l.account_id, l.class_id, l.debit_cents, l.credit_cents, l.reconciliation_id, l.reconciled_at,
                 a.account_type IN ('ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE') OR (a.is_system = 1 AND a.account_type = 'OTHER_CURRENT_ASSET')
          FROM journal_lines l
@@ -565,7 +566,8 @@ async fn plan(conn: &mut SqliteConnection, cutoff: NaiveDate) -> Result<Plan, St
             .fetch_all(&mut *conn)
             .await
             .map_err(db_err)?;
-    let mut by_item: BTreeMap<i64, Vec<(usize, &(i64, i64, String, i64, i64))>> = BTreeMap::new();
+    type ItemLine = (i64, i64, String, i64, i64);
+    let mut by_item: BTreeMap<i64, Vec<(usize, &ItemLine)>> = BTreeMap::new();
     for m in &movements {
         let root = groups.find(nodes.node(stock_table, m.0).expect("a stock movement"));
         by_item.entry(m.1).or_default().push((root, m));
@@ -743,7 +745,8 @@ struct ArchiveRecord {
 /// groups, and `PRAGMA foreign_key_check` (File Check & Repair's LINKS check) confirms nothing dangles.
 async fn open_private(path: &Path) -> Result<SqliteConnection, String> {
     crate::wal_guard::check(path)?;
-    let options = SqliteConnectOptions::new().filename(path).foreign_keys(false).create_if_missing(false);
+    // A copy of an encrypted company (gap R1) opens with its key.
+    let options = crate::file_cipher::options_for(path)?.0.foreign_keys(false).create_if_missing(false);
     SqliteConnection::connect_with(&options).await.map_err(|e| format!("CONDENSE_OPEN: cannot open {}: {e}", path.display()))
 }
 
@@ -1129,7 +1132,7 @@ pub async fn pool_is_archive(pool: &SqlitePool) -> bool {
 
 async fn open_checked(path: &Path) -> Result<SqlitePool, String> {
     crate::wal_guard::check(path)?;
-    let options = SqliteConnectOptions::new().filename(path).foreign_keys(true).create_if_missing(false);
+    let options = crate::file_cipher::options_for(path)?.0.foreign_keys(true).create_if_missing(false);
     SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|e| format!("CONDENSE_OPEN: cannot open {}: {e}", path.display()))
 }
 

@@ -437,7 +437,8 @@ async fn job_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate) 
             sources.push((default_job, None, 1));
         }
         // Document lines that share a job and product count as one.
-        let mut merged: Vec<((Option<i64>, Option<i64>), i64)> = Vec::new();
+        type MergeKey = (Option<i64>, Option<i64>);
+        let mut merged: Vec<(MergeKey, i64)> = Vec::new();
         for (job, item, weight) in sources {
             match merged.iter_mut().find(|(k, _)| *k == (job, item)) {
                 Some((_, w)) => *w += weight.saturating_abs(),
@@ -759,7 +760,8 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
                     }
                 } else {
                     // Rows by product (named ones by name, then none) or by account (chart order).
-                    let mut groups: BTreeMap<(i64, String, String, i64), (String, Option<i64>, Option<i64>, Vec<i64>)> = BTreeMap::new();
+                    type GroupValue = (String, Option<i64>, Option<i64>, Vec<i64>);
+                    let mut groups: BTreeMap<(i64, String, String, i64), GroupValue> = BTreeMap::new();
                     for l in job_lines {
                         let (key, label, item, account) = match params.by {
                             Breakdown::Item => {
@@ -803,7 +805,8 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
             let lines: Vec<JobLine> = job_lines(pool, start, end).await?.into_iter().filter(|l| matcher.line(l)).collect();
             let names = item_names(pool).await?;
             report.line_count = lines.len();
-            let mut sums: BTreeMap<(bool, String, i64), (Option<i64>, Vec<i64>)> = BTreeMap::new();
+            type SumKey = (bool, String, i64);
+            let mut sums: BTreeMap<SumKey, (Option<i64>, Vec<i64>)> = BTreeMap::new();
             for l in &lines {
                 add(&mut sums.entry(item_key(l.item, &names)).or_insert_with(|| (l.item, Vec::new())).1, &[l.cost(), l.revenue()]);
             }
@@ -878,7 +881,8 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
                     report.rows.push(row(RowKind::Total, 0, cells));
                 }
                 _ => {
-                    let mut by_item: BTreeMap<(bool, String, i64), (Option<i64>, Vec<i64>)> = BTreeMap::new();
+                    type ItemKey = (bool, String, i64);
+                    let mut by_item: BTreeMap<ItemKey, (Option<i64>, Vec<i64>)> = BTreeMap::new();
                     for ((_, item), s) in &sums {
                         add(&mut by_item.entry(item_key(*item, &names)).or_insert_with(|| (*item, Vec::new())).1, s);
                     }

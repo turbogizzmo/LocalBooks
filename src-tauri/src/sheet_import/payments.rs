@@ -12,6 +12,7 @@ use sqlx::SqlitePool;
 use super::{amount_of, date_order, read_date, Check, Mapping, Problem, Rows, Sheet, SheetKind};
 use crate::bank::DateOrder;
 use crate::ledger::{db_err, format_cents};
+use crate::money::Cents;
 
 /// One row of a payments sheet, as read.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -124,7 +125,7 @@ async fn resolve(pool: &SqlitePool, kind: SheetKind, rows: &[PaymentRow], proble
             };
             sqlx::query_as(
                 "SELECT i.id, COALESCE(c.name, i.customer_name), i.total_cents - i.amount_paid_cents, i.status, i.is_voided, i.currency_code
-                 FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.invoice_number = ?1",
+                 FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.invoice_number = ?1 AND i.is_replaced = 0",
             )
             .bind(number)
             .fetch_all(pool)
@@ -270,12 +271,12 @@ pub async fn post(pool: &SqlitePool, kind: SheetKind, sheet: &Sheet, mapping: &M
                 invoice_id: x.document_id,
                 deposit_account_id: x.account_id,
                 payment_date: r.date,
-                amount_cents: r.amount_cents,
+                amount_cents: Cents(r.amount_cents),
                 payment_method: method_kind(r.method.as_deref()).into(),
                 payment_method_id: None,
                 reference: r.reference.clone(),
                 exchange_rate_e6: None,
-                discount_cents: 0,
+                discount_cents: Cents::ZERO,
             })
             .collect();
         crate::invoices::record_payments(pool, inputs).await?;

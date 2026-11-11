@@ -2,6 +2,7 @@ use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, InvoiceInput, InvoiceLineInput};
 use chrono::NaiveDate;
+use crate::money::Cents;
 
 async fn invoice(pool: &SqlitePool, customer: &str) -> i64 {
     let services: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(pool).await.unwrap();
@@ -9,13 +10,14 @@ async fn invoice(pool: &SqlitePool, customer: &str) -> i64 {
     create_and_post_invoice(
         pool,
         InvoiceInput {
+            invoice_number: None,
             customer_name: customer.into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: 5_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(5_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -47,7 +49,7 @@ async fn queue_then_send_records_history_and_dequeues() {
     assert_eq!((sent[0].method.as_str(), sent[0].subject.as_str()), ("MAIL_APP", "Invoice 1001 again"));
     assert_eq!(sent[1].recipients, "ap@acme.test, cfo@acme.test");
 
-    let status = statuses(&pool, FormKind::Invoice).await.unwrap();
+    let status = statuses(&pool, FormKind::Invoice, None).await.unwrap();
     let sa = status.iter().find(|s| s.document_id == a).unwrap();
     assert_eq!((sa.send_count, sa.queued, sa.last_recipients.as_deref()), (2, false, Some("ap@acme.test")));
     let sb = status.iter().find(|s| s.document_id == b).unwrap();
@@ -104,4 +106,19 @@ async fn voided_invoices_cannot_be_queued() {
     let entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM invoices WHERE id = ?1").bind(a).fetch_one(&pool).await.unwrap();
     crate::ledger::void_transaction(&pool, entry).await.unwrap();
     assert!(set_queued(&pool, FormKind::Invoice, a, true).await.unwrap_err().starts_with("EMAIL_VOIDED"));
+}
+
+#[tokio::test]
+async fn a_statement_is_marked_sent_for_the_period_it_covered_only() {
+    let pool = test_pool().await;
+    let march = NaiveDate::from_ymd_opt(2026, 3, 31).unwrap();
+    let april = NaiveDate::from_ymd_opt(2026, 4, 30).unwrap();
+    // Customer 7's March statement is emailed.
+    record_for(&pool, FormKind::Statement, 7, Some(march), &["ap@cafe.example".to_string()], Method::Smtp, "March statement").await.unwrap();
+    let sent = |period| {
+        let pool = pool.clone();
+        async move { statuses(&pool, FormKind::Statement, period).await.unwrap().into_iter().filter(|s| s.last_sent_at.is_some()).map(|s| s.document_id).collect::<Vec<_>>() }
+    };
+    assert_eq!(sent(Some(march)).await, vec![7]);
+    assert!(sent(Some(april)).await.is_empty(), "April's statement hasn't been sent");
 }

@@ -265,7 +265,8 @@ pub fn catalog_row_reads(page: &LogicalPage, span: &crate::qbw_pages::RowSpan) -
 /// once (upgrades append newer definitions); the most frequent definition wins, then the newest.
 pub fn read_catalog(pages: &[LogicalPage]) -> Catalog {
     let mut names = HashMap::new();
-    let mut defs: HashMap<(u32, u32), HashMap<(String, u16, bool, u32), (u32, u64)>> = HashMap::new();
+    type FieldKey = (String, u16, bool, u32);
+    let mut defs: HashMap<(u32, u32), HashMap<FieldKey, (u32, u64)>> = HashMap::new();
     for page in pages.iter().filter(|p| is_catalog_page(p)) {
         for span in page.rows.iter().filter(|r| r.chained) {
             match catalog_entry(page.owner, page.row(span)) {
