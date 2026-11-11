@@ -8,7 +8,8 @@ people using LocalBooks.
 
 - **Keyboard and contrast fixes across LocalBooks.** **F6** now moves between the sidebar, the
   toolbar and the window you are working in (**Shift+F6** goes back), so you can always get back to
-  the sidebar without a mouse. Pale grey, blue, orange and red text is a little darker so it's
+  the sidebar without a mouse, and a list or panel that scrolls with nothing in it to Tab to now
+  takes focus itself, so the arrow keys can scroll it. Pale grey, blue, orange and red text is a little darker so it's
   easier to read, and the Preferences categories, the Custom Forms preview and the Import steps
   work better with screen readers. Every page, form and Help is now checked automatically for
   accessibility (WCAG 2.1 AA), and Help has a new guide, Use LocalBooks from the keyboard.

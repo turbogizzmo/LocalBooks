@@ -20,6 +20,9 @@ page title, search, your sign-in, text size and Help) and the **window** you are
 | **Shift+F6** | Moves to the part before. |
 | **Tab** / **Shift+Tab** | Moves through the fields and buttons of the part you are in. In a window, Tab goes round that window's own fields and buttons and doesn't leave it; press **F6** to get out. |
 
+A list or panel that scrolls but has nothing in it to Tab to takes a Tab stop of its own: Tab to it
+and scroll it with the arrow keys, **Page Up** and **Page Down**.
+
 Coming back to a part with **F6** puts you on the field you left there. In the sidebar, F6 lands on
 the page that is open.
 

@@ -66,6 +66,17 @@ const focused = () =>
     return `${part} › ${el.tagName.toLowerCase()} ${(el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 40)}`;
   });
 
+/**
+ * Opens a page from the sidebar and waits for its window. Not `goTo`, which waits for the page's
+ * title: some windows rename themselves as they load (Reports becomes the report it shows).
+ */
+async function openPage(label) {
+  const link = $(`//nav[@aria-label="Main"]//button[normalize-space()="${label}"]`);
+  await click(link);
+  await browser.waitUntil(async () => (await link.getAttribute('aria-current')) === 'page', { timeoutMsg: `${label} did not open` });
+  await $('[aria-label="Open windows"] > section[data-f6-region]').waitForDisplayed();
+}
+
 const PAGES = [];
 const FORMS = [];
 
@@ -89,7 +100,7 @@ describe('Accessibility', () => {
     const failures = [];
     for (const page of PAGES) {
       await closeAll();
-      await goTo(page);
+      await openPage(page);
       const found = await violations();
       if (found.length) failures.push(`${page}:\n  ${found.map((v) => `${v.impact} ${v.id}: ${v.help} ${v.url}\n    ${v.nodes.join('\n    ')}`).join('\n  ')}`);
     }
@@ -115,8 +126,11 @@ describe('Accessibility', () => {
   });
 
   it('finds no problems in Help', async () => {
+    await closeAll();
     await browser.keys('F1');
     await $('[aria-label="Search help"]').waitForDisplayed();
+    // Help slides in; axe would measure its text mid-fade.
+    await browser.waitUntil(() => browser.execute(() => document.querySelector('aside[aria-label="Help"]').getAnimations().length === 0), { timeoutMsg: 'Help is still sliding in' });
     await expectAccessible();
     await browser.keys('F1');
     await $('[aria-label="Search help"]').waitForDisplayed({ reverse: true });

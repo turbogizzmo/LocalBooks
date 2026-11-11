@@ -24,6 +24,7 @@ import { setCurrencySymbol, setHoursFormat } from './lib/money.js';
 import * as cw from './lib/childWindows.js';
 import { runFormCommand } from './lib/formFlow.jsx';
 import { moveBetweenRegions, rememberRegionFocus } from './lib/regionKeys.js';
+import { keepScrollersFocusable } from './lib/scrollFocus.js';
 
 /**
  * Reports › QuickReport: the Ctrl+Q of the list or register in front, for what is selected in it
@@ -207,6 +208,10 @@ export default function App() {
       document.removeEventListener('focusout', rememberRegionFocus);
     };
   }, []);
+
+  // A panel that scrolls with nothing inside to Tab to takes focus itself, so the keyboard can
+  // scroll it (scrollFocus.js).
+  useEffect(() => keepScrollersFocusable(), []);
 
   // File › New Company… and Open or Restore Company… (the window reloads on the company opened).
   const companyFiles = useCompanyFileActions();
