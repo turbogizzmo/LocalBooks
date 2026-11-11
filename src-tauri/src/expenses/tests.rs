@@ -405,4 +405,6 @@ fn bill_and_expense_amounts_arrive_as_bare_integers() {
     .unwrap();
     assert_eq!(expense.lines[0].amount_cents, Cents(700));
     assert!(serde_json::from_str::<SplitLineInput>(r#"{"accountId":5,"amountCents":7.5,"memo":null}"#).is_err(), "a fractional amount is refused");
+    let lowest = BillInput { total_cents: Cents(i64::MIN), ..bill };
+    assert!(validate_bill(&lowest).unwrap_err().starts_with("BILL_AMOUNT_TOO_LARGE"), "the unallocated amount is checked, not wrapped");
 }
