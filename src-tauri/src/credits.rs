@@ -734,10 +734,11 @@ pub(crate) async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input:
     }
     let mut total: i64 = 0;
     for (idx, line) in input.lines.iter().enumerate() {
-        if !(1..=MAX_LINE_CENTS).contains(&line.amount_cents.get()) {
+        let amount = line.amount_cents.get();
+        if !(1..=MAX_LINE_CENTS).contains(&amount) {
             return Err(format!("VC_BAD_AMOUNT: line {} amount must be greater than zero", idx + 1));
         }
-        total = total.checked_add(line.amount_cents.get()).filter(|t| *t <= MAX_LINE_CENTS).ok_or("VC_TOO_LARGE: the credit is too large")?;
+        total = total.checked_add(amount).filter(|t| *t <= MAX_LINE_CENTS).ok_or("VC_TOO_LARGE: the credit is too large")?;
     }
     let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents.get()).collect();
     let (form_amounts, total) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "VC")?;
