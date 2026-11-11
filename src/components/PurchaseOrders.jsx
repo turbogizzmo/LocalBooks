@@ -245,7 +245,11 @@ function BillDialog({ order, onClose, onDone }) {
       await api.billPurchaseOrder(order.id, billDate, dueDate, number.trim() || null);
       onDone(`PO #${order.poNumber} turned into a bill from ${order.vendorName} for ${formatCents(order.totalCents)}; the bill is posted to Accounts Payable.`);
     } catch (err) {
-      setError(errorText(err));
+      setError(
+        isHeldForApproval(err)
+          ? `${errorText(err)}. A bill from a purchase order can't be submitted from here yet: enter it in Enter Bills and choose Submit for approval, then close this purchase order once the bill is approved.`
+          : errorText(err),
+      );
     }
   };
   return (

@@ -717,11 +717,14 @@ pub async fn set_purchase_order_closed(pool: &SqlitePool, id: i64, closed: bool)
     Ok(())
 }
 
+/// A purchase order's vendor, total, status, memo, number and the vendor's terms.
+type OrderHead = (String, i64, String, Option<String>, i64, Option<i64>);
+
 /// The bill an open purchase order becomes, with the same lines, discounts and charges, and the
 /// vendor's terms (so Pay Bills offers its early-payment discount). Nothing is written: the screen's
 /// command runs the bill checks and approval rules on it first, as Enter Bills does.
 pub async fn purchase_order_bill(pool: &SqlitePool, id: i64, bill_date: NaiveDate, due_date: NaiveDate, bill_number: Option<String>) -> Result<BillInput, String> {
-    let head: Option<(String, i64, String, Option<String>, i64, Option<i64>)> = sqlx::query_as(
+    let head: Option<OrderHead> = sqlx::query_as(
         "SELECT v.name, o.total_cents, o.status, o.memo, o.po_number, v.terms_id FROM purchase_orders o JOIN vendors v ON v.id = o.vendor_id WHERE o.id = ?1",
     )
     .bind(id)
@@ -761,7 +764,9 @@ pub async fn purchase_order_bill(pool: &SqlitePool, id: i64, bill_date: NaiveDat
     })
 }
 
-/// Turns an open purchase order into a posted bill with the same lines; returns the bill id.
+/// Turns an open purchase order into a posted bill with the same lines; returns the bill id. The
+/// screen's command builds, checks and posts in steps instead.
+#[cfg(test)]
 pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDate, due_date: NaiveDate, bill_number: Option<String>) -> Result<i64, String> {
     let bill = purchase_order_bill(pool, id, bill_date, due_date, bill_number).await?;
     post_purchase_order_bill(pool, id, &bill).await
