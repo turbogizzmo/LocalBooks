@@ -67,7 +67,7 @@ async fn deposit_sweeps_undeposited_funds_and_other_lines() {
         deposit_date: d(4),
         memo: Some("Branch deposit".into()),
         items: items.iter().map(|i| DepositItemRef { kind: i.kind.clone(), id: i.id }).collect(),
-        other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: 125, memo: Some("Interest".into()), class_id: None, customer_id: None, vendor_id: None }],
+        other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: Cents(125), memo: Some("Interest".into()), class_id: None, customer_id: None, vendor_id: None }],
         cash_back: None,
         deductions: Vec::new(),
     };
@@ -106,12 +106,12 @@ async fn transfer_moves_money_between_accounts() {
         (account_id(&pool, "1010").await, account_id(&pool, "1020").await, account_id(&pool, "2100").await, account_id(&pool, "1200").await);
     let xfer = |from, to, cents| TransferInput { from_account_id: from, to_account_id: to, transfer_date: d(2), amount_cents: cents, memo: None };
 
-    post_transfer(&pool, xfer(savings, checking, 250_000)).await.expect("transfer posts");
-    post_transfer(&pool, xfer(checking, card, 40_000)).await.expect("card payment posts");
+    post_transfer(&pool, xfer(savings, checking, Cents(250_000))).await.expect("transfer posts");
+    post_transfer(&pool, xfer(checking, card, Cents(40_000))).await.expect("card payment posts");
     assert_eq!((balance(&pool, checking).await, balance(&pool, savings).await, balance(&pool, card).await), (210_000, -250_000, -40_000));
 
-    assert!(post_transfer(&pool, xfer(checking, checking, 1)).await.unwrap_err().starts_with("XFER_SAME_ACCOUNT"));
-    assert!(post_transfer(&pool, xfer(checking, ar, 1)).await.unwrap_err().starts_with("XFER_BAD_ACCOUNT"));
+    assert!(post_transfer(&pool, xfer(checking, checking, Cents(1))).await.unwrap_err().starts_with("XFER_SAME_ACCOUNT"));
+    assert!(post_transfer(&pool, xfer(checking, ar, Cents(1))).await.unwrap_err().starts_with("XFER_BAD_ACCOUNT"));
     let activity = list_banking_activity(&pool).await.unwrap();
     assert_eq!(activity.len(), 2);
     assert!(activity.iter().all(|a| a.kind == "TRANSFER"));
@@ -126,17 +126,17 @@ async fn cash_back_comes_out_of_what_the_bank_gets() {
         deposit_date: d(5),
         memo: None,
         items: vec![],
-        other_lines: vec![DepositOtherLine { account_id: services, amount_cents: 50_000, memo: Some("Market stall".into()), class_id: None, customer_id: None, vendor_id: None }],
+        other_lines: vec![DepositOtherLine { account_id: services, amount_cents: Cents(50_000), memo: Some("Market stall".into()), class_id: None, customer_id: None, vendor_id: None }],
         cash_back: cash,
         deductions: Vec::new(),
     };
     let back = |account_id, amount_cents| Some(CashBack { account_id, amount_cents, memo: Some("Float".into()) });
     // It must leave the bank something, and go somewhere other than the bank.
-    assert!(post_bank_deposit(&pool, input(back(supplies, 50_000))).await.unwrap_err().starts_with("DEP_BAD_CASH_BACK"));
-    assert!(post_bank_deposit(&pool, input(back(supplies, -1))).await.unwrap_err().starts_with("DEP_BAD_CASH_BACK"));
-    assert!(post_bank_deposit(&pool, input(back(checking, 100))).await.unwrap_err().starts_with("DEP_CASH_BACK_ACCOUNT"));
+    assert!(post_bank_deposit(&pool, input(back(supplies, Cents(50_000)))).await.unwrap_err().starts_with("DEP_BAD_CASH_BACK"));
+    assert!(post_bank_deposit(&pool, input(back(supplies, Cents(-1)))).await.unwrap_err().starts_with("DEP_BAD_CASH_BACK"));
+    assert!(post_bank_deposit(&pool, input(back(checking, Cents(100)))).await.unwrap_err().starts_with("DEP_CASH_BACK_ACCOUNT"));
 
-    let id = post_bank_deposit(&pool, input(back(supplies, 7_500))).await.unwrap();
+    let id = post_bank_deposit(&pool, input(back(supplies, Cents(7_500)))).await.unwrap();
     assert_eq!(balance(&pool, checking).await, 42_500);
     assert_eq!(balance(&pool, supplies).await, 7_500);
     assert_eq!(balance(&pool, services).await, 50_000);
@@ -146,6 +146,20 @@ async fn cash_back_comes_out_of_what_the_bank_gets() {
     let row = list_banking_activity(&pool).await.unwrap().into_iter().find(|r| r.kind == "DEPOSIT" && r.id == id).unwrap();
     assert_eq!(row.amount_cents, 42_500);
     // A zero amount is no cash back at all.
-    post_bank_deposit(&pool, input(back(supplies, 0))).await.unwrap();
+    post_bank_deposit(&pool, input(back(supplies, Cents::ZERO))).await.unwrap();
     assert_eq!(balance(&pool, checking).await, 92_500);
+}
+
+#[test]
+fn deposit_and_transfer_amounts_arrive_as_bare_integers() {
+    let other: DepositOtherLine = serde_json::from_str(r#"{"accountId":4,"amountCents":12345,"memo":null}"#).unwrap();
+    assert_eq!(other.amount_cents, Cents(12_345));
+    let deduction: DepositDeduction = serde_json::from_str(r#"{"accountId":5,"amountCents":250,"memo":null,"kind":"FEE"}"#).unwrap();
+    assert_eq!(deduction.amount_cents, Cents(250));
+    let cash_back: CashBack = serde_json::from_str(r#"{"accountId":6,"amountCents":2000,"memo":null}"#).unwrap();
+    assert_eq!(cash_back.amount_cents, Cents(2_000));
+    let transfer: TransferInput =
+        serde_json::from_str(r#"{"fromAccountId":1,"toAccountId":2,"transferDate":"2026-06-01","amountCents":50000,"memo":null}"#).unwrap();
+    assert_eq!(transfer.amount_cents, Cents(50_000));
+    assert!(serde_json::from_str::<CashBack>(r#"{"accountId":6,"amountCents":20.5,"memo":null}"#).is_err(), "a fractional amount is refused");
 }

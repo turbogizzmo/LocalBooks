@@ -515,7 +515,7 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
                     items: payments.iter().map(|id| DepositItemRef { kind: "PAYMENT".into(), id: *id }).collect(),
                     other_lines: other
                         .iter()
-                        .map(|(account_id, amount_cents)| DepositOtherLine { account_id: *account_id, amount_cents: *amount_cents, memo: None, class_id: None, customer_id: None, vendor_id: None })
+                        .map(|(account_id, amount_cents)| DepositOtherLine { account_id: *account_id, amount_cents: Cents(*amount_cents), memo: None, class_id: None, customer_id: None, vendor_id: None })
                         .collect(),
                         cash_back: None,
                         deductions: Vec::new(),
@@ -558,7 +558,7 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
             let (from, to) = (a.pay_from[from_index], a.pay_from[to_index]);
             let result = crate::banking::post_transfer(
                 pool,
-                TransferInput { from_account_id: from, to_account_id: to, transfer_date: date(*day), amount_cents: *cents, memo: None },
+                TransferInput { from_account_id: from, to_account_id: to, transfer_date: date(*day), amount_cents: Cents(*cents), memo: None },
             )
             .await;
             let transfer_id = match result {

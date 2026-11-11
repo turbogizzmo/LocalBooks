@@ -263,7 +263,7 @@ async fn other_funds_on_a_deposit_bounce_back_to_their_account() {
             deposit_date: d(3),
             memo: None,
             items: vec![],
-            other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: 7_000, memo: Some("Refund check".into()), class_id: None, customer_id: None, vendor_id: None }],
+            other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: Cents(7_000), memo: Some("Refund check".into()), class_id: None, customer_id: None, vendor_id: None }],
             cash_back: None,
             deductions: Vec::new(),
         },

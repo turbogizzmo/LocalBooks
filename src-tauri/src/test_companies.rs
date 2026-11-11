@@ -172,7 +172,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     ledger::post_journal_entry(&pool, JournalEntry { id: None, date: d(2024, 1, 2), description: "Owner's investment".into(), lines: vec![JournalLine::debit(checking, 5_000_000), JournalLine::credit(equity, 5_000_000)], currency: None })
         .await
         .expect("opening balance");
-    crate::banking::post_transfer(&pool, crate::banking::TransferInput { from_account_id: checking, to_account_id: savings, transfer_date: d(2024, 1, 3), amount_cents: 1_000_000, memo: Some("Reserve".into()) })
+    crate::banking::post_transfer(&pool, crate::banking::TransferInput { from_account_id: checking, to_account_id: savings, transfer_date: d(2024, 1, 3), amount_cents: Cents(1_000_000), memo: Some("Reserve".into()) })
         .await
         .expect("transfer");
 
