@@ -21,7 +21,7 @@ pub const DOC_NUMBER_TAKEN: &str = "DOC_NUMBER_TAKEN";
 
 /// The highest number a person may type. The next number is not capped, so a file whose imported
 /// numbers are higher still numbers new forms.
-pub const MAX_DOC_NUMBER: i64 = 999_999_999;
+pub const MAX_DOC_NUMBER: i64 = 999_999_999_999;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]

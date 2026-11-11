@@ -238,6 +238,7 @@ async fn discounts_lower_taxable_sales_on_the_liability_report_and_the_return() 
     let memo = crate::credits::create_credit_memo(
         &pool,
         crate::credits::CreditMemoInput {
+            credit_number: None,
             customer_name: "Acme".into(),
             credit_date: d(3),
             memo: None,

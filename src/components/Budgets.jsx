@@ -54,8 +54,10 @@ export default function Budgets({ accounts, navigate }) {
   };
   const invalid = Object.keys(cells).filter((k) => cents(k) === null);
   const changed = Object.keys({ ...cells, ...saved }).filter((k) => cents(k) !== null && cents(k) !== (saved[k] ?? 0));
+  // A typed amount that isn't valid money yet is still unsaved work.
+  const unsaved = changed.length > 0 || invalid.length > 0;
   // Closing the window (or quitting) with amounts not saved asks first.
-  useUnsavedChanges('budget', changed.length > 0);
+  useUnsavedChanges('budget', unsaved);
   const rowTotal = (id) => MONTHS.reduce((s, m) => s + (cents(key(id, m)) ?? 0), 0);
 
   const save = async () => {
@@ -100,7 +102,8 @@ export default function Budgets({ accounts, navigate }) {
   const years = budgetYearChoices(todayIso(), fiscalStartMonth(prefs?.fiscal_year_start));
   const thisYear = years.find((y) => y.current);
   const startNew = async () => {
-    if (changed.length > 0 && !(await askConfirm(`“${budget.name}” has ${changed.length} amount${changed.length === 1 ? '' : 's'} not saved. Start a new budget and lose them?`, { confirmLabel: 'Discard and continue', danger: true }))) return;
+    const pending = changed.length + invalid.length;
+    if (unsaved && !(await askConfirm(`“${budget.name}” has ${pending} amount${pending === 1 ? '' : 's'} not saved. Start a new budget and lose them?`, { confirmLabel: 'Discard and continue', danger: true }))) return;
     setCreating({ name: `FY${thisYear.start.slice(0, 4)} Budget`, start: thisYear.start });
   };
   return (
@@ -109,7 +112,7 @@ export default function Budgets({ accounts, navigate }) {
         {list.length > 0 && (
           <label>
             <span className="qb-label">Budget</span>
-            <select className="qb-input w-[240px]" value={budget?.id ?? ''} onChange={(e) => setBudgetId(Number(e.target.value))} disabled={changed.length > 0}>
+            <select className="qb-input w-[240px]" value={budget?.id ?? ''} onChange={(e) => setBudgetId(Number(e.target.value))} disabled={unsaved}>
               {list.map((b) => (
                 <option key={b.id} value={b.id}>{b.name} (FY from {formatDate(b.fiscalYearStart)})</option>
               ))}

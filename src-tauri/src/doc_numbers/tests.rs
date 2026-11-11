@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, InvoiceInput, InvoiceLineInput};
+use crate::money::Cents;
 use chrono::NaiveDate;
 use sqlx::SqlitePool;
 
@@ -18,10 +19,10 @@ fn invoice(number: Option<i64>, customer: &str, income: i64) -> InvoiceInput {
         customer_name: customer.into(),
         issue_date: d(4),
         due_date: d(30),
-        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: 5_000, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents::from(5_000), income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     }
 }
@@ -191,16 +192,16 @@ async fn a_part_paid_invoice_keeps_its_number_and_its_payment_when_edited() {
     let income = services(&pool).await;
     let checking: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(&pool).await.unwrap();
     let mut input = invoice(None, "Acme", income);
-    input.lines[0].rate_cents = 10_000;
+    input.lines[0].rate_cents = Cents::from(10_000);
     let first = create_and_post_invoice(&pool, input).await.unwrap();
     crate::invoices::record_payment(
         &pool,
-        crate::invoices::PaymentInput { invoice_id: first.id, deposit_account_id: checking, payment_date: d(10), amount_cents: 4_000, payment_method: "CHECK".into(), payment_method_id: None, reference: None, exchange_rate_e6: None, discount_cents: 0 },
+        crate::invoices::PaymentInput { invoice_id: first.id, deposit_account_id: checking, payment_date: d(10), amount_cents: Cents::from(4_000), payment_method: "CHECK".into(), payment_method_id: None, reference: None, exchange_rate_e6: None, discount_cents: Cents::ZERO },
     )
     .await
     .unwrap();
     let mut changed = invoice(None, "Acme", income);
-    changed.lines[0].rate_cents = 12_000;
+    changed.lines[0].rate_cents = Cents::from(12_000);
     let edited = crate::edits::replace_invoice(&pool, first.id, changed).await.unwrap();
     let after = crate::invoices::get_summary(&pool, edited).await.unwrap();
     assert_eq!((after.invoice_number, after.amount_paid_cents, after.status.as_str()), (first.invoice_number, 4_000, "PARTIAL"));

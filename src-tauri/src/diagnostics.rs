@@ -146,7 +146,7 @@ impl Drop for StartupSteps {
 /// "startup took 2400 ms: open company 2100 ms, ..." with the steps of 50 ms or more, slowest first.
 fn startup_line(total_ms: u128, steps: &[(&'static str, u128)]) -> String {
     let mut slow: Vec<_> = steps.iter().filter(|(_, ms)| *ms >= 50).collect();
-    slow.sort_by(|a, b| b.1.cmp(&a.1));
+    slow.sort_by_key(|s| std::cmp::Reverse(s.1));
     let parts: Vec<String> = slow.iter().map(|(name, ms)| format!("{name} {ms} ms")).collect();
     if parts.is_empty() {
         format!("startup took {total_ms} ms")
