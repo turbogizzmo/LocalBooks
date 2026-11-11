@@ -299,6 +299,11 @@ item's **Edit…** window).
   taxable amount.
 - **Other charge**: shipping, handling, a rush fee. An amount works like any item; a percentage
   (`3%`) is worked out on the line above it.
+
+On bills, checks, vendor credits and purchase orders an Other charge item posts to its **Expense
+account on bills and checks** (for example a freight expense account) and a Discount item to its
+**Account on bills and checks**, if you choose one; otherwise both use the item's income account. See [Discounts and charges on bills, checks, credits and
+orders](bills.md#discounts-and-charges-on-bills-checks-credits-and-orders).
 - **Group**: click **Groups…**, then **New group…**. Give it a name, a description for sales forms
   and its items with their quantities. Tick **Print as one line** to print the group as a single
   line with its total instead of each item. A group holds services, parts and fixed charges, not
