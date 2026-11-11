@@ -81,7 +81,7 @@ export function FormSheet({ page, logo, className = '' }) {
   );
 }
 
-const FORM_NAMES = { INVOICE: 'invoice', ESTIMATE: 'estimate', SALES_RECEIPT: 'sales receipt', STATEMENT: 'statement', CREDIT_MEMO: 'credit memo', BILL_PAYMENT: 'bill payment stub', SALES_ORDER: 'sales order' };
+const FORM_NAMES = { INVOICE: 'invoice', ESTIMATE: 'estimate', SALES_RECEIPT: 'sales receipt', STATEMENT: 'statement', CREDIT_MEMO: 'credit memo', BILL_PAYMENT: 'bill payment stub', SALES_ORDER: 'sales order', PURCHASE_ORDER: 'purchase order' };
 
 /** "Emailed 10/21/2026 to ap@acme.com" (sent_at is UTC; shown as the local date). */
 export function sentText(record) {

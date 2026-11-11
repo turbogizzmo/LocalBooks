@@ -44,8 +44,9 @@ on in **Preferences › Items & Inventory** (see [Turn purchase orders off](#tur
 LocalBooks numbers each order with the next PO number when it is saved; you can't type your own.
 Saving says what the order totals and reminds you that nothing posted.
 
-The purchase order has no ship-to address and no field for the vendor's address: the printed order
-shows your company, the vendor's name, the dates, the lines and the total.
+The printed order shows your company, the vendor's name with its company name and address (from the
+vendor's record), the dates, each line with its Customer:Job and Class, and the total. It has no
+ship-to address.
 
 ### If the order needs approval
 
@@ -71,7 +72,8 @@ above it has:
   transactions. **New** goes back to a blank order.
 - **Duplicate** to start a new order copied from this one (see [Duplicate an
   order](#duplicate-an-order)).
-- **Print** to print it, and **Attach File** to keep the vendor's quote or confirmation with it
+- **Print** (Print… or Save as PDF…) and **Email** to send it to the vendor, and **Attach File**
+  to keep the vendor's quote or confirmation with it
   (see [Attach receipts and documents](attachments.md#what-you-can-attach)).
 - **Create Bill** to turn it into a bill (see [Turn an order into a bill](#turn-an-order-into-a-bill)).
 - **Close PO** to close it without billing, or **Reopen** on a closed order.
@@ -87,10 +89,17 @@ first.
 - **Several orders:** choose **File › Print Forms › Purchase Orders…** (see [Print other forms in
   a batch](invoices.md#print-other-forms-in-a-batch)).
 
-Each discount or charge prints under the line it applies to, with its percent if it has one.
+Each discount or charge prints under the line it applies to, with its percent if it has one. The
+order prints as the Purchase Order form: choose its layout, title, colors and message in **Settings ›
+Custom Forms › Purchase order**.
 
-LocalBooks doesn't email purchase orders. Save the order as a PDF and attach it to an email in your
-mail program.
+## Email an order to the vendor
+
+Open the order and click **Email**. The message goes to the email on the vendor's record, with the
+order attached as a PDF and any of its files marked **Send with the form**; change the address,
+subject or message before it goes. **Email later** puts it in the queue under **File › Send
+Forms** to send with others. It is sent through your mail app or your email server, as invoices
+are (see [Print or email it](invoices.md#print-or-email-it)).
 
 ## Turn an order into a bill
 

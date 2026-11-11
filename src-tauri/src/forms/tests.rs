@@ -509,3 +509,34 @@ async fn a_bill_payment_prints_and_emails_its_stub_with_every_bill_on_the_check(
     crate::email_log::set_queued(&pool, FormKind::BillPayment, first, true).await.unwrap();
     crate::email_log::record(&pool, FormKind::BillPayment, first, &["ap@paper.example".to_string()], crate::email_log::Method::Smtp, "Payment").await.unwrap();
 }
+
+#[tokio::test]
+async fn a_purchase_order_prints_with_the_vendors_address_job_and_class_and_can_be_queued_for_email() {
+    let pool = crate::db::test_pool().await;
+    let supplies: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '6250'").fetch_one(&pool).await.unwrap();
+    let job: i64 = sqlx::query_scalar("INSERT INTO customers (name) VALUES ('Harbor Refit') RETURNING id").fetch_one(&pool).await.unwrap();
+    let class: i64 = sqlx::query_scalar("INSERT INTO classes (name) VALUES ('Marine') RETURNING id").fetch_one(&pool).await.unwrap();
+    crate::preferences::set(&pool, crate::preferences::tax_time::INVENTORY, "true").await.unwrap();
+    let order: crate::workflows::PurchaseOrderInput = serde_json::from_value(serde_json::json!({
+        "vendorName": "Paper Co", "poDate": "2026-05-01", "expectedDate": "2026-05-15", "memo": "Rush",
+        "lines": [{ "accountId": supplies, "description": "Paper", "quantityE4": 50_000, "rateCents": 900, "amountCents": 4_500, "customerId": job, "classId": class }],
+        "formLines": [{ "afterLine": 1, "kind": "DISCOUNT", "description": "Volume discount", "amountCents": 500, "accountId": supplies }]
+    }))
+    .unwrap();
+    let po = crate::workflows::create_purchase_order(&pool, order).await.unwrap();
+    sqlx::query("UPDATE vendors SET company_name = 'Paper Company LLC', address = '12 Mill Rd\nSpringfield', email = 'orders@paper.example' WHERE name = 'Paper Co'").execute(&pool).await.unwrap();
+
+    let doc = purchase_order_doc(&pool, po, "$").await.unwrap();
+    assert_eq!((doc.kind, doc.customer_name.as_str(), doc.customer_email.as_deref()), (FormKind::PurchaseOrder, "Paper Co", Some("orders@paper.example")));
+    assert_eq!(doc.customer_details, ["Paper Company LLC", "12 Mill Rd", "Springfield"]);
+    assert_eq!(doc.lines[0].details, ["Customer:Job: Harbor Refit", "Class: Marine"]);
+    assert_eq!((doc.lines[1].description.as_str(), doc.lines[1].amount.as_str()), ("Volume discount", "-$5.00"));
+    assert_eq!(doc.total, "$40.00");
+    assert!(pdf_file_for(&pool, FormKind::PurchaseOrder, po, None).await.is_ok());
+
+    crate::email_log::set_queued(&pool, FormKind::PurchaseOrder, po, true).await.unwrap();
+    let queued = crate::email_log::queue(&pool).await.unwrap();
+    assert_eq!(queued.iter().map(|q| (q.kind, q.customer_name.as_str(), q.customer_email.as_deref())).collect::<Vec<_>>(), [(FormKind::PurchaseOrder, "Paper Co", Some("orders@paper.example"))]);
+    crate::email_log::record(&pool, FormKind::PurchaseOrder, po, &["orders@paper.example".to_string()], crate::email_log::Method::Smtp, "PO").await.unwrap();
+    assert!(crate::email_log::queue(&pool).await.unwrap().is_empty(), "sent, it leaves the queue");
+}

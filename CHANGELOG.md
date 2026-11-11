@@ -21,6 +21,10 @@ people using LocalBooks.
   for example a discount for filing on time, a penalty or a rounding difference, against an income
   or expense account. The sales tax return shows it under the rate's agency. Before, this took a
   journal entry, which changed what was owed but not the return.
+- **Email and design purchase orders.** A saved purchase order now prints, saves as PDF and emails
+  to the vendor like the other forms, with Email later too. It shows the vendor's address and
+  each line's Customer:Job and Class, and its look is set in Settings › Custom Forms › Purchase
+  order. File › Print Forms › Purchase Orders uses the same design.
 - **Edit and delete purchase orders.** An open purchase order can be changed with Edit… (from its
   row or the saved order) and keeps its number. Delete removes one nothing was received or billed
   against. Neither changes the books, as a purchase order posts nothing.
