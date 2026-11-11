@@ -29,7 +29,7 @@ export const screens = {
     guide: 'journal-entries-and-voids',
   },
   'accounting/recurring': {
-    help: 'Memorized transactions that repeat on a schedule: rent, subscriptions, monthly invoices and accruals. Enter everything that is due in one step, or pause a schedule.',
+    help: 'Memorized transactions that repeat on a schedule: rent, subscriptions, monthly invoices and accruals. Enter everything that is due in one step, edit a schedule, or pause one. A copy that can’t be entered (a closed period, say) is listed and stays due; the others are entered.',
   },
   'accounting/todos': {
     help: 'Your own tasks, with due dates, about a customer, vendor or employee and optionally one of their invoices or bills. Tick Done to complete one; due ones also show in Reminders on the Dashboard.',

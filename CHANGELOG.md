@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Edit memorized transactions.** Recurring Transactions has Edit… to change a memorized
+  transaction's name, how often it repeats, its next date and its end date.
+- **Enter all due enters what it can.** A copy that can't be entered, such as one dated in a
+  closed period, is listed with the reason and stays due, and the others are entered. Before,
+  one such copy stopped all of them.
+
 - **Month-end schedules stay at month end.** A recurring transaction that repeats monthly,
   quarterly or yearly from the 29th, 30th or 31st now falls on the last day of shorter months and
   goes back to its own day after them (January 31, February 28, March 31). Before, it moved to the

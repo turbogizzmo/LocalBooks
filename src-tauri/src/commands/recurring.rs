@@ -8,6 +8,7 @@ handlers![
     set_recurring_active,
     delete_recurring,
     enter_recurring,
+    edit_recurring_schedule,
 ];
 
 #[tauri::command]
@@ -37,8 +38,16 @@ pub async fn delete_recurring(app: AppHandle, db: State<'_, Db>, id: i64) -> Res
 }
 
 #[tauri::command]
-pub async fn enter_recurring(app: AppHandle, db: State<'_, Db>, as_of: Option<NaiveDate>, only: Option<i64>) -> Result<usize, String> {
-    let entered = workflows::enter_due(&db.pool().await, as_of.unwrap_or_else(|| Local::now().date_naive()), only).await?;
+pub async fn enter_recurring(app: AppHandle, db: State<'_, Db>, as_of: Option<NaiveDate>, only: Option<i64>) -> Result<workflows::EnteredDue, String> {
+    let report = workflows::enter_due_report(&db.pool().await, as_of.unwrap_or_else(|| Local::now().date_naive()), only).await?;
     notify(&app);
-    Ok(entered)
+    Ok(report)
+}
+
+/// Edit…: a memorized transaction's name and schedule.
+#[tauri::command]
+pub async fn edit_recurring_schedule(app: AppHandle, db: State<'_, Db>, id: i64, input: workflows::ScheduleInput) -> Result<(), String> {
+    workflows::edit_recurring_schedule(&db.pool().await, id, &input).await?;
+    notify(&app);
+    Ok(())
 }

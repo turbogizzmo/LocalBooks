@@ -547,26 +547,66 @@ fn anchor_day(next: NaiveDate, chosen: Option<u32>) -> u32 {
 /// A template that may be due: id, kind, payload, frequency, every, next date, end date, anchor day.
 type DueTemplate = (i64, String, String, String, i64, NaiveDate, Option<NaiveDate>, Option<i64>);
 
+/// A memorized transaction Enter all due couldn't enter: the date and why (a closed period, an
+/// inactive account and the like). Its schedule stays on that date.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SkippedOccurrence {
+    pub template_id: i64,
+    pub name: String,
+    pub date: NaiveDate,
+    pub reason: String,
+}
+
+/// What Enter all due did.
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct EnteredDue {
+    pub entered: usize,
+    pub skipped: Vec<SkippedOccurrence>,
+}
+
 /// Enters every occurrence that is due on or before `as_of` for active templates (at most 120 in
 /// one go), moving each template's next date along its schedule. Returns how many were entered.
+#[cfg(test)]
 pub async fn enter_due(pool: &SqlitePool, as_of: NaiveDate, only: Option<i64>) -> Result<usize, String> {
+    enter_due_report(pool, as_of, only).await.map(|r| r.entered)
+}
+
+/// [`enter_due`], reporting the copies it couldn't enter. A copy that fails (dated in a closed
+/// period, say) is undone on its own and its schedule stops there, so the others are still entered
+/// and nothing is entered twice when the person fixes the cause and enters again.
+pub async fn enter_due_report(pool: &SqlitePool, as_of: NaiveDate, only: Option<i64>) -> Result<EnteredDue, String> {
     run(pool, async |tx| {
         let templates: Vec<DueTemplate> = sqlx::query_as(
             "SELECT id, kind, payload, frequency, every, next_date, end_date, anchor_day FROM recurring_templates
-             WHERE is_active = 1 AND next_date <= ?1 AND (?2 IS NULL OR id = ?2)",
+             WHERE is_active = 1 AND next_date <= ?1 AND (?2 IS NULL OR id = ?2) ORDER BY next_date, id",
         )
         .bind(as_of)
         .bind(only)
         .fetch_all(&mut **tx)
         .await
         .map_err(db_err)?;
-        let mut entered = 0;
+        let mut report = EnteredDue::default();
         for (id, kind, payload, frequency, every, mut next, end, anchor) in templates {
             let anchor = anchor.and_then(|d| u32::try_from(d).ok());
-            while next <= as_of && end.is_none_or(|e| next <= e) && entered < 120 {
-                let entry = post_occurrence(tx, &kind, &payload, next).await?;
-                sqlx::query("INSERT INTO recurring_runs (template_id, run_date, journal_entry_id) VALUES (?1, ?2, ?3)").bind(id).bind(next).bind(entry).execute(&mut **tx).await.map_err(db_err)?;
-                entered += 1;
+            while next <= as_of && end.is_none_or(|e| next <= e) && report.entered < 120 {
+                sqlx::query("SAVEPOINT recurring_copy").execute(&mut **tx).await.map_err(db_err)?;
+                let posted = async {
+                    let entry = post_occurrence(tx, &kind, &payload, next).await?;
+                    sqlx::query("INSERT INTO recurring_runs (template_id, run_date, journal_entry_id) VALUES (?1, ?2, ?3)").bind(id).bind(next).bind(entry).execute(&mut **tx).await.map_err(db_err)?;
+                    Ok::<(), String>(())
+                }
+                .await;
+                if let Err(reason) = posted {
+                    sqlx::query("ROLLBACK TO recurring_copy").execute(&mut **tx).await.map_err(db_err)?;
+                    sqlx::query("RELEASE recurring_copy").execute(&mut **tx).await.map_err(db_err)?;
+                    let name: String = sqlx::query_scalar("SELECT name FROM recurring_templates WHERE id = ?1").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
+                    report.skipped.push(SkippedOccurrence { template_id: id, name, date: next, reason });
+                    break;
+                }
+                sqlx::query("RELEASE recurring_copy").execute(&mut **tx).await.map_err(db_err)?;
+                report.entered += 1;
                 next = advance(next, &frequency, every, anchor).ok_or("REC_BAD_SCHEDULE: the schedule cannot advance")?;
             }
             let finished = end.is_some_and(|e| next > e);
@@ -578,9 +618,61 @@ pub async fn enter_due(pool: &SqlitePool, as_of: NaiveDate, only: Option<i64>) -
                 .await
                 .map_err(db_err)?;
         }
-        Ok(entered)
+        Ok(report)
     })
     .await
+}
+
+/// Changes a memorized transaction's name and schedule; the transaction it enters stays as it was
+/// memorized. Moving the next date makes its day the one later dates fall on.
+pub async fn edit_recurring_schedule(pool: &SqlitePool, id: i64, input: &ScheduleInput) -> Result<(), String> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err("REC_NAME_REQUIRED: name the recurring transaction".into());
+    }
+    if advance(input.next_date, &input.frequency, input.every, None).is_none() || !(1..=52).contains(&input.every) {
+        return Err("REC_BAD_SCHEDULE: choose weekly, monthly, quarterly or yearly, every 1 to 52".into());
+    }
+    if input.end_date.is_some_and(|e| e < input.next_date) {
+        return Err("REC_BAD_END: the end date is before the next date".into());
+    }
+    let anchor = i64::from(anchor_day(input.next_date, input.anchor_day));
+    let done = sqlx::query(
+        "UPDATE recurring_templates SET name = ?1, frequency = ?2, every = ?3, next_date = ?4, end_date = ?5,
+                anchor_day = CASE WHEN next_date = ?4 AND anchor_day IS NOT NULL THEN anchor_day ELSE ?6 END
+         WHERE id = ?7",
+    )
+    .bind(name)
+    .bind(&input.frequency)
+    .bind(input.every)
+    .bind(input.next_date)
+    .bind(input.end_date)
+    .bind(anchor)
+    .bind(id)
+    .execute(pool)
+    .await
+    .map_err(|e| {
+        let msg = db_err(e);
+        if msg.contains("UNIQUE") { format!("REC_DUPLICATE: there is already a recurring transaction named '{name}'") } else { msg }
+    })?;
+    if done.rows_affected() == 0 {
+        return Err("REC_NOT_FOUND: that recurring transaction no longer exists".into());
+    }
+    Ok(())
+}
+
+/// A memorized transaction's name and schedule, as Edit… changes them.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleInput {
+    pub name: String,
+    pub frequency: String,
+    pub every: i64,
+    pub next_date: NaiveDate,
+    #[serde(default)]
+    pub end_date: Option<NaiveDate>,
+    #[serde(default)]
+    pub anchor_day: Option<u32>,
 }
 
 // ------------------------------------------------------------------------------------------------
