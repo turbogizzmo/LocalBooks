@@ -227,10 +227,13 @@ pub(super) async fn closing_date_exceptions(pool: &SqlitePool, start: NaiveDate,
                 SELECT e.id, e.entry_number, e.entry_date, e.source_type, e.memo, e.created_at,
                        (SELECT a.actor FROM ledger_audit_log a WHERE a.action_type = 'POST' AND a.target_entity_id = e.id ORDER BY a.id LIMIT 1) AS entered_by,
                        (SELECT MIN(k.set_at) FROM closing_locks k WHERE k.lock_date >= e.entry_date) AS closed_at,
+                       -- The first close covering its date, by the entry ids it recorded: exact,
+                       -- where two clock times can be equal.
+                       (SELECT k.last_entry_id FROM closing_locks k WHERE k.lock_date >= e.entry_date ORDER BY k.id LIMIT 1) AS closed_after_entry,
                        (SELECT COALESCE(SUM(l.debit_cents), 0) FROM journal_lines l WHERE l.journal_entry_id = e.id) AS amount_cents
                 FROM journal_entries e
                 WHERE e.status = 'POSTED' AND e.entry_date <= ?1 AND e.entry_date BETWEEN ?2 AND ?3
-             ) WHERE closed_at IS NOT NULL AND created_at > closed_at
+             ) WHERE closed_at IS NOT NULL AND (CASE WHEN closed_after_entry IS NOT NULL THEN id > closed_after_entry ELSE created_at > closed_at END)
              ORDER BY entry_date, entry_number",
         )
         .bind(lock)
