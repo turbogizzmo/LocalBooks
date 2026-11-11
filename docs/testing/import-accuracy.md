@@ -81,10 +81,92 @@ after posting with a notice in step 3. What is left on the files above:
   quantities from a company file yet, so builds are not imported (gap R3c).
 - **Payroll.** Paychecks and payroll liability payments keep their payroll-item lines in tables of
   their own; the reader reads them (R3a, #327).
-- **Check lines in upgraded files.** In files upgraded from an older QuickBooks version, the column
-  list the reader takes from the file's catalog for the check line table does not match how the rows
-  are stored (nine column ids are missing), so those rows don't decode. Gap R3b.
+- **Check lines in upgraded files.** In files upgraded from an older QuickBooks version, damaged
+  catalog pages hid some column definitions of the check line table; they are re-solved before the
+  catalog is read (R3b, #323), and lost columns that remain are guessed (#380, and the sign-off below).
 - **A handful of unread rows.** A few transactions per file still have a line that could not be read;
   they are listed in step 2 for entry by hand and are left out of posting.
 
 The real backup, which is the case users bring, matches in full.
+
+## Sign-off, 2026-11-11 (R3)
+
+Every company file in the test kit was read and fully imported with the code on `main` after #380
+and #385 plus the fixes below: the real backup and 31 sample files (19 textbook chapter files, the
+textbook sample company, 9 contractor-course chapter files, the contractor starter file and the
+construction sample). "Read" counts the file's accounts whose total from the decoded lines equals
+the balance the file stores; "Full import" counts LocalBooks accounts whose balance after a full
+import equals the stored balances of the file accounts mapped to them. An account the file keeps
+no balance for (some equity and system accounts) is not compared; the check used to count it as
+zero, which showed false differences on two chapter files.
+
+### Fixed in this change
+
+- **Memorized transactions.** The file keeps memorized transactions (templates for entering the
+  same transaction again) in the same tables as real ones, marked on the line or the header. The
+  reader counted them as real, so every account a template touched came out doubled on the
+  chapter file about memorizing transactions. They are now skipped, by the ledger reader and the
+  document reader alike (read 70 → 82 of 82).
+- **Tables that lost several column definitions.** #380 guesses up to two lost columns per table.
+  Some files lost three (check lines on the getting-started chapter) or six (bill lines on the
+  chapter about other accounts). Up to three, each row still tries every guess; from four to six,
+  the reader works out the table's layout once, on the first row that needs it, and reads the
+  other rows with it (all rows of a table share one layout), giving up after three rows that fit
+  no guess. Read: getting-started chapter 75 → 83 of 85, other-accounts chapter 85 → 95 of 95,
+  textbook sample 101 → 104 of 111, construction sample 110 → 114 of 115.
+- **One movement kept as two halves.** Some files keep a customer payment deposited straight to
+  the bank as a payment holding only its receivables line and a deposit on the same day holding
+  only the bank line; neither balances alone, so both were left out of posting. Two unbalanced
+  transactions on the same date whose differences cancel exactly, each the other's only such
+  match, are now read as one under the half that names a customer, vendor or number. This put the
+  contractor chapter 5 file in full agreement (full import 5 → 7 accounts, none differing).
+
+### Results
+
+| File | Read: stored balances matched | Full import: LocalBooks accounts matching / differing |
+|---|---|---|
+| Real backup (`.qbb`) | 112 of 112 | 77 / 0 (journal mode too) |
+| 11 more sample files (7 textbook chapter and appendix files, contractor chapters 3, 5 and 6, the contractor starter file) | all | all match, none differing |
+| Textbook, getting started | 83 of 85 | 19 / 2 |
+| Textbook, memorizing transactions | 82 of 82 | 18 / 0 |
+| Textbook, other accounts | 95 of 95 | 25 / 0 |
+| Textbook, entering bills | 84 of 84 | 17 / 0 |
+| Textbook, lists | 85 of 85 | 17 / 0 |
+| Textbook, estimating appendix | 83 of 85 | 14 / 3 |
+| Textbook, letters appendix | 84 of 85 | 15 / 2 |
+| Textbook, customizing forms | 77 of 85 | 9 / 2 |
+| Textbook, reports | 82 of 84 | 18 / 2 |
+| Textbook, setting up inventory | 71 of 86 | 2 / 3 |
+| Textbook, invoicing for services | 83 of 85 | 16 / 2 |
+| Textbook, bank accounts | 86 of 87 | 17 / 2 |
+| Textbook sample company | 104 of 111 | 63 / 14 |
+| Contractor, chapters 10, 11, 12 | 54–55 of 60 | 6–8 / 3–5 |
+| Contractor, chapter 4 | 63 of 65 | 2 / 1 |
+| Contractor, chapters 7 and 8 | 65 of 68, 58 of 65 | 7 / 5, 5 / 5 |
+| Construction sample | 114 of 115 | 76 / 2 |
+
+### What is left, and why
+
+Every remaining difference comes from data the reader can't decode, not from how a decoded
+transaction is imported; each one is listed in step 2 of the import (unreadable lines for entry
+by hand, accounts that differ). Gap R3d tracks them.
+
+- **Damaged line rows** (most files above): a few rows per file don't decode, or decode with a
+  value that fails the checks (unknown account, a date out of range). Their transactions don't
+  balance and are left out of posting. Examples: one $35 invoice line (getting started), one bill
+  line of $850 (letters appendix), one check line (estimating appendix), 4 to 17 rows on the
+  contractor chapter files, 28 on the textbook sample.
+- **Inventory cost rows that don't decode** (reports, invoicing for services, textbook sample,
+  construction sample): the cost pair of a sold line is incomplete, so it is rejected and Cost of
+  Goods Sold and Inventory Asset differ by that pair ($104.85 to $285.00; $180.00 on the
+  construction sample).
+- **Column types that don't match the rows** (setting up inventory): the file's catalog describes
+  the bill and check line tables with column types that don't match how their rows are stored, so
+  none of those rows decode (29 lines). This is a different fault from lost columns, which the
+  reader now handles.
+- **Pages that can't be decoded** (contractor chapter 4): 103 of the file's 1,468 row pages have no
+  anchor, and the $5,500 opening-balance deposit to the checking account is on one of them; no
+  decoded row holds it.
+- **An adjustment line on an account that isn't in the account list** (bank accounts chapter):
+  one inventory adjustment's value line posts to an account id the file no longer lists, so the
+  adjustment is unbalanced ($699).

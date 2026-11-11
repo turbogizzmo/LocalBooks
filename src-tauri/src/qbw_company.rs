@@ -116,6 +116,56 @@ impl SourceTransaction {
     }
 }
 
+/// A memorized transaction is a template the file keeps for entering the same transaction again;
+/// its rows sit in the same tables as real ones, marked on the line or on its header, and post
+/// nothing.
+fn memorized(line: &Row, header: Option<&Row>) -> bool {
+    line.get("is_memorized_transaction_bool").as_int() == Some(1) || header.is_some_and(|h| h.get("is_memorized_transaction_bool").as_int() == Some(1))
+}
+
+/// Some files keep one movement of money as two transactions that each hold half of it: a
+/// customer payment deposited straight to the bank holds only its receivables line, and a deposit
+/// on the same day holds only the bank line. Neither balances alone. Two unbalanced transactions
+/// on the same date, each a single line, whose differences cancel exactly, each the other's only
+/// such match, are read as one: the lines go to the one that names a customer, vendor or number
+/// (else the lower id), and its memo says so. A transaction with more lines that lost one is
+/// damaged, not a half, and is left as it is. Returns how many pairs were joined.
+fn join_split_halves(transactions: &mut BTreeMap<i64, SourceTransaction>) -> usize {
+    let off: Vec<(i64, NaiveDate, i64)> = transactions
+        .values()
+        .filter(|t| t.lines.len() == 1)
+        .map(|t| (t.id, t.date, t.imbalance_cents()))
+        .filter(|(_, _, d)| *d != 0 && *d != i64::MAX)
+        .collect();
+    let partners = |id: i64, date: NaiveDate, d: i64| off.iter().filter(move |(o, od, odiff)| *o != id && *od == date && odiff.checked_neg() == Some(d)).map(|(o, _, _)| *o);
+    let mut pairs = Vec::new();
+    for &(id, date, d) in &off {
+        let mine: Vec<i64> = partners(id, date, d).collect();
+        if let [other] = mine[..] {
+            let theirs: Vec<i64> = partners(other, date, -d).collect();
+            if theirs == [id] && id < other {
+                pairs.push((id, other));
+            }
+        }
+    }
+    for &(a, b) in &pairs {
+        let named = |t: &SourceTransaction| t.name.is_some() || t.doc_num.is_some();
+        let keep_b = transactions.get(&b).is_some_and(named) && !transactions.get(&a).is_some_and(named);
+        let (keep, drop) = if keep_b { (b, a) } else { (a, b) };
+        if let Some(gone) = transactions.remove(&drop) {
+            if let Some(t) = transactions.get_mut(&keep) {
+                t.lines.extend(gone.lines);
+                let note = format!("Read together with transaction {drop} of the file, which held the other half");
+                t.memo = Some(match t.memo.take().or(gone.memo) {
+                    Some(memo) => format!("{memo} ({note})"),
+                    None => note,
+                });
+            }
+        }
+    }
+    pairs.len()
+}
+
 /// The checked sum of some amounts, or `None` when it overflows.
 pub(crate) fn checked_total(amounts: impl IntoIterator<Item = i64>) -> Option<i64> {
     amounts.into_iter().try_fold(0i64, |sum, c| sum.checked_add(c))
@@ -132,6 +182,8 @@ pub struct LedgerQuality {
     /// Lines read from rows damaged near their end (memo lost), kept because they make their
     /// transaction balance exactly.
     pub recovered_lines: usize,
+    /// Pairs of transactions read as one (see [`join_split_halves`]).
+    pub joined_transactions: usize,
     /// Decoded lines rejected by the checks (unknown account, odd amount, impossible date).
     pub rejected_lines: usize,
     pub rejected_by_reason: BTreeMap<&'static str, usize>,
@@ -1005,7 +1057,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
             });
         }
         for r in lines.rows {
-            if r.get("is_no_post_bool").as_int() == Some(1) {
+            if r.get("is_no_post_bool").as_int() == Some(1) || memorized(&r, r.get("transaction_id").as_int().and_then(|t| headers.get(&t))) {
                 continue;
             }
             let checked = (|| {
@@ -1106,6 +1158,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
         }
     }
 
+    quality.joined_transactions = join_split_halves(&mut transactions);
     let (mut balanced, mut unbalanced): (Vec<_>, Vec<_>) =
         transactions.into_values().filter(|t| !t.lines.is_empty()).partition(|t| t.imbalance_cents() == 0);
     balanced.sort_by_key(|t| (t.date, t.id));
