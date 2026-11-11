@@ -6,6 +6,8 @@ becomes its release notes on GitHub and in the app's update window (see
 
 ## [Unreleased]
 
+## [0.16.0]
+
 - **LocalBooks is now Tillhouse.** Same app, new name, new icon and new colors. Another accounting
   program already used the LocalBooks name, so we changed ours while the group of testers is small.
   Nothing moves: your company files (still `.localbooks` files), settings, backups, saved passwords
@@ -33,7 +35,7 @@ becomes its release notes on GitHub and in the app's update window (see
   also upgrades a throwaway copy of a backup from an older version, so you know a restore of it
   would work. The reminder still comes after 30 days, which you can change in Preferences ›
   Reminders.
-- **Keyboard and contrast fixes across LocalBooks.** **F6** now moves between the sidebar, the
+- **Keyboard and contrast fixes across Tillhouse.** **F6** now moves between the sidebar, the
   toolbar and the window you are working in (**Shift+F6** goes back), so you can always get back to
   the sidebar without a mouse, and a list or panel that scrolls with nothing in it to Tab to now
   takes focus itself, so the arrow keys can scroll it. Pale grey, blue, orange and red text is a little darker so it's

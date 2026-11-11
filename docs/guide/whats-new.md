@@ -4,10 +4,21 @@ The newest changes first, in plain words, with a link to the steps for each. Til
 new version when it starts (or check in **Settings › Updates**). The full list, including fixes, is in
 the [release notes](https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md).
 
-## Next version
+## 0.16.0
 
 - **LocalBooks is now Tillhouse**: a new name, icon and colors. Your company files, settings,
   backups and passwords stay where they are, and the update installs over the old copy.
+- **Inventory quantities come in from QuickBooks Desktop**: a full import sets each item's quantity
+  on hand and value. [What a company file brings over](desktop-migration.md#what-a-company-file-brings-over)
+- **Touch ID and Windows Hello** for two-step sign-in on your own Mac or PC (optional).
+  [Two-step sign-in](users-and-passwords.md#two-step-sign-in)
+- **Backup safety** knows when a copy is really off this computer, and test restores are recorded.
+  [Backups and company files](backups-and-company-files.md)
+- **Keyboard**: F6 moves between the sidebar, toolbar and window, and every screen meets WCAG 2.1 AA
+  contrast. [Use Tillhouse from the keyboard](keyboard.md)
+- **Create Bill on a purchase order** works with approval rules.
+  [Purchase orders](purchase-orders.md)
+- **Pay Bills checks take the print date** when that preference is on.
 
 ## 0.15.0
 
