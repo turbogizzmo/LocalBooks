@@ -449,8 +449,8 @@ fn summary(kind: &str, payload: &str) -> (i64, Option<String>) {
     let today = NaiveDate::from_ymd_opt(2000, 1, 1).unwrap();
     match dated(kind, payload, today) {
         Ok(Dated::Journal(e)) => (e.lines.iter().map(|l| l.debit.get()).sum(), None),
-        Ok(Dated::Expense(e)) => (e.lines.iter().map(|l| l.amount_cents).sum(), e.payee_name),
-        Ok(Dated::Bill(b)) => (b.total_cents, Some(b.vendor_name)),
+        Ok(Dated::Expense(e)) => (Cents::checked_sum(e.lines.iter().map(|l| l.amount_cents)).map_or(0, Cents::get), e.payee_name),
+        Ok(Dated::Bill(b)) => (b.total_cents.get(), Some(b.vendor_name)),
         Ok(Dated::Invoice(i)) => (
             Cents::checked_sum(i.lines.iter().map(|l| Cents(crate::invoices::line_amount(l.quantity_e4, l.rate_cents.get()).unwrap_or(0))))
                 .and_then(|t| t.checked_sub(i.discount_cents))
@@ -999,15 +999,15 @@ pub async fn purchase_order_bill(pool: &SqlitePool, id: i64, bill_date: NaiveDat
         bill_date,
         due_date,
         memo: Some(memo.unwrap_or_else(|| format!("PO #{number}"))),
-        total_cents: total,
+        total_cents: Cents(total),
         lines: lines
             .iter()
             .map(|l| BillLineInput {
                 account_id: l.account_id,
-                amount_cents: l.amount_cents,
+                amount_cents: Cents(l.amount_cents),
                 memo: l.description.clone(),
                 quantity_e4: l.quantity_e4,
-                rate_cents: l.rate_cents,
+                rate_cents: l.rate_cents.map(Cents),
                 product_service_id: l.product_service_id,
                 class_id: l.class_id,
                 customer_id: l.customer_id,

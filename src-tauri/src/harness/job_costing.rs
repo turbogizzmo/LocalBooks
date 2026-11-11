@@ -79,7 +79,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     };
     let bill_line = |account_id: i64, cents: i64, memo: &str, job: Option<i64>| BillLineInput {
         account_id,
-        amount_cents: cents,
+        amount_cents: Cents(cents),
         memo: Some(memo.into()),
         quantity_e4: None,
         rate_cents: None,
@@ -91,7 +91,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
 
     // Twenty oak panels into stock at $150.
     let mut panels = bill_line(stock.asset_account_id, 300_000, "Oak panels", None);
-    (panels.product_service_id, panels.quantity_e4, panels.rate_cents) = (Some(oak), Some(200_000), Some(15_000));
+    (panels.product_service_id, panels.quantity_e4, panels.rate_cents) = (Some(oak), Some(200_000), Some(Cents(15_000)));
     let bill = |vendor: &str, number: &str, date, lines: Vec<BillLineInput>| BillInput { form_lines: Vec::new(),
         terms_id: None,
         vendor_name: vendor.into(),
@@ -99,7 +99,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
         bill_date: date,
         due_date: date + chrono::Days::new(30),
         memo: None,
-        total_cents: lines.iter().map(|l| l.amount_cents).sum(),
+        total_cents: Cents::checked_sum(lines.iter().map(|l| l.amount_cents)).expect("bill total"),
         lines,
     };
     crate::expenses::post_vendor_bill(p, bill("Timberline Supply", "TS-401", d(2025, 10, 1), vec![panels])).await.expect("stock bill");
@@ -162,7 +162,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     .await
     .expect("job bill");
 
-    let split = |account_id: i64, cents: i64, job: i64| SplitLineInput { account_id, amount_cents: cents, memo: None, class_id: None, customer_id: Some(job), billable: None };
+    let split = |account_id: i64, cents: i64, job: i64| SplitLineInput { account_id, amount_cents: Cents(cents), memo: None, class_id: None, customer_id: Some(job), billable: None };
     let expense = |kind: &str, payee: &str, from: i64, date, lines| ExpenseInput { form_lines: Vec::new(),
         payment_method_id: None,
         kind: kind.into(),

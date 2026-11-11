@@ -775,12 +775,12 @@ async fn post_bill(
         bill_date: date(day),
         due_date: date(day) + Days::new(u64::from(due_in)),
         memo: None,
-        total_cents: total,
+        total_cents: Cents(total),
         lines: lines
             .iter()
             .map(|(account_id, amount_cents)| BillLineInput {
                 account_id: *account_id,
-                amount_cents: *amount_cents,
+                amount_cents: Cents(*amount_cents),
                 memo: None,
                 quantity_e4: None,
                 rate_cents: None,
@@ -837,7 +837,7 @@ async fn post_expense(
         memo: None,
         lines: lines
             .iter()
-            .map(|(account_id, amount_cents)| SplitLineInput { account_id: *account_id, amount_cents: *amount_cents, memo: None, class_id: None, customer_id: None, billable: None })
+            .map(|(account_id, amount_cents)| SplitLineInput { account_id: *account_id, amount_cents: Cents(*amount_cents), memo: None, class_id: None, customer_id: None, billable: None })
             .collect(),
         currency: None,
     };

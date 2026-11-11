@@ -3,6 +3,7 @@ use crate::bank::suggest::Suggester;
 use crate::bank::{approve_many, list_pending, Approval};
 use crate::db::test_pool;
 use crate::expenses::{ExpenseInput, SplitLineInput};
+use crate::money::Cents;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -32,7 +33,7 @@ async fn check(pool: &SqlitePool, number: Option<&str>, date: &str, cents: i64) 
         check_number: number.map(Into::into),
         payment_method: None,
         memo: None,
-        lines: vec![SplitLineInput { account_id: rent, amount_cents: cents, memo: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![SplitLineInput { account_id: rent, amount_cents: Cents(cents), memo: None, class_id: None, customer_id: None, billable: None }],
         currency: None,
     };
     crate::expenses::post_expense(pool, input).await.unwrap().journal_entry_id.unwrap()

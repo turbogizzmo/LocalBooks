@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::expenses::{post_vendor_bill, BillInput, BillLineInput};
+use crate::money::Cents;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -23,8 +24,8 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: Option<&str>, cents: i64)
         bill_date: d(1),
         due_date: d(31),
         memo: None,
-        total_cents: cents,
-        lines: vec![BillLineInput { account_id: rent, amount_cents: cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+        total_cents: Cents(cents),
+        lines: vec![BillLineInput { account_id: rent, amount_cents: Cents(cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
     };
     post_vendor_bill(pool, input).await.unwrap().id
 }

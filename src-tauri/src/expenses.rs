@@ -8,20 +8,21 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::ledger::{convert_lines, db_err, format_cents, post_entry_in_tx, rollback, EntrySource, ForeignCurrency, JournalEntry, JournalLine, MAX_LINE_CENTS};
+use crate::money::Cents;
 use crate::sales::{create_party, find_or_create_named, Party, PartyView};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BillLineInput {
     pub account_id: i64,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub memo: Option<String>,
     /// Optional item pricing: quantity scaled by 10,000 and unit rate. When given, the line amount
     /// must equal round_half_up(quantity_e4 × rate_cents / 10,000).
     #[serde(default)]
     pub quantity_e4: Option<i64>,
     #[serde(default)]
-    pub rate_cents: Option<i64>,
+    pub rate_cents: Option<Cents>,
     /// The product bought. A tracked inventory product adds the quantity to stock at this line's
     /// cost; the line must then post to that product's inventory account and give a quantity.
     #[serde(default)]
@@ -47,7 +48,7 @@ pub struct BillInput {
     pub due_date: NaiveDate,
     pub memo: Option<String>,
     /// The bill total as printed on the vendor's bill; the split lines must add up to it exactly.
-    pub total_cents: i64,
+    pub total_cents: Cents,
     pub lines: Vec<BillLineInput>,
     /// The vendor's term the bill was entered with (its due date is entered with it).
     #[serde(default)]
@@ -173,28 +174,29 @@ pub fn validate_bill(input: &BillInput) -> Result<i64, String> {
         match (line.quantity_e4, line.rate_cents) {
             (None, None) => {}
             (Some(q), Some(r)) => {
-                let priced = crate::invoices::validate_line(q, r, idx + 1, "BILL")?;
-                if priced != line.amount_cents {
+                let priced = crate::invoices::validate_line(q, r.get(), idx + 1, "BILL")?;
+                if priced != line.amount_cents.get() {
                     return Err(format!(
                         "BILL_LINE_MISMATCH: split line {} quantity × rate is {}, not {}",
                         idx + 1,
                         format_cents(priced),
-                        format_cents(line.amount_cents)
+                        format_cents(line.amount_cents.get())
                     ));
                 }
             }
             _ => return Err(format!("BILL_LINE_INCOMPLETE: split line {} needs both a quantity and a rate, or neither", idx + 1)),
         }
     }
-    sum_split_lines(input.lines.iter().map(|l| l.amount_cents), "BILL")?;
-    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+    sum_split_lines(input.lines.iter().map(|l| l.amount_cents.get()), "BILL")?;
+    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents.get()).collect();
     let (_, total) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "BILL")?;
-    if total != input.total_cents {
+    if total != input.total_cents.get() {
+        let unallocated = input.total_cents.checked_sub(Cents(total)).ok_or("BILL_AMOUNT_TOO_LARGE: the bill total is out of range")?;
         return Err(format!(
             "BILL_SPLIT_MISMATCH: split lines, discounts and charges add up to {} but the bill total is {} ({} unallocated)",
             format_cents(total),
-            format_cents(input.total_cents),
-            format_cents(input.total_cents - total)
+            format_cents(input.total_cents.get()),
+            format_cents(unallocated.get())
         ));
     }
     Ok(total)
@@ -286,7 +288,7 @@ pub(crate) async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInp
 /// kept even when it has since been made inactive.
 pub(crate) async fn write_bill_carrying(tx: &mut Transaction<'_, Sqlite>, input: &BillInput, carried_terms: Option<i64>) -> Result<i64, String> {
     let total = validate_bill(input)?;
-    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents.get()).collect();
     let (form_amounts, _) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "BILL")?;
     crate::purchase_lines::check(tx, &input.form_lines, "BILL").await?;
     let vendor_name = input.vendor_name.trim();
@@ -316,7 +318,7 @@ pub(crate) async fn write_bill_carrying(tx: &mut Transaction<'_, Sqlite>, input:
         let n = idx + 1;
         if let Some(product) = line.product_service_id {
             if let Some(item) = crate::inventory::check_purchase_line(tx, product, line.account_id, line.quantity_e4, n).await? {
-                received.push((item, line.quantity_e4.unwrap_or_default(), line.amount_cents));
+                received.push((item, line.quantity_e4.unwrap_or_default(), line.amount_cents.get()));
             }
         }
         let category: Option<(String, String, bool, bool)> = sqlx::query_as(
@@ -366,8 +368,8 @@ pub(crate) async fn write_bill_carrying(tx: &mut Transaction<'_, Sqlite>, input:
         // One debit per distinct account and class, in first-appearance order.
         let key = (line.account_id, line.class_id);
         match debits.iter_mut().find(|(k, _)| *k == key) {
-            Some((_, sum)) => *sum += line.amount_cents,
-            None => debits.push((key, line.amount_cents)),
+            Some((_, sum)) => *sum = sum.checked_add(line.amount_cents.get()).ok_or("BILL_AMOUNT_TOO_LARGE: the bill is too large")?,
+            None => debits.push((key, line.amount_cents.get())),
         }
     }
 
@@ -579,7 +581,7 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
 #[serde(rename_all = "camelCase")]
 pub struct SplitLineInput {
     pub account_id: i64,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub memo: Option<String>,
     #[serde(default)]
     pub class_id: Option<i64>,
@@ -683,8 +685,8 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     if input.lines.is_empty() {
         return Err("EXP_NO_ITEMS: add at least one split line".into());
     }
-    sum_split_lines(input.lines.iter().map(|l| l.amount_cents), "EXP")?;
-    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+    sum_split_lines(input.lines.iter().map(|l| l.amount_cents.get()), "EXP")?;
+    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents.get()).collect();
     let (form_amounts, total) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "EXP")?;
     crate::purchase_lines::check(tx, &input.form_lines, "EXP").await?;
     if let Some(method) = clean(input.payment_method.as_deref()).filter(|_| input.payment_method_id.is_none()) {
@@ -724,7 +726,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     // A charge debits each split and credits the payment account; a card credit is the reverse.
     let split = |account, cents| if is_credit { JournalLine::credit(account, cents) } else { JournalLine::debit(account, cents) };
     let mut lines: Vec<JournalLine> =
-        input.lines.iter().map(|line| split(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id)).collect();
+        input.lines.iter().map(|line| split(line.account_id, line.amount_cents.get()).with_memo(line.memo.as_deref()).with_class(line.class_id)).collect();
     lines.extend(crate::purchase_lines::journal_lines(&input.form_lines, &form_amounts, !is_credit));
     // The payment line stays last: the home-currency total is read from it.
     lines.push(if is_credit { JournalLine::debit(input.payment_account_id, total) } else { JournalLine::credit(input.payment_account_id, total) });

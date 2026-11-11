@@ -41,7 +41,7 @@ async fn edits_void_and_repost_and_respect_payments() {
     let old_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM expenses WHERE id = ?1").bind(expense_id).fetch_one(&pool).await.unwrap();
     crate::workflows::add_attachment(&pool, old_entry, "receipt.pdf", b"%PDF-1.4").await.unwrap();
     let mut fixed = expense.clone();
-    fixed.lines[0].amount_cents = 95_000;
+    fixed.lines[0].amount_cents = Cents(95_000);
     let new_expense = replace_expense(&pool, expense_id, fixed).await.unwrap();
     assert_eq!(balance(&pool, rent).await, 95_000);
     let new_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM expenses WHERE id = ?1").bind(new_expense).fetch_one(&pool).await.unwrap();

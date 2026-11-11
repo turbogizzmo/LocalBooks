@@ -30,8 +30,8 @@ fn bill(vendor: &str, lines: Vec<(i64, i64)>) -> BillInput {
         bill_date: d(1),
         due_date: d(31),
         memo: None,
-        total_cents: lines.iter().map(|(_, cents)| cents).sum(),
-        lines: lines.into_iter().map(|(account, cents)| BillLineInput{ account_id: account, amount_cents: cents, memo: Some("Line".into()), quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }).collect(),
+        total_cents: Cents(lines.iter().map(|(_, cents)| cents).sum()),
+        lines: lines.into_iter().map(|(account, cents)| BillLineInput{ account_id: account, amount_cents: Cents(cents), memo: Some("Line".into()), quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }).collect(),
     }
 }
 
@@ -132,7 +132,7 @@ async fn split_bill_must_match_total_and_debits_each_account_once() {
     let (ap, rent, utilities) = (account_id(&pool, "2000").await, account_id(&pool, "6300").await, account_id(&pool, "6500").await);
 
     let mut short = bill("Landlord LLC", vec![(rent, 100_000), (utilities, 20_000)]);
-    short.total_cents = 125_000;
+    short.total_cents = Cents(125_000);
     let err = post_vendor_bill(&pool, short).await.expect_err("split must match total");
     assert!(err.starts_with("BILL_SPLIT_MISMATCH") && err.contains("$50.00 unallocated"), "{err}");
 
@@ -163,7 +163,7 @@ async fn expenses_and_checks_credit_the_payment_account() {
         check_number: Some("1042".into()),
         payment_method: None,
         memo: None,
-        lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents, memo: None, class_id: None, customer_id: None, billable: None }).collect(),
+        lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents: Cents(amount_cents), memo: None, class_id: None, customer_id: None, billable: None }).collect(),
         currency: None,
     };
 
@@ -226,8 +226,8 @@ async fn foreign_expense_credits_the_bank_in_home_currency() {
             payment_method: Some("CREDIT_CARD".into()),
             memo: None,
             lines: vec![
-                SplitLineInput { account_id: travel, amount_cents: 3_200_000, memo: Some("2 nights".into()), class_id: None, customer_id: None, billable: None },
-                SplitLineInput { account_id: meals, amount_cents: 450_050, memo: None, class_id: None, customer_id: None, billable: None },
+                SplitLineInput { account_id: travel, amount_cents: Cents(3_200_000), memo: Some("2 nights".into()), class_id: None, customer_id: None, billable: None },
+                SplitLineInput { account_id: meals, amount_cents: Cents(450_050), memo: None, class_id: None, customer_id: None, billable: None },
             ],
             currency: Some(ForeignCurrency { code: "JPY".into(), exchange_rate_e6: 6_667 }),
         },
@@ -247,15 +247,15 @@ async fn foreign_expense_credits_the_bank_in_home_currency() {
 async fn bill_lines_can_be_priced_by_quantity_and_rate() {
     let pool = test_pool().await;
     let (ap, supplies) = (account_id(&pool, "2000").await, account_id(&pool, "6250").await);
-    let priced = |q: i64, r: i64, amount: i64| BillLineInput{ account_id: supplies, amount_cents: amount, memo: Some("Paper".into()), quantity_e4: Some(q), rate_cents: Some(r), product_service_id: None, class_id: None, customer_id: None, billable: None };
+    let priced = |q: i64, r: i64, amount: i64| BillLineInput{ account_id: supplies, amount_cents: Cents(amount), memo: Some("Paper".into()), quantity_e4: Some(q), rate_cents: Some(Cents(r)), product_service_id: None, class_id: None, customer_id: None, billable: None };
     let mut input = bill("Staples", vec![]);
     input.lines = vec![priced(25_000, 1_299, 3_248)];
-    input.total_cents = 3_248;
+    input.total_cents = Cents(3_248);
     post_vendor_bill(&pool, input.clone()).await.expect("2.5 × $12.99 = $32.475 → $32.48");
     assert_eq!(balance(&pool, ap).await, 3_248);
 
     input.lines = vec![priced(25_000, 1_299, 3_247)];
-    input.total_cents = 3_247;
+    input.total_cents = Cents(3_247);
     assert!(post_vendor_bill(&pool, input.clone()).await.unwrap_err().starts_with("BILL_LINE_MISMATCH"));
     input.lines = vec![BillLineInput { quantity_e4: Some(10_000), rate_cents: None, ..priced(0, 0, 3_247) }];
     assert!(post_vendor_bill(&pool, input).await.unwrap_err().starts_with("BILL_LINE_INCOMPLETE"));
@@ -275,7 +275,7 @@ async fn card_credits_debit_the_card_and_credit_the_splits() {
         check_number: Some("ignored".into()),
         payment_method: None,
         memo: Some("Returned chair".into()),
-        lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents, memo: None, class_id: None, customer_id: None, billable: None }).collect(),
+        lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents: Cents(amount_cents), memo: None, class_id: None, customer_id: None, billable: None }).collect(),
         currency: None,
     };
     post_expense(&pool, input("EXPENSE", card, vec![(office, 20_000), (fuel, 5_000)])).await.unwrap();
@@ -355,7 +355,7 @@ async fn the_database_holds_card_credits_to_their_rules() {
             check_number: None,
             payment_method: None,
             memo: None,
-            lines: vec![SplitLineInput { account_id: office, amount_cents: 100, memo: None, class_id: None, customer_id: None, billable: None }],
+            lines: vec![SplitLineInput { account_id: office, amount_cents: Cents(100), memo: None, class_id: None, customer_id: None, billable: None }],
             currency: None,
         },
     )
@@ -380,7 +380,7 @@ async fn foreign_card_credit_debits_the_card_in_home_currency() {
             check_number: None,
             payment_method: None,
             memo: None,
-            lines: vec![SplitLineInput { account_id: travel, amount_cents: 1_500_000, memo: None, class_id: None, customer_id: None, billable: None }],
+            lines: vec![SplitLineInput { account_id: travel, amount_cents: Cents(1_500_000), memo: None, class_id: None, customer_id: None, billable: None }],
             currency: Some(ForeignCurrency { code: "JPY".into(), exchange_rate_e6: 6_667 }),
         },
     )
@@ -388,4 +388,21 @@ async fn foreign_card_credit_debits_the_card_in_home_currency() {
     .expect("foreign card credit posts");
     assert_eq!((posted.kind.as_str(), posted.home_total_cents), ("CARD_CREDIT", 10_001));
     assert_eq!((balance(&pool, card).await, balance(&pool, travel).await), (-10_001, -10_001));
+}
+
+#[test]
+fn bill_and_expense_amounts_arrive_as_bare_integers() {
+    let bill: BillInput = serde_json::from_str(
+        r#"{"vendorName":"Staples","billNumber":null,"billDate":"2026-06-01","dueDate":"2026-07-01","memo":null,"totalCents":24690,
+            "lines":[{"accountId":5,"amountCents":24690,"memo":null,"quantityE4":20000,"rateCents":12345}]}"#,
+    )
+    .unwrap();
+    assert_eq!((bill.total_cents, bill.lines[0].amount_cents, bill.lines[0].rate_cents), (Cents(24_690), Cents(24_690), Some(Cents(12_345))));
+    let expense: ExpenseInput = serde_json::from_str(
+        r#"{"kind":"CHECK","payeeName":"Staples","paymentAccountId":3,"expenseDate":"2026-06-02","checkNumber":"101","memo":null,
+            "lines":[{"accountId":5,"amountCents":700,"memo":null}]}"#,
+    )
+    .unwrap();
+    assert_eq!(expense.lines[0].amount_cents, Cents(700));
+    assert!(serde_json::from_str::<SplitLineInput>(r#"{"accountId":5,"amountCents":7.5,"memo":null}"#).is_err(), "a fractional amount is refused");
 }

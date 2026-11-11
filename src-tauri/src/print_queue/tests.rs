@@ -26,7 +26,7 @@ async fn check(pool: &SqlitePool, payee: &str, number: Option<&str>, cents: i64,
             check_number: number.map(Into::into),
             payment_method: None,
             memo: None,
-            lines: vec![SplitLineInput { account_id: rent, amount_cents: cents, memo: None, class_id: None, customer_id: None, billable: None }],
+            lines: vec![SplitLineInput { account_id: rent, amount_cents: Cents(cents), memo: None, class_id: None, customer_id: None, billable: None }],
             currency: None,
         },
         queued,
@@ -118,7 +118,7 @@ async fn only_unnumbered_live_checks_join_the_queue() {
         check_number: None,
         payment_method: None,
         memo: None,
-        lines: vec![SplitLineInput { account_id: supplies, amount_cents: 1_000, memo: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![SplitLineInput { account_id: supplies, amount_cents: Cents(1_000), memo: None, class_id: None, customer_id: None, billable: None }],
         currency: None,
     };
     let not_a_check = post_expense(&pool, expense, true).await.unwrap_err();
@@ -152,7 +152,7 @@ async fn an_edited_queued_check_stays_queued() {
         check_number: None,
         payment_method: None,
         memo: Some("October rent".into()),
-        lines: vec![SplitLineInput { account_id: rent, amount_cents: 11_000, memo: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![SplitLineInput { account_id: rent, amount_cents: Cents(11_000), memo: None, class_id: None, customer_id: None, billable: None }],
         currency: None,
     };
     let new_id = crate::edits::replace_expense(&pool, queued.id, edited).await.unwrap();
@@ -205,8 +205,8 @@ async fn pay_bills_checks_wait_in_the_queue_one_per_vendor_and_take_their_number
         bill_date: d(1),
         due_date: d(31),
         memo: None,
-        total_cents: cents,
-        lines: vec![BillLineInput { account_id: rent, amount_cents: cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+        total_cents: Cents(cents),
+        lines: vec![BillLineInput { account_id: rent, amount_cents: Cents(cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
     };
     let mut ids = Vec::new();
     for (vendor, number, cents) in [("Landlord", "L-1", 100_000), ("Landlord", "L-2", 20_000), ("Plumber", "P-9", 7_500)] {
