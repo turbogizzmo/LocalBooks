@@ -161,6 +161,9 @@ fn reads_the_ledger_of_a_real_file() {
         *by_kind.entry(t.kind).or_default() += 1;
     }
     println!("by kind: {by_kind:?}");
+    for g in &ledger.sales_lists.item_groups {
+        println!("  group {} ({} items, print items {}): {:?}", g.name, g.members.len(), g.print_items, g.members);
+    }
     println!("rejected: {:?}", q.rejected_by_reason);
     for u in &ledger.unreadable {
         println!("  unreadable line: {:?}", u);
@@ -460,4 +463,35 @@ fn inventory_cost_tables_pair_with_their_forms() {
         assert!(lines.starts_with(&form.replace("sale_receipt", "sales_receipt")), "{cost} pairs with {lines}");
     }
     assert!(INVENTORY_COST_TABLES.contains(&("abmc_bill_inventory_lineitem", "abmc_bill_lineitem")));
+}
+
+/// Item groups are the type-7 items; their items come from the grouped-items rows in the order
+/// column 2 gives (found by id, since some files lost its name), with quantities made positive and
+/// an empty quantity taken as 1.
+/// The parts of an assembly are in the same table and are not a group.
+#[test]
+fn item_groups_read_their_items_in_order() {
+    use crate::qbw_records::Numeric;
+    let int = |v: i64| Value::Int(v);
+    let quantity = |q: u128| Value::Numeric(Numeric { coefficient: q, exponent: 0, negative: true });
+    let row = |values: Vec<(&str, Value)>| Row { values: values.into_iter().map(|(k, v)| (k.to_string(), v)).collect() };
+    let users = vec![
+        row(vec![("item_id", int(60)), ("item_type", int(7)), ("name", Value::Bytes(b"Door kit".to_vec())), ("print_grouped_bool", int(1)), ("is_hidden_bool", int(0))]),
+        row(vec![("item_id", int(61)), ("item_type", int(2)), ("name", Value::Bytes(b"Framed door".to_vec()))]),
+        row(vec![("item_id", int(20)), ("item_type", int(1)), ("name", Value::Bytes(b"Frame".to_vec()))]),
+        row(vec![("item_id", int(21)), ("item_type", int(1)), ("name", Value::Bytes(b"Hinge".to_vec()))]),
+    ];
+    let grouped = vec![
+        row(vec![("item_id", int(60)), ("column_2", int(1)), ("sub_item_id", int(21)), ("quantity_qnty", quantity(3))]),
+        row(vec![("item_id", int(60)), ("column_2", int(0)), ("sub_item_id", int(20)), ("quantity_qnty", quantity(1))]),
+        row(vec![("item_id", int(61)), ("column_2", int(0)), ("sub_item_id", int(20)), ("quantity_qnty", quantity(1))]),
+        // A blank line in the group, then an item with no quantity (typed on the form): it comes in at 1.
+        row(vec![("item_id", int(60)), ("column_2", int(3)), ("sub_item_id", int(0))]),
+        row(vec![("item_id", int(60)), ("column_2", int(2)), ("sub_item_id", int(22))]),
+    ];
+    let groups = item_groups_from(&users, &grouped, Some("column_2"));
+    assert_eq!(groups.len(), 1, "the assembly is not a group");
+    let kit = &groups[0];
+    assert_eq!((kit.name.as_str(), kit.print_items, kit.active), ("Door kit", true, true));
+    assert_eq!(kit.members, [(20, 10_000), (21, 30_000), (22, 10_000)]);
 }

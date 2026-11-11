@@ -267,6 +267,22 @@ pub struct SourceSalesLists {
     pub price_levels: Vec<SourcePriceLevel>,
     /// Customers' default price levels: (`SourceParty::id`, level name).
     pub customer_price_levels: Vec<(i64, String)>,
+    /// Item groups, by name.
+    pub item_groups: Vec<SourceItemGroup>,
+}
+
+/// An item group from the file: items sold together, which a sales form lists under the group.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceItemGroup {
+    pub id: i64,
+    /// `Parent:Child` path, as items have.
+    pub name: String,
+    pub description: Option<String>,
+    /// True when printed forms list the group's items; false prints the group as one line.
+    pub print_items: bool,
+    pub active: bool,
+    /// The group's items in the order it lists them: (`SourceItem::id`, quantity × 10,000).
+    pub members: Vec<(i64, i64)>,
 }
 
 /// A price level from the file.
@@ -847,6 +863,61 @@ fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
     out
 }
 
+/// The file's item groups (item type 7). Their items are rows of `abmc_grouped_items`: the group's
+/// `item_id`, the member's `sub_item_id` and its `quantity_qnty` (stored negative, or left empty
+/// when the quantity is typed on the form; such an item comes in at quantity 1). The table's
+/// column 2 orders a group's items; some files lost its name from the catalog, so it is found by
+/// id. The same table lists the parts of assembly items, which are not groups and are left out.
+fn read_item_groups(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItemGroup> {
+    let order_column = catalog
+        .table_id("abmc_grouped_items")
+        .and_then(|t| catalog.columns.get(&t))
+        .and_then(|cols| cols.iter().find(|c| c.id == 2))
+        // A position is a whole number that isn't an id; any other column 2 leaves the file's order.
+        .filter(|c| matches!(c.domain, crate::qbw_records::MISSING_DOMAIN | 1 | 2 | 19 | 21 | 22) && !c.name.ends_with("_id"))
+        .map(|c| c.name.clone());
+    item_groups_from(&rows_of(pages, catalog, "abmc_item_user"), &rows_of(pages, catalog, "abmc_grouped_items"), order_column.as_deref())
+}
+
+/// The groups among the item rows, with their items from the grouped-items rows (see
+/// [`read_item_groups`]); `order_column` names the column that orders a group's items.
+fn item_groups_from(users: &[Row], grouped: &[Row], order_column: Option<&str>) -> Vec<SourceItemGroup> {
+    let names: BTreeMap<i64, (String, Option<i64>)> =
+        users.iter().filter_map(|r| Some((r.get("item_id").as_int()?, (text(r, "name")?, r.get("parent_id").as_int())))).collect();
+    let full = paths(&names);
+    let mut members: BTreeMap<i64, Vec<(i64, usize, i64, i64)>> = BTreeMap::new();
+    for (n, r) in grouped.iter().enumerate() {
+        // Item 0 is a blank line in the group.
+        let (Some(group), Some(item)) = (r.get("item_id").as_int(), r.get("sub_item_id").as_int().filter(|i| *i != 0)) else {
+            continue;
+        };
+        // An item listed with no quantity is one whose quantity is typed on the form; a LocalBooks
+        // group needs one, so it comes in at 1.
+        let quantity = r.get("quantity_qnty").as_quantity_e4().map(i64::saturating_abs).filter(|q| *q != 0).unwrap_or(crate::ledger::QUANTITY_SCALE);
+        let position = order_column.and_then(|c| r.get(c).as_int()).unwrap_or(i64::MAX);
+        members.entry(group).or_default().push((position, n, item, quantity));
+    }
+    let mut out: Vec<SourceItemGroup> = users
+        .iter()
+        .filter(|r| r.get("item_type").as_int() == Some(7) && r.get("is_deleted_bool").as_int() != Some(1))
+        .filter_map(|r| {
+            let id = r.get("item_id").as_int()?;
+            let mut items = members.remove(&id).unwrap_or_default();
+            items.sort_by_key(|m| (m.0, m.1));
+            Some(SourceItemGroup {
+                id,
+                name: full.get(&id)?.clone(),
+                description: text(r, "description"),
+                print_items: r.get("print_grouped_bool").as_int() == Some(1),
+                active: r.get("is_hidden_bool").as_int() != Some(1),
+                members: items.into_iter().map(|(_, _, item, quantity)| (item, quantity)).collect(),
+            })
+        })
+        .collect();
+    out.sort_by_key(|g| g.name.to_lowercase());
+    out
+}
+
 /// The class list from `abmc_class`: each class's `Parent:Child` path by id, and the list with
 /// whether each class is active (deleted classes are left out).
 pub(crate) fn read_classes(pages: &[LogicalPage], catalog: &Catalog) -> (HashMap<i64, String>, Vec<(String, bool)>) {
@@ -1080,6 +1151,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     sales_lists.reps.sort();
     sales_lists.ship_methods.sort();
     (sales_lists.price_levels, sales_lists.customer_price_levels) = read_price_levels(&pages, &catalog);
+    sales_lists.item_groups = read_item_groups(&pages, &catalog);
     let mut ledger = Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality, sales_lists, classes: Vec::new() };
     for (name, active) in class_list {
         ledger.add_class(&name, active);

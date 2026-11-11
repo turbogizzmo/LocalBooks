@@ -44,6 +44,9 @@ people using LocalBooks.
 - **Credit memo numbers don't skip.** An overpayment kept as credit no longer takes the next credit
   memo number, so credit memos number 1, 2, 3 in a row. Registers and custom reports show such a
   payment by its reference.
+- **Item groups come in from company files.** Bringing in a company file's lists now adds its item
+  groups as LocalBooks groups, with their items in order, their quantities, and whether printed
+  forms list the items.
 - **Inventory adjustments come in from company files.** Some files had lost part of the
   description of their inventory adjustment lines, so none of the adjustments were read and
   Inventory Asset and Cost of Goods Sold came out wrong. LocalBooks now reads those lines, and the
