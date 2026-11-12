@@ -7,6 +7,7 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 
 use crate::ledger::db_err;
+use crate::money::Cents;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -23,7 +24,7 @@ pub struct AccountView {
     pub classification: String,
     pub is_active: bool,
     pub is_system: bool,
-    pub balance_cents: i64,
+    pub balance_cents: Cents,
     /// Expense accounts: where reimbursements go when counted as income (`billable_costs`).
     #[sqlx(default)]
     pub reimbursement_income_account_id: Option<i64>,
@@ -36,16 +37,16 @@ pub struct TrialBalanceRow {
     pub account_number: Option<String>,
     pub full_name: String,
     pub account_type_name: String,
-    pub debit_cents: i64,
-    pub credit_cents: i64,
+    pub debit_cents: Cents,
+    pub credit_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrialBalance {
     pub rows: Vec<TrialBalanceRow>,
-    pub total_debit_cents: i64,
-    pub total_credit_cents: i64,
+    pub total_debit_cents: Cents,
+    pub total_credit_cents: Cents,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -53,8 +54,8 @@ pub struct TrialBalance {
 pub struct MonthPoint {
     /// `YYYY-MM`
     pub month: String,
-    pub assets_cents: i64,
-    pub liabilities_cents: i64,
+    pub assets_cents: Cents,
+    pub liabilities_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -62,8 +63,8 @@ pub struct MonthPoint {
 pub struct Dashboard {
     pub trial_balance: TrialBalance,
     pub series: Vec<MonthPoint>,
-    pub total_assets_cents: i64,
-    pub total_liabilities_cents: i64,
+    pub total_assets_cents: Cents,
+    pub total_liabilities_cents: Cents,
 }
 
 pub async fn list_accounts(pool: &SqlitePool) -> Result<Vec<AccountView>, String> {
@@ -82,7 +83,7 @@ pub async fn list_accounts(pool: &SqlitePool) -> Result<Vec<AccountView>, String
 }
 
 pub async fn trial_balance(pool: &SqlitePool) -> Result<TrialBalance, String> {
-    let rows: Vec<(i64, Option<String>, String, String, i64, i64)> = sqlx::query_as(
+    let rows: Vec<(i64, Option<String>, String, String, Cents, Cents)> = sqlx::query_as(
         "SELECT c.id, c.account_number, c.full_name, c.account_type_name, b.total_debit_cents, b.total_credit_cents
          FROM v_chart_of_accounts c
          JOIN v_account_balances b ON b.account_id = c.id
@@ -93,15 +94,19 @@ pub async fn trial_balance(pool: &SqlitePool) -> Result<TrialBalance, String> {
     .await
     .map_err(db_err)?;
 
-    let mut tb = TrialBalance { rows: Vec::with_capacity(rows.len()), total_debit_cents: 0, total_credit_cents: 0 };
+    let mut tb = TrialBalance { rows: Vec::with_capacity(rows.len()), total_debit_cents: Cents::ZERO, total_credit_cents: Cents::ZERO };
     for (account_id, account_number, full_name, account_type_name, debits, credits) in rows {
-        let net = debits - credits;
-        let (debit_cents, credit_cents) = if net > 0 { (net, 0) } else { (0, -net) };
-        tb.total_debit_cents += debit_cents;
-        tb.total_credit_cents += credit_cents;
+        let net = debits.checked_sub(credits).ok_or_else(overflow)?;
+        let (debit_cents, credit_cents) = if net.is_positive() { (net, Cents::ZERO) } else { (Cents::ZERO, net.checked_neg().ok_or_else(overflow)?) };
+        tb.total_debit_cents = tb.total_debit_cents.checked_add(debit_cents).ok_or_else(overflow)?;
+        tb.total_credit_cents = tb.total_credit_cents.checked_add(credit_cents).ok_or_else(overflow)?;
         tb.rows.push(TrialBalanceRow { account_id, account_number, full_name, account_type_name, debit_cents, credit_cents });
     }
     Ok(tb)
+}
+
+fn overflow() -> String {
+    "REPORT_OVERFLOW: the balances are too large to add up".to_string()
 }
 
 /// Month-end asset and liability balances for the 12 months ending with `today`'s month.
@@ -111,7 +116,7 @@ pub async fn asset_liability_series(pool: &SqlitePool, today: NaiveDate) -> Resu
     let end = current + Months::new(1);
 
     // Net debit movement per (month, classification); everything before the window collapses into OPEN.
-    let rows: Vec<(String, String, i64)> = sqlx::query_as(
+    let rows: Vec<(String, String, Cents)> = sqlx::query_as(
         "SELECT CASE WHEN p.entry_date < ?1 THEN 'OPEN' ELSE substr(p.entry_date, 1, 7) END AS bucket,
                 t.classification,
                 SUM(p.debit_cents) - SUM(p.credit_cents) AS net
@@ -127,23 +132,23 @@ pub async fn asset_liability_series(pool: &SqlitePool, today: NaiveDate) -> Resu
     .await
     .map_err(db_err)?;
 
-    let movement: HashMap<(String, String), i64> = rows.into_iter().map(|(bucket, class, net)| ((bucket, class), net)).collect();
-    let net = |bucket: &str, class: &str| movement.get(&(bucket.to_string(), class.to_string())).copied().unwrap_or(0);
+    let movement: HashMap<(String, String), Cents> = rows.into_iter().map(|(bucket, class, net)| ((bucket, class), net)).collect();
+    let net = |bucket: &str, class: &str| movement.get(&(bucket.to_string(), class.to_string())).copied().unwrap_or(Cents::ZERO);
 
     let mut assets = net("OPEN", "ASSET");
-    let mut liabilities = -net("OPEN", "LIABILITY");
+    let mut liabilities = net("OPEN", "LIABILITY").checked_neg().ok_or_else(overflow)?;
     let mut series = Vec::with_capacity(12);
     for i in 0..12 {
         let month = (start + Months::new(i)).format("%Y-%m").to_string();
-        assets += net(&month, "ASSET");
-        liabilities -= net(&month, "LIABILITY");
+        assets = assets.checked_add(net(&month, "ASSET")).ok_or_else(overflow)?;
+        liabilities = liabilities.checked_sub(net(&month, "LIABILITY")).ok_or_else(overflow)?;
         series.push(MonthPoint { month, assets_cents: assets, liabilities_cents: liabilities });
     }
     Ok(series)
 }
 
 pub async fn dashboard(pool: &SqlitePool, today: NaiveDate) -> Result<Dashboard, String> {
-    let (total_assets_cents, total_liabilities_cents): (i64, i64) = sqlx::query_as(
+    let (total_assets_cents, total_liabilities_cents): (Cents, Cents) = sqlx::query_as(
         "SELECT COALESCE(SUM(CASE WHEN classification = 'ASSET' THEN balance_cents END), 0),
                 COALESCE(SUM(CASE WHEN classification = 'LIABILITY' THEN balance_cents END), 0)
          FROM v_account_balances",

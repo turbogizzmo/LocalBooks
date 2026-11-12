@@ -159,7 +159,7 @@ async fn recurring_purchase_orders_search_attachments_and_budgets() {
     assert_eq!(enter_due(&pool, d(3, 15), None).await.unwrap(), 2, "January 31 and February 28");
     assert_eq!(balance(&pool, rent).await, 240_000);
     let listed = list_recurring(&pool).await.unwrap();
-    assert_eq!((listed[0].next_date, listed[0].run_count, listed[0].amount_cents), (d(3, 31), 2, 120_000), "back to month end after February");
+    assert_eq!((listed[0].next_date, listed[0].run_count, listed[0].amount_cents), (d(3, 31), 2, Cents(120_000)), "back to month end after February");
     assert_eq!(enter_due(&pool, d(12, 31), Some(id)).await.unwrap(), 2, "March and April, then the end date");
     assert!(!list_recurring(&pool).await.unwrap()[0].is_active);
 

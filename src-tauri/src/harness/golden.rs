@@ -77,7 +77,7 @@ async fn trial_balance() {
     for r in &tb.rows {
         let name = format!("{} {}", r.account_number.as_deref().unwrap_or("----"), r.full_name);
         let side = |c: i64| if c == 0 { String::new() } else { money(c) };
-        writeln!(out, "{name:<44}{:<24}{:>16}{:>16}", r.account_type_name, side(r.debit_cents), side(r.credit_cents)).unwrap();
+        writeln!(out, "{name:<44}{:<24}{:>16}{:>16}", r.account_type_name, side(r.debit_cents.get()), side(r.credit_cents.get())).unwrap();
     }
     writeln!(out, "{:<68}{:>16}{:>16}", "Total", money(tb.total_debit_cents), money(tb.total_credit_cents)).unwrap();
     insta::assert_snapshot!(out);
@@ -100,9 +100,9 @@ async fn aging(payable: bool) -> String {
         writeln!(out).unwrap();
     };
     for r in &report.rows {
-        row(&r.party_name, &r.buckets_cents, r.total_cents);
+        row(&r.party_name, &r.buckets_cents.map(Cents::get), r.total_cents.get());
     }
-    row("TOTAL", &report.totals_cents, report.total_cents);
+    row("TOTAL", &report.totals_cents.map(Cents::get), report.total_cents.get());
     writeln!(out, "\nOpen items").unwrap();
     for item in &report.items {
         writeln!(
@@ -114,7 +114,7 @@ async fn aging(payable: bool) -> String {
             item.date,
             item.due_date,
             item.days_past_due,
-            money(item.open_cents)
+            money(item.open_cents.get())
         )
         .unwrap();
     }

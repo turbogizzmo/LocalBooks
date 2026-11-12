@@ -404,7 +404,7 @@ async fn pdf_statement_is_checked_against_its_balances_and_imported_once() {
     assert_eq!(import_file(&pool, &path, checking, None).await.unwrap(), ImportSummary { imported: 0, matched: 0, duplicates: 7, skipped_zero: 0 });
 
     let pending = list_pending(&pool, &Suggester::default(), "test").await.unwrap();
-    assert_eq!(pending.iter().map(|t| t.amount_cents).sum::<i64>(), 101_940);
+    assert_eq!(pending.iter().map(|t| t.amount_cents.get()).sum::<i64>(), 101_940);
     assert!(pending.iter().any(|t| t.description == "POS PURCHASE GREENLEAF GROCERY SPRINGFIELD CARD 4321"));
 
     // Read with the columns swapped, the statement no longer adds up as a bank account... until the
@@ -438,7 +438,7 @@ async fn card_statement_charges_import_as_money_out() {
     import_file(&pool, &path, card, seen.mapping.clone()).await.unwrap();
     let pending = list_pending(&pool, &Suggester::default(), "test").await.unwrap();
     let cafe = pending.iter().find(|t| t.description == "CORNER CAFE").unwrap();
-    assert_eq!((cafe.amount_cents, cafe.date.as_str()), (-1_250, "2025-12-18"));
+    assert_eq!((cafe.amount_cents, cafe.date.as_str()), (Cents(-1_250), "2025-12-18"));
     std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 

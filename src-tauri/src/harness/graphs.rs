@@ -5,6 +5,7 @@
 use super::account;
 use super::fixture::{d, harbor_lane};
 use crate::graphs::{self, GraphSlice, SalesBy};
+use crate::money::Cents;
 use crate::report_center;
 use crate::statements::{self, Basis, BudgetAmount, ClassReportLine, LineKind, PeriodColumn, PeriodReportInput};
 
@@ -124,10 +125,10 @@ async fn aging_graphs_match_the_aging_summaries() {
         for as_of in [d(2025, 3, 31), d(2025, 12, 31)] {
             let g = graphs::aging(&pool, payable, as_of).await.unwrap();
             let report = report_center::aging(&pool, payable, as_of).await.unwrap();
-            assert_eq!(g.buckets.iter().map(|b| b.amount_cents).collect::<Vec<_>>(), report.totals_cents.to_vec());
-            assert_eq!(g.buckets.iter().map(|b| b.amount_cents).sum::<i64>(), report.total_cents);
-            assert_eq!(g.total_cents, report.total_cents);
-            let owed: i64 = report.rows.iter().map(|r| r.total_cents).filter(|&c| c > 0).sum();
+            assert_eq!(g.buckets.iter().map(|b| b.amount_cents).collect::<Vec<_>>(), report.totals_cents.map(Cents::get).to_vec());
+            assert_eq!(g.buckets.iter().map(|b| b.amount_cents).sum::<i64>(), report.total_cents.get());
+            assert_eq!(g.total_cents, report.total_cents.get());
+            let owed: i64 = report.rows.iter().map(|r| r.total_cents.get()).filter(|&c| c > 0).sum();
             assert_eq!(sum(&g.parties), owed, "payable={payable} {as_of}");
             assert!(g.parties.windows(2).all(|w| w[1].other || w[0].amount_cents >= w[1].amount_cents), "largest first");
         }
@@ -148,13 +149,13 @@ async fn sales_graph_matches_the_sales_summaries() {
             SalesBy::Rep => report_center::sales_by_rep(&pool, start, end).await,
         }
         .unwrap();
-        assert_eq!(g.total_cents, report.total_cents, "{by:?}");
-        assert_eq!(g.months.iter().map(|m| m.amount_cents).sum::<i64>(), report.total_cents, "{by:?} months add up to the year");
-        let positive: i64 = report.rows.iter().map(|r| r.amount_cents).filter(|&c| c > 0).sum();
+        assert_eq!(g.total_cents, report.total_cents.get(), "{by:?}");
+        assert_eq!(g.months.iter().map(|m| m.amount_cents).sum::<i64>(), report.total_cents.get(), "{by:?} months add up to the year");
+        let positive: i64 = report.rows.iter().map(|r| r.amount_cents.get()).filter(|&c| c > 0).sum();
         assert_eq!(sum(&g.top), positive, "{by:?}");
         let march = report_center::by_party(&pool, false, d(2025, 3, 1), d(2025, 3, 31)).await.unwrap();
         if by == SalesBy::Customer {
-            assert_eq!(g.months[2].amount_cents, march.total_cents);
+            assert_eq!(g.months[2].amount_cents, march.total_cents.get());
         }
     }
     let by_customer = graphs::sales(&pool, SalesBy::Customer, start, end).await.unwrap();

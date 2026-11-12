@@ -1033,7 +1033,7 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
 
     let tb = crate::reports::trial_balance(pool).await?;
     ensure_eq!(tb.total_debit_cents, tb.total_credit_cents, "trial balance totals");
-    ensure_eq!(tb.total_debit_cents, expected.values().filter(|b| **b > 0).sum::<i64>(), "trial balance debits");
+    ensure_eq!(tb.total_debit_cents.get(), expected.values().filter(|b| **b > 0).sum::<i64>(), "trial balance debits");
 
     // Statements at several dates, across the fiscal year boundary.
     let sum_of = |class: &str| -> i64 { expected.iter().filter(|(id, _)| a.of(**id).0 == class).map(|(_, b)| *b).sum() };
@@ -1072,7 +1072,7 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
     let open_ar: i64 = m.invoices.values().filter(|i| !i.voided).map(|i| i.home_total - i.relieved).sum();
     ensure_eq!(m.balances.get(&a.ar).copied().unwrap_or(0), open_ar, "A/R in the model vs its open invoices");
     let ar_aging = crate::report_center::aging(pool, false, far_end()).await?;
-    ensure_eq!(ar_aging.total_cents, open_ar, "A/R aging total");
+    ensure_eq!(ar_aging.total_cents.get(), open_ar, "A/R aging total");
     let view_ar: i64 =
         sqlx::query_scalar("SELECT COALESCE(SUM(b.home_open_cents), 0) FROM v_invoice_balances b JOIN invoices i ON i.id = b.invoice_id WHERE i.is_voided = 0")
             .fetch_one(pool)
@@ -1103,7 +1103,7 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
     let open_ap: i64 = m.bills.values().filter(|b| !b.voided).map(|b| b.total - b.paid).sum();
     ensure_eq!(-m.balances.get(&a.ap).copied().unwrap_or(0), open_ap, "A/P in the model vs its open bills");
     let ap_aging = crate::report_center::aging(pool, true, far_end()).await?;
-    ensure_eq!(ap_aging.total_cents, open_ap, "A/P aging total");
+    ensure_eq!(ap_aging.total_cents.get(), open_ap, "A/P aging total");
     ensure_eq!(scalar(pool, "SELECT COUNT(*) FROM bills WHERE ?1 = ?1", 0).await?, m.bills.len() as i64, "bill rows");
     for (id, bill) in &m.bills {
         let (paid, status, voided): (i64, String, bool) =
@@ -1124,7 +1124,7 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
     // Undeposited Funds holds exactly the payments waiting to be deposited.
     let waiting: i64 = m.waiting_for_deposit().iter().map(|p| m.payments[p].home).sum();
     ensure_eq!(m.balances.get(&a.undeposited).copied().unwrap_or(0), waiting, "Undeposited Funds in the model");
-    let listed: i64 = crate::banking::list_undeposited(pool).await?.iter().map(|i| i.amount_cents).sum();
+    let listed: i64 = crate::banking::list_undeposited(pool).await?.iter().map(|i| i.amount_cents.get()).sum();
     ensure_eq!(listed, waiting, "payments listed as undeposited");
     Ok(())
 }

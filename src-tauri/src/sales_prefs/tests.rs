@@ -454,7 +454,7 @@ async fn assert_receivables_tie(pool: &SqlitePool, customer_id: i64, expected: i
     .unwrap();
     let open: i64 =
         sqlx::query_scalar("SELECT COALESCE(SUM(total_cents - amount_paid_cents), 0) FROM invoices WHERE is_voided = 0").fetch_one(pool).await.unwrap();
-    let aging = crate::invoices::ar_aging(pool, d(12, 31)).await.unwrap().total_cents;
+    let aging = crate::invoices::ar_aging(pool, d(12, 31)).await.unwrap().total_cents.get();
     // A voided payment's reversing entry has no customer on the statement yet (see docs/gaps.md),
     // so after a void the statement is left out.
     let statement = match customer_id {
@@ -568,7 +568,7 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
 
     // Only the money reaches Undeposited Funds and the bank deposit.
     let waiting = crate::banking::list_undeposited(&pool).await.unwrap();
-    let item = waiting.iter().find(|w| w.amount_cents == 49_000).expect("the discounted payment waits to be deposited for 490.00");
+    let item = waiting.iter().find(|w| w.amount_cents == Cents(49_000)).expect("the discounted payment waits to be deposited for 490.00");
     let deposit = crate::banking::DepositInput {
         bank_account_id: bank,
         deposit_date: d(10, 12),

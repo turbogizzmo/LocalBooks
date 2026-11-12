@@ -28,7 +28,7 @@ async fn journal(pool: &SqlitePool) -> Vec<(i64, i64, i64, i64, i64)> {
 }
 
 async fn ar_total(pool: &SqlitePool) -> i64 {
-    crate::invoices::ar_aging(pool, day()).await.unwrap().total_cents
+    crate::invoices::ar_aging(pool, day()).await.unwrap().total_cents.get()
 }
 
 #[tokio::test]

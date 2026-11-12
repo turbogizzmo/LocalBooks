@@ -46,10 +46,10 @@ async fn aging_is_as_of_a_date_and_summaries_and_ledger_add_up() {
     // On April 1 the January invoice was still open (paid April 10) and 60 days past due.
     let ar = aging(&pool, false, d(4, 1)).await.unwrap();
     let acme = ar.rows.iter().find(|r| r.party_name == "Acme").unwrap();
-    assert_eq!(acme.buckets_cents, [0, 20_000, 10_000, 0, 0], "March invoice 1 day late; January invoice 60 days late");
-    assert_eq!(ar.total_cents, 35_000);
+    assert_eq!(acme.buckets_cents, [0, 20_000, 10_000, 0, 0].map(Cents), "March invoice 1 day late; January invoice 60 days late");
+    assert_eq!(ar.total_cents, Cents(35_000));
     let later = aging(&pool, false, d(4, 30)).await.unwrap();
-    assert_eq!(later.total_cents, 25_000);
+    assert_eq!(later.total_cents, Cents(25_000));
     assert_eq!(later.items.len(), 2);
 
     let bill: crate::expenses::BillInput = serde_json::from_value(serde_json::json!({
@@ -59,23 +59,27 @@ async fn aging_is_as_of_a_date_and_summaries_and_ledger_add_up() {
     .unwrap();
     crate::expenses::post_vendor_bill(&pool, bill).await.unwrap();
     let ap = aging(&pool, true, d(5, 15)).await.unwrap();
-    assert_eq!(ap.rows[0].buckets_cents, [0, 0, 0, 7_000, 0], "65 days past due");
+    assert_eq!(ap.rows[0].buckets_cents, [0, 0, 0, 7_000, 0].map(Cents), "65 days past due");
 
     let sales = by_party(&pool, false, d(1, 1), d(12, 31)).await.unwrap();
-    let names: Vec<(&str, i64)> = sales.rows.iter().map(|r| (r.label.as_str(), r.amount_cents)).collect();
+    let names: Vec<(&str, i64)> = sales.rows.iter().map(|r| (r.label.as_str(), r.amount_cents.get())).collect();
     assert_eq!(names, [("Acme", 30_000), ("Globex", 5_000)]);
     let spend = by_party(&pool, true, d(1, 1), d(12, 31)).await.unwrap();
-    assert_eq!((spend.rows[0].label.as_str(), spend.total_cents), ("Staples", 7_000));
+    assert_eq!((spend.rows[0].label.as_str(), spend.total_cents), ("Staples", Cents(7_000)));
     let products = sales_by_product(&pool, d(1, 1), d(12, 31)).await.unwrap();
-    assert_eq!((products.rows[0].label.as_str(), products.rows[0].quantity_e4, products.total_cents), ("No product/service", Some(30_000), 35_000));
+    assert_eq!((products.rows[0].label.as_str(), products.rows[0].quantity_e4, products.total_cents), ("No product/service", Some(30_000), Cents(35_000)));
 
     let gl = general_ledger(&pool, d(3, 1), d(4, 30)).await.unwrap();
     let checking_gl = gl.accounts.iter().find(|a| a.account_id == checking).unwrap();
-    assert_eq!((checking_gl.opening_balance_cents, checking_gl.ending_balance_cents), (0, 10_000));
+    assert_eq!((checking_gl.opening_balance_cents, checking_gl.ending_balance_cents), (Cents(0), Cents(10_000)));
     let services_gl = gl.accounts.iter().find(|a| a.account_id == services).unwrap();
-    assert_eq!((services_gl.opening_balance_cents, services_gl.ending_balance_cents), (10_000, 35_000), "income opens at its year-to-date amount");
-    let debits: i64 = gl.accounts.iter().map(|a| a.total_debit_cents).sum();
-    let credits: i64 = gl.accounts.iter().map(|a| a.total_credit_cents).sum();
+    assert_eq!(
+        (services_gl.opening_balance_cents, services_gl.ending_balance_cents),
+        (Cents(10_000), Cents(35_000)),
+        "income opens at its year-to-date amount"
+    );
+    let debits: i64 = gl.accounts.iter().map(|a| a.total_debit_cents.get()).sum();
+    let credits: i64 = gl.accounts.iter().map(|a| a.total_credit_cents.get()).sum();
     assert_eq!(debits, credits);
 
     let tb = crate::statements::trial_balance_as_of(&pool, d(4, 30)).await.unwrap();
@@ -263,9 +267,9 @@ async fn aging_counts_from_the_due_date_or_the_transaction_date() {
 
     // On April 1, 30 days past the due date but 90 days after the invoice date.
     let by_due = aging(&pool, false, d(4, 1)).await.unwrap();
-    assert_eq!((by_due.basis.as_str(), by_due.rows[0].buckets_cents), ("DUE", [0, 10_000, 0, 0, 0]));
+    assert_eq!((by_due.basis.as_str(), by_due.rows[0].buckets_cents), ("DUE", [0, 10_000, 0, 0, 0].map(Cents)));
     crate::preferences::set(&pool, AGING_BASIS, "transaction").await.unwrap();
     let by_date = aging(&pool, false, d(4, 1)).await.unwrap();
-    assert_eq!((by_date.basis.as_str(), by_date.rows[0].buckets_cents, by_date.items[0].days_past_due), ("TRANSACTION", [0, 0, 0, 10_000, 0], 90));
+    assert_eq!((by_date.basis.as_str(), by_date.rows[0].buckets_cents, by_date.items[0].days_past_due), ("TRANSACTION", [0, 0, 0, 10_000, 0].map(Cents), 90));
     assert!(crate::preferences::set(&pool, AGING_BASIS, "invoice").await.unwrap_err().starts_with("PREF_BAD_AGING"));
 }

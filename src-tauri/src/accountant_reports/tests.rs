@@ -132,7 +132,7 @@ async fn reconcile_all_but_last(pool: &SqlitePool, account_id: i64, end: NaiveDa
         .collect();
     let (clear, _) = lines.split_at(lines.len() - 1);
     let state = crate::reconcile::account_state(pool, account_id).await.unwrap();
-    let ending = state.reconciled_balance_cents + clear.iter().map(|l| l.amount_cents).sum::<i64>();
+    let ending = state.reconciled_balance_cents.get() + clear.iter().map(|l| l.amount_cents.get()).sum::<i64>();
     let rec = crate::reconcile::start(pool, account_id, end, ending).await.unwrap();
     crate::reconcile::set_lines_cleared(pool, rec.id, &clear.iter().map(|l| l.line_id).collect::<Vec<_>>(), true).await.unwrap();
     crate::reconcile::lock(pool, rec.id).await.unwrap();
