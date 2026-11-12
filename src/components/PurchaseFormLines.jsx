@@ -38,9 +38,17 @@ export function usePurchaseFormLines(lines, stored = null) {
   return [rows, setByForm, laid, touched];
 }
 
-/** The rows under a form's split grid: kind, the split line it follows, item, account, text and amount. */
-export default function PurchaseFormLines({ rows, setRows, laid, lines, accounts }) {
+/**
+ * The rows under a form's split grid: kind, the split line it follows, item, account, text and
+ * amount, and (once the company has customers) the customer or job, with a Bill? box on a charge
+ * unless `withBillable` is off (vendor credits and purchase orders: not a cost to bill on).
+ */
+export default function PurchaseFormLines({ rows, setRows, laid, lines, accounts, withBillable = true }) {
   const items = useLedgerQuery(api.listProducts).data ?? [];
+  const customers = useLedgerQuery(api.listCustomers).data ?? [];
+  const withJobs = customers.length > 0 || rows.some((r) => r.customerId);
+  const prefs = useLedgerQuery(api.getPreferences).data;
+  const billableByDefault = prefs?.expenses_billable_default === 'true';
   const update = (key, change) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...change } : r)));
   // The first split line without a discount or charge after it, for a new row.
   const free = lines.findIndex((_, i) => !rows.some((r) => Number(r.afterLine) === i + 1));
@@ -58,6 +66,8 @@ export default function PurchaseFormLines({ rows, setRows, laid, lines, accounts
               <th className="text-left font-normal">Description</th>
               <th className="text-left font-normal">Amount or %</th>
               <th className="text-right font-normal">Comes to</th>
+              {withJobs && <th className="text-left font-normal" title="The customer or job this line is for (job costing)">Customer:Job</th>}
+              {withJobs && withBillable && <th className="font-normal" title="Billable: invoice this charge to the customer from Sales › Bill Costs">Bill?</th>}
               <th />
             </tr>
           </thead>
@@ -68,7 +78,7 @@ export default function PurchaseFormLines({ rows, setRows, laid, lines, accounts
               return (
                 <tr key={r.key}>
                   <td className="pr-1">
-                    <select className="qb-input h-row" aria-label="Discount or charge" value={r.kind} onChange={(e) => update(r.key, { kind: e.target.value, itemId: null })}>
+                    <select className="qb-input h-row" aria-label="Discount or charge" value={r.kind} onChange={(e) => update(r.key, { kind: e.target.value, itemId: null, billable: null })}>
                       <option value="DISCOUNT">Discount</option>
                       <option value="CHARGE">Charge</option>
                     </select>
@@ -104,6 +114,35 @@ export default function PurchaseFormLines({ rows, setRows, laid, lines, accounts
                     <input className="qb-input num h-row w-[90px]" aria-label="Amount or percent" value={r.value} placeholder="0.00 or 10%" onChange={(e) => update(r.key, { value: e.target.value })} />
                   </td>
                   <td className="num pr-1 text-right">{amount !== undefined ? formatCents(r.kind === 'DISCOUNT' ? -amount : amount) : ''}</td>
+                  {withJobs && (
+                    <td className="pr-1">
+                      <select
+                        className="qb-input h-row max-w-[170px]"
+                        aria-label="Customer or job"
+                        value={r.customerId ?? ''}
+                        onChange={(e) => update(r.key, { customerId: e.target.value ? Number(e.target.value) : null, billable: null })}
+                      >
+                        <option value="">—</option>
+                        {customers.filter((c) => c.isActive || c.id === r.customerId).map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
+                  {withJobs && withBillable && (
+                    <td className="pr-1 text-center">
+                      {r.customerId && r.kind === 'CHARGE' ? (
+                        <input
+                          type="checkbox"
+                          className="accent-qb-green"
+                          checked={r.billable ?? billableByDefault}
+                          onChange={(e) => update(r.key, { billable: e.target.checked })}
+                          aria-label="Billable"
+                          title="Invoice this charge to the customer from Sales › Bill Costs"
+                        />
+                      ) : null}
+                    </td>
+                  )}
                   <td>
                     <button type="button" className="qb-btn qb-btn-secondary h-[20px] px-1.5" aria-label="Remove this line" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
                       ✕

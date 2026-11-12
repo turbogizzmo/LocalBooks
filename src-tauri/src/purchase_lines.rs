@@ -95,6 +95,13 @@ pub struct PurchaseFormLineInput {
     pub account_id: i64,
     #[serde(default)]
     pub class_id: Option<i64>,
+    /// The customer or job the line is for.
+    #[serde(default)]
+    pub customer_id: Option<i64>,
+    /// Billable to that customer (Sales › Bill Costs); left out, Preferences › Time & Expenses
+    /// decides. Only bills, checks and expenses keep it.
+    #[serde(default)]
+    pub billable: Option<bool>,
 }
 
 /// A stored line, as the forms load it back.
@@ -110,6 +117,8 @@ pub struct PurchaseFormLineView {
     pub amount_cents: Cents,
     pub account_id: i64,
     pub class_id: Option<i64>,
+    pub customer_id: Option<i64>,
+    pub billable: bool,
 }
 
 /// Works out each form line's amount from the split lines' amounts (`splits`, in line order), and
@@ -211,6 +220,14 @@ pub async fn check(tx: &mut Transaction<'_, Sqlite>, form: &[PurchaseFormLineInp
         if let Some(class) = line.class_id {
             crate::classes::check_usable(tx, class, &format!("{code}: {what} after split line {n}")).await?;
         }
+        if let Some(job) = line.customer_id {
+            crate::job_reports::check_job(tx, job, &format!("{code}: {what} after split line {n}")).await?;
+        }
+        if line.billable == Some(true) && (line.kind == PurchaseLineKind::Discount || line.customer_id.is_none()) {
+            return Err(format!(
+                "{code}_FORM_LINE_BILLABLE: the {what} after split line {n} can't be billable; only a charge with a customer or job is billed on"
+            ));
+        }
         if line.description.chars().count() > 4000 {
             return Err(format!("{code}_FORM_LINE_TEXT: the {what} after split line {n} has too long a description"));
         }
@@ -225,14 +242,21 @@ fn description(line: &PurchaseFormLineInput) -> &str {
     }
 }
 
-/// Stores the lines (`amounts` from [`lay_out`]) on document `id`.
+/// Stores the lines (`amounts` from [`lay_out`]) on document `id`. A charge with a customer on a
+/// bill, check, expense or purchase order is billable as the form says, or by Preferences › Time &
+/// Expenses when it doesn't. Discounts and a vendor credit's lines are never billable, though they
+/// may name a customer or job.
 pub async fn write(tx: &mut Transaction<'_, Sqlite>, doc: PurchaseDoc, id: i64, form: &[PurchaseFormLineInput], amounts: &[i64]) -> Result<(), String> {
     let sql = format!(
-        "INSERT INTO purchase_form_lines ({}, after_line, kind, description, product_service_id, percent_ppm, amount_cents, account_id, class_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO purchase_form_lines ({}, after_line, kind, description, product_service_id, percent_ppm, amount_cents, account_id, class_id, customer_id, is_billable)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         doc.column()
     );
     for (line, amount) in form.iter().zip(amounts) {
+        let billable = match (doc, line.kind) {
+            (PurchaseDoc::VendorCredit, _) | (_, PurchaseLineKind::Discount) => false,
+            _ => crate::expenses::is_billable(tx, line.billable, line.customer_id).await?,
+        };
         sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(id)
             .bind(i64::try_from(line.after_line).map_err(|_| "FORM_LINE_PLACE: line number out of range".to_string())?)
@@ -243,6 +267,8 @@ pub async fn write(tx: &mut Transaction<'_, Sqlite>, doc: PurchaseDoc, id: i64, 
             .bind(*amount)
             .bind(line.account_id)
             .bind(line.class_id)
+            .bind(line.customer_id)
+            .bind(billable)
             .execute(&mut **tx)
             .await
             .map_err(db_err)?;
@@ -268,7 +294,7 @@ pub fn journal_lines(form: &[PurchaseFormLineInput], amounts: &[i64], split_debi
 /// transaction with `&mut **tx`).
 pub async fn lines_of<'e, E: sqlx::Executor<'e, Database = Sqlite>>(executor: E, doc: PurchaseDoc, id: i64) -> Result<Vec<PurchaseFormLineView>, String> {
     sqlx::query_as::<_, PurchaseFormLineView>(sqlx::AssertSqlSafe(format!(
-        "SELECT after_line, kind, description, product_service_id, percent_ppm, amount_cents, account_id, class_id
+        "SELECT after_line, kind, description, product_service_id, percent_ppm, amount_cents, account_id, class_id, customer_id, is_billable AS billable
          FROM purchase_form_lines WHERE {} = ?1 ORDER BY after_line",
         doc.column()
     )))
@@ -321,6 +347,8 @@ pub fn inputs_of(views: &[PurchaseFormLineView]) -> Vec<PurchaseFormLineInput> {
             amount_cents: if v.percent_ppm.is_some() { None } else { Some(v.amount_cents) },
             account_id: v.account_id,
             class_id: v.class_id,
+            customer_id: v.customer_id,
+            billable: Some(v.billable),
         })
         .collect()
 }

@@ -9,7 +9,27 @@ import { parsePercentPpm, percentText } from './itemTypes.js';
 let nextKey = 1;
 
 /** A new discount or charge row, after split line `afterLine`. */
-export const blankFormLine = (afterLine = 1, kind = 'DISCOUNT') => ({ key: nextKey++, afterLine, kind, itemId: null, accountId: null, classId: null, description: '', value: '' });
+// `billable` is null until the row's Bill? box is touched: the company default then decides, as on
+// a split line. Only a charge with a customer is billed on.
+export const blankFormLine = (afterLine = 1, kind = 'DISCOUNT') => ({
+  key: nextKey++,
+  afterLine,
+  kind,
+  itemId: null,
+  accountId: null,
+  classId: null,
+  customerId: null,
+  billable: null,
+  description: '',
+  value: '',
+});
+
+/** What a row sends for its customer and Bill? box: billable only for a charge with a customer. */
+const jobOf = (row) => {
+  const customerId = row.customerId ?? null;
+  const billable = customerId && row.kind === 'CHARGE' ? (row.billable ?? null) : customerId ? false : null;
+  return { customerId, billable };
+};
 
 /** "10%" → { percentPpm }, "25.00" → { amountCents }, else null. */
 export function readValue(text) {
@@ -54,6 +74,7 @@ export function layOutPurchase(splitAmounts, rows) {
       amountCents: value.amountCents,
       accountId: row.accountId,
       classId: row.classId ?? null,
+      ...jobOf(row),
     });
   }
   if (total < 1) return { error: 'TOTAL' };
@@ -84,6 +105,9 @@ export function rowsFromStored(views) {
     itemId: v.productServiceId ?? null,
     accountId: v.accountId,
     classId: v.classId ?? null,
+    customerId: v.customerId ?? null,
+    // A saved line says whether it was billable; a memorized one may leave it to the default.
+    billable: v.customerId ? (v.billable ?? null) : null,
     description: v.description,
     value: v.percentPpm ? percentText(v.percentPpm) : centsToInput(v.amountCents),
   }));
@@ -132,6 +156,8 @@ export function layOutCarried(splitAmounts, formLines) {
     itemId: f.productServiceId ?? null,
     accountId: f.accountId,
     classId: f.classId ?? null,
+    customerId: f.customerId ?? null,
+    billable: null,
     description: f.description ?? '',
     value: f.percentPpm ? percentText(f.percentPpm) : centsToInput(f.amountCents),
   }));

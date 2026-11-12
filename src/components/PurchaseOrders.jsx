@@ -132,7 +132,7 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
         </div>
       </div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withPricing withClasses withJobs withBillable={false} stockItems={stockItems.data ?? []} />
-      <PurchaseFormLines rows={formRows} setRows={setFormRows} laid={laid} lines={lines} accounts={accounts} />
+      <PurchaseFormLines rows={formRows} setRows={setFormRows} laid={laid} lines={lines} accounts={accounts} withBillable={false} />
       <div className="flex items-center gap-2 px-2 py-1">
         <input className="qb-input w-[320px]" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Message to vendor" />
         {error && <span className="text-sm text-qb-negative">{error}</span>}

@@ -144,7 +144,7 @@ export function BillableTables({ shown, shownTime, picks, milli }) {
                   <input type="checkbox" className="accent-qb-green" checked={picked.has(costKey(c))} onChange={() => toggle(c)} aria-label={`Bill ${c.memo ?? c.accountName} of ${formatDate(c.date)}`} />
                 </td>
                 <td className="qb-grid-cell">{formatDate(c.date)}</td>
-                <td className="qb-grid-cell">{c.source === 'BILL' ? 'Bill' : 'Check / expense'}</td>
+                <td className="qb-grid-cell">{c.source === 'BILL' ? 'Bill' : c.source === 'CHARGE' ? 'Charge' : 'Check / expense'}</td>
                 <td className="qb-grid-cell">{c.vendorName ?? '—'}</td>
                 <td className="qb-grid-cell">{c.accountName}</td>
                 <td className="qb-grid-cell">{c.memo ?? ''}</td>

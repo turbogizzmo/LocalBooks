@@ -1,7 +1,8 @@
 //! Billable expenses: costs on checks, expenses and bills marked billable to a customer or job,
 //! invoiced to them from Sales › Bill Costs.
 //!
-//! A cost is billable when its line has a customer and is marked billable (new lines follow
+//! A cost is a split line of a check, expense or bill, or a charge line on one (freight, say:
+//! `purchase_form_lines`). It is billable when its line has a customer and is marked billable (new lines follow
 //! Preferences › Time & Expenses › "Mark all expenses as billable"). Billing writes one invoice:
 //!
 //! - one line per cost, for its amount, crediting the cost's own expense account (the
@@ -44,7 +45,8 @@ use crate::preferences::tax_time;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct UnbilledCost {
-    /// `EXPENSE` (a check or expense line) or `BILL` (a bill line).
+    /// `EXPENSE` (a check or expense line), `BILL` (a bill line) or `CHARGE` (a charge line on a
+    /// bill, check or expense: `purchase_form_lines`).
     pub source: String,
     pub line_id: i64,
     pub date: String,
@@ -86,7 +88,20 @@ const UNBILLED: &str = "
     FROM bill_lines l JOIN bills b ON b.id = l.bill_id JOIN journal_entries e ON e.id = b.journal_entry_id
     JOIN v_chart_of_accounts a ON a.id = l.account_id JOIN customers c ON c.id = l.customer_id JOIN vendors v ON v.id = b.vendor_id
     WHERE l.is_billable = 1 AND e.is_voided = 0
-      AND NOT EXISTS (SELECT 1 FROM billed_costs bc JOIN invoices i ON i.id = bc.invoice_id WHERE bc.bill_line_id = l.id AND i.is_voided = 0)";
+      AND NOT EXISTS (SELECT 1 FROM billed_costs bc JOIN invoices i ON i.id = bc.invoice_id WHERE bc.bill_line_id = l.id AND i.is_voided = 0)
+    UNION ALL
+    SELECT 'CHARGE', f.id, b.bill_date, v.name, f.account_id, a.full_name, NULLIF(f.description, ''), f.amount_cents, f.customer_id, c.name, NULL, NULL
+    FROM purchase_form_lines f JOIN bills b ON b.id = f.bill_id JOIN journal_entries e ON e.id = b.journal_entry_id
+    JOIN v_chart_of_accounts a ON a.id = f.account_id JOIN customers c ON c.id = f.customer_id JOIN vendors v ON v.id = b.vendor_id
+    WHERE f.kind = 'CHARGE' AND f.is_billable = 1 AND e.is_voided = 0
+      AND NOT EXISTS (SELECT 1 FROM billed_costs bc JOIN invoices i ON i.id = bc.invoice_id WHERE bc.purchase_form_line_id = f.id AND i.is_voided = 0)
+    UNION ALL
+    SELECT 'CHARGE', f.id, x.expense_date, v.name, f.account_id, a.full_name, NULLIF(f.description, ''), f.amount_cents, f.customer_id, c.name,
+           x.currency_code, x.exchange_rate_e6
+    FROM purchase_form_lines f JOIN expenses x ON x.id = f.expense_id JOIN journal_entries e ON e.id = x.journal_entry_id
+    JOIN v_chart_of_accounts a ON a.id = f.account_id JOIN customers c ON c.id = f.customer_id LEFT JOIN vendors v ON v.id = x.vendor_id
+    WHERE f.kind = 'CHARGE' AND f.is_billable = 1 AND e.is_voided = 0 AND x.is_credit = 0
+      AND NOT EXISTS (SELECT 1 FROM billed_costs bc JOIN invoices i ON i.id = bc.invoice_id WHERE bc.purchase_form_line_id = f.id AND i.is_voided = 0)";
 
 /// Billable time not yet on a live invoice.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, sqlx::FromRow)]
@@ -357,6 +372,7 @@ async fn write_with_billing(
         let column = match cost.source.as_str() {
             "EXPENSE" => "expense_line_id",
             "BILL" => "bill_line_id",
+            "CHARGE" => "purchase_form_line_id",
             other => return Err(format!("COST_BAD_SOURCE: '{other}' is not a cost source")),
         };
         let found: Option<UnbilledCost> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT * FROM ({UNBILLED}) WHERE source = ?1 AND line_id = ?2")))
@@ -502,8 +518,8 @@ pub(crate) async fn reimbursed_accounts(tx: &mut Transaction<'_, Sqlite>, invoic
 /// An edited invoice keeps the costs and time the original billed.
 pub(crate) async fn follow_replaced_invoice(tx: &mut Transaction<'_, Sqlite>, old_invoice: i64, new_invoice: i64) -> Result<(), String> {
     sqlx::query(
-        "INSERT INTO billed_costs (expense_line_id, bill_line_id, invoice_id, amount_cents, markup_cents)
-         SELECT expense_line_id, bill_line_id, ?2, amount_cents, markup_cents FROM billed_costs WHERE invoice_id = ?1",
+        "INSERT INTO billed_costs (expense_line_id, bill_line_id, purchase_form_line_id, invoice_id, amount_cents, markup_cents)
+         SELECT expense_line_id, bill_line_id, purchase_form_line_id, ?2, amount_cents, markup_cents FROM billed_costs WHERE invoice_id = ?1",
     )
     .bind(old_invoice)
     .bind(new_invoice)
@@ -534,6 +550,20 @@ pub(crate) async fn follow_replaced_lines(tx: &mut Transaction<'_, Sqlite>, tabl
          SELECT n.id, b.invoice_id, b.amount_cents, b.markup_cents
          FROM billed_costs b JOIN {lines} o ON o.id = b.{column} JOIN invoices i ON i.id = b.invoice_id
          JOIN {lines} n ON n.{parent} = ?2 AND n.line_number = o.line_number AND n.customer_id IS o.customer_id
+         WHERE o.{parent} = ?1 AND i.is_voided = 0"
+    )))
+    .bind(old_id)
+    .bind(new_id)
+    .execute(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    // A billed charge line stays billed on the replacement's charge after the same split line, for
+    // the same customer.
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO billed_costs (purchase_form_line_id, invoice_id, amount_cents, markup_cents)
+         SELECT n.id, b.invoice_id, b.amount_cents, b.markup_cents
+         FROM billed_costs b JOIN purchase_form_lines o ON o.id = b.purchase_form_line_id JOIN invoices i ON i.id = b.invoice_id
+         JOIN purchase_form_lines n ON n.{parent} = ?2 AND n.after_line = o.after_line AND n.kind = o.kind AND n.customer_id IS o.customer_id
          WHERE o.{parent} = ?1 AND i.is_voided = 0"
     )))
     .bind(old_id)

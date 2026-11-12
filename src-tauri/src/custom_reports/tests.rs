@@ -91,3 +91,50 @@ async fn rejects_bad_settings() {
     assert_eq!(empty.line_count, 0);
     assert_eq!(empty.rows.len(), 1);
 }
+
+/// Gap T84: a custom report by item lists the discount and charge items' lines, on sales and
+/// purchase forms alike.
+#[tokio::test]
+async fn the_items_source_lists_discount_and_charge_lines() {
+    use crate::money::Cents;
+    let pool = crate::db::test_pool().await;
+    let id = |number: &'static str| {
+        let pool = pool.clone();
+        async move { sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(&pool).await.unwrap() }
+    };
+    let (services, supplies, freight) = (id("4100").await, id("6250").await, id("6400").await);
+    let item = |name: &str, kind: &str, account: i64| {
+        crate::sales::create_item(
+            &pool,
+            crate::sales::ProductInput { name: name.into(), description: None, rate_cents: Cents::ZERO, income_account_id: services, is_taxable: false },
+            crate::sales::ItemKind { item_type: kind.into(), percent_ppm: None, expense_account_id: Some(account) },
+        )
+    };
+    let loyalty = item("Loyalty", "DISCOUNT", supplies).await.unwrap();
+    let shipping = item("Shipping", "OTHER_CHARGE", freight).await.unwrap();
+    let rebate = item("Rebate", "DISCOUNT", supplies).await.unwrap();
+    crate::sales::create_customer(&pool, "Acme", None).await.unwrap();
+
+    let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
+        "customerName": "Acme", "issueDate": "2026-05-01", "dueDate": "2026-05-31",
+        "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": 10_000, "incomeAccountId": services }],
+        "formLines": [{ "afterLines": 1, "kind": "DISCOUNT", "amountCents": 1_000, "accountId": services, "productServiceId": loyalty.id, "description": "Loyalty" }]
+    }))
+    .unwrap();
+    crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
+    let bill: crate::expenses::BillInput = serde_json::from_value(serde_json::json!({
+        "vendorName": "Supplier", "billNumber": "B-1", "billDate": "2026-05-02", "dueDate": "2026-05-31", "memo": null, "totalCents": 20_200,
+        "lines": [{ "accountId": supplies, "amountCents": 20_000, "memo": "Lumber" }, { "accountId": supplies, "amountCents": 1_000, "memo": "Nails" }],
+        "formLines": [
+            { "afterLine": 1, "kind": "DISCOUNT", "amountCents": 2_000, "accountId": supplies, "productServiceId": rebate.id, "description": "Rebate" },
+            { "afterLine": 2, "kind": "CHARGE", "amountCents": 1_200, "accountId": freight, "productServiceId": shipping.id, "description": "Freight" }
+        ]
+    }))
+    .unwrap();
+    crate::expenses::post_vendor_bill(&pool, bill).await.unwrap();
+
+    let lines = item_lines(&pool, None, d(2026, 5, 31)).await.unwrap();
+    let mut by_item: Vec<(String, i64)> = lines.iter().filter_map(|l| Some((l.item_name.clone()?, l.item_amount_cents?))).collect();
+    by_item.sort();
+    assert_eq!(by_item, [("Loyalty".to_string(), -1_000), ("Rebate".to_string(), -2_000), ("Shipping".to_string(), 1_200)]);
+}
