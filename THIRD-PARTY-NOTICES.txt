@@ -17,7 +17,7 @@ adler2 2.0.1  [0BSD OR MIT OR Apache-2.0]  https://github.com/oyvindln/adler2
 adobe-cmap-parser 0.4.1  [MIT]  https://github.com/jrmuizel/adobe-cmap-parser
 aead 0.6.1  [MIT OR Apache-2.0]  https://github.com/RustCrypto/traits
 aes 0.8.4  [MIT OR Apache-2.0]  https://github.com/RustCrypto/block-ciphers
-aes 0.9.3  [MIT OR Apache-2.0]  https://github.com/RustCrypto/block-ciphers
+aes 0.9.4  [MIT OR Apache-2.0]  https://github.com/RustCrypto/block-ciphers
 aes-gcm 0.11.1  [Apache-2.0 OR MIT]  https://github.com/RustCrypto/AEADs
 aho-corasick 1.1.5  [Unlicense OR MIT]  https://github.com/BurntSushi/aho-corasick
 alloc-no-stdlib 3.0.0  [BSD-3-Clause]  https://github.com/dropbox/rust-alloc-no-stdlib
@@ -885,7 +885,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
------ Used by: aead 0.6.1 (LICENSE-APACHE), aes 0.8.4 (LICENSE-APACHE), aes 0.9.3 (LICENSE-APACHE), aes-gcm 0.11.1 (LICENSE-APACHE), argon2 0.6.0 (LICENSE-APACHE), base64ct 1.8.3 (LICENSE-APACHE), blake2 0.11.0 (LICENSE-APACHE), block-buffer 0.10.4 (LICENSE-APACHE), block-buffer 0.12.1 (LICENSE-APACHE), block-padding 0.3.3 (LICENSE-APACHE), block-padding 0.4.2 (LICENSE-APACHE), cbc 0.1.2 (LICENSE-APACHE), cbc 0.2.1 (LICENSE-APACHE), chacha20 0.10.2 (LICENSE-APACHE), cipher 0.4.4 (LICENSE-APACHE), cipher 0.5.2 (LICENSE-APACHE), const-oid 0.10.3 (LICENSE-APACHE), cpubits 0.1.1 (LICENSE-APACHE), cpufeatures 0.2.17 (LICENSE-APACHE), cpufeatures 0.3.1 (LICENSE-APACHE), crypto-common 0.1.7 (LICENSE-APACHE), crypto-common 0.2.2 (LICENSE-APACHE), ctr 0.10.1 (LICENSE-APACHE), digest 0.10.7 (LICENSE-APACHE), digest 0.11.3 (LICENSE-APACHE), ghash 0.6.0 (LICENSE-APACHE), hkdf 0.13.0 (LICENSE-APACHE), hmac 0.13.0 (LICENSE-APACHE), hybrid-array 0.4.15 (LICENSE-APACHE), inout 0.1.4 (LICENSE-APACHE), inout 0.2.5 (LICENSE-APACHE), md-5 0.10.6 (LICENSE-APACHE), md-5 0.11.0 (LICENSE-APACHE), password-hash 0.6.1 (LICENSE-APACHE), phc 0.6.1 (LICENSE-APACHE), polyval 0.7.3 (LICENSE-APACHE), sha1 0.11.0 (LICENSE-APACHE), sha2 0.10.9 (LICENSE-APACHE), sha2 0.11.1 (LICENSE-APACHE), universal-hash 0.6.1 (LICENSE-APACHE) -----
+----- Used by: aead 0.6.1 (LICENSE-APACHE), aes 0.8.4 (LICENSE-APACHE), aes 0.9.4 (LICENSE-APACHE), aes-gcm 0.11.1 (LICENSE-APACHE), argon2 0.6.0 (LICENSE-APACHE), base64ct 1.8.3 (LICENSE-APACHE), blake2 0.11.0 (LICENSE-APACHE), block-buffer 0.10.4 (LICENSE-APACHE), block-buffer 0.12.1 (LICENSE-APACHE), block-padding 0.3.3 (LICENSE-APACHE), block-padding 0.4.2 (LICENSE-APACHE), cbc 0.1.2 (LICENSE-APACHE), cbc 0.2.1 (LICENSE-APACHE), chacha20 0.10.2 (LICENSE-APACHE), cipher 0.4.4 (LICENSE-APACHE), cipher 0.5.2 (LICENSE-APACHE), const-oid 0.10.3 (LICENSE-APACHE), cpubits 0.1.1 (LICENSE-APACHE), cpufeatures 0.2.17 (LICENSE-APACHE), cpufeatures 0.3.1 (LICENSE-APACHE), crypto-common 0.1.7 (LICENSE-APACHE), crypto-common 0.2.2 (LICENSE-APACHE), ctr 0.10.1 (LICENSE-APACHE), digest 0.10.7 (LICENSE-APACHE), digest 0.11.3 (LICENSE-APACHE), ghash 0.6.0 (LICENSE-APACHE), hkdf 0.13.0 (LICENSE-APACHE), hmac 0.13.0 (LICENSE-APACHE), hybrid-array 0.4.15 (LICENSE-APACHE), inout 0.1.4 (LICENSE-APACHE), inout 0.2.5 (LICENSE-APACHE), md-5 0.10.6 (LICENSE-APACHE), md-5 0.11.0 (LICENSE-APACHE), password-hash 0.6.1 (LICENSE-APACHE), phc 0.6.1 (LICENSE-APACHE), polyval 0.7.3 (LICENSE-APACHE), sha1 0.11.0 (LICENSE-APACHE), sha2 0.10.9 (LICENSE-APACHE), sha2 0.11.1 (LICENSE-APACHE), universal-hash 0.6.1 (LICENSE-APACHE) -----
 
 Apache License
                         Version 2.0, January 2004
@@ -1146,7 +1146,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
------ Used by: aes 0.9.3 (LICENSE-MIT) -----
+----- Used by: aes 0.9.4 (LICENSE-MIT) -----
 
 Copyright (c) 2018-2024 The RustCrypto Project Developers
 Copyright (c) 2018 Artyom Pavlov
