@@ -23,7 +23,7 @@ async fn purchase_details_batch_activity_and_pasted_items() {
 
     set_purchase_details(&pool, bolt, Some(" Hex bolt, box of 100 "), Some(1_200)).await.unwrap();
     let view = list_products(&pool).await.unwrap().into_iter().find(|p| p.id == bolt).unwrap();
-    assert_eq!((view.purchase_description.as_deref(), view.purchase_cost_cents), (Some("Hex bolt, box of 100"), Some(1_200)));
+    assert_eq!((view.purchase_description.as_deref(), view.purchase_cost_cents), (Some("Hex bolt, box of 100"), Some(Cents(1_200))));
     assert!(set_purchase_details(&pool, bolt, None, Some(-1)).await.unwrap_err().starts_with("ITEM_BAD_COST"));
     assert!(set_purchase_details(&pool, 9_999, None, None).await.unwrap_err().starts_with("ITEM_NOT_FOUND"));
 
@@ -64,10 +64,10 @@ async fn purchase_details_batch_activity_and_pasted_items() {
     assert_eq!((done.added, done.updated, done.problems.len()), (2, 1, 0));
     let items = list_products(&pool).await.unwrap();
     let get = |n: &str| items.iter().find(|p| p.name == n).unwrap();
-    assert_eq!((get("Nut").rate_cents, get("Nut").purchase_cost_cents), (25, Some(10)));
+    assert_eq!((get("Nut").rate_cents, get("Nut").purchase_cost_cents), (Cents(25), Some(Cents(10))));
     assert_eq!(
         (get("Bolt").rate_cents, get("Bolt").purchase_cost_cents, get("Bolt").purchase_description.as_deref()),
-        (60, Some(1_200), Some("Hex bolt, box of 100")),
+        (Cents(60), Some(Cents(1_200)), Some("Hex bolt, box of 100")),
         "an empty cell leaves the value"
     );
     assert_eq!(get("Washer").purchase_description.as_deref(), Some("Zinc washer"));
