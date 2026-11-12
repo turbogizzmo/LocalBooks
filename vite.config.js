@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -37,7 +38,7 @@ function pdfStandardFonts() {
 }
 
 export default defineConfig({
-  plugins: [react(), pdfStandardFonts()],
+  plugins: [react(), tailwindcss(), pdfStandardFonts()],
   clearScreen: false,
   server: {
     port: 1420,

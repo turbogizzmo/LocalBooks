@@ -266,7 +266,7 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
     }
   }
   return (
-    <div className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
+    <div className="flex h-full flex-col gap-2 p-2 outline-hidden" tabIndex={-1} onKeyDown={onKeyDown}>
       {dialog && (
         <AccountDialog
           account={dialog.account}

@@ -69,7 +69,7 @@ export default function FormToolbar({ label, groups, children }) {
 
 const BUTTON =
   'flex min-w-[52px] flex-col items-center justify-start gap-0.5 rounded-sm px-1.5 pb-0.5 pt-1 text-2xs font-semibold leading-tight ' +
-  'focus-visible:bg-qb-surface focus-visible:shadow-focus focus-visible:outline-none';
+  'focus-visible:bg-qb-surface focus-visible:shadow-focus focus-visible:outline-hidden';
 const ENABLED = 'text-qb-ink hover:bg-qb-surface hover:shadow-panel';
 const DISABLED = 'cursor-not-allowed text-qb-ink-faint opacity-60';
 
@@ -159,7 +159,7 @@ function MenuButton({ item }) {
               disabled={entry.disabled}
               title={entry.hint}
               onClick={() => choose(entry)}
-              className="block w-full whitespace-nowrap px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover focus:bg-qb-row-hover focus:outline-none disabled:cursor-not-allowed disabled:text-qb-ink-faint"
+              className="block w-full whitespace-nowrap px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover focus:bg-qb-row-hover focus:outline-hidden disabled:cursor-not-allowed disabled:text-qb-ink-faint"
             >
               {entry.label}
             </button>

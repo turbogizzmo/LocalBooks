@@ -703,7 +703,7 @@ export default function PartyList({ kind, navigate, intent = null }) {
   }
 
   return (
-    <div ref={listRef} className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
+    <div ref={listRef} className="flex h-full flex-col gap-2 p-2 outline-hidden" tabIndex={-1} onKeyDown={onKeyDown}>
       {editing && (
         <PartyDialog
           kind={kind}

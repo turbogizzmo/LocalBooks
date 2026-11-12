@@ -117,7 +117,7 @@ export default function PartyTransactions({ kind, party, onClose }) {
   };
 
   return (
-    <section className="qb-panel flex h-[40%] min-h-[160px] flex-none flex-col outline-none" aria-label={`Transactions with ${party.name}`} tabIndex={-1} onKeyDown={onKeyDown}>
+    <section className="qb-panel flex h-[40%] min-h-[160px] flex-none flex-col outline-hidden" aria-label={`Transactions with ${party.name}`} tabIndex={-1} onKeyDown={onKeyDown}>
       {history !== null && <TransactionHistory journalEntryId={history} onClose={() => setHistory(null)} onOpen={openFromList} />}
       <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
         <h2 className="truncate text-md font-semibold">Transactions · {party.name}</h2>

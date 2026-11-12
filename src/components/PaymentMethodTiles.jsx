@@ -14,7 +14,7 @@ const TILE_KINDS = [
 
 const TILE =
   'flex h-[58px] w-[66px] flex-col items-center justify-center gap-1 rounded-sm border text-2xs font-semibold uppercase tracking-wide ' +
-  'focus-visible:outline-none focus-visible:shadow-focus';
+  'focus-visible:outline-hidden focus-visible:shadow-focus';
 const tileState = (pressed) =>
   pressed
     ? 'border-qb-green bg-qb-green-tint text-qb-green-active ring-1 ring-inset ring-qb-green'
@@ -103,7 +103,7 @@ export default function PaymentMethodTiles({ value, onChange, label = 'Payment m
               role="menuitemradio"
               aria-checked={value === m.id}
               onClick={() => pickMore(m)}
-              className="flex w-full items-center gap-1 whitespace-nowrap px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover focus:bg-qb-row-hover focus:outline-none"
+              className="flex w-full items-center gap-1 whitespace-nowrap px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover focus:bg-qb-row-hover focus:outline-hidden"
             >
               <span className="w-3 text-qb-green-active">{value === m.id ? '✓' : ''}</span>
               {m.name}
@@ -116,7 +116,7 @@ export default function PaymentMethodTiles({ value, onChange, label = 'Payment m
               setOpen(false);
               setAdding(true);
             }}
-            className="flex w-full items-center gap-1 whitespace-nowrap border-t border-qb-border px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover focus:bg-qb-row-hover focus:outline-none"
+            className="flex w-full items-center gap-1 whitespace-nowrap border-t border-qb-border px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover focus:bg-qb-row-hover focus:outline-hidden"
           >
             <span className="w-3" />＋ Add new…
           </button>

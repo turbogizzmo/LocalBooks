@@ -167,7 +167,7 @@ function BarChart({ width, height = 260, categories, series, line = null, onSele
             role="button"
             tabIndex={0}
             aria-label={`${describe(i)}. ${selectHint}`}
-            className="cursor-pointer outline-none focus-visible:stroke-qb-info"
+            className="cursor-pointer outline-hidden focus-visible:stroke-qb-info"
             strokeWidth="2"
             onMouseEnter={() => setHover(i)}
             onFocus={() => setHover(i)}
@@ -237,7 +237,7 @@ function PieChart({ width, slices, onSelect, label, selectHint }) {
           role: 'button',
           tabIndex: 0,
           'aria-label': describe,
-          className: 'cursor-pointer outline-none',
+          className: 'cursor-pointer outline-hidden',
           opacity: hover === null || hover === i ? 1 : 0.55,
           onMouseEnter: () => setHover(i),
           onFocus: () => setHover(i),
@@ -307,7 +307,7 @@ function RankChart({ width, items, color, onSelect, label, selectHint }) {
             role="button"
             tabIndex={0}
             aria-label={`${s.label}: ${formatCents(s.amountCents)}. ${selectHint}`}
-            className="cursor-pointer outline-none"
+            className="cursor-pointer outline-hidden"
             onMouseEnter={() => setHover(i)}
             onFocus={() => setHover(i)}
             onBlur={() => setHover(null)}

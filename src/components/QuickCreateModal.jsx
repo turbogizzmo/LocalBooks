@@ -85,7 +85,7 @@ export default function QuickCreateModal({ onClose, onCreate }) {
 
   return (
     // A press on the dimmed backdrop itself (not inside the dialog) closes it.
-    <div role="presentation" className="fixed inset-0 z-50 flex items-start justify-center bg-qb-nav/30 pt-[12vh] backdrop-blur-sm" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div role="presentation" className="fixed inset-0 z-50 flex items-start justify-center bg-qb-nav/30 pt-[12vh] backdrop-blur-xs" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Create new" className="w-[760px] rounded-xs border border-qb-border-strong bg-white shadow-popover">
         <div className="flex items-center border-b border-qb-border px-3 py-1">
           <h2 className="text-md font-semibold">New</h2>
@@ -108,7 +108,7 @@ export default function QuickCreateModal({ onClose, onCreate }) {
                       type="button"
                       data-item={item.id}
                       onClick={() => onCreate(item)}
-                      className="block w-full rounded-xs px-1.5 py-0.5 text-left text-base hover:bg-qb-green-tint hover:text-qb-green-active focus:bg-qb-green-tint focus:text-qb-green-active focus:outline-none"
+                      className="block w-full rounded-xs px-1.5 py-0.5 text-left text-base hover:bg-qb-green-tint hover:text-qb-green-active focus:bg-qb-green-tint focus:text-qb-green-active focus:outline-hidden"
                     >
                       {item.label}
                     </button>

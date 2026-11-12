@@ -41,7 +41,7 @@ export default function ArAgingWidget() {
                   <span aria-hidden="true" className="font-semibold">{BUCKET_STYLE[b.key].icon}</span>
                   <span className="truncate">{b.label}</span>
                 </div>
-                <div className="num text-left font-semibold">{formatCents(b.amountCents)}</div>
+                <div className="num font-semibold">{formatCents(b.amountCents)}</div>
                 <div className="text-2xs text-qb-ink-faint">{b.invoiceCount} invoice{b.invoiceCount === 1 ? '' : 's'}</div>
               </div>
             ))}

@@ -14,7 +14,7 @@ function StatTile({ label, cents, emphasis }) {
   return (
     <div className="qb-panel px-2 py-1">
       <div className="text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">{label}</div>
-      <div className={`num text-left text-2xl font-semibold ${emphasis && cents < 0 ? 'num-negative' : ''}`}>
+      <div className={`num text-2xl font-semibold ${emphasis && cents < 0 ? 'num-negative' : ''}`}>
         {formatCents(cents)}
       </div>
     </div>

@@ -454,7 +454,7 @@ export default function JournalEntries({ accounts, intent }) {
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={`Could not load the journal: ${error}`} />}
       {history !== null && <TransactionHistory journalEntryId={history} onClose={() => setHistory(null)} onOpen={openWindow} />}
-      <section className="qb-panel flex min-h-0 flex-1 flex-col outline-none" tabIndex={-1} onKeyDown={onListKey}>
+      <section className="qb-panel flex min-h-0 flex-1 flex-col outline-hidden" tabIndex={-1} onKeyDown={onListKey}>
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Journal</h2>
           <select className="qb-input h-row w-[170px] text-sm" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Show">

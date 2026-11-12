@@ -391,7 +391,7 @@ export default function BankFeed({ accounts }) {
               </button>
             </div>
           </div>
-          <div ref={listRef} role="region" aria-label="Downloaded transactions" tabIndex={0} onKeyDown={onListKey} className="min-h-0 flex-1 overflow-auto outline-none scrollbar-thin focus-visible:shadow-focus">
+          <div ref={listRef} role="region" aria-label="Downloaded transactions" tabIndex={0} onKeyDown={onListKey} className="min-h-0 flex-1 overflow-auto outline-hidden scrollbar-thin focus-visible:shadow-focus">
             <table className="qb-grid">
               <colgroup>
                 <col className="w-[30px]" />
@@ -511,7 +511,7 @@ export default function BankFeed({ accounts }) {
                 <dt className="text-qb-ink-muted">Description</dt>
                 <dd className="break-words font-semibold">{selected.description}</dd>
                 <dt className="text-qb-ink-muted">{selected.amountCents < 0 ? 'Spent' : 'Received'}</dt>
-                <dd className="num text-left text-xl font-semibold">{formatCents(Math.abs(selected.amountCents))}</dd>
+                <dd className="num text-xl font-semibold">{formatCents(Math.abs(selected.amountCents))}</dd>
                 <dt className="text-qb-ink-muted">Account</dt>
                 <dd>{accountLabel(accounts, selected.bankAccountId)}</dd>
               </dl>
