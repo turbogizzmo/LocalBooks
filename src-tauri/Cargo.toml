@@ -32,7 +32,7 @@ pdf-extract = "0.12"
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 quick-xml = "0.42"
 regex = "1"
-rust_xlsxwriter = "0.101"
+rust_xlsxwriter = "0.102"
 reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
