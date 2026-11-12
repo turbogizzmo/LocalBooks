@@ -1247,13 +1247,13 @@ fn with_form_lines(items: Vec<(i64, FormLine)>, form: &[crate::item_types::FormL
                 description: f.description.clone(),
                 quantity: if one_line { f.group_quantity_e4.map(format_quantity).unwrap_or_default() } else { String::new() },
                 rate: String::new(),
-                amount: if one_line { money(f.amount_cents) } else { String::new() },
+                amount: if one_line { money(f.amount_cents.get()) } else { String::new() },
                 details: Vec::new(),
                 service_date: String::new(),
             }
         } else {
             let rate = f.percent_ppm.map(crate::item_types::percent_text).unwrap_or_default();
-            let mut amount = money(f.amount_cents);
+            let mut amount = money(f.amount_cents.get());
             if mark && f.kind == "DISCOUNT" && f.is_taxable {
                 amount.push_str(" T");
             }
