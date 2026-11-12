@@ -48,9 +48,9 @@ pub async fn party_summary(pool: &SqlitePool, kind: &str, id: i64) -> Result<Par
             let costs = crate::billable_costs::list_unbilled(pool, Some(id)).await?;
             let trips = crate::mileage::list_unbilled_trips(pool, Some(id)).await?;
             Ok(PartySummary {
-                open_balance_cents: customer.open_balance_cents,
+                open_balance_cents: customer.open_balance_cents.get(),
                 active_estimate_count: estimates.len() as i64,
-                active_estimate_cents: sum(estimates.iter().map(|e| e.total_cents))?,
+                active_estimate_cents: sum(estimates.iter().map(|e| e.total_cents.get()))?,
                 unbilled_cost_count: costs.len() as i64,
                 unbilled_cost_cents: sum(costs.iter().map(|c| c.amount_cents))?,
                 unbilled_trip_count: trips.len() as i64,
@@ -62,7 +62,7 @@ pub async fn party_summary(pool: &SqlitePool, kind: &str, id: i64) -> Result<Par
             let vendor = vendors.iter().find(|v| v.id == id).ok_or_else(|| format!("PARTY_NOT_FOUND: vendor {id} does not exist"))?;
             let pos: Vec<_> = crate::workflows::list_purchase_orders(pool).await?.into_iter().filter(|o| o.vendor_id == id && o.status == "OPEN").collect();
             Ok(PartySummary {
-                open_balance_cents: vendor.open_balance_cents,
+                open_balance_cents: vendor.open_balance_cents.get(),
                 open_po_count: pos.len() as i64,
                 open_po_cents: sum(pos.iter().map(|o| o.total_cents.get()))?,
                 ..PartySummary::default()
@@ -188,7 +188,7 @@ pub async fn set_notes(pool: &SqlitePool, kind: &str, id: i64, notes: &str) -> R
         return Err(format!("PARTY_NOTES_LONG: keep notes to {NOTES_MAX} characters"));
     }
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
-    let result = sqlx::query(&format!("UPDATE {table} SET notes = ?1 WHERE id = ?2"))
+    let result = sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {table} SET notes = ?1 WHERE id = ?2")))
         .bind((!notes.is_empty()).then_some(notes))
         .bind(id)
         .execute(&mut *tx)

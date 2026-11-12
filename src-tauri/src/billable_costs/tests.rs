@@ -62,7 +62,7 @@ async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
     let expense_before = balance(&pool, supplies).await;
     let invoice = bill_costs(&pool, bill(None)).await.unwrap();
     // $200 back, plus 15% markup ($30).
-    assert_eq!(invoice.total_cents, 23_000);
+    assert_eq!(invoice.total_cents, Cents(23_000));
     assert_eq!(balance(&pool, supplies).await, expense_before - 20_000, "the reimbursement reduces the expense");
     assert_eq!(balance(&pool, services).await, -3_000, "the markup is income");
     assert!(list_unbilled(&pool, Some(acme)).await.unwrap().is_empty(), "billed costs leave the list");
@@ -80,7 +80,7 @@ async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
             .map(|l| crate::invoices::InvoiceLineInput {
                 description: l.description.clone(),
                 quantity_e4: l.quantity_e4,
-                rate_cents: Cents(l.rate_cents),
+                rate_cents: l.rate_cents,
                 income_account_id: l.income_account_id,
                 product_service_id: None,
                 class_id: None,
@@ -107,7 +107,7 @@ async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
     assert!(crate::preferences::set(&pool, "reimbursed_income_account_id", &supplies.to_string()).await.unwrap_err().starts_with("PREF_BAD_INCOME_ACCOUNT"));
     let (supplies_before, income_before) = (balance(&pool, supplies).await, balance(&pool, reimbursed).await);
     let as_income = bill_costs(&pool, bill(Some("10"))).await.unwrap();
-    assert_eq!(as_income.total_cents, 22_000);
+    assert_eq!(as_income.total_cents, Cents(22_000));
     assert_eq!(balance(&pool, supplies).await, supplies_before, "the expense stays");
     assert_eq!(balance(&pool, reimbursed).await, income_before - 20_000);
     assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
@@ -268,10 +268,10 @@ async fn billable_time_is_invoiced_once_at_its_hours_and_rate() {
     // Time with no service item can't be billed: the item gives the invoice line its income account.
     assert!(bill_costs(&pool, bill(vec![time[1].id])).await.unwrap_err().starts_with("TIME_NO_ITEM"));
     let invoice = bill_costs(&pool, bill(vec![time[0].id])).await.unwrap();
-    assert_eq!(invoice.total_cents, 14_250);
+    assert_eq!(invoice.total_cents, Cents(14_250));
     assert_eq!(balance(&pool, services).await, -14_250, "the service item's income account");
     let lines = crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap().items;
-    assert_eq!((lines[0].quantity_e4, lines[0].rate_cents, lines[0].product_service_id), (15_000, 9_500, Some(design)));
+    assert_eq!((lines[0].quantity_e4, lines[0].rate_cents, lines[0].product_service_id), (15_000, Cents(9_500), Some(design)));
     assert_eq!(list_unbilled_time(&pool, Some(acme)).await.unwrap().len(), 1, "billed time leaves the list");
     assert!(bill_costs(&pool, bill(vec![time[0].id])).await.unwrap_err().starts_with("TIME_NOT_BILLABLE"), "never billed twice");
     let removed = sqlx::query("DELETE FROM billed_time").execute(&pool).await.unwrap_err().to_string();
@@ -313,7 +313,7 @@ async fn a_foreign_currency_cost_is_billed_at_its_home_amount() {
     )
     .await
     .unwrap();
-    assert_eq!(invoice.total_cents, 22_100);
+    assert_eq!(invoice.total_cents, Cents(22_100));
     assert_eq!(balance(&pool, supplies).await, expense_before - 22_100, "the expense is back to where it was");
     let line = &crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap().items[0];
     assert!(line.description.ends_with(", EUR 200.00)"), "{}", line.description);
@@ -430,10 +430,14 @@ async fn a_billable_card_charge_is_invoiced_from_the_invoice_form() {
     let expense_before = balance(&pool, supplies).await;
     let invoice = crate::print_queue::create_invoice(&pool, form("acme : kitchen"), &chosen, false, None).await.unwrap();
     // $500 for the form's own line, $120 back for the charge and 10% markup ($12).
-    assert_eq!(invoice.total_cents, 63_200);
+    assert_eq!(invoice.total_cents, Cents(63_200));
     assert_eq!(invoice.customer_name, "Acme:Kitchen");
     let lines = crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap().items;
-    assert_eq!(lines.iter().map(|l| l.rate_cents).collect::<Vec<_>>(), [50_000, 12_000, 1_200], "the form's lines first, then the cost and its markup");
+    assert_eq!(
+        lines.iter().map(|l| l.rate_cents).collect::<Vec<_>>(),
+        [Cents(50_000), Cents(12_000), Cents(1_200)],
+        "the form's lines first, then the cost and its markup"
+    );
     assert_eq!(balance(&pool, supplies).await, expense_before - 12_000, "the reimbursement reduces the expense, as Bill Costs does");
     assert!(list_unbilled(&pool, Some(job)).await.unwrap().is_empty(), "the charge is marked billed by the invoice");
     let billed: i64 =

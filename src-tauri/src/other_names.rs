@@ -50,11 +50,11 @@ fn clean(text: Option<&str>) -> Option<String> {
 }
 
 pub async fn list(pool: &SqlitePool) -> Result<Vec<OtherName>, String> {
-    sqlx::query_as::<_, OtherName>(&format!("{SELECT} ORDER BY o.name COLLATE NOCASE")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as::<_, OtherName>(sqlx::AssertSqlSafe(format!("{SELECT} ORDER BY o.name COLLATE NOCASE"))).fetch_all(pool).await.map_err(db_err)
 }
 
 pub async fn get(pool: &SqlitePool, id: i64) -> Result<OtherName, String> {
-    sqlx::query_as::<_, OtherName>(&format!("{SELECT} WHERE o.id = ?1"))
+    sqlx::query_as::<_, OtherName>(sqlx::AssertSqlSafe(format!("{SELECT} WHERE o.id = ?1")))
         .bind(id)
         .fetch_optional(pool)
         .await

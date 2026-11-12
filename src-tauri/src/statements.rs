@@ -204,7 +204,7 @@ async fn cash_basis_movement(
     let class_clause = "(?3 IS NULL
                 OR l.class_id IN (SELECT a.class_id FROM v_class_ancestry a JOIN json_each(?3) j ON j.value = a.ancestor_id)
                 OR (?4 AND l.class_id IS NULL))";
-    let immediate: Vec<(i64, i64)> = sqlx::query_as(&format!(
+    let immediate: Vec<(i64, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{DEFERRED_ENTRIES}
          SELECT l.account_id, SUM(l.debit_cents) - SUM(l.credit_cents)
          FROM v_posted_lines l JOIN journal_entries e ON e.id = l.journal_entry_id
@@ -212,7 +212,7 @@ async fn cash_basis_movement(
            AND e.id NOT IN (SELECT id FROM deferred)
            AND (e.reverses_entry_id IS NULL OR e.reverses_entry_id NOT IN (SELECT id FROM deferred))
          GROUP BY l.account_id"
-    ))
+    )))
     .bind(start)
     .bind(end)
     .bind(&ids)
@@ -263,9 +263,9 @@ async fn cash_basis_movement(
 
     let pl_accounts: std::collections::HashSet<i64> = chart.accounts.iter().filter(|a| PL_TYPES.contains(&a.account_type.as_str())).map(|a| a.id).collect();
     for (entry_id, total, paid) in settled {
-        let lines: Vec<(i64, i64)> = sqlx::query_as(&format!(
+        let lines: Vec<(i64, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT l.account_id, l.debit_cents - l.credit_cents FROM journal_lines l WHERE l.journal_entry_id = ?5 AND {class_clause}"
-        ))
+        )))
         .bind(start)
         .bind(end)
         .bind(&ids)

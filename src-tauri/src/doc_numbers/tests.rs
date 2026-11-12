@@ -244,7 +244,7 @@ async fn a_part_paid_invoice_keeps_its_number_and_its_payment_when_edited() {
     changed.lines[0].rate_cents = Cents::from(12_000);
     let edited = crate::edits::replace_invoice(&pool, first.id, changed).await.unwrap();
     let after = crate::invoices::get_summary(&pool, edited).await.unwrap();
-    assert_eq!((after.invoice_number, after.amount_paid_cents, after.status.as_str()), (first.invoice_number, 4_000, "PARTIAL"));
+    assert_eq!((after.invoice_number, after.amount_paid_cents, after.status.as_str()), (first.invoice_number, Cents(4_000), "PARTIAL"));
     // The payment, Receive Payments and the customer's open invoices all name the same number.
     let paid_on: i64 = sqlx::query_scalar("SELECT i.invoice_number FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.is_voided = 0")
         .fetch_one(&pool)

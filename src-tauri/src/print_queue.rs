@@ -126,7 +126,7 @@ async fn set_in_tx(tx: &mut Transaction<'_, Sqlite>, form: Form, id: i64, queued
         Form::Check => ("expenses", "check"),
         Form::Invoice => ("invoices", "invoice"),
     };
-    let row: Option<(bool, bool)> = sqlx::query_as(&format!("SELECT is_voided, journal_entry_id IS NOT NULL FROM {table} WHERE id = ?1"))
+    let row: Option<(bool, bool)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT is_voided, journal_entry_id IS NOT NULL FROM {table} WHERE id = ?1")))
         .bind(id)
         .fetch_optional(&mut **tx)
         .await
@@ -137,7 +137,12 @@ async fn set_in_tx(tx: &mut Transaction<'_, Sqlite>, form: Form, id: i64, queued
         Some((_, false)) => return Err(format!("PRINT_NOT_POSTED: that {noun} is not saved yet")),
         _ => {}
     }
-    sqlx::query(&format!("UPDATE {table} SET to_be_printed = ?1 WHERE id = ?2")).bind(queued).bind(id).execute(&mut **tx).await.map_err(db_err)?;
+    sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {table} SET to_be_printed = ?1 WHERE id = ?2")))
+        .bind(queued)
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 

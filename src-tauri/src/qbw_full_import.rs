@@ -194,7 +194,7 @@ async fn post(tx: &mut Transaction<'_, Sqlite>, t: &Staged, description: String,
 }
 
 async fn exec(tx: &mut Transaction<'_, Sqlite>, sql: &str) -> Result<(), String> {
-    sqlx::query(sql).execute(&mut **tx).await.map(|_| ()).map_err(db_err)
+    sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&mut **tx).await.map(|_| ()).map_err(db_err)
 }
 
 /// A form line ready for a document row.
@@ -313,13 +313,16 @@ async fn number(tx: &mut Transaction<'_, Sqlite>, table: &str, column: &str, bas
         return crate::credits::next_credit_number(tx, false).await;
     }
     if let Some(n) = doc_num.and_then(|d| d.trim().parse::<i64>().ok()).filter(|n| (1..1_000_000_000_000).contains(n)) {
-        let taken: bool =
-            sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM {table} WHERE {column} = ?1)")).bind(n).fetch_one(&mut **tx).await.map_err(db_err)?;
+        let taken: bool = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT EXISTS (SELECT 1 FROM {table} WHERE {column} = ?1)")))
+            .bind(n)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(db_err)?;
         if !taken {
             return Ok(n);
         }
     }
-    sqlx::query_scalar(&format!("SELECT COALESCE(MAX({column}), {base}) + 1 FROM {table}")).fetch_one(&mut **tx).await.map_err(db_err)
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT COALESCE(MAX({column}), {base}) + 1 FROM {table}"))).fetch_one(&mut **tx).await.map_err(db_err)
 }
 
 /// Lines on receivables accounts, and their account when there is just one.
@@ -358,10 +361,10 @@ async fn insert_lines(tx: &mut Transaction<'_, Sqlite>, table: &str, fk: &str, i
 
 async fn insert_numbered(tx: &mut Transaction<'_, Sqlite>, table: &str, fk: &str, id: i64, lines: &[FormLine], numbers: &[i64]) -> Result<(), String> {
     for (l, n) in lines.iter().zip(numbers) {
-        sqlx::query(&format!(
+        sqlx::query(sqlx::AssertSqlSafe(format!(
             "INSERT INTO {table} ({fk}, line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
-        ))
+        )))
         .bind(id)
         .bind(n)
         .bind(l.description.trim())

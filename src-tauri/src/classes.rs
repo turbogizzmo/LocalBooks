@@ -58,11 +58,11 @@ fn is_used_sql() -> String {
 
 /// Every class, ordered as a tree (each parent followed by its subclasses).
 pub async fn list_classes(pool: &SqlitePool) -> Result<Vec<ClassView>, String> {
-    sqlx::query_as::<_, ClassView>(&format!(
+    sqlx::query_as::<_, ClassView>(sqlx::AssertSqlSafe(format!(
         "SELECT c.id, c.name, c.full_name, c.parent_id, c.depth, c.is_active, ({}) AS is_used
          FROM v_classes c ORDER BY replace(lower(c.full_name), ':', char(1))",
         is_used_sql()
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
@@ -301,7 +301,7 @@ pub struct ReclassQuery {
 /// Income and expense lines in the range that can be reclassified: posted, not voided, not a void's
 /// reversal, and not themselves part of a reclassifying entry.
 pub async fn reclass_candidates(pool: &SqlitePool, query: &ReclassQuery) -> Result<Vec<ReclassLine>, String> {
-    sqlx::query_as::<_, ReclassLine>(&format!(
+    sqlx::query_as::<_, ReclassLine>(sqlx::AssertSqlSafe(format!(
         "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, {DISPLAY_SOURCE_TYPE} AS source_type,
                 COALESCE(l.memo, e.memo) AS memo, l.account_id, a.full_name AS account_name,
                 l.debit_cents - l.credit_cents AS amount_cents, x.class_id, k.full_name AS class_name
@@ -318,7 +318,7 @@ pub async fn reclass_candidates(pool: &SqlitePool, query: &ReclassQuery) -> Resu
            AND (?4 IS NULL OR x.class_id IN (SELECT class_id FROM v_class_ancestry WHERE ancestor_id = ?4))
            AND (?5 = 0 OR x.class_id IS NULL)
          ORDER BY e.entry_date, e.entry_number, l.line_number"
-    ))
+    )))
     .bind(query.start_date)
     .bind(query.end_date)
     .bind(query.account_id)

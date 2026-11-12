@@ -232,7 +232,7 @@ pub(super) async fn todo_notes(pool: &SqlitePool, today: NaiveDate) -> Result<Ac
 /// counts it.
 pub(super) async fn sales_by_ship_to(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Result<AccountantReport, String> {
     type SaleRow = (Option<String>, String, String, Option<String>, Option<String>, i64, i64);
-    let sales: Vec<SaleRow> = sqlx::query_as(&format!(
+    let sales: Vec<SaleRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT ship_to, source_type, entry_date, num, name, journal_entry_id, income FROM (
             SELECT NULLIF(trim(i.ship_to), '') AS ship_to, {DISPLAY_SOURCE_TYPE} AS source_type, e.entry_date, CAST(i.invoice_number AS TEXT) AS num,
                    c.name, e.id AS journal_entry_id,
@@ -247,7 +247,7 @@ pub(super) async fn sales_by_ship_to(pool: &SqlitePool, start: NaiveDate, end: N
             FROM sales_receipts r JOIN journal_entries e ON e.id = r.journal_entry_id LEFT JOIN customers c ON c.id = r.customer_id
             WHERE r.is_voided = 0 AND e.status = 'POSTED' AND e.entry_date BETWEEN ?1 AND ?2
          ) ORDER BY ship_to IS NULL, ship_to COLLATE NOCASE, entry_date, num"
-    ))
+    )))
     .bind(start)
     .bind(end)
     .fetch_all(pool)
@@ -298,7 +298,7 @@ pub(super) async fn sales_by_ship_to(pool: &SqlitePool, start: NaiveDate, end: N
 pub(super) async fn currency_gains(pool: &SqlitePool, start: NaiveDate, end: NaiveDate, unrealized: bool) -> Result<AccountantReport, String> {
     let account = if unrealized { "Unrealized Exchange Gain or Loss" } else { "Exchange Gain or Loss" };
     type LineRow = (i64, String, String, i64, Option<String>, Option<String>, i64);
-    let lines: Vec<LineRow> = sqlx::query_as(&format!(
+    let lines: Vec<LineRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT e.id, {DISPLAY_SOURCE_TYPE}, e.entry_date, e.entry_number, MAX(p.party_name), COALESCE(MAX(l.memo), e.memo),
                 SUM(l.credit_cents - l.debit_cents)
          FROM journal_lines l
@@ -309,7 +309,7 @@ pub(super) async fn currency_gains(pool: &SqlitePool, start: NaiveDate, end: Nai
            AND e.status = 'POSTED' AND e.entry_date BETWEEN ?1 AND ?2
          GROUP BY e.id
          ORDER BY e.entry_date, e.entry_number"
-    ))
+    )))
     .bind(start)
     .bind(end)
     .bind(account)

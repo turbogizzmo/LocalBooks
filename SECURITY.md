@@ -66,8 +66,8 @@ claim loses its link.
 - **A company file from someone else cannot run code.** Every connection turns off
   `trusted_schema`, so views and triggers stored in a file cannot call functions with side effects
   (`open_for` in [`db.rs`](src-tauri/src/db.rs)). A file whose `-wal` log was written for another
-  page size is refused, which blocks RUSTSEC-2026-0459 in the SQLite Tillhouse bundles until it
-  can be upgraded. It is checked twice: by path just before opening, for a clear message, and again
+  page size is refused. That was the way in for RUSTSEC-2026-0459, which the bundled SQLite (SQLCipher
+  4.20 on SQLite 3.54.1) now fixes itself; the check stays as a second line. It is checked twice: by path just before opening, for a clear message, and again
   by the VFS every company file opens through, as SQLite opens the log, through SQLite's own handle,
   so a log swapped in between is refused too (`a_log_with_another_page_size_is_refused` and
   `a_log_swapped_after_the_check_is_refused_when_sqlite_opens_it` in

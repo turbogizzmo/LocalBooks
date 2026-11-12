@@ -91,9 +91,9 @@ pub async fn account_register(
     let scope = if include_subaccounts { "SELECT account_id FROM v_account_ancestry WHERE ancestor_id = ?1" } else { "SELECT ?1" };
 
     let opening: i64 = match start_date {
-        Some(start) => sqlx::query_scalar(&format!(
+        Some(start) => sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
             "SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id IN ({scope}) AND entry_date < ?2"
-        ))
+        )))
         .bind(account_id)
         .bind(start)
         .fetch_one(pool)
@@ -101,7 +101,7 @@ pub async fn account_register(
         .map_err(db_err)?,
         None => 0,
     };
-    let mut rows: Vec<RegisterRow> = sqlx::query_as(&format!(
+    let mut rows: Vec<RegisterRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, {DISPLAY_SOURCE_TYPE} AS source_type, e.source_id,
                 {DOC_NUMBER} AS num, p.party_name, COALESCE(l.memo, e.memo) AS memo, a.full_name AS account_name,
                 (SELECT CASE WHEN COUNT(DISTINCT o.account_id) = 1 THEN MAX(o_a.full_name) WHEN COUNT(*) > 1 THEN '-Split-' END
@@ -121,7 +121,7 @@ pub async fn account_register(
          WHERE e.status = 'POSTED' AND l.account_id IN ({scope})
            AND (?2 IS NULL OR e.entry_date >= ?2) AND (?3 IS NULL OR e.entry_date <= ?3)
          ORDER BY e.entry_date, e.entry_number, l.line_number"
-    ))
+    )))
     .bind(account_id)
     .bind(start_date)
     .bind(end_date)

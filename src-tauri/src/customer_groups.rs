@@ -233,12 +233,12 @@ const SELECT: &str = "SELECT id, name, rules_json, statement_every_days, stateme
     payment_every_days, payment_min_days_overdue, payment_last_sent FROM customer_groups";
 
 pub async fn list(pool: &SqlitePool) -> Result<Vec<CustomerGroup>, String> {
-    let rows: Vec<GroupRow> = sqlx::query_as(&format!("{SELECT} ORDER BY name COLLATE NOCASE")).fetch_all(pool).await.map_err(db_err)?;
+    let rows: Vec<GroupRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!("{SELECT} ORDER BY name COLLATE NOCASE"))).fetch_all(pool).await.map_err(db_err)?;
     build(pool, rows).await
 }
 
 pub async fn get(pool: &SqlitePool, id: i64) -> Result<CustomerGroup, String> {
-    let rows: Vec<GroupRow> = sqlx::query_as(&format!("{SELECT} WHERE id = ?1")).bind(id).fetch_all(pool).await.map_err(db_err)?;
+    let rows: Vec<GroupRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!("{SELECT} WHERE id = ?1"))).bind(id).fetch_all(pool).await.map_err(db_err)?;
     build(pool, rows).await?.pop().ok_or_else(|| "GROUP_NOT_FOUND: that customer group no longer exists".into())
 }
 

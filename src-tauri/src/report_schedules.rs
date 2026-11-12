@@ -286,12 +286,14 @@ const SELECT: &str =
     "SELECT id, name, reports_json, frequency, start_date, end_date, next_run, destination, recipients, folder, format, is_active, last_run_at, last_result, pdf_password_key FROM report_schedules";
 
 pub async fn list(pool: &SqlitePool) -> Result<Vec<Schedule>, String> {
-    let rows: Vec<ScheduleRow> = sqlx::query_as(&format!("{SELECT} ORDER BY name COLLATE NOCASE, id")).fetch_all(pool).await.map_err(db_err)?;
+    let rows: Vec<ScheduleRow> =
+        sqlx::query_as(sqlx::AssertSqlSafe(format!("{SELECT} ORDER BY name COLLATE NOCASE, id"))).fetch_all(pool).await.map_err(db_err)?;
     Ok(rows.into_iter().map(from_row).collect())
 }
 
 pub async fn get(pool: &SqlitePool, id: i64) -> Result<Schedule, String> {
-    let row: Option<ScheduleRow> = sqlx::query_as(&format!("{SELECT} WHERE id = ?1")).bind(id).fetch_optional(pool).await.map_err(db_err)?;
+    let row: Option<ScheduleRow> =
+        sqlx::query_as(sqlx::AssertSqlSafe(format!("{SELECT} WHERE id = ?1"))).bind(id).fetch_optional(pool).await.map_err(db_err)?;
     row.map(from_row).ok_or_else(|| "SCHEDULE_NOT_FOUND: that schedule no longer exists".into())
 }
 

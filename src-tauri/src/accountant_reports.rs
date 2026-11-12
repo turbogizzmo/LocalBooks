@@ -166,7 +166,7 @@ struct RecLine {
 /// its statement that was not cleared in an earlier one. Voided entries and the entries that void
 /// them net to zero and are never offered for clearing, so they are left out too.
 async fn rec_lines(pool: &SqlitePool, h: &RecHeader) -> Result<Vec<RecLine>, String> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT e.id AS journal_entry_id, e.entry_date AS date, {DISPLAY_SOURCE_TYPE} AS source_type,
                 e.reverses_entry_id IS NOT NULL AS is_reversal, {NUM} AS num, p.party_name AS name,
                 COALESCE(l.memo, e.memo) AS memo, {NORMAL_SIGNED} AS amount_cents,
@@ -184,7 +184,7 @@ async fn rec_lines(pool: &SqlitePool, h: &RecHeader) -> Result<Vec<RecLine>, Str
                 OR (e.entry_date <= ?3 AND e.is_voided = 0 AND e.reverses_entry_id IS NULL
                     AND (l.reconciliation_id IS NULL OR r.is_locked = 0 OR r.statement_end_date > ?3)))
          ORDER BY e.entry_date, e.entry_number, l.line_number"
-    ))
+    )))
     .bind(h.account_id)
     .bind(h.id)
     .bind(&h.statement_end_date)
@@ -195,14 +195,14 @@ async fn rec_lines(pool: &SqlitePool, h: &RecHeader) -> Result<Vec<RecLine>, Str
 
 /// Everything posted to the account through the statement date, on its normal side.
 async fn register_balance(pool: &SqlitePool, account_id: i64, as_of: &str) -> Result<i64, String> {
-    sqlx::query_scalar(&format!(
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT COALESCE(SUM({NORMAL_SIGNED}), 0)
          FROM journal_lines l
          JOIN journal_entries e ON e.id = l.journal_entry_id
          JOIN chart_of_accounts a ON a.id = l.account_id
          JOIN account_types t ON t.code = a.account_type
          WHERE l.account_id = ?1 AND e.status = 'POSTED' AND e.entry_date <= ?2"
-    ))
+    )))
     .bind(account_id)
     .bind(as_of)
     .fetch_one(pool)
@@ -395,7 +395,7 @@ pub async fn discrepancy(pool: &SqlitePool, account_id: Option<i64>, today: Naiv
         has_snapshot: bool,
         cleared_now_cents: i64,
     }
-    let recs: Vec<Rec> = sqlx::query_as(&format!(
+    let recs: Vec<Rec> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT r.id, r.account_id, ca.full_name AS account_name, r.statement_end_date, r.statement_ending_balance_cents, r.beginning_balance_cents,
                 EXISTS (SELECT 1 FROM reconciliation_snapshots s WHERE s.reconciliation_id = r.id) AS has_snapshot,
                 COALESCE((SELECT SUM({NORMAL_SIGNED}) FROM journal_lines l
@@ -404,7 +404,7 @@ pub async fn discrepancy(pool: &SqlitePool, account_id: Option<i64>, today: Naiv
          FROM reconciliations r JOIN v_chart_of_accounts ca ON ca.id = r.account_id
          WHERE r.is_locked = 1 AND NOT EXISTS (SELECT 1 FROM reconciliation_undos u WHERE u.reconciliation_id = r.id) AND (?1 IS NULL OR r.account_id = ?1)
          ORDER BY ca.full_name COLLATE NOCASE, r.account_id, r.statement_end_date"
-    ))
+    )))
     .bind(account_id)
     .fetch_all(pool)
     .await
@@ -445,7 +445,7 @@ pub async fn discrepancy(pool: &SqlitePool, account_id: Option<i64>, today: Naiv
         }
         previous_ending = Some((r.account_id, r.statement_ending_balance_cents));
         if r.has_snapshot {
-            let checks: Vec<SnapshotCheck> = sqlx::query_as(&format!(
+            let checks: Vec<SnapshotCheck> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
                 "SELECT s.journal_entry_id, s.entry_number, s.entry_date, s.source_type, s.memo, s.amount_cents,
                         l.id IS NOT NULL AS now_exists, l.reconciliation_id AS now_reconciliation_id, l.account_id AS now_account_id,
                         e.entry_date AS now_date, CASE WHEN l.id IS NOT NULL THEN {NORMAL_SIGNED} END AS now_amount_cents,
@@ -457,7 +457,7 @@ pub async fn discrepancy(pool: &SqlitePool, account_id: Option<i64>, today: Naiv
                  LEFT JOIN account_types t ON t.code = a.account_type
                  WHERE s.reconciliation_id = ?1
                  ORDER BY s.entry_date, s.entry_number, s.journal_line_id"
-            ))
+            )))
             .bind(r.id)
             .fetch_all(pool)
             .await
@@ -496,7 +496,7 @@ pub async fn discrepancy(pool: &SqlitePool, account_id: Option<i64>, today: Naiv
                     }
                 }
             }
-            let added: Vec<AddedLine> = sqlx::query_as(&format!(
+            let added: Vec<AddedLine> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
                 "SELECT e.id AS journal_entry_id, e.entry_number, e.entry_date, {DISPLAY_SOURCE_TYPE} AS source_type,
                         COALESCE(l.memo, e.memo) AS memo, {NORMAL_SIGNED} AS amount_cents
                  FROM journal_lines l
@@ -506,7 +506,7 @@ pub async fn discrepancy(pool: &SqlitePool, account_id: Option<i64>, today: Naiv
                  WHERE l.reconciliation_id = ?1
                    AND NOT EXISTS (SELECT 1 FROM reconciliation_snapshot_lines s WHERE s.reconciliation_id = ?1 AND s.journal_line_id = l.id)
                  ORDER BY e.entry_date, e.entry_number, l.line_number"
-            ))
+            )))
             .bind(r.id)
             .fetch_all(pool)
             .await
@@ -1027,7 +1027,7 @@ pub async fn income_tax(pool: &SqlitePool, form: &str, start: NaiveDate, end: Na
     let keep = |code: Option<&str>| only.is_none_or(|o| code == Some(o));
 
     let detail_lines: Vec<TaxDetailLine> = if detail {
-        sqlx::query_as(&format!(
+        sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT e.id AS journal_entry_id, l.account_id, e.entry_date AS date, {DISPLAY_SOURCE_TYPE} AS source_type,
                     e.reverses_entry_id IS NOT NULL AS is_reversal, {NUM} AS num, p.party_name AS name,
                     COALESCE(l.memo, e.memo) AS memo, l.debit_cents - l.credit_cents AS net_cents
@@ -1037,7 +1037,7 @@ pub async fn income_tax(pool: &SqlitePool, form: &str, start: NaiveDate, end: Na
              {NUM_JOINS}
              WHERE e.status = 'POSTED' AND e.entry_date BETWEEN ?1 AND ?2 AND a.classification IN ('INCOME', 'EXPENSE')
              ORDER BY e.entry_date, e.entry_number, l.line_number"
-        ))
+        )))
         .bind(start)
         .bind(end)
         .fetch_all(pool)

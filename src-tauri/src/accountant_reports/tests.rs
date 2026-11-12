@@ -200,7 +200,7 @@ async fn reconciliations_keep_a_snapshot_and_report_changes_made_afterwards() {
             .await
             .unwrap();
     for t in triggers {
-        sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP TRIGGER {t}"))).execute(&pool).await.unwrap();
     }
     let cleared: Vec<(i64, i64)> =
         sqlx::query_as("SELECT id, journal_entry_id FROM journal_lines WHERE reconciliation_id = ?1 ORDER BY id").bind(january).fetch_all(&pool).await.unwrap();
@@ -231,7 +231,7 @@ async fn older_reconciliations_are_checked_by_their_totals() {
     let rec = reconcile_all_but_last(&pool, checking, d(2025, 1, 31)).await;
     // As if completed before migration 0056: no snapshot.
     for t in ["trg_rec_snapshot_lines_no_delete", "trg_rec_snapshot_no_delete"] {
-        sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP TRIGGER {t}"))).execute(&pool).await.unwrap();
     }
     sqlx::query("DELETE FROM reconciliation_snapshot_lines").execute(&pool).await.unwrap();
     sqlx::query("DELETE FROM reconciliation_snapshots").execute(&pool).await.unwrap();
@@ -244,7 +244,7 @@ async fn older_reconciliations_are_checked_by_their_totals() {
     let triggers: Vec<String> =
         sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'journal_lines'").fetch_all(&pool).await.unwrap();
     for t in triggers {
-        sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP TRIGGER {t}"))).execute(&pool).await.unwrap();
     }
     sqlx::query("UPDATE journal_lines SET debit_cents = 12000 WHERE reconciliation_id = ?1").bind(rec).execute(&pool).await.unwrap();
     let report = discrepancy(&pool, None, d(2025, 3, 1)).await.unwrap();
