@@ -755,6 +755,34 @@ def upgrade_macos(args, old, new):
         checked = run_new_app(args, exe, "macos")
         checked.work = str(Path(args.work) / "macos-launch")
         cmd_launch(checked, done=False, heading="Upgraded install (macOS): launch")
+        # On a pull request the bundle is the newest published release, which may predate the
+        # rename; the release runs the step on the build that ships it.
+        if os.environ.get("GITHUB_EVENT_NAME") != "pull_request":
+            check_old_name_renames(applications, bundle)
+
+
+def check_old_name_renames(applications, bundle):
+    """A copy still named LocalBooks.app (updated in place from 0.15 or older) renames itself to
+    Tillhouse.app on its next launch (src-tauri/src/mac_app_name.rs). The previous release already
+    has the new name, so this puts the new build at the old name and launches it."""
+    rows = []
+    folder = applications / "old-name"
+    shutil.rmtree(folder, ignore_errors=True)
+    folder.mkdir()
+    old_copy = folder / "LocalBooks.app"
+    subprocess.run(["cp", "-R", str(bundle), str(old_copy)], check=True)
+    renamed = folder / "Tillhouse.app"
+    exe = old_copy / "Contents/MacOS" / next((old_copy / "Contents/MacOS").iterdir()).name
+    proc = subprocess.Popen([str(exe)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    deadline = time.time() + 30
+    while time.time() < deadline and not renamed.is_dir():
+        time.sleep(1)
+    alive = proc.poll() is None
+    proc.kill()
+    proc.wait()
+    expect(rows, "LocalBooks.app renames itself to Tillhouse.app", renamed.is_dir() and not old_copy.exists(), ", ".join(sorted(p.name for p in folder.iterdir())))
+    expect(rows, "Keeps running after the rename", alive, "restarted from Tillhouse.app" if alive else "exited")
+    report(rows, "Old app name (macOS)")
 
 
 def cmd_installer_upgrade(args):
