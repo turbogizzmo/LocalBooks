@@ -256,11 +256,8 @@ async fn overdue_aging(pool: &SqlitePool, args: &Value) -> Result<(Value, String
         })
         .collect();
 
-    let buckets: Vec<Value> = aging
-        .buckets
-        .iter()
-        .map(|b| json!({ "bucket": b.key, "label": b.label, "invoiceCount": b.invoice_count, "amountCents": b.amount_cents }))
-        .collect();
+    let buckets: Vec<Value> =
+        aging.buckets.iter().map(|b| json!({ "bucket": b.key, "label": b.label, "invoiceCount": b.invoice_count, "amountCents": b.amount_cents })).collect();
     let text = format!(
         "Receivables as of {as_of}: {} open, {} overdue across {overdue_count} invoices ({}.{:02}% of receivables)",
         plain_amount(aging.total_cents),
@@ -313,7 +310,9 @@ pub async fn handle_message(pool: &SqlitePool, message: Value) -> Option<Value> 
     }
     let Some(method) = message.get("method").and_then(Value::as_str) else {
         // A response to a server request (we never send any) or garbage without an id.
-        return id.filter(|_| message.get("result").is_none() && message.get("error").is_none()).map(|id| rpc_error(id, -32600, "Invalid Request: method is required"));
+        return id
+            .filter(|_| message.get("result").is_none() && message.get("error").is_none())
+            .map(|id| rpc_error(id, -32600, "Invalid Request: method is required"));
     };
     let id = id?; // notifications (no id) are acknowledged without a body
     let params = message.get("params").cloned().unwrap_or(Value::Null);
@@ -339,9 +338,7 @@ pub async fn handle_message(pool: &SqlitePool, message: Value) -> Option<Value> 
             let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
             match call_tool(pool, name, &args).await {
                 None => rpc_error(id, -32602, &format!("Unknown tool: {name}")),
-                Some(Ok((data, text))) => {
-                    rpc_result(id, json!({ "content": [{ "type": "text", "text": text }], "structuredContent": data, "isError": false }))
-                }
+                Some(Ok((data, text))) => rpc_result(id, json!({ "content": [{ "type": "text", "text": text }], "structuredContent": data, "isError": false })),
                 Some(Err(err)) => rpc_result(id, json!({ "content": [{ "type": "text", "text": err }], "isError": true })),
             }
         }
@@ -434,10 +431,8 @@ async fn read_request(stream: &mut TcpStream) -> Result<Request, Response> {
         (Some(m), Some(p)) if !m.is_empty() => (m.to_string(), p.to_string()),
         _ => return Err(Response::refuse(400, "Malformed request line")),
     };
-    let headers: Vec<(String, String)> = lines
-        .filter_map(|line| line.split_once(':'))
-        .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_string()))
-        .collect();
+    let headers: Vec<(String, String)> =
+        lines.filter_map(|line| line.split_once(':')).map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_string())).collect();
     if headers.iter().any(|(k, _)| k == "transfer-encoding") {
         return Err(Response::refuse(400, "Chunked request bodies are not supported; send Content-Length"));
     }

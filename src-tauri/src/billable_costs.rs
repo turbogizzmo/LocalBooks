@@ -142,14 +142,19 @@ pub async fn list_unbilled_time(pool: &SqlitePool, customer_id: Option<i64>) -> 
 /// Sets the income account reimbursements of `expense_account_id` go to (None: the one in
 /// Preferences › Time & Expenses).
 pub async fn set_reimbursement_account(pool: &SqlitePool, expense_account_id: i64, income_account_id: Option<i64>) -> Result<(), String> {
-    let class: Option<String> = sqlx::query_scalar("SELECT classification FROM v_chart_of_accounts WHERE id = ?1").bind(expense_account_id).fetch_optional(pool).await.map_err(db_err)?;
+    let class: Option<String> = sqlx::query_scalar("SELECT classification FROM v_chart_of_accounts WHERE id = ?1")
+        .bind(expense_account_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
     match class.as_deref() {
         None => return Err("ACCOUNT_NOT_FOUND: that account does not exist".into()),
         Some("EXPENSE") => {}
         Some(_) => return Err("COST_REIMBURSE_NOT_EXPENSE: only an expense account's reimbursements can go to an income account".into()),
     }
     if let Some(income) = income_account_id {
-        let class: Option<String> = sqlx::query_scalar("SELECT classification FROM v_chart_of_accounts WHERE id = ?1").bind(income).fetch_optional(pool).await.map_err(db_err)?;
+        let class: Option<String> =
+            sqlx::query_scalar("SELECT classification FROM v_chart_of_accounts WHERE id = ?1").bind(income).fetch_optional(pool).await.map_err(db_err)?;
         if class.as_deref() != Some("INCOME") {
             return Err("COST_REIMBURSE_NOT_INCOME: choose an income account for the reimbursements".into());
         }
@@ -169,14 +174,16 @@ pub async fn set_reimbursement_account(pool: &SqlitePool, expense_account_id: i6
 
 /// Unbilled costs, for one customer or job or for all, oldest first.
 pub async fn list_unbilled(pool: &SqlitePool, customer_id: Option<i64>) -> Result<Vec<UnbilledCost>, String> {
-    sqlx::query_as::<_, UnbilledCost>(&format!("SELECT * FROM ({UNBILLED}) WHERE ?1 IS NULL OR customer_id = ?1 ORDER BY customer_name COLLATE NOCASE, date, source, line_id"))
-        .bind(customer_id)
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?
-        .into_iter()
-        .map(in_home_currency)
-        .collect()
+    sqlx::query_as::<_, UnbilledCost>(&format!(
+        "SELECT * FROM ({UNBILLED}) WHERE ?1 IS NULL OR customer_id = ?1 ORDER BY customer_name COLLATE NOCASE, date, source, line_id"
+    ))
+    .bind(customer_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?
+    .into_iter()
+    .map(in_home_currency)
+    .collect()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -299,7 +306,13 @@ impl OnInvoice {
 /// Writes the invoice on the form with the chosen costs and time added after its own lines, and
 /// marks them billed by it, in the caller's transaction. `settings` and `markup` come from
 /// [`billing_settings`], read before the transaction. Nothing chosen: an ordinary invoice.
-pub(crate) async fn write_invoice_with_costs(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput, chosen: &OnInvoice, settings: &Defaults, markup: i64) -> Result<i64, String> {
+pub(crate) async fn write_invoice_with_costs(
+    tx: &mut Transaction<'_, Sqlite>,
+    input: &InvoiceInput,
+    chosen: &OnInvoice,
+    settings: &Defaults,
+    markup: i64,
+) -> Result<i64, String> {
     if chosen.is_empty() {
         return crate::invoices::write_invoice(tx, input).await;
     }
@@ -319,7 +332,14 @@ pub(crate) async fn write_invoice_with_costs(tx: &mut Transaction<'_, Sqlite>, i
 /// The one billing path, for Bill Costs and the invoice form alike: works out a line per cost and
 /// time entry (and the markup line), writes the invoice with them after `input`'s own lines, and
 /// records what it billed.
-async fn write_with_billing(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput, customer_id: i64, chosen: &OnInvoice, settings: &Defaults, markup: i64) -> Result<i64, String> {
+async fn write_with_billing(
+    tx: &mut Transaction<'_, Sqlite>,
+    input: &InvoiceInput,
+    customer_id: i64,
+    chosen: &OnInvoice,
+    settings: &Defaults,
+    markup: i64,
+) -> Result<i64, String> {
     let mut lines = Vec::with_capacity(chosen.costs.len() + chosen.time.len() + 1);
     let mut links = Vec::with_capacity(chosen.costs.len());
     let mut reimbursed = Vec::new();
@@ -360,8 +380,9 @@ async fn write_with_billing(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInp
         let from = found.vendor_name.as_deref().map(|v| format!(", {v}")).unwrap_or_default();
         // Counted as income: the expense account's own income account, else the one in Preferences.
         let account = if settings.as_income {
-            own_income.get(&found.account_id).copied().or(settings.income_account_id)
-                .ok_or("COST_NO_INCOME_ACCOUNT: choose the income account for reimbursed expenses in Preferences › Time & Expenses, or on the expense account")?
+            own_income.get(&found.account_id).copied().or(settings.income_account_id).ok_or(
+                "COST_NO_INCOME_ACCOUNT: choose the income account for reimbursed expenses in Preferences › Time & Expenses, or on the expense account",
+            )?
         } else {
             reimbursed.push(found.account_id);
             found.account_id
@@ -373,24 +394,32 @@ async fn write_with_billing(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInp
             income_account_id: account,
             product_service_id: None,
             class_id: None,
-            is_taxable: false, service_date: None,
+            is_taxable: false,
+            service_date: None,
         });
-        let this_markup = markup_cents(found.amount_cents, markup).filter(|m| (0..=MAX_LINE_CENTS).contains(m)).ok_or("COST_MARKUP_TOO_LARGE: the markup is out of range")?;
+        let this_markup =
+            markup_cents(found.amount_cents, markup).filter(|m| (0..=MAX_LINE_CENTS).contains(m)).ok_or("COST_MARKUP_TOO_LARGE: the markup is out of range")?;
         markup_total = markup_total.checked_add(this_markup).ok_or("COST_MARKUP_TOO_LARGE: the markup is out of range")?;
         links.push((column, cost.line_id, found.amount_cents, this_markup));
     }
     let mut time_links = Vec::with_capacity(chosen.time.len());
     for &activity in &chosen.time {
-        let found: Option<UnbilledTime> = sqlx::query_as(&format!("SELECT * FROM ({UNBILLED_TIME}) WHERE id = ?1")).bind(activity).fetch_optional(&mut **tx).await.map_err(db_err)?;
+        let found: Option<UnbilledTime> =
+            sqlx::query_as(&format!("SELECT * FROM ({UNBILLED_TIME}) WHERE id = ?1")).bind(activity).fetch_optional(&mut **tx).await.map_err(db_err)?;
         let Some(found) = found else {
             return Err("TIME_NOT_BILLABLE: a time entry is not billable, or is already on an invoice".into());
         };
         if found.customer_id != customer_id {
             return Err(format!("TIME_OTHER_CUSTOMER: the time dated {} is for a different customer or job", found.date));
         }
-        let item = found.product_service_id.ok_or_else(|| format!("TIME_NO_ITEM: the time dated {} has no service item; choose one on the timesheet so the invoice knows its income account", found.date))?;
-        let (income_account_id, is_taxable): (i64, bool) =
-            sqlx::query_as("SELECT income_account_id, is_taxable FROM products_services WHERE id = ?1").bind(item).fetch_one(&mut **tx).await.map_err(db_err)?;
+        let item = found.product_service_id.ok_or_else(|| {
+            format!("TIME_NO_ITEM: the time dated {} has no service item; choose one on the timesheet so the invoice knows its income account", found.date)
+        })?;
+        let (income_account_id, is_taxable): (i64, bool) = sqlx::query_as("SELECT income_account_id, is_taxable FROM products_services WHERE id = ?1")
+            .bind(item)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(db_err)?;
         let hours = hours_e4(found.minutes).ok_or("TIME_AMOUNT: the hours are out of range")?;
         let amount = mul_div_round(hours, found.hourly_rate_cents, QUANTITY_SCALE).ok_or("TIME_AMOUNT: the amount is out of range")?;
         let what = found.description.clone().or(found.service_name.clone()).unwrap_or_else(|| "Time".into());
@@ -415,7 +444,8 @@ async fn write_with_billing(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInp
             income_account_id: account,
             product_service_id: None,
             class_id: None,
-            is_taxable: false, service_date: None,
+            is_taxable: false,
+            service_date: None,
         });
     }
 
@@ -476,13 +506,15 @@ pub(crate) async fn follow_replaced_invoice(tx: &mut Transaction<'_, Sqlite>, ol
     .execute(&mut **tx)
     .await
     .map_err(db_err)?;
-    sqlx::query("INSERT INTO billed_time (time_activity_id, invoice_id, amount_cents) SELECT time_activity_id, ?2, amount_cents FROM billed_time WHERE invoice_id = ?1")
-        .bind(old_invoice)
-        .bind(new_invoice)
-        .execute(&mut **tx)
-        .await
-        .map(|_| ())
-        .map_err(db_err)
+    sqlx::query(
+        "INSERT INTO billed_time (time_activity_id, invoice_id, amount_cents) SELECT time_activity_id, ?2, amount_cents FROM billed_time WHERE invoice_id = ?1",
+    )
+    .bind(old_invoice)
+    .bind(new_invoice)
+    .execute(&mut **tx)
+    .await
+    .map(|_| ())
+    .map_err(db_err)
 }
 
 /// An edited expense or bill: a cost already billed stays billed on its replacement line (same line

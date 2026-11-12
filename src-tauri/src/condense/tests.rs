@@ -51,7 +51,9 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn close_books(pool: &SqlitePool, date: NaiveDate, passcode: Option<&str>) {
-    crate::closing::set_closing_date(pool, &ClosingInput { lock_date: Some(date), current_passcode: passcode.map(Into::into), new_passcode: None }).await.unwrap();
+    crate::closing::set_closing_date(pool, &ClosingInput { lock_date: Some(date), current_passcode: passcode.map(Into::into), new_passcode: None })
+        .await
+        .unwrap();
 }
 
 /// Clears every line on `account_id` dated on or before `through` in one completed reconciliation.
@@ -117,7 +119,12 @@ async fn every_table_is_either_a_list_or_a_transaction() {
     for (table, dates) in TRANSACTION_TABLES {
         assert!(!KEPT_TABLES.contains(table), "{table} is in both lists");
         for column in *dates {
-            let exists: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2)").bind(table).bind(column).fetch_one(&mut *conn).await.unwrap();
+            let exists: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2)")
+                .bind(table)
+                .bind(column)
+                .fetch_one(&mut *conn)
+                .await
+                .unwrap();
             assert!(exists, "{table}.{column} dates the table's rows");
         }
     }
@@ -141,7 +148,8 @@ async fn condensing_harbor_lane_keeps_every_balance_and_open_item() {
     let before = books_picture(&pool, cutoff).await;
     let entries_before = count(&pool, "SELECT COUNT(*) FROM journal_entries").await;
     let invoices_before = count(&pool, "SELECT COUNT(*) FROM invoices").await;
-    let open_invoices: Vec<i64> = sqlx::query_scalar("SELECT id FROM invoices WHERE total_cents > amount_paid_cents AND is_voided = 0 ORDER BY id").fetch_all(&pool).await.unwrap();
+    let open_invoices: Vec<i64> =
+        sqlx::query_scalar("SELECT id FROM invoices WHERE total_cents > amount_paid_cents AND is_voided = 0 ORDER BY id").fetch_all(&pool).await.unwrap();
 
     let preview = preview(&pool, cutoff).await.unwrap();
     assert!(preview.blockers.is_empty(), "{:?}", preview.blockers);
@@ -161,7 +169,8 @@ async fn condensing_harbor_lane_keeps_every_balance_and_open_item() {
     assert_eq!(entries_after, entries_before - preview.entries_summarized + preview.summary_entries);
     assert!(count(&pool, "SELECT COUNT(*) FROM invoices").await < invoices_before);
     assert_eq!(books_picture(&pool, cutoff).await, before);
-    let still_open: Vec<i64> = sqlx::query_scalar("SELECT id FROM invoices WHERE total_cents > amount_paid_cents AND is_voided = 0 ORDER BY id").fetch_all(&pool).await.unwrap();
+    let still_open: Vec<i64> =
+        sqlx::query_scalar("SELECT id FROM invoices WHERE total_cents > amount_paid_cents AND is_voided = 0 ORDER BY id").fetch_all(&pool).await.unwrap();
     assert_eq!(still_open, open_invoices, "every open invoice is carried as it was");
     assert_audit_intact(&pool, "condensed file").await;
     let summaries = count(&pool, "SELECT COUNT(*) FROM journal_entries WHERE memo LIKE 'Condensed: %' AND entry_date <= '2025-03-31'").await;
@@ -173,7 +182,13 @@ async fn condensing_harbor_lane_keeps_every_balance_and_open_item() {
     let (checking, services) = (account(&pool, "1010").await, account(&pool, "4100").await);
     ledger::post_journal_entry(
         &pool,
-        ledger::JournalEntry { id: None, date: d(2025, 4, 2), description: "After".into(), lines: vec![ledger::JournalLine::debit(checking, 100), ledger::JournalLine::credit(services, 100)], currency: None },
+        ledger::JournalEntry {
+            id: None,
+            date: d(2025, 4, 2),
+            description: "After".into(),
+            lines: vec![ledger::JournalLine::debit(checking, 100), ledger::JournalLine::credit(services, 100)],
+            currency: None,
+        },
     )
     .await
     .unwrap();
@@ -207,10 +222,17 @@ async fn a_to_do_keeps_the_invoice_it_is_about() {
     let removed = |p: &CondensePreview| p.rows_removed.get("invoices").copied().unwrap_or(0);
     let without = removed(&preview(&pool, cutoff).await.unwrap());
     // A paid invoice from the condensed months that a to-do points at (link_kind has no foreign key).
-    let paid: Vec<i64> = sqlx::query_scalar("SELECT id FROM invoices WHERE issue_date <= '2025-03-31' AND amount_paid_cents = total_cents ORDER BY id").fetch_all(&pool).await.unwrap();
+    let paid: Vec<i64> = sqlx::query_scalar("SELECT id FROM invoices WHERE issue_date <= '2025-03-31' AND amount_paid_cents = total_cents ORDER BY id")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
     let mut linked = None;
     for id in paid {
-        let todo: i64 = sqlx::query_scalar("INSERT INTO todos (title, link_kind, link_id) VALUES ('Send a thank-you', 'INVOICE', ?1) RETURNING id").bind(id).fetch_one(&pool).await.unwrap();
+        let todo: i64 = sqlx::query_scalar("INSERT INTO todos (title, link_kind, link_id) VALUES ('Send a thank-you', 'INVOICE', ?1) RETURNING id")
+            .bind(id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         if removed(&preview(&pool, cutoff).await.unwrap()) == without - 1 {
             linked = Some((id, todo));
             break;
@@ -283,11 +305,17 @@ async fn inventory_is_carried_at_quantity_and_cost() {
     let tmp = TempDir::new("stock");
     let pool = crate::db::open(&tmp.company()).await.unwrap();
     let (sales, checking) = (account(&pool, "4000").await, account(&pool, "1010").await);
-    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false })
-        .await
-        .unwrap()
-        .id;
-    let tracked = crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap();
+    let product = crate::sales::create_product(
+        &pool,
+        crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false },
+    )
+    .await
+    .unwrap()
+    .id;
+    let tracked =
+        crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None })
+            .await
+            .unwrap();
     let buy = |date: &str, qty: i64, rate: i64| {
         let pool = pool.clone();
         let date = date.to_string();
@@ -298,7 +326,14 @@ async fn inventory_is_carried_at_quantity_and_cost() {
             }))
             .unwrap();
             let bill = crate::expenses::post_vendor_bill(&pool, input).await.unwrap();
-            let paid = crate::expenses::BillPaymentInput { bill_id: bill.id, payment_account_id: checking, payment_date: NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap(), amount_cents: Cents(qty * rate), reference: None, to_be_printed: false };
+            let paid = crate::expenses::BillPaymentInput {
+                bill_id: bill.id,
+                payment_account_id: checking,
+                payment_date: NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap(),
+                amount_cents: Cents(qty * rate),
+                reference: None,
+                to_be_printed: false,
+            };
             crate::expenses::pay_vendor_bill(&pool, paid).await.unwrap();
         }
     };
@@ -328,17 +363,23 @@ async fn inventory_is_carried_at_quantity_and_cost() {
     let pool = db.pool().await;
     let cutoff = d(2024, 12, 31);
     let before = books_picture(&pool, cutoff).await;
-    let item_before: (i64, i64) = sqlx::query_as("SELECT qty_on_hand_e4, value_cents FROM inventory_items WHERE id = ?1").bind(tracked.id).fetch_one(&pool).await.unwrap();
+    let item_before: (i64, i64) =
+        sqlx::query_as("SELECT qty_on_hand_e4, value_cents FROM inventory_items WHERE id = ?1").bind(tracked.id).fetch_one(&pool).await.unwrap();
     let result = condense_live_on(&db, cutoff, today()).await.unwrap();
     assert!(result.verification.passed, "{:?}", result.verification);
 
     let pool = db.pool().await;
     assert_eq!(books_picture(&pool, cutoff).await, before);
-    let item_after: (i64, i64) = sqlx::query_as("SELECT qty_on_hand_e4, value_cents FROM inventory_items WHERE id = ?1").bind(tracked.id).fetch_one(&pool).await.unwrap();
+    let item_after: (i64, i64) =
+        sqlx::query_as("SELECT qty_on_hand_e4, value_cents FROM inventory_items WHERE id = ?1").bind(tracked.id).fetch_one(&pool).await.unwrap();
     assert_eq!(item_after, item_before);
     // Four 2024 movements became one, carrying 8 on hand at their cost; 2025's are kept.
     let movements: Vec<(String, i64, i64)> =
-        sqlx::query_as("SELECT movement_date, qty_after_e4, value_after_cents FROM stock_ledger_entries WHERE item_id = ?1 ORDER BY id").bind(tracked.id).fetch_all(&pool).await.unwrap();
+        sqlx::query_as("SELECT movement_date, qty_after_e4, value_after_cents FROM stock_ledger_entries WHERE item_id = ?1 ORDER BY id")
+            .bind(tracked.id)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     assert_eq!(movements.len(), 3, "{movements:?}");
     assert_eq!(movements[0].0, "2024-09-01");
     assert_eq!(movements[0].1, 80_000);
@@ -430,14 +471,27 @@ async fn refuses_to_switch_when_the_books_changed_meanwhile() {
 async fn a_summary_that_does_not_add_up_is_reported() {
     let pool = crate::db::test_pool().await;
     let (checking, services) = (account(&pool, "1010").await, account(&pool, "4100").await);
-    let post = |cents: i64| ledger::post_journal_entry(
-        &pool,
-        ledger::JournalEntry { id: None, date: d(2025, 1, 5), description: "Sale".into(), lines: vec![ledger::JournalLine::debit(checking, cents), ledger::JournalLine::credit(services, cents)], currency: None },
-    );
+    let post = |cents: i64| {
+        ledger::post_journal_entry(
+            &pool,
+            ledger::JournalEntry {
+                id: None,
+                date: d(2025, 1, 5),
+                description: "Sale".into(),
+                lines: vec![ledger::JournalLine::debit(checking, cents), ledger::JournalLine::credit(services, cents)],
+                currency: None,
+            },
+        )
+    };
     let (sale, summary) = (post(1_000).await.unwrap(), post(999).await.unwrap());
-    let record = |summarizes: Vec<i64>| json!({ "removed": { "journalEntries": [] }, "summaries": [{ "entryId": summary, "summarizes": summarizes }] }).to_string();
+    let record =
+        |summarizes: Vec<i64>| json!({ "removed": { "journalEntries": [] }, "summaries": [{ "entryId": summary, "summarizes": summarizes }] }).to_string();
     let mut tx = ledger::begin_write(&pool).await.unwrap();
-    sqlx::query("INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot) VALUES ('CONDENSE', 0, ?1)").bind(record(vec![sale])).execute(&mut *tx).await.unwrap();
+    sqlx::query("INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot) VALUES ('CONDENSE', 0, ?1)")
+        .bind(record(vec![sale]))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
     ledger::commit_write(tx).await.unwrap();
     let audit = ledger::verify_ledger_audit(&pool).await.unwrap();
     assert!(audit.findings.iter().any(|f| f.entry_id == summary && f.problem.starts_with("Condensed into a summary")), "{:?}", audit.findings);
@@ -449,7 +503,13 @@ async fn a_condensed_entry_is_accepted_only_when_a_condense_record_lists_it() {
     let (checking, services) = (account(&pool, "1010").await, account(&pool, "4100").await);
     let entry = ledger::post_journal_entry(
         &pool,
-        ledger::JournalEntry { id: None, date: d(2025, 1, 5), description: "Sale".into(), lines: vec![ledger::JournalLine::debit(checking, 500), ledger::JournalLine::credit(services, 500)], currency: None },
+        ledger::JournalEntry {
+            id: None,
+            date: d(2025, 1, 5),
+            description: "Sale".into(),
+            lines: vec![ledger::JournalLine::debit(checking, 500), ledger::JournalLine::credit(services, 500)],
+            currency: None,
+        },
     )
     .await
     .unwrap();
@@ -466,7 +526,11 @@ async fn a_condensed_entry_is_accepted_only_when_a_condense_record_lists_it() {
 
     let mut tx = ledger::begin_write(&pool).await.unwrap();
     let record = json!({ "removed": { "journalEntries": [entry] }, "summaries": [{ "entryId": null, "summarizes": [] }] }).to_string();
-    sqlx::query("INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot) VALUES ('CONDENSE', 0, ?1)").bind(record).execute(&mut *tx).await.unwrap();
+    sqlx::query("INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot) VALUES ('CONDENSE', 0, ?1)")
+        .bind(record)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
     ledger::commit_write(tx).await.unwrap();
     assert!(!deleted(&ledger::verify_ledger_audit(&pool).await.unwrap()));
 }
@@ -496,13 +560,35 @@ async fn a_file_on_a_purchase_order_keeps_it() {
     let pool = db.pool().await;
     let vendor: String = sqlx::query_scalar("SELECT name FROM vendors ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
     let expense = account(&pool, "6300").await;
-    let line = crate::workflows::PurchaseOrderLineInput { account_id: expense, product_service_id: None, description: Some("Paper".into()), quantity_e4: None, rate_cents: None, amount_cents: Cents(4_000), class_id: None, customer_id: None };
-    let po = crate::workflows::create_purchase_order(&pool, crate::workflows::PurchaseOrderInput { form_lines: Vec::new(), vendor_name: vendor, po_date: d(2025, 2, 3), expected_date: None, memo: None, lines: vec![line] })
-        .await
-        .unwrap();
+    let line = crate::workflows::PurchaseOrderLineInput {
+        account_id: expense,
+        product_service_id: None,
+        description: Some("Paper".into()),
+        quantity_e4: None,
+        rate_cents: None,
+        amount_cents: Cents(4_000),
+        class_id: None,
+        customer_id: None,
+    };
+    let po = crate::workflows::create_purchase_order(
+        &pool,
+        crate::workflows::PurchaseOrderInput {
+            form_lines: Vec::new(),
+            vendor_name: vendor,
+            po_date: d(2025, 2, 3),
+            expected_date: None,
+            memo: None,
+            lines: vec![line],
+        },
+    )
+    .await
+    .unwrap();
     // Billed by a bill paid in the condensed months: the order goes with that bill's group.
     let removed = |p: &CondensePreview| p.rows_removed.get("purchase_orders").copied().unwrap_or(0);
-    let paid: Vec<i64> = sqlx::query_scalar("SELECT id FROM bills WHERE bill_date <= '2025-03-31' AND amount_paid_cents = total_cents ORDER BY id").fetch_all(&pool).await.unwrap();
+    let paid: Vec<i64> = sqlx::query_scalar("SELECT id FROM bills WHERE bill_date <= '2025-03-31' AND amount_paid_cents = total_cents ORDER BY id")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
     let mut without = 0;
     for bill in paid {
         sqlx::query("UPDATE purchase_orders SET bill_id = ?1, status = 'BILLED' WHERE id = ?2").bind(bill).bind(po).execute(&pool).await.unwrap();

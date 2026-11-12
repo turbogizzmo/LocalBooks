@@ -311,7 +311,13 @@ pub fn read_documents(
         let refs: Vec<&Row> = rows.iter().collect();
         out.insert(
             tid,
-            SourceDocument::Invoice { customer_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&too_large, &refs, arap, classes, &subtotals), sales: sales_of(h) },
+            SourceDocument::Invoice {
+                customer_id,
+                number: text(h, "doc_num"),
+                due_date: h.get("due_date").as_date(),
+                lines: form_lines(&too_large, &refs, arap, classes, &subtotals),
+                sales: sales_of(h),
+            },
         );
     }
     let memo_headers = headers_of("abmc_credit_memo_header");
@@ -349,7 +355,12 @@ pub fn read_documents(
         let Some(customer_id) = h.get("customer_id").as_int() else { continue };
         out.insert(
             tid,
-            SourceDocument::Payment { customer_id, reference: text(&h, "doc_num"), method: method_of(&h), applied_to: applied.remove(&(4, tid)).unwrap_or_default() },
+            SourceDocument::Payment {
+                customer_id,
+                reference: text(&h, "doc_num"),
+                method: method_of(&h),
+                applied_to: applied.remove(&(4, tid)).unwrap_or_default(),
+            },
         );
     }
     let bill_headers = headers_of("abmc_bill_header");
@@ -357,7 +368,15 @@ pub fn read_documents(
         let Some(h) = bill_headers.get(&tid) else { continue };
         let Some(vendor_id) = h.get("vendor_id").as_int() else { continue };
         let refs: Vec<&Row> = rows.iter().collect();
-        out.insert(tid, SourceDocument::Bill { vendor_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&too_large, &refs, arap, classes, &none) });
+        out.insert(
+            tid,
+            SourceDocument::Bill {
+                vendor_id,
+                number: text(h, "doc_num"),
+                due_date: h.get("due_date").as_date(),
+                lines: form_lines(&too_large, &refs, arap, classes, &none),
+            },
+        );
     }
     for table in ["abmc_bill_check_header", "abmc_bill_ccard_header"] {
         for (tid, h) in headers_of(table) {
@@ -385,7 +404,15 @@ pub fn read_documents(
         let (Some(customer_id), Some(date)) = (h.get("customer_id").as_int(), h.get("transaction_date").as_date()) else { continue };
         out.insert(
             tid,
-            SourceDocument::Estimate { customer_id, date, number: text(h, "doc_num"), expires: h.get("due_date").as_date(), memo: text(h, "memo"), lines: positive(&rows), sales: sales_of(h) },
+            SourceDocument::Estimate {
+                customer_id,
+                date,
+                number: text(h, "doc_num"),
+                expires: h.get("due_date").as_date(),
+                memo: text(h, "memo"),
+                lines: positive(&rows),
+                sales: sales_of(h),
+            },
         );
     }
     let order_headers = headers_of("abmc_purchase_order_header");

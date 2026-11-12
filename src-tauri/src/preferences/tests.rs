@@ -28,7 +28,14 @@ async fn preferences_validate_normalize_and_persist() {
     assert_eq!(set(&pool, "company_ein", "123456789").await.unwrap(), "12-3456789");
     assert_eq!(set(&pool, "fiscal_year_start", "07-01").await.unwrap(), "07-01");
     assert_eq!(fiscal_start_month(&pool).await.unwrap(), 7);
-    for (key, value) in [("fiscal_year_start", "07-15"), ("fiscal_year_start", "13-01"), ("company_name", "  "), ("tax_form", "990-EZ"), ("bogus", "x"), ("company_ein", "12-34")] {
+    for (key, value) in [
+        ("fiscal_year_start", "07-15"),
+        ("fiscal_year_start", "13-01"),
+        ("company_name", "  "),
+        ("tax_form", "990-EZ"),
+        ("bogus", "x"),
+        ("company_ein", "12-34"),
+    ] {
         assert!(set(&pool, key, value).await.is_err(), "{key}={value} should be rejected");
     }
     // The database guards the fiscal start even if the module is bypassed.

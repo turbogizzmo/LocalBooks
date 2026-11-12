@@ -60,7 +60,8 @@ async fn a_computer_is_added_beside_the_app_and_signs_in_only_where_its_secret_i
     drop(conn);
 
     // The file keeps only a hash: the secret is in the computer's store, nowhere in the file.
-    let (credential_id, hash): (Vec<u8>, Vec<u8>) = sqlx::query_as("SELECT credential_id, secret_hash FROM user_device_factors").fetch_one(&pool).await.unwrap();
+    let (credential_id, hash): (Vec<u8>, Vec<u8>) =
+        sqlx::query_as("SELECT credential_id, secret_hash FROM user_device_factors").fetch_one(&pool).await.unwrap();
     let saved = here.get(&store_key(&credential_id)).await.unwrap().unwrap();
     let secret = unhex(&saved).unwrap();
     assert_eq!(secret.len(), SECRET_BYTES);
@@ -74,7 +75,13 @@ async fn a_computer_is_added_beside_the_app_and_signs_in_only_where_its_secret_i
     assert_eq!(check(&pool, &here, owner.user.id).await.unwrap_err(), NOT_HERE);
     here.put(&store_key(&credential_id), &saved).await.unwrap();
     // Nor is a row moved to another user: the hash is bound to the user.
-    let clerk = users::add(&pool, &owner, NewUserInput { username: "clerk".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "clerk password".into() }).await.unwrap();
+    let clerk = users::add(
+        &pool,
+        &owner,
+        NewUserInput { username: "clerk".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "clerk password".into() },
+    )
+    .await
+    .unwrap();
     let clerk_session = users::sign_in(&pool, "clerk", "clerk password").await.unwrap();
     enrol_app(&pool, &clerk_session, "clerk password").await;
     sqlx::query("UPDATE user_device_factors SET user_id = ?1").bind(clerk.id).execute(&pool).await.unwrap();
@@ -103,7 +110,13 @@ async fn removing_a_computer_keeps_the_app_and_only_the_owner_can() {
     let secret = enrol_app(&pool, &owner, "owner password").await;
     let added = add(&pool, &here, &owner, Kind::WindowsHello, "Office PC").await.unwrap();
 
-    let clerk = users::add(&pool, &owner, NewUserInput { username: "clerk".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "clerk password".into() }).await.unwrap();
+    let clerk = users::add(
+        &pool,
+        &owner,
+        NewUserInput { username: "clerk".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "clerk password".into() },
+    )
+    .await
+    .unwrap();
     let _ = clerk;
     let clerk_session = users::sign_in(&pool, "clerk", "clerk password").await.unwrap();
     assert!(remove(&pool, &here, &clerk_session, added.id).await.unwrap_err().starts_with("MFA_DEVICE_NONE"), "not someone else's computer");
@@ -145,7 +158,13 @@ async fn every_way_back_removes_the_computers_too() {
     let (owner, recovery) = users::turn_on(&pool, "owner", None, "owner password").await.unwrap();
     mfa::set_policy(&pool, &owner, Policy::Optional).await.unwrap();
     let (here, path) = computer("way-back");
-    let clerk = users::add(&pool, &owner, NewUserInput { username: "clerk".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "clerk temp pw".into() }).await.unwrap();
+    let clerk = users::add(
+        &pool,
+        &owner,
+        NewUserInput { username: "clerk".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "clerk temp pw".into() },
+    )
+    .await
+    .unwrap();
     let clerk_session = users::sign_in(&pool, "clerk", "clerk temp pw").await.unwrap();
 
     // An Admin's reset.
@@ -158,7 +177,8 @@ async fn every_way_back_removes_the_computers_too() {
     // A temporary password from an Admin.
     enrol_app(&pool, &clerk_session, "clerk temp pw").await;
     add(&pool, &here, &clerk_session, Kind::TouchId, "Clerk's Mac").await.unwrap();
-    let update = UserUpdate { display_name: "clerk".into(), role: Role::Standard, can_see_sensitive: false, is_active: true, new_password: Some("another temp".into()) };
+    let update =
+        UserUpdate { display_name: "clerk".into(), role: Role::Standard, can_see_sensitive: false, is_active: true, new_password: Some("another temp".into()) };
     users::update(&pool, &owner, clerk.id, update).await.unwrap();
     assert_eq!(computers(&pool).await, 0);
 
@@ -196,7 +216,12 @@ async fn every_way_back_removes_the_computers_too() {
     assert_eq!(computers(&pool).await, 0);
 
     // The schema itself refuses a computer without an app.
-    let err = sqlx::query("INSERT INTO user_device_factors (user_id, credential_id, label, kind, secret_hash) VALUES (1, zeroblob(16), 'x', 'TOUCH_ID', zeroblob(32))").execute(&pool).await.unwrap_err();
+    let err = sqlx::query(
+        "INSERT INTO user_device_factors (user_id, credential_id, label, kind, secret_hash) VALUES (1, zeroblob(16), 'x', 'TOUCH_ID', zeroblob(32))",
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
     assert!(err.to_string().contains("MFA_DEVICE_NEEDS_APP") || err.to_string().contains("FOREIGN KEY"), "{err}");
     let _ = std::fs::remove_file(path);
 }

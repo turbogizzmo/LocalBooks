@@ -24,7 +24,9 @@ async fn company() -> SqlitePool {
     let p = &pool;
     let id = |table: &'static str, name: &'static str| {
         let p = p.clone();
-        async move { sqlx::query_scalar::<_, i64>(&format!("SELECT id FROM {table} WHERE name = ?1")).bind(name).fetch_one(&p).await.unwrap_or_else(|_| panic!("{name}")) }
+        async move {
+            sqlx::query_scalar::<_, i64>(&format!("SELECT id FROM {table} WHERE name = ?1")).bind(name).fetch_one(&p).await.unwrap_or_else(|_| panic!("{name}"))
+        }
     };
     let cafe = id("customers", "Brightwater Cafe").await;
     sqlx::query("UPDATE customers SET phone = '555-0142', company_name = 'Brightwater Cafe Inc.', billing_address = '8 Pier Road\nHarbor Lane, OR 97001', terms_days = 30 WHERE id = ?1")
@@ -32,8 +34,15 @@ async fn company() -> SqlitePool {
         .execute(p)
         .await
         .unwrap();
-    let patio: i64 = sqlx::query_scalar("INSERT INTO customers (name, parent_id, phone) VALUES ('Brightwater Cafe:Patio Menu', ?1, '555-0143') RETURNING id").bind(cafe).fetch_one(p).await.unwrap();
-    sqlx::query("UPDATE vendors SET phone = '555-0190', email = 'orders@riverside.example', terms_days = 30, is_1099 = 1 WHERE name = 'Riverside Print Shop'").execute(p).await.unwrap();
+    let patio: i64 = sqlx::query_scalar("INSERT INTO customers (name, parent_id, phone) VALUES ('Brightwater Cafe:Patio Menu', ?1, '555-0143') RETURNING id")
+        .bind(cafe)
+        .fetch_one(p)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE vendors SET phone = '555-0190', email = 'orders@riverside.example', terms_days = 30, is_1099 = 1 WHERE name = 'Riverside Print Shop'")
+        .execute(p)
+        .await
+        .unwrap();
 
     // Time in November: billable design for the cafe, unbilled work on its patio menu job, and an
     // hour of office time for no one.
@@ -76,7 +85,8 @@ async fn company() -> SqlitePool {
     };
     crate::workflows::create_purchase_order(
         p,
-        crate::workflows::PurchaseOrderInput { form_lines: Vec::new(),
+        crate::workflows::PurchaseOrderInput {
+            form_lines: Vec::new(),
             vendor_name: "Riverside Print Shop".into(),
             po_date: d(2025, 12, 5),
             expected_date: Some(d(2025, 12, 19)),
@@ -90,11 +100,25 @@ async fn company() -> SqlitePool {
     // Twelve mugs into stock on a bill that also carries job costs for the cafe and its patio job;
     // $50.00 of it paid, so its open balance splits unevenly.
     let sales = account(p, "4000").await;
-    let mugs = crate::sales::create_product(p, crate::sales::ProductInput { name: "Gift Mugs".into(), description: Some("Logo mugs".into()), rate_cents: Cents(1_800), income_account_id: sales, is_taxable: true })
-        .await
-        .unwrap()
-        .id;
-    let tracked = crate::inventory::track_product(p, &crate::inventory::TrackInput { product_id: mugs, sku: Some("MUG-12".into()), asset_account_id: None, cogs_account_id: None }).await.unwrap();
+    let mugs = crate::sales::create_product(
+        p,
+        crate::sales::ProductInput {
+            name: "Gift Mugs".into(),
+            description: Some("Logo mugs".into()),
+            rate_cents: Cents(1_800),
+            income_account_id: sales,
+            is_taxable: true,
+        },
+    )
+    .await
+    .unwrap()
+    .id;
+    let tracked = crate::inventory::track_product(
+        p,
+        &crate::inventory::TrackInput { product_id: mugs, sku: Some("MUG-12".into()), asset_account_id: None, cogs_account_id: None },
+    )
+    .await
+    .unwrap();
     let bill_line = |account_id, amount_cents, memo: &str, qty: Option<i64>, rate: Option<i64>, item, job| BillLineInput {
         account_id,
         amount_cents,
@@ -108,7 +132,8 @@ async fn company() -> SqlitePool {
     };
     let bill = crate::expenses::post_vendor_bill(
         p,
-        BillInput { form_lines: Vec::new(),
+        BillInput {
+            form_lines: Vec::new(),
             terms_id: None,
             vendor_name: "Lakeside Ceramics".into(),
             bill_number: Some("LC-310".into()),
@@ -126,9 +151,19 @@ async fn company() -> SqlitePool {
     .await
     .unwrap()
     .id;
-    crate::expenses::pay_vendor_bill(p, BillPaymentInput { bill_id: bill, payment_account_id: account(p, "1010").await, payment_date: d(2025, 12, 10), amount_cents: Cents(5_000), reference: None, to_be_printed: false })
-        .await
-        .unwrap();
+    crate::expenses::pay_vendor_bill(
+        p,
+        BillPaymentInput {
+            bill_id: bill,
+            payment_account_id: account(p, "1010").await,
+            payment_date: d(2025, 12, 10),
+            amount_cents: Cents(5_000),
+            reference: None,
+            to_be_printed: false,
+        },
+    )
+    .await
+    .unwrap();
 
     // For the T36 reports: a budget, two to-dos, a memorized transaction and a ship-to address.
     let budget = crate::statements::create_budget(p, "Plan 2025", d(2025, 6, 1)).await.unwrap().id;
@@ -138,20 +173,35 @@ async fn company() -> SqlitePool {
         .chain((1..=12).map(|period| crate::statements::BudgetAmount { account_id: rent, period, amount_cents: 250_000 }))
         .collect();
     crate::statements::set_budget_amounts(p, budget, &amounts).await.unwrap();
-    sqlx::query("INSERT INTO todos (title, note, due_date, customer_id) VALUES ('Call about the patio menu', 'Ask for the final copy', '2025-12-20', ?1)").bind(cafe).execute(p).await.unwrap();
-    sqlx::query("INSERT INTO todos (title, is_done, done_at) VALUES ('Order mug stock', 1, '2025-12-01T10:00:00.000Z')").execute(p).await.unwrap();
-    sqlx::query("INSERT INTO recurring_templates (name, kind, payload, frequency, every, next_date) VALUES ('Monthly rent', 'EXPENSE', '{}', 'MONTHLY', 1, '2026-01-01')").execute(p).await.unwrap();
-    sqlx::query("UPDATE invoices SET ship_to = '8 Pier Road
-Harbor Lane, OR 97001' WHERE id = (SELECT id FROM invoices WHERE customer_id = ?1 AND is_voided = 0 ORDER BY id LIMIT 1)")
+    sqlx::query("INSERT INTO todos (title, note, due_date, customer_id) VALUES ('Call about the patio menu', 'Ask for the final copy', '2025-12-20', ?1)")
         .bind(cafe)
         .execute(p)
         .await
         .unwrap();
+    sqlx::query("INSERT INTO todos (title, is_done, done_at) VALUES ('Order mug stock', 1, '2025-12-01T10:00:00.000Z')").execute(p).await.unwrap();
+    sqlx::query("INSERT INTO recurring_templates (name, kind, payload, frequency, every, next_date) VALUES ('Monthly rent', 'EXPENSE', '{}', 'MONTHLY', 1, '2026-01-01')").execute(p).await.unwrap();
+    sqlx::query(
+        "UPDATE invoices SET ship_to = '8 Pier Road
+Harbor Lane, OR 97001' WHERE id = (SELECT id FROM invoices WHERE customer_id = ?1 AND is_voided = 0 ORDER BY id LIMIT 1)",
+    )
+    .bind(cafe)
+    .execute(p)
+    .await
+    .unwrap();
     // A sales order for twenty mugs, more than are on hand, and a logo package: open for the sales
     // order reports, with part of it backordered.
     let so_line = |item, description: &str, qty: i64, rate: i64| crate::sales_orders::SalesOrderLineInput {
         id: None,
-        line: crate::sales::SalesLineInput { product_service_id: Some(item), description: description.into(), quantity_e4: qty, rate_cents: Cents(rate), income_account_id: sales, class_id: None, is_taxable: false, service_date: None },
+        line: crate::sales::SalesLineInput {
+            product_service_id: Some(item),
+            description: description.into(),
+            quantity_e4: qty,
+            rate_cents: Cents(rate),
+            income_account_id: sales,
+            class_id: None,
+            is_taxable: false,
+            service_date: None,
+        },
     };
     crate::sales_orders::create(
         p,
@@ -233,7 +283,8 @@ async fn statement_summaries_tie_out() {
     // Balance Sheet Summary: the same totals as the Balance Sheet, and its lines add up to them.
     let bs = crate::statements::balance_sheet(&pool, today()).await.unwrap();
     let summary = run(&pool, "bs-summary").await;
-    let totals: BTreeMap<String, i64> = summary.report.rows.iter().filter(|r| r.kind != RowKind::Detail && r.kind != RowKind::Section).map(|r| (text(&r.cells[0]), last(r))).collect();
+    let totals: BTreeMap<String, i64> =
+        summary.report.rows.iter().filter(|r| r.kind != RowKind::Detail && r.kind != RowKind::Section).map(|r| (text(&r.cells[0]), last(r))).collect();
     // A group folded into one line shows its total beside the group's name.
     let folded: BTreeMap<String, i64> = details(&summary).map(|r| (text(&r.cells[0]), last(r))).collect();
     for line in bs.lines.iter().filter(|l| matches!(l.kind, crate::statements::LineKind::Total | crate::statements::LineKind::Net)) {
@@ -326,7 +377,11 @@ async fn time_inventory_and_lists_tie_out() {
 
     // Physical Inventory Worksheet: today's quantity of every tracked item.
     let worksheet = run(&pool, "physical-inventory").await;
-    let on_hand: Vec<(String, i64)> = sqlx::query_as("SELECT p.name, i.qty_on_hand_e4 FROM inventory_items i JOIN products_services p ON p.id = i.product_id ORDER BY p.name").fetch_all(&pool).await.unwrap();
+    let on_hand: Vec<(String, i64)> =
+        sqlx::query_as("SELECT p.name, i.qty_on_hand_e4 FROM inventory_items i JOIN products_services p ON p.id = i.product_id ORDER BY p.name")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     let shown: Vec<(String, i64)> = details(&worksheet).map(|r| (text(&r.cells[0]), cents(&r.cells[3]))).collect();
     assert_eq!(shown, on_hand);
     assert!(details(&worksheet).all(|r| r.cells[4].is_null()), "the count column is blank");
@@ -354,7 +409,8 @@ async fn audit_trail_lists_the_chain() {
     let pool = company().await;
     let day: chrono::NaiveDate = sqlx::query_scalar("SELECT date(MAX(timestamp), 'localtime') FROM ledger_audit_log").fetch_one(&pool).await.unwrap();
     let report = list_reports::run(&pool, "audit-trail", Some(day), Some(day), day).await.unwrap();
-    let written: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE date(timestamp, 'localtime') = ?1").bind(day).fetch_one(&pool).await.unwrap();
+    let written: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE date(timestamp, 'localtime') = ?1").bind(day).fetch_one(&pool).await.unwrap();
     assert_eq!(report.report.line_count as i64, written);
     let action = report.report.columns.iter().position(|c| c.label == "Action").unwrap();
     let posted: Vec<&ReportRow> = details(&report).filter(|r| text(&r.cells[action]) == "Posted").collect();
@@ -382,13 +438,16 @@ async fn several_reports_make_one_workbook() {
     let book = crate::xlsx_export::to_xlsx_book(&[sheet("Phone List", &a), sheet("Phone List", &b)], "$").unwrap();
     assert!(book.starts_with(b"PK"));
     let long = "A report title much longer than thirty-one characters";
-    assert_eq!(crate::xlsx_export::sheet_names(["Phone List", "phone list", "Phone List", long, long].into_iter()), vec![
-        "Phone List".to_string(),
-        "phone list (2)".into(),
-        "Phone List (3)".into(),
-        "A report title much longer than".into(),
-        "A report title much longer (2)".into(),
-    ]);
+    assert_eq!(
+        crate::xlsx_export::sheet_names(["Phone List", "phone list", "Phone List", long, long].into_iter()),
+        vec![
+            "Phone List".to_string(),
+            "phone list (2)".into(),
+            "Phone List (3)".into(),
+            "A report title much longer than".into(),
+            "A report title much longer (2)".into(),
+        ]
+    );
     assert!(crate::xlsx_export::to_xlsx_book(&[], "$").is_err());
 }
 
@@ -594,19 +653,31 @@ async fn open_purchase_orders_by_job_tie_out_and_the_job_reaches_the_bill() {
 
     // The bill made from the order keeps each line's job.
     let bill = crate::workflows::bill_purchase_order(p, po, d(2025, 12, 12), d(2025, 12, 26), None).await.unwrap();
-    let on_bill: Vec<Option<i64>> = sqlx::query_scalar("SELECT customer_id FROM bill_lines WHERE bill_id = ?1 ORDER BY line_number").bind(bill).fetch_all(p).await.unwrap();
+    let on_bill: Vec<Option<i64>> =
+        sqlx::query_scalar("SELECT customer_id FROM bill_lines WHERE bill_id = ?1 ORDER BY line_number").bind(bill).fetch_all(p).await.unwrap();
     assert_eq!(on_bill, [Some(cafe), Some(patio), None]);
 
     // A customer entered twice: merging it into the cafe moves its purchase order lines too.
     let twice: i64 = sqlx::query_scalar("INSERT INTO customers (name) VALUES ('Brightwater Cafe Co') RETURNING id").fetch_one(p).await.unwrap();
     crate::workflows::create_purchase_order(
         p,
-        crate::workflows::PurchaseOrderInput { form_lines: Vec::new(), vendor_name: "Riverside Print Shop".into(), po_date: d(2025, 12, 10), expected_date: None, memo: None, lines: vec![line(900, "Table cards", Some(twice))] },
+        crate::workflows::PurchaseOrderInput {
+            form_lines: Vec::new(),
+            vendor_name: "Riverside Print Shop".into(),
+            po_date: d(2025, 12, 10),
+            expected_date: None,
+            memo: None,
+            lines: vec![line(900, "Table cards", Some(twice))],
+        },
     )
     .await
     .unwrap();
     crate::merges::merge(p, crate::merges::MergeKind::Customer, twice, cafe, d(2025, 12, 31)).await.unwrap_or_else(|e| panic!("merge: {e}"));
-    let moved: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM purchase_order_lines WHERE customer_id = ?1 AND description = 'Table cards'").bind(cafe).fetch_one(p).await.unwrap();
+    let moved: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM purchase_order_lines WHERE customer_id = ?1 AND description = 'Table cards'")
+        .bind(cafe)
+        .fetch_one(p)
+        .await
+        .unwrap();
     assert_eq!(moved, 1);
 }
 
@@ -690,16 +761,30 @@ async fn t9_terms_unbilled_stock_and_closing_exceptions_tie_out() {
     let checking = account(p, "1010").await;
     let close = |date: Option<chrono::NaiveDate>| {
         let p = p.clone();
-        async move { crate::closing::set_closing_date(&p, &crate::closing::ClosingInput { lock_date: date, current_passcode: None, new_passcode: None }).await.unwrap() }
+        async move {
+            crate::closing::set_closing_date(&p, &crate::closing::ClosingInput { lock_date: date, current_passcode: None, new_passcode: None }).await.unwrap()
+        }
     };
     close(Some(d(2025, 11, 30))).await;
     let none = list_reports::run(p, "closing-date-exceptions", Some(d(2025, 1, 1)), Some(d(2025, 12, 31)), today()).await.unwrap();
     assert_eq!(none.report.line_count, 0);
     close(None).await;
-    let line = |account_id, debit, credit| crate::ledger::JournalLine { account_id, debit: crate::money::Cents(debit), credit: crate::money::Cents(credit), memo: None, class_id: None };
+    let line = |account_id, debit, credit| crate::ledger::JournalLine {
+        account_id,
+        debit: crate::money::Cents(debit),
+        credit: crate::money::Cents(credit),
+        memo: None,
+        class_id: None,
+    };
     let late = crate::ledger::post_journal_entry(
         p,
-        crate::ledger::JournalEntry { id: None, date: d(2025, 11, 20), description: "Late office supplies".into(), lines: vec![line(office, 4_200, 0), line(checking, 0, 4_200)], currency: None },
+        crate::ledger::JournalEntry {
+            id: None,
+            date: d(2025, 11, 20),
+            description: "Late office supplies".into(),
+            lines: vec![line(office, 4_200, 0), line(checking, 0, 4_200)],
+            currency: None,
+        },
     )
     .await
     .unwrap();

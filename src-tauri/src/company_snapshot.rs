@@ -111,7 +111,16 @@ pub enum Period {
 }
 
 impl Period {
-    const ALL: [Period; 8] = [Period::Today, Period::ThisMonth, Period::LastMonth, Period::ThisQuarter, Period::LastQuarter, Period::ThisFiscalYear, Period::LastFiscalYear, Period::Last12Months];
+    const ALL: [Period; 8] = [
+        Period::Today,
+        Period::ThisMonth,
+        Period::LastMonth,
+        Period::ThisQuarter,
+        Period::LastQuarter,
+        Period::ThisFiscalYear,
+        Period::LastFiscalYear,
+        Period::Last12Months,
+    ];
 
     fn code(self) -> &'static str {
         match self {
@@ -210,21 +219,41 @@ pub const TOP: usize = 5;
 fn top(summary: &SummaryReport) -> (Vec<WidgetLine>, i64, i64) {
     let mut rows: Vec<&crate::report_center::SummaryRow> = summary.rows.iter().collect();
     rows.sort_by(|a, b| b.amount_cents.cmp(&a.amount_cents).then_with(|| a.label.cmp(&b.label)));
-    let lines: Vec<WidgetLine> = rows.iter().take(TOP).map(|r| WidgetLine { label: r.label.clone(), amount_cents: r.amount_cents, overdue_cents: None, account_id: None, previous_cents: None, date: None }).collect();
+    let lines: Vec<WidgetLine> = rows
+        .iter()
+        .take(TOP)
+        .map(|r| WidgetLine { label: r.label.clone(), amount_cents: r.amount_cents, overdue_cents: None, account_id: None, previous_cents: None, date: None })
+        .collect();
     let shown: i64 = lines.iter().map(|l| l.amount_cents).sum();
     (lines, summary.total_cents - shown, summary.total_cents)
 }
 
-async fn figures(pool: &SqlitePool, kind: WidgetKind, start: NaiveDate, end: NaiveDate, viewer: crate::reminders::Viewer) -> Result<(Vec<WidgetLine>, i64, Vec<TrendPoint>, i64, &'static str), String> {
+async fn figures(
+    pool: &SqlitePool,
+    kind: WidgetKind,
+    start: NaiveDate,
+    end: NaiveDate,
+    viewer: crate::reminders::Viewer,
+) -> Result<(Vec<WidgetLine>, i64, Vec<TrendPoint>, i64, &'static str), String> {
     Ok(match kind {
         WidgetKind::AccountBalances => {
             let bs = crate::statements::balance_sheet(pool, end).await?;
-            let kinds: Vec<(i64, String)> = sqlx::query_as("SELECT id, account_type FROM chart_of_accounts WHERE account_type IN ('BANK', 'CREDIT_CARD')").fetch_all(pool).await.map_err(db_err)?;
+            let kinds: Vec<(i64, String)> = sqlx::query_as("SELECT id, account_type FROM chart_of_accounts WHERE account_type IN ('BANK', 'CREDIT_CARD')")
+                .fetch_all(pool)
+                .await
+                .map_err(db_err)?;
             let lines: Vec<WidgetLine> = bs
                 .lines
                 .iter()
                 .filter(|l| l.kind == LineKind::Account && l.account_id.is_some_and(|id| kinds.iter().any(|(k, _)| *k == id)))
-                .map(|l| WidgetLine { label: l.label.clone(), amount_cents: l.amount_cents.unwrap_or(0), overdue_cents: None, account_id: l.account_id, previous_cents: None, date: None })
+                .map(|l| WidgetLine {
+                    label: l.label.clone(),
+                    amount_cents: l.amount_cents.unwrap_or(0),
+                    overdue_cents: None,
+                    account_id: l.account_id,
+                    previous_cents: None,
+                    date: None,
+                })
                 .collect();
             // The total is the bank balances (the cards are listed, owed, beside them).
             let total = lines.iter().filter(|l| kinds.iter().any(|(id, t)| Some(*id) == l.account_id && t == "BANK")).map(|l| l.amount_cents).sum();
@@ -238,15 +267,30 @@ async fn figures(pool: &SqlitePool, kind: WidgetKind, start: NaiveDate, end: Nai
             let lines: Vec<WidgetLine> = rows
                 .iter()
                 .take(TOP)
-                .map(|r| WidgetLine { label: r.party_name.clone(), amount_cents: r.total_cents, overdue_cents: Some(r.buckets_cents[1..].iter().sum()), account_id: None, previous_cents: None, date: None })
+                .map(|r| WidgetLine {
+                    label: r.party_name.clone(),
+                    amount_cents: r.total_cents,
+                    overdue_cents: Some(r.buckets_cents[1..].iter().sum()),
+                    account_id: None,
+                    previous_cents: None,
+                    date: None,
+                })
                 .collect();
             let shown: i64 = lines.iter().map(|l| l.amount_cents).sum();
             (lines, aging.total_cents - shown, Vec::new(), aging.total_cents, if payable { "ap" } else { "ar" })
         }
         WidgetKind::IncomeExpenseTrend => {
             let graph = crate::graphs::income_expense(pool, start, end, report_basis(pool).await?).await?;
-            let trend: Vec<TrendPoint> =
-                graph.months.iter().map(|p| TrendPoint { month: p.month.month.clone(), income_cents: p.income_cents, expense_cents: p.expense_cents, net_cents: p.net_income_cents }).collect();
+            let trend: Vec<TrendPoint> = graph
+                .months
+                .iter()
+                .map(|p| TrendPoint {
+                    month: p.month.month.clone(),
+                    income_cents: p.income_cents,
+                    expense_cents: p.expense_cents,
+                    net_cents: p.net_income_cents,
+                })
+                .collect();
             (Vec::new(), 0, trend, graph.net_income_cents, "pl")
         }
         WidgetKind::TopCustomers => {
@@ -275,7 +319,11 @@ async fn figures(pool: &SqlitePool, kind: WidgetKind, start: NaiveDate, end: Nai
             .await
             .map_err(db_err)?;
             let count = i64::try_from(open.len()).unwrap_or(i64::MAX);
-            let lines = open.into_iter().take(TOP).map(|(title, due)| WidgetLine { label: title, amount_cents: 0, overdue_cents: None, account_id: None, previous_cents: None, date: due }).collect();
+            let lines = open
+                .into_iter()
+                .take(TOP)
+                .map(|(title, due)| WidgetLine { label: title, amount_cents: 0, overdue_cents: None, account_id: None, previous_cents: None, date: due })
+                .collect();
             (lines, 0, Vec::new(), count, "list:todo-notes")
         }
         WidgetKind::IncomeBreakdown | WidgetKind::ExpenseBreakdown => {
@@ -305,7 +353,14 @@ async fn figures(pool: &SqlitePool, kind: WidgetKind, start: NaiveDate, end: Nai
             let now = crate::statements::profit_and_loss_basis(pool, start, end, None, basis).await?;
             let (ps, pe) = (start - Months::new(12), end - Months::new(12));
             let then = crate::statements::profit_and_loss_basis(pool, ps, pe, None, basis).await?;
-            let line = |label: &str, a: i64, b: i64| WidgetLine { label: label.into(), amount_cents: a, overdue_cents: None, account_id: None, previous_cents: Some(b), date: None };
+            let line = |label: &str, a: i64, b: i64| WidgetLine {
+                label: label.into(),
+                amount_cents: a,
+                overdue_cents: None,
+                account_id: None,
+                previous_cents: Some(b),
+                date: None,
+            };
             let lines = vec![
                 line("Income", now.total_revenue_cents, then.total_revenue_cents),
                 line("Expenses", now.total_expenses_cents, then.total_expenses_cents),
@@ -346,12 +401,14 @@ pub async fn snapshot(pool: &SqlitePool, today: NaiveDate, viewer: crate::remind
 
 /// Adds a widget at the end of the page, with its usual period.
 pub async fn add(pool: &SqlitePool, kind: WidgetKind) -> Result<i64, String> {
-    sqlx::query_scalar("INSERT INTO snapshot_widgets (kind, period, position) VALUES (?1, ?2, (SELECT COALESCE(MAX(position), 0) + 1 FROM snapshot_widgets)) RETURNING id")
-        .bind(kind.code())
-        .bind(kind.default_period().code())
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_scalar(
+        "INSERT INTO snapshot_widgets (kind, period, position) VALUES (?1, ?2, (SELECT COALESCE(MAX(position), 0) + 1 FROM snapshot_widgets)) RETURNING id",
+    )
+    .bind(kind.code())
+    .bind(kind.default_period().code())
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn remove(pool: &SqlitePool, id: i64) -> Result<(), String> {
@@ -400,7 +457,12 @@ pub async fn arrange(pool: &SqlitePool, order: &[i64]) -> Result<(), String> {
             return Err("SNAPSHOT_ORDER: the page changed meanwhile; try again".into());
         }
         for (position, id) in order.iter().enumerate() {
-            sqlx::query("UPDATE snapshot_widgets SET position = ?1 WHERE id = ?2").bind(i64::try_from(position).unwrap_or(i64::MAX)).bind(id).execute(&mut *tx).await.map_err(db_err)?;
+            sqlx::query("UPDATE snapshot_widgets SET position = ?1 WHERE id = ?2")
+                .bind(i64::try_from(position).unwrap_or(i64::MAX))
+                .bind(id)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_err)?;
         }
         Ok(())
     }

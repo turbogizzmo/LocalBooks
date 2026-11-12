@@ -1090,7 +1090,14 @@ fn dates_read_in_every_stored_form() {
 fn invoice_lines_come_from_entries_only_when_they_add_up() {
     let mut book = xml_book();
     let consulting = "consulting".to_string();
-    book.accounts.push(Account { guid: "tax".into(), name: "Sales Tax".into(), kind: "LIABILITY".into(), commodity: "CURRENCY:USD".into(), parent: Some("root".into()), ..Default::default() });
+    book.accounts.push(Account {
+        guid: "tax".into(),
+        name: "Sales Tax".into(),
+        kind: "LIABILITY".into(),
+        commodity: "CURRENCY:USD".into(),
+        parent: Some("root".into()),
+        ..Default::default()
+    });
     // 2 × $50 less 10% = $90, plus $7.20 tax.
     let t2 = book.transactions.iter_mut().find(|t| t.guid == "t2").unwrap();
     t2.splits = vec![
@@ -1208,7 +1215,8 @@ async fn a_full_import_of_a_gnucash_book_creates_native_documents() {
     assert_eq!(summary.unbalanced.len(), 1);
     assert_eq!(summary.unreadable.len(), 5);
 
-    let (status, total, paid): (String, i64, i64) = sqlx::query_as("SELECT status, total_cents, amount_paid_cents FROM invoices").fetch_one(&pool).await.unwrap();
+    let (status, total, paid): (String, i64, i64) =
+        sqlx::query_as("SELECT status, total_cents, amount_paid_cents FROM invoices").fetch_one(&pool).await.unwrap();
     assert_eq!((status.as_str(), total, paid), ("PARTIAL", 10_000, 6_000));
     let bill_status: String = sqlx::query_scalar("SELECT status FROM bills").fetch_one(&pool).await.unwrap();
     assert_eq!(bill_status, "PAID");

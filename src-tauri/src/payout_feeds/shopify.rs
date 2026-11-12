@@ -118,7 +118,9 @@ pub struct ShopifyTxn {
 }
 
 pub fn read_txn(node: &Value) -> Result<ShopifyTxn, String> {
-    let at = DateTime::parse_from_rfc3339(&text(node, "transactionDate")).map(|t| t.with_timezone(&Utc)).map_err(|_| "PAYOUT_RESPONSE: Shopify sent a transaction without a date Tillhouse can read".to_string())?;
+    let at = DateTime::parse_from_rfc3339(&text(node, "transactionDate"))
+        .map(|t| t.with_timezone(&Utc))
+        .map_err(|_| "PAYOUT_RESPONSE: Shopify sent a transaction without a date Tillhouse can read".to_string())?;
     Ok(ShopifyTxn {
         kind: text(node, "type"),
         at,
@@ -177,7 +179,8 @@ const PAYOUTS_QUERY: &str = "query($after: String) { shopifyPaymentsAccount { pa
   pageInfo { hasNextPage endCursor }
   nodes { id legacyResourceId issuedAt status transactionType net { amount currencyCode } } } } }";
 
-const TRANSACTIONS_QUERY: &str = "query($after: String) { shopifyPaymentsAccount { balanceTransactions(first: 100, after: $after, sortKey: PROCESSED_AT, reverse: true) {
+const TRANSACTIONS_QUERY: &str =
+    "query($after: String) { shopifyPaymentsAccount { balanceTransactions(first: 100, after: $after, sortKey: PROCESSED_AT, reverse: true) {
   pageInfo { hasNextPage endCursor }
   nodes { type transactionDate test amount { amount } net { amount } associatedPayout { id } associatedOrder { name } } } } }";
 
@@ -189,7 +192,9 @@ async fn walk(http: &reqwest::Client, base: &str, token: &str, query: &str, fiel
     let mut after: Option<String> = None;
     for _ in 0..MAX_PAGES {
         let data = graphql(http, base, token, query, json!({ "after": after })).await?;
-        let conn = data.pointer(&format!("/shopifyPaymentsAccount/{field}")).ok_or_else(|| "PAYOUT_PERMISSION: this store has no Shopify Payments account Tillhouse can read".to_string())?;
+        let conn = data
+            .pointer(&format!("/shopifyPaymentsAccount/{field}"))
+            .ok_or_else(|| "PAYOUT_PERMISSION: this store has no Shopify Payments account Tillhouse can read".to_string())?;
         let nodes = conn.get("nodes").and_then(Value::as_array).cloned().unwrap_or_default();
         let done = !nodes.is_empty() && nodes.iter().all(&stop);
         out.extend(nodes.into_iter().filter(|n| !stop(n)));
@@ -217,7 +222,14 @@ fn issued(n: &Value) -> Option<DateTime<Utc>> {
 
 /// Connects a Shopify store: checks the token can read its Shopify Payments account, keeps it in
 /// the credential store, and saves the feed with the store's address and its accounts.
-pub async fn connect_shopify(pool: &SqlitePool, store: &SecretStore, api: Option<&str>, shop: &str, token: &str, input: &FeedInput) -> Result<PayoutFeed, String> {
+pub async fn connect_shopify(
+    pool: &SqlitePool,
+    store: &SecretStore,
+    api: Option<&str>,
+    shop: &str,
+    token: &str,
+    input: &FeedInput,
+) -> Result<PayoutFeed, String> {
     let shop = shop_domain(shop)?;
     let token = token.trim();
     if token.is_empty() {

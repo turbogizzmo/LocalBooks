@@ -84,8 +84,17 @@ const TAX_CODE: &[&str] = &["salestaxcode", "taxcode", "taxable"];
 
 /// Keys only one product's exports use.
 const DESKTOP_KEYS: &[&str] = &["trans#", "adj", "accnt#", "billto", "billfrom", "mainphone", "mainemail", "balancetotal", "salestaxcode"];
-const ONLINE_KEYS: &[&str] =
-    &["transactiontype", "memodescription", "distributionaccount", "detailtype", "productservice", "phonenumbers", "customerfullname", "fullname", "salesprice"];
+const ONLINE_KEYS: &[&str] = &[
+    "transactiontype",
+    "memodescription",
+    "distributionaccount",
+    "detailtype",
+    "productservice",
+    "phonenumbers",
+    "customerfullname",
+    "fullname",
+    "salesprice",
+];
 
 /// What a file holds, by its column headings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,7 +142,10 @@ impl Header {
                 // A single Amount column is signed by each account's own side, which the report
                 // does not say; reading it would mean guessing.
                 return match self.has(AMOUNT) {
-                    true => Err("it has an Amount column but no Debit and Credit columns. Customize the report, add the Debit and Credit columns, and export it again".into()),
+                    true => Err(
+                        "it has an Amount column but no Debit and Credit columns. Customize the report, add the Debit and Credit columns, and export it again"
+                            .into(),
+                    ),
                     false => Ok(None),
                 };
             }
@@ -227,7 +239,8 @@ pub(crate) fn grids(file: &str, bytes: &[u8]) -> Result<Vec<Grid>, String> {
         }
         return Ok(vec![grid]);
     }
-    let mut book = calamine::open_workbook_auto_from_rs(Cursor::new(bytes)).map_err(|e| format!("REPORT_UNREADABLE: {file}: not a workbook Excel can open ({e})"))?;
+    let mut book =
+        calamine::open_workbook_auto_from_rs(Cursor::new(bytes)).map_err(|e| format!("REPORT_UNREADABLE: {file}: not a workbook Excel can open ({e})"))?;
     let mut sheets = Vec::new();
     for n in 0..book.sheet_names().len() {
         let Some(Ok(range)) = book.worksheet_range_at(n) else { continue };
@@ -318,7 +331,10 @@ fn account_type(name: &str) -> Option<&'static str> {
 
 /// Whether an account of this type normally carries a debit balance.
 fn debit_side(account_type: &str) -> bool {
-    matches!(account_type, "BANK" | "ACCOUNTS_RECEIVABLE" | "OTHER_CURRENT_ASSET" | "FIXED_ASSET" | "OTHER_ASSET" | "COST_OF_GOODS_SOLD" | "EXPENSE" | "OTHER_EXPENSE")
+    matches!(
+        account_type,
+        "BANK" | "ACCOUNTS_RECEIVABLE" | "OTHER_CURRENT_ASSET" | "FIXED_ASSET" | "OTHER_ASSET" | "COST_OF_GOODS_SOLD" | "EXPENSE" | "OTHER_EXPENSE"
+    )
 }
 
 fn balance_sheet(account_type: &str) -> bool {
@@ -600,7 +616,10 @@ fn by_account(t: &Table) -> Vec<Group> {
         let lower = first.trim().to_lowercase();
         if !is_line && (lower == "total" || lower.starts_with("total ")) {
             let closed = account_path(first.trim()[5..].trim().trim_start_matches("for ").trim_start_matches("For "));
-            match headings.iter().rposition(|(_, h)| h.eq_ignore_ascii_case(&closed) || h.rsplit(':').next().is_some_and(|last| last.eq_ignore_ascii_case(&closed))) {
+            match headings
+                .iter()
+                .rposition(|(_, h)| h.eq_ignore_ascii_case(&closed) || h.rsplit(':').next().is_some_and(|last| last.eq_ignore_ascii_case(&closed)))
+            {
                 Some(i) => headings.truncate(i),
                 None if closed.is_empty() => headings.clear(),
                 None => {}

@@ -144,10 +144,7 @@ pub fn extract(path: &Path, progress: &mut dyn FnMut(Progress)) -> Result<Extrac
                 continue;
             }
         };
-        let date = item
-            .txn_date_days_since_unix()
-            .and_then(unix_day_to_date)
-            .or_else(|| header_dates.get(&item.invoice_id).copied());
+        let date = item.txn_date_days_since_unix().and_then(unix_day_to_date).or_else(|| header_dates.get(&item.invoice_id).copied());
         lines.push(RawLine {
             qb_invoice_id: item.invoice_id,
             qb_item_id: item.item_qb_id,
@@ -187,10 +184,7 @@ fn ensure_found(path: &Path, extraction: &Extraction) -> Result<(), String> {
             "QBW_UNSUPPORTED_VERSION: no transactions could be read from {name}. It was most likely saved by a version of the desktop program this importer cannot read yet. Nothing was imported"
         ))
     } else {
-        Err(format!(
-            "QBW_NO_INVOICES: {name} has {} transactions but no invoice lines this importer can read. Nothing was imported",
-            extraction.header_count
-        ))
+        Err(format!("QBW_NO_INVOICES: {name} has {} transactions but no invoice lines this importer can read. Nothing was imported", extraction.header_count))
     }
 }
 
@@ -471,9 +465,7 @@ async fn require_income_account(pool: &SqlitePool, account_id: i64) -> Result<()
     .map_err(db_err)?;
     match row {
         None => Err(format!("QBW_BAD_ACCOUNT: account #{account_id} does not exist")),
-        Some((class, _)) if class != "INCOME" => {
-            Err("QBW_BAD_ACCOUNT: imported invoice lines can only map to an Income or Other Income account".into())
-        }
+        Some((class, _)) if class != "INCOME" => Err("QBW_BAD_ACCOUNT: imported invoice lines can only map to an Income or Other Income account".into()),
         Some((_, 0)) => Err("QBW_BAD_ACCOUNT: that account is inactive".into()),
         Some(_) => Ok(()),
     }
@@ -502,13 +494,12 @@ pub async fn set_mapping(pool: &SqlitePool, batch_id: i64, raw_label: &str, acco
 /// has the generated name) and maps the label to it. Returns how many accounts were created.
 pub async fn auto_create_accounts(pool: &SqlitePool, batch_id: i64) -> Result<i64, String> {
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
-    let unmapped: Vec<String> = sqlx::query_scalar(
-        "SELECT raw_account_label FROM staging_account_map WHERE batch_id = ?1 AND account_id IS NULL ORDER BY raw_account_label",
-    )
-    .bind(batch_id)
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(db_err)?;
+    let unmapped: Vec<String> =
+        sqlx::query_scalar("SELECT raw_account_label FROM staging_account_map WHERE batch_id = ?1 AND account_id IS NULL ORDER BY raw_account_label")
+            .bind(batch_id)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(db_err)?;
 
     let mut created = 0i64;
     for raw in unmapped {
@@ -585,22 +576,18 @@ pub struct PostBatchResult {
 /// single transaction. Refuses to start while any label is unmapped.
 pub async fn post_batch(pool: &SqlitePool, input: &PostBatchInput) -> Result<PostBatchResult, String> {
     let batch_id = input.batch_id;
-    let exists: Option<i64> = sqlx::query_scalar("SELECT id FROM staging_import_batches WHERE id = ?1")
-        .bind(batch_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+    let exists: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM staging_import_batches WHERE id = ?1").bind(batch_id).fetch_optional(pool).await.map_err(db_err)?;
     if exists.is_none() {
         return Err(format!("QBW_NO_BATCH: import #{batch_id} does not exist"));
     }
 
-    let offset: Option<(String, i64)> = sqlx::query_as(
-        "SELECT t.classification, a.is_active FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
-    )
-    .bind(input.offset_account_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(db_err)?;
+    let offset: Option<(String, i64)> =
+        sqlx::query_as("SELECT t.classification, a.is_active FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1")
+            .bind(input.offset_account_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
     match offset {
         None => return Err("QBW_BAD_OFFSET: choose an offset account".into()),
         Some((class, _)) if class == "INCOME" || class == "EXPENSE" => {
@@ -610,12 +597,11 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostBatchInput) -> Result<Pos
         Some(_) => {}
     }
 
-    let map: Vec<(String, Option<i64>)> =
-        sqlx::query_as("SELECT raw_account_label, account_id FROM staging_account_map WHERE batch_id = ?1")
-            .bind(batch_id)
-            .fetch_all(pool)
-            .await
-            .map_err(db_err)?;
+    let map: Vec<(String, Option<i64>)> = sqlx::query_as("SELECT raw_account_label, account_id FROM staging_account_map WHERE batch_id = ?1")
+        .bind(batch_id)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
     let unmapped: Vec<String> = map.iter().filter(|(_, a)| a.is_none()).map(|(l, _)| display_label(l)).collect();
     if !unmapped.is_empty() {
         return Err(format!("QBW_UNMAPPED: map every label before posting ({})", unmapped.join(", ")));
@@ -652,12 +638,8 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostBatchInput) -> Result<Pos
     let mut invoices: BTreeMap<String, Invoice> = BTreeMap::new();
     for row in rows {
         let date = row.date.as_deref().and_then(|d| d.parse::<NaiveDate>().ok());
-        let inv = invoices.entry(row.qb_invoice_id).or_insert(Invoice {
-            date: None,
-            lines: 0,
-            by_account: BTreeMap::new(),
-            already_posted: row.already_posted != 0,
-        });
+        let inv =
+            invoices.entry(row.qb_invoice_id).or_insert(Invoice { date: None, lines: 0, by_account: BTreeMap::new(), already_posted: row.already_posted != 0 });
         // An invoice dates from its earliest dated line.
         inv.date = match (inv.date, date) {
             (Some(a), Some(b)) => Some(a.min(b)),
@@ -696,13 +678,7 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostBatchInput) -> Result<Pos
         }
         let offset = if total > 0 { JournalLine::debit(input.offset_account_id, total) } else { JournalLine::credit(input.offset_account_id, -total) };
         lines.push(offset);
-        let entry = JournalEntry {
-            id: None,
-            date,
-            description: format!("Desktop migration · invoice {qb_id}"),
-            lines,
-            currency: None,
-        };
+        let entry = JournalEntry { id: None, date, description: format!("Desktop migration · invoice {qb_id}"), lines, currency: None };
         let entry_id = match ledger::post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await {
             Ok(id) => id,
             Err(err) => return Err(ledger::rollback(tx, format!("{err} (imported invoice {qb_id})")).await),

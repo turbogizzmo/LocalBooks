@@ -19,7 +19,11 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn account_of_type(pool: &SqlitePool, account_type: &str) -> i64 {
-    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = ?1 AND is_active = 1 ORDER BY id LIMIT 1").bind(account_type).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = ?1 AND is_active = 1 ORDER BY id LIMIT 1")
+        .bind(account_type)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 fn invoice(customer: &str, income: i64, cents: i64, details: SalesDetails) -> InvoiceInput {
@@ -35,7 +39,8 @@ fn invoice(customer: &str, income: i64, cents: i64, details: SalesDetails) -> In
             income_account_id: income,
             product_service_id: None,
             class_id: None,
-            is_taxable: false, service_date: None,
+            is_taxable: false,
+            service_date: None,
         }],
         currency: None,
         tax_rate_id: None,
@@ -88,7 +93,12 @@ async fn the_migration_links_existing_records_and_payments() {
         sqlx::query_as("SELECT c.name, t.name FROM customers c LEFT JOIN terms t ON t.id = c.terms_id ORDER BY c.name").fetch_all(&pool).await.unwrap();
     assert_eq!(
         linked,
-        [("Acme".into(), Some("Net 30".into())), ("Birch".into(), Some("Net 45".into())), ("Cobalt".into(), Some("Due on receipt".into())), ("Dune".into(), None)]
+        [
+            ("Acme".into(), Some("Net 30".into())),
+            ("Birch".into(), Some("Net 45".into())),
+            ("Cobalt".into(), Some("Due on receipt".into())),
+            ("Dune".into(), None)
+        ]
     );
     let vendor: Option<String> = sqlx::query_scalar("SELECT t.name FROM vendors v JOIN terms t ON t.id = v.terms_id").fetch_optional(&pool).await.unwrap();
     assert_eq!(vendor.as_deref(), Some("Net 45"), "the vendor shares the Net 45 term added for Birch");
@@ -104,7 +114,8 @@ async fn records_written_with_days_only_are_linked_to_a_term() {
     let birch: Option<i64> = sqlx::query_scalar("SELECT terms_id FROM customers WHERE name = 'Birch'").fetch_one(&pool).await.unwrap();
     assert_eq!(birch, Some(net21.id));
     sqlx::query("UPDATE customers SET terms_days = 15 WHERE name = 'Acme'").execute(&pool).await.unwrap();
-    let acme: String = sqlx::query_scalar("SELECT t.name FROM customers c JOIN terms t ON t.id = c.terms_id WHERE c.name = 'Acme'").fetch_one(&pool).await.unwrap();
+    let acme: String =
+        sqlx::query_scalar("SELECT t.name FROM customers c JOIN terms t ON t.id = c.terms_id WHERE c.name = 'Acme'").fetch_one(&pool).await.unwrap();
     assert_eq!(acme, "Net 15");
 }
 
@@ -172,7 +183,16 @@ async fn an_invoice_and_a_bill_keep_their_term_and_early_payment_discount() {
         payment_method_id: None,
         reference: None,
         memo: None,
-        lines: vec![SalesLineInput { product_service_id: None, description: "Sale".into(), quantity_e4: 10_000, rate_cents: Cents(500), income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![SalesLineInput {
+            product_service_id: None,
+            description: "Sale".into(),
+            quantity_e4: 10_000,
+            rate_cents: Cents(500),
+            income_account_id: services,
+            class_id: None,
+            is_taxable: false,
+            service_date: None,
+        }],
         tax_rate_id: None,
         discount_cents: Cents::ZERO,
         details: SalesDetails { terms_id: Some(two_ten.id), ..Default::default() },
@@ -180,14 +200,25 @@ async fn an_invoice_and_a_bill_keep_their_term_and_early_payment_discount() {
     assert!(post_sales_receipt(&pool, receipt).await.unwrap_err().starts_with("SR_NO_TERMS"));
 
     let expense = account_of_type(&pool, "EXPENSE").await;
-    let bill = |terms_id| BillInput { form_lines: Vec::new(),
+    let bill = |terms_id| BillInput {
+        form_lines: Vec::new(),
         vendor_name: "Staples".into(),
         bill_number: None,
         bill_date: d(10, 1),
         due_date: d(10, 31),
         memo: None,
         total_cents: Cents(50_000),
-        lines: vec![BillLineInput { account_id: expense, amount_cents: Cents(50_000), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![BillLineInput {
+            account_id: expense,
+            amount_cents: Cents(50_000),
+            memo: None,
+            quantity_e4: None,
+            rate_cents: None,
+            product_service_id: None,
+            class_id: None,
+            customer_id: None,
+            billable: None,
+        }],
         terms_id,
     };
     let posted = post_vendor_bill(&pool, bill(Some(two_ten.id))).await.unwrap();
@@ -204,8 +235,14 @@ async fn payment_methods_name_a_kind_of_payment() {
     let pool = test_pool().await;
     let visa = create_payment_method(&pool, PaymentMethodInput { name: " Visa ".into(), kind: "CREDIT_CARD".into() }).await.unwrap();
     assert_eq!((visa.name.as_str(), visa.kind.as_str()), ("Visa", "CREDIT_CARD"));
-    assert!(create_payment_method(&pool, PaymentMethodInput { name: "visa".into(), kind: "CASH".into() }).await.unwrap_err().starts_with("PAYMENT_METHOD_DUPLICATE"));
-    assert!(create_payment_method(&pool, PaymentMethodInput { name: "Barter".into(), kind: "GOATS".into() }).await.unwrap_err().starts_with("PAYMENT_METHOD_BAD_KIND"));
+    assert!(create_payment_method(&pool, PaymentMethodInput { name: "visa".into(), kind: "CASH".into() })
+        .await
+        .unwrap_err()
+        .starts_with("PAYMENT_METHOD_DUPLICATE"));
+    assert!(create_payment_method(&pool, PaymentMethodInput { name: "Barter".into(), kind: "GOATS".into() })
+        .await
+        .unwrap_err()
+        .starts_with("PAYMENT_METHOD_BAD_KIND"));
 
     let services = account(&pool, "4100").await;
     let bank = account_of_type(&pool, "BANK").await;
@@ -218,22 +255,42 @@ async fn payment_methods_name_a_kind_of_payment() {
         payment_method_id: method,
         reference: None,
         memo: None,
-        lines: vec![SalesLineInput { product_service_id: None, description: "Sale".into(), quantity_e4: 10_000, rate_cents: Cents(500), income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![SalesLineInput {
+            product_service_id: None,
+            description: "Sale".into(),
+            quantity_e4: 10_000,
+            rate_cents: Cents(500),
+            income_account_id: services,
+            class_id: None,
+            is_taxable: false,
+            service_date: None,
+        }],
         tax_rate_id: None,
         discount_cents: Cents::ZERO,
         details: SalesDetails::default(),
     };
     // The chosen method decides the kind recorded.
     let sold = post_sales_receipt(&pool, receipt(Some(visa.id), "CASH")).await.unwrap();
-    let stored: (String, Option<i64>) = sqlx::query_as("SELECT payment_method, payment_method_id FROM sales_receipts WHERE id = ?1").bind(sold.id).fetch_one(&pool).await.unwrap();
+    let stored: (String, Option<i64>) =
+        sqlx::query_as("SELECT payment_method, payment_method_id FROM sales_receipts WHERE id = ?1").bind(sold.id).fetch_one(&pool).await.unwrap();
     assert_eq!(stored, ("CREDIT_CARD".into(), Some(visa.id)));
     // A kind alone is recorded with the first method of that kind.
     let cash = post_sales_receipt(&pool, receipt(None, "CASH")).await.unwrap();
-    let name: String = sqlx::query_scalar("SELECT m.name FROM sales_receipts r JOIN payment_methods m ON m.id = r.payment_method_id WHERE r.id = ?1").bind(cash.id).fetch_one(&pool).await.unwrap();
+    let name: String = sqlx::query_scalar("SELECT m.name FROM sales_receipts r JOIN payment_methods m ON m.id = r.payment_method_id WHERE r.id = ?1")
+        .bind(cash.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(name, "Cash");
 
-    assert!(update_payment_method(&pool, visa.id, PaymentMethodInput { name: "Visa".into(), kind: "CHECK".into() }).await.unwrap_err().starts_with("PAYMENT_METHOD_IN_USE"));
-    assert_eq!(update_payment_method(&pool, visa.id, PaymentMethodInput { name: "Visa card".into(), kind: "CREDIT_CARD".into() }).await.unwrap().name, "Visa card");
+    assert!(update_payment_method(&pool, visa.id, PaymentMethodInput { name: "Visa".into(), kind: "CHECK".into() })
+        .await
+        .unwrap_err()
+        .starts_with("PAYMENT_METHOD_IN_USE"));
+    assert_eq!(
+        update_payment_method(&pool, visa.id, PaymentMethodInput { name: "Visa card".into(), kind: "CREDIT_CARD".into() }).await.unwrap().name,
+        "Visa card"
+    );
     assert!(delete_payment_method(&pool, visa.id).await.unwrap_err().starts_with("PAYMENT_METHOD_IN_USE"));
     set_payment_method_active(&pool, visa.id, false).await.unwrap();
     assert!(post_sales_receipt(&pool, receipt(Some(visa.id), "CASH")).await.unwrap_err().starts_with("SR_INACTIVE_METHOD"));
@@ -241,11 +298,16 @@ async fn payment_methods_name_a_kind_of_payment() {
     let check = list_payment_methods(&pool).await.unwrap().into_iter().find(|m| m.kind == "CHECK").unwrap();
     set_payment_method_active(&pool, check.id, false).await.unwrap();
     let by_check = post_sales_receipt(&pool, receipt(None, "CHECK")).await.unwrap();
-    let stored: (String, Option<i64>) = sqlx::query_as("SELECT payment_method, payment_method_id FROM sales_receipts WHERE id = ?1").bind(by_check.id).fetch_one(&pool).await.unwrap();
+    let stored: (String, Option<i64>) =
+        sqlx::query_as("SELECT payment_method, payment_method_id FROM sales_receipts WHERE id = ?1").bind(by_check.id).fetch_one(&pool).await.unwrap();
     assert_eq!(stored, ("CHECK".into(), None));
     // A sales receipt's details (no terms column) save with a customer message.
     let thanks = create_profile_entry(&pool, ProfileList::CustomerMessage, "Thanks!").await.unwrap();
-    let with_message = SalesReceiptInput { receipt_number: None, details: SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() }, ..receipt(None, "CASH") };
+    let with_message = SalesReceiptInput {
+        receipt_number: None,
+        details: SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() },
+        ..receipt(None, "CASH")
+    };
     let sold = post_sales_receipt(&pool, with_message).await.unwrap();
     assert_eq!(document_details(&pool, SalesDoc::SalesReceipt, sold.id).await.unwrap().customer_message.as_deref(), Some("Thanks!"));
     let unused = create_payment_method(&pool, PaymentMethodInput { name: "Venmo".into(), kind: "OTHER".into() }).await.unwrap();
@@ -282,12 +344,18 @@ async fn types_go_on_records_and_messages_print_on_sales_forms() {
     assert!(delete_profile_entry(&pool, retail.id).await.unwrap_err().starts_with("PROFILE_IN_USE"));
 
     let services = account(&pool, "4100").await;
-    let inv = create_and_post_invoice(&pool, invoice("Acme", services, 10_000, SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() })).await.unwrap();
+    let inv = create_and_post_invoice(&pool, invoice("Acme", services, 10_000, SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() }))
+        .await
+        .unwrap();
     let details = document_details(&pool, SalesDoc::Invoice, inv.id).await.unwrap();
     assert_eq!(details.customer_message.as_deref(), Some(thanks.name.as_str()));
-    let err = create_and_post_invoice(&pool, invoice("Acme", services, 10_000, SalesDetails { customer_message_id: Some(remodel.id), ..Default::default() })).await.unwrap_err();
+    let err = create_and_post_invoice(&pool, invoice("Acme", services, 10_000, SalesDetails { customer_message_id: Some(remodel.id), ..Default::default() }))
+        .await
+        .unwrap_err();
     assert!(err.starts_with("INV_UNKNOWN_CUSTOMER_MESSAGE"), "{err}");
     set_profile_entry_active(&pool, thanks.id, false).await.unwrap();
-    let err = create_and_post_invoice(&pool, invoice("Acme", services, 10_000, SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() })).await.unwrap_err();
+    let err = create_and_post_invoice(&pool, invoice("Acme", services, 10_000, SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() }))
+        .await
+        .unwrap_err();
     assert!(err.starts_with("INV_INACTIVE_CUSTOMER_MESSAGE"), "{err}");
 }

@@ -17,8 +17,8 @@ use sqlx::SqlitePool;
 
 use super::account;
 use super::fixture::{d, harbor_lane};
-use crate::custom_reports::{self, Column, ColumnKind, CustomReport, Filters, GroupBy, Mode, ReportRow, ReportSettings, RowKind, Source};
 use crate::credits::{ApplyCreditInput, CreditMemoInput, VendorCreditInput, VendorCreditLineInput};
+use crate::custom_reports::{self, Column, ColumnKind, CustomReport, Filters, GroupBy, Mode, ReportRow, ReportSettings, RowKind, Source};
 use crate::expenses::{BillInput, BillLineInput};
 use crate::invoices::{InvoiceInput, InvoiceLineInput};
 use crate::money::Cents;
@@ -37,8 +37,17 @@ pub(super) async fn company() -> SqlitePool {
     let sales = account(p, "4000").await;
     let office = account(p, "6250").await;
     let studio = crate::classes::create_class(p, crate::classes::ClassInput { name: "Studio".into(), parent_id: None }).await.expect("class").id;
-    let rep = crate::sales_lists::create_sales_rep(p, crate::sales_lists::SalesRepInput { initials: "MR".into(), name: Some("Mara Reyes".into()) }).await.expect("rep").id;
-    let product = |name: &str, rate: i64| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: Cents(rate), income_account_id: sales, is_taxable: false };
+    let rep = crate::sales_lists::create_sales_rep(p, crate::sales_lists::SalesRepInput { initials: "MR".into(), name: Some("Mara Reyes".into()) })
+        .await
+        .expect("rep")
+        .id;
+    let product = |name: &str, rate: i64| crate::sales::ProductInput {
+        name: name.into(),
+        description: None,
+        rate_cents: Cents(rate),
+        income_account_id: sales,
+        is_taxable: false,
+    };
     let logo = crate::sales::create_product(p, product("Logo Package", 120_000)).await.expect("product").id;
     let prints = crate::sales::create_product(p, product("Poster Prints", 2_500)).await.expect("product").id;
 
@@ -49,7 +58,8 @@ pub(super) async fn company() -> SqlitePool {
         income_account_id: sales,
         product_service_id: Some(item),
         class_id: class,
-        is_taxable: false, service_date: None,
+        is_taxable: false,
+        service_date: None,
     };
     let details = crate::sales_lists::SalesDetails { sales_rep_id: Some(rep), ..Default::default() };
     let invoice = crate::invoices::create_and_post_invoice(
@@ -71,12 +81,23 @@ pub(super) async fn company() -> SqlitePool {
     .id;
     let memo = crate::credits::create_credit_memo(
         p,
-        CreditMemoInput { credit_number: None, form_lines: Vec::new(),
+        CreditMemoInput {
+            credit_number: None,
+            form_lines: Vec::new(),
             customer_name: "Brightwater Cafe".into(),
             credit_date: d(2025, 11, 20),
             memo: Some("Misprinted posters".into()),
             refund_account_id: None,
-            lines: vec![SalesLineInput { product_service_id: Some(prints), description: "Misprinted posters".into(), quantity_e4: 60_000, rate_cents: Cents(2_500), income_account_id: sales, class_id: Some(studio), is_taxable: false, service_date: None }],
+            lines: vec![SalesLineInput {
+                product_service_id: Some(prints),
+                description: "Misprinted posters".into(),
+                quantity_e4: 60_000,
+                rate_cents: Cents(2_500),
+                income_account_id: sales,
+                class_id: Some(studio),
+                is_taxable: false,
+                service_date: None,
+            }],
             tax_rate_id: None,
             header: Default::default(),
         },
@@ -84,11 +105,17 @@ pub(super) async fn company() -> SqlitePool {
     .await
     .expect("credit memo")
     .id;
-    crate::credits::apply_customer_credit(p, ApplyCreditInput { credit_id: memo, document_id: invoice, amount_cents: Cents(10_000), applied_date: d(2025, 11, 21) }).await.expect("apply credit");
+    crate::credits::apply_customer_credit(
+        p,
+        ApplyCreditInput { credit_id: memo, document_id: invoice, amount_cents: Cents(10_000), applied_date: d(2025, 11, 21) },
+    )
+    .await
+    .expect("apply credit");
 
     let bill = crate::expenses::post_vendor_bill(
         p,
-        BillInput { form_lines: Vec::new(),
+        BillInput {
+            form_lines: Vec::new(),
             terms_id: None,
             vendor_name: "Riverside Print Shop".into(),
             bill_number: Some("RP-77".into()),
@@ -97,8 +124,28 @@ pub(super) async fn company() -> SqlitePool {
             memo: Some("Poster stock".into()),
             total_cents: Cents(45_000),
             lines: vec![
-                BillLineInput { account_id: office, amount_cents: Cents(40_000), memo: Some("Poster stock".into()), quantity_e4: Some(5_000_000), rate_cents: Some(Cents(80)), product_service_id: Some(prints), class_id: Some(studio), customer_id: None, billable: None },
-                BillLineInput { account_id: office, amount_cents: Cents(5_000), memo: Some("Delivery".into()), quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None },
+                BillLineInput {
+                    account_id: office,
+                    amount_cents: Cents(40_000),
+                    memo: Some("Poster stock".into()),
+                    quantity_e4: Some(5_000_000),
+                    rate_cents: Some(Cents(80)),
+                    product_service_id: Some(prints),
+                    class_id: Some(studio),
+                    customer_id: None,
+                    billable: None,
+                },
+                BillLineInput {
+                    account_id: office,
+                    amount_cents: Cents(5_000),
+                    memo: Some("Delivery".into()),
+                    quantity_e4: None,
+                    rate_cents: None,
+                    product_service_id: None,
+                    class_id: None,
+                    customer_id: None,
+                    billable: None,
+                },
             ],
         },
     )
@@ -107,24 +154,39 @@ pub(super) async fn company() -> SqlitePool {
     .id;
     let credit = crate::credits::create_vendor_credit(
         p,
-        VendorCreditInput { form_lines: Vec::new(),
+        VendorCreditInput {
+            form_lines: Vec::new(),
             vendor_name: "Riverside Print Shop".into(),
             reference: Some("RP-C1".into()),
             credit_date: d(2025, 11, 25),
             memo: Some("Damaged stock".into()),
-            lines: vec![VendorCreditLineInput { account_id: office, amount_cents: Cents(6_000), memo: Some("Damaged stock".into()), class_id: Some(studio), customer_id: None }],
+            lines: vec![VendorCreditLineInput {
+                account_id: office,
+                amount_cents: Cents(6_000),
+                memo: Some("Damaged stock".into()),
+                class_id: Some(studio),
+                customer_id: None,
+            }],
         },
     )
     .await
     .expect("vendor credit")
     .id;
-    crate::credits::apply_vendor_credit(p, ApplyCreditInput { credit_id: credit, document_id: bill, amount_cents: Cents(2_500), applied_date: d(2025, 11, 26) }).await.expect("apply vendor credit");
+    crate::credits::apply_vendor_credit(
+        p,
+        ApplyCreditInput { credit_id: credit, document_id: bill, amount_cents: Cents(2_500), applied_date: d(2025, 11, 26) },
+    )
+    .await
+    .expect("apply vendor credit");
     // A year-end adjusting entry, between balance sheet accounts so the other presets are unchanged.
     let entry = crate::ledger::JournalEntry {
         id: None,
         date: d(2025, 12, 31),
         description: "Equipment contributed by the owner".into(),
-        lines: vec![crate::ledger::JournalLine::debit(account(p, "1500").await, 150_000), crate::ledger::JournalLine::credit(account(p, "3100").await, 150_000)],
+        lines: vec![
+            crate::ledger::JournalLine::debit(account(p, "1500").await, 150_000),
+            crate::ledger::JournalLine::credit(account(p, "3100").await, 150_000),
+        ],
         currency: None,
     };
     crate::ledger::post_journal_entry_flagged(p, entry, true).await.expect("adjusting entry");
@@ -192,7 +254,14 @@ async fn general_ledger_agrees() {
                 lines.push((r.journal_entry_id.unwrap(), cents(&r.cells[1]), cents(&r.cells[2]), cents(&r.cells[3])));
             }
             let total = rows.next().expect("account total");
-            accounts.push((heading.account_id.unwrap(), cents(&opening.cells[3]), lines, cents(&total.cells[1]), cents(&total.cells[2]), cents(&total.cells[3])));
+            accounts.push((
+                heading.account_id.unwrap(),
+                cents(&opening.cells[3]),
+                lines,
+                cents(&total.cells[1]),
+                cents(&total.cells[2]),
+                cents(&total.cells[3]),
+            ));
         }
         let expected: Vec<_> = gl
             .accounts
@@ -219,7 +288,8 @@ async fn aging_detail_agrees() {
             let report = run(&pool, &settings).await;
             let (num, open, aging_col) = (column(&report, "Num"), column(&report, "Open Balance"), column(&report, "Aging"));
             let mut got: Vec<(String, i64, i64)> = details(&report).map(|r| (text(&r.cells[num]), cents(&r.cells[open]), cents(&r.cells[aging_col]))).collect();
-            let mut want: Vec<(String, i64, i64)> = aging.items.iter().map(|i| (i.number.clone().unwrap_or_default(), i.open_cents, i.days_past_due.max(0))).collect();
+            let mut want: Vec<(String, i64, i64)> =
+                aging.items.iter().map(|i| (i.number.clone().unwrap_or_default(), i.open_cents, i.days_past_due.max(0))).collect();
             got.sort();
             want.sort();
             assert_eq!(got, want, "{preset} as of {as_of}");
@@ -257,10 +327,26 @@ async fn sales_and_expense_summaries_agree() {
     let classes = |c: &str| Filters { classifications: vec![c.into()], ..Filters::default() };
     let types = |t: &[&str]| Filters { transaction_types: t.iter().map(|s| s.to_string()).collect(), ..Filters::default() };
     let cases = [
-        (crate::report_center::by_party(&pool, false, start, end).await.unwrap(), summary(Source::Ledger, GroupBy::Name, classes("INCOME"), false), "No customer"),
-        (crate::report_center::by_party(&pool, true, start, end).await.unwrap(), summary(Source::Ledger, GroupBy::Name, classes("EXPENSE"), false), "No vendor"),
-        (crate::report_center::sales_by_product(&pool, start, end).await.unwrap(), summary(Source::Items, GroupBy::Item, types(&["INVOICE", "SALES_RECEIPT", "CREDIT_MEMO"]), true), "No product/service"),
-        (crate::report_center::sales_by_rep(&pool, start, end).await.unwrap(), summary(Source::Items, GroupBy::Rep, types(&["INVOICE", "SALES_RECEIPT"]), true), "No rep"),
+        (
+            crate::report_center::by_party(&pool, false, start, end).await.unwrap(),
+            summary(Source::Ledger, GroupBy::Name, classes("INCOME"), false),
+            "No customer",
+        ),
+        (
+            crate::report_center::by_party(&pool, true, start, end).await.unwrap(),
+            summary(Source::Ledger, GroupBy::Name, classes("EXPENSE"), false),
+            "No vendor",
+        ),
+        (
+            crate::report_center::sales_by_product(&pool, start, end).await.unwrap(),
+            summary(Source::Items, GroupBy::Item, types(&["INVOICE", "SALES_RECEIPT", "CREDIT_MEMO"]), true),
+            "No product/service",
+        ),
+        (
+            crate::report_center::sales_by_rep(&pool, start, end).await.unwrap(),
+            summary(Source::Items, GroupBy::Rep, types(&["INVOICE", "SALES_RECEIPT"]), true),
+            "No rep",
+        ),
     ];
     for (existing, settings, none) in cases {
         let report = run(&pool, &settings).await;
@@ -313,7 +399,8 @@ async fn customer_balances_agree_with_receivables() {
     for row in &aging.rows {
         assert_eq!(got.get(&row.party_name).map(|v| v.0), Some(row.total_cents), "{}", row.party_name);
     }
-    let receivable: i64 = sqlx::query_scalar("SELECT SUM(balance_cents) FROM v_account_balances WHERE account_type = 'ACCOUNTS_RECEIVABLE'").fetch_one(&pool).await.unwrap();
+    let receivable: i64 =
+        sqlx::query_scalar("SELECT SUM(balance_cents) FROM v_account_balances WHERE account_type = 'ACCOUNTS_RECEIVABLE'").fetch_one(&pool).await.unwrap();
     assert_eq!(cents(report.rows.last().unwrap().cells.last().unwrap()), receivable);
 }
 
@@ -328,7 +415,11 @@ pub(super) fn render_cell(kind: ColumnKind, v: &Value) -> String {
         (ColumnKind::Quantity, v) => {
             let q = cents(v);
             let (whole, frac) = (q / 10_000, (q % 10_000).abs());
-            if frac == 0 { whole.to_string() } else { format!("{whole}.{:04}", frac).trim_end_matches('0').to_string() }
+            if frac == 0 {
+                whole.to_string()
+            } else {
+                format!("{whole}.{:04}", frac).trim_end_matches('0').to_string()
+            }
         }
         (_, Value::String(s)) => s.chars().take(24).collect(),
         (_, v) => v.to_string(),
@@ -337,7 +428,20 @@ pub(super) fn render_cell(kind: ColumnKind, v: &Value) -> String {
 
 pub(super) fn render(title: &str, report: &CustomReport) -> String {
     let mut out = format!("{title}, {} to {}\n\n", report.start_date.map_or("all dates".into(), |s| s.to_string()), report.end_date);
-    let widths: Vec<usize> = report.columns.iter().enumerate().map(|(i, c)| if i == 0 { 30 } else if matches!(c.kind, ColumnKind::Text) { 25 } else { 13 }).collect();
+    let widths: Vec<usize> = report
+        .columns
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            if i == 0 {
+                30
+            } else if matches!(c.kind, ColumnKind::Text) {
+                25
+            } else {
+                13
+            }
+        })
+        .collect();
     let pad = |s: &str, w: usize, right: bool| if right { format!("{s:>w$} ") } else { format!("{s:<w$} ") };
     let right = |k: ColumnKind| !matches!(k, ColumnKind::Text | ColumnKind::Date);
     let mut head = String::new();
@@ -407,7 +511,8 @@ pub(super) fn excel(title: &str, report: &CustomReport) -> Vec<u8> {
         })
         .collect();
     let sheet: crate::xlsx_export::Sheet =
-        serde_json::from_value(serde_json::json!({ "company": "Harbor Lane Design Co.", "title": title, "subtitle": "", "columns": columns, "rows": rows })).expect("the screen's sheet is a valid Sheet");
+        serde_json::from_value(serde_json::json!({ "company": "Harbor Lane Design Co.", "title": title, "subtitle": "", "columns": columns, "rows": rows }))
+            .expect("the screen's sheet is a valid Sheet");
     crate::xlsx_export::to_xlsx(&sheet, "$").expect("workbook")
 }
 
@@ -416,7 +521,11 @@ pub(super) fn excel(title: &str, report: &CustomReport) -> Vec<u8> {
 // ------------------------------------------------------------------------------------------------
 
 fn lines_report(filters: Filters) -> ReportSettings {
-    year(ReportSettings { columns: vec![Column::Type, Column::Num, Column::Name, Column::Memo, Column::Account, Column::Class, Column::Item, Column::Amount], filters, ..ReportSettings::default() })
+    year(ReportSettings {
+        columns: vec![Column::Type, Column::Num, Column::Name, Column::Memo, Column::Account, Column::Class, Column::Item, Column::Amount],
+        filters,
+        ..ReportSettings::default()
+    })
 }
 
 /// The given column of every detail row.
@@ -451,12 +560,18 @@ async fn filters_narrow_lines() {
 
     // A name, and every vendor.
     let cafe: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Brightwater Cafe'").fetch_one(&pool).await.unwrap();
-    let named = run(&pool, &lines_report(Filters { names: vec![custom_reports::NameRef { kind: custom_reports::NameKind::Customer, id: cafe }], ..Filters::default() })).await;
+    let named = run(
+        &pool,
+        &lines_report(Filters { names: vec![custom_reports::NameRef { kind: custom_reports::NameKind::Customer, id: cafe }], ..Filters::default() }),
+    )
+    .await;
     assert!(named.line_count > 0);
     assert!(values(&named, "Name").iter().all(|n| text(n) == "Brightwater Cafe"));
     let vendors = run(&pool, &lines_report(Filters { name_kind: Some(custom_reports::NameKind::Vendor), ..Filters::default() })).await;
     // A void's reversal belongs to the name of what it voids.
-    assert!(values(&vendors, "Type").iter().all(|t| ["Bill", "Bill Payment", "Check", "Expense", "Vendor Credit", "Credit Card Credit", "Void"].contains(&text(t).as_str())));
+    assert!(values(&vendors, "Type")
+        .iter()
+        .all(|t| ["Bill", "Bill Payment", "Check", "Expense", "Vendor Credit", "Credit Card Credit", "Void"].contains(&text(t).as_str())));
 
     // An item matches the ledger lines it was posted on.
     let prints: i64 = sqlx::query_scalar("SELECT id FROM products_services WHERE name = 'Poster Prints'").fetch_one(&pool).await.unwrap();
@@ -478,15 +593,35 @@ async fn filters_narrow_lines() {
 
     // Cleared and reconciled: the fixture reconciles checking for the first quarter.
     let checking = account(&pool, "1010").await;
-    let reconciled = run(&pool, &lines_report(Filters { account_ids: vec![checking], cleared: Some(custom_reports::Cleared::Reconciled), ..Filters::default() })).await;
-    let uncleared = run(&pool, &lines_report(Filters { account_ids: vec![checking], cleared: Some(custom_reports::Cleared::Uncleared), ..Filters::default() })).await;
+    let reconciled =
+        run(&pool, &lines_report(Filters { account_ids: vec![checking], cleared: Some(custom_reports::Cleared::Reconciled), ..Filters::default() })).await;
+    let uncleared =
+        run(&pool, &lines_report(Filters { account_ids: vec![checking], cleared: Some(custom_reports::Cleared::Uncleared), ..Filters::default() })).await;
     let checking_all = run(&pool, &lines_report(Filters { account_ids: vec![checking], ..Filters::default() })).await;
     assert!(reconciled.line_count > 0);
     assert_eq!(reconciled.line_count + uncleared.line_count, checking_all.line_count);
 
     // Paid invoices: fully paid by year end.
-    let paid = run(&pool, &lines_report(Filters { account_types: vec!["ACCOUNTS_RECEIVABLE".into()], transaction_types: vec!["INVOICE".into()], paid_status: Some(custom_reports::PaidStatus::Paid), ..Filters::default() })).await;
-    let open = run(&pool, &lines_report(Filters { account_types: vec!["ACCOUNTS_RECEIVABLE".into()], transaction_types: vec!["INVOICE".into()], paid_status: Some(custom_reports::PaidStatus::Open), ..Filters::default() })).await;
+    let paid = run(
+        &pool,
+        &lines_report(Filters {
+            account_types: vec!["ACCOUNTS_RECEIVABLE".into()],
+            transaction_types: vec!["INVOICE".into()],
+            paid_status: Some(custom_reports::PaidStatus::Paid),
+            ..Filters::default()
+        }),
+    )
+    .await;
+    let open = run(
+        &pool,
+        &lines_report(Filters {
+            account_types: vec!["ACCOUNTS_RECEIVABLE".into()],
+            transaction_types: vec!["INVOICE".into()],
+            paid_status: Some(custom_reports::PaidStatus::Open),
+            ..Filters::default()
+        }),
+    )
+    .await;
     let invoices: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM invoices WHERE is_voided = 0").fetch_one(&pool).await.unwrap();
     assert_eq!((paid.line_count + open.line_count) as i64, invoices);
     assert_eq!(open.line_count, 3);
@@ -527,9 +662,15 @@ async fn one_row_per_transaction() {
     let pool = company().await;
     let settings = year(ReportSettings { per_transaction: true, columns: vec![Column::Type, Column::Amount], ..ReportSettings::default() });
     let report = run(&pool, &settings).await;
-    let entries: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM journal_entries WHERE status = 'POSTED' AND entry_date BETWEEN '2025-01-01' AND '2025-12-31'").fetch_one(&pool).await.unwrap();
+    let entries: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM journal_entries WHERE status = 'POSTED' AND entry_date BETWEEN '2025-01-01' AND '2025-12-31'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(report.line_count as i64, entries);
-    let total: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) FROM v_posted_lines WHERE entry_date BETWEEN '2025-01-01' AND '2025-12-31'").fetch_one(&pool).await.unwrap();
+    let total: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) FROM v_posted_lines WHERE entry_date BETWEEN '2025-01-01' AND '2025-12-31'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(cents(&report.rows.last().unwrap().cells[2]), total);
 }
 
@@ -633,7 +774,16 @@ async fn columns_by_class_customer_job_and_vendor_tie_out() {
             customer_name: "Brightwater Cafe:Patio Menu".into(),
             issue_date: d(2025, 12, 3),
             due_date: d(2025, 12, 17),
-            lines: vec![InvoiceLineInput { description: "Patio menu design".into(), quantity_e4: 10_000, rate_cents: Cents(42_000), income_account_id: sales, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput {
+                description: "Patio menu design".into(),
+                quantity_e4: 10_000,
+                rate_cents: Cents(42_000),
+                income_account_id: sales,
+                product_service_id: None,
+                class_id: None,
+                is_taxable: false,
+                service_date: None,
+            }],
             currency: None,
             tax_rate_id: None,
             discount_cents: Cents::ZERO,
@@ -654,9 +804,12 @@ async fn columns_by_class_customer_job_and_vendor_tie_out() {
         })
     };
     let plain = run(p, &pl(None)).await;
-    let amount_of = |r: &CustomReport| -> BTreeMap<String, i64> { r.rows.iter().filter(|x| x.kind == RowKind::Detail).map(|x| (text(&x.cells[0]), cents(x.cells.last().unwrap()))).collect() };
+    let amount_of = |r: &CustomReport| -> BTreeMap<String, i64> {
+        r.rows.iter().filter(|x| x.kind == RowKind::Detail).map(|x| (text(&x.cells[0]), cents(x.cells.last().unwrap()))).collect()
+    };
     let expected = amount_of(&plain);
-    for by in [custom_reports::NameColumns::Class, custom_reports::NameColumns::Customer, custom_reports::NameColumns::Job, custom_reports::NameColumns::Vendor] {
+    for by in [custom_reports::NameColumns::Class, custom_reports::NameColumns::Customer, custom_reports::NameColumns::Job, custom_reports::NameColumns::Vendor]
+    {
         let report = run(p, &pl(Some(by))).await;
         assert_eq!(amount_of(&report), expected, "{by:?}: each row's Total is the plain amount");
         assert_eq!(report.columns.last().unwrap().label, "Total");

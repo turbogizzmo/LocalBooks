@@ -52,10 +52,12 @@ pub fn rename(rules: &[PayeeRule], description: &str) -> Option<String> {
 }
 
 pub async fn list(pool: &SqlitePool) -> Result<Vec<PayeeRule>, String> {
-    sqlx::query_as::<_, PayeeRule>("SELECT id, match_kind, pattern, payee_name FROM bank_payee_rules ORDER BY payee_name COLLATE NOCASE, pattern COLLATE NOCASE")
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as::<_, PayeeRule>(
+        "SELECT id, match_kind, pattern, payee_name FROM bank_payee_rules ORDER BY payee_name COLLATE NOCASE, pattern COLLATE NOCASE",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 fn checked(rule: &PayeeRule) -> Result<(String, String), String> {
@@ -75,7 +77,11 @@ fn checked(rule: &PayeeRule) -> Result<(String, String), String> {
 
 fn duplicate(err: sqlx::Error) -> String {
     let msg = db_err(err);
-    if msg.contains("UNIQUE") { "BANK_RENAME_DUPLICATE: there is already a rule for that text".into() } else { msg }
+    if msg.contains("UNIQUE") {
+        "BANK_RENAME_DUPLICATE: there is already a rule for that text".into()
+    } else {
+        msg
+    }
 }
 
 /// Saves a new rule (`id` 0) or changes one; returns it.
@@ -173,11 +179,12 @@ pub async fn list_category_rules(pool: &SqlitePool) -> Result<Vec<CategoryRule>,
 
 /// Points a category rule at another account.
 pub async fn set_category_rule_account(pool: &SqlitePool, id: i64, account_id: i64) -> Result<(), String> {
-    let usable: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM chart_of_accounts WHERE id = ?1 AND is_active = 1 AND account_type NOT IN ('BANK', 'CREDIT_CARD'))")
-        .bind(account_id)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let usable: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM chart_of_accounts WHERE id = ?1 AND is_active = 1 AND account_type NOT IN ('BANK', 'CREDIT_CARD'))")
+            .bind(account_id)
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
     if !usable {
         return Err("BANK_RULE_BAD_ACCOUNT: choose an active category account (not a bank or card)".into());
     }

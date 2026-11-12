@@ -59,7 +59,11 @@ pub async fn send(pool: &SqlitePool, group_id: i64, invoice_ids: &[i64], as_of: 
     }
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     for id in invoice_ids {
-        sqlx::query("INSERT INTO form_email_queue (form_type, document_id) VALUES ('INVOICE', ?1) ON CONFLICT DO NOTHING").bind(id).execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query("INSERT INTO form_email_queue (form_type, document_id) VALUES ('INVOICE', ?1) ON CONFLICT DO NOTHING")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
     }
     sqlx::query("UPDATE customer_groups SET payment_last_sent = ?1 WHERE id = ?2").bind(as_of).bind(group_id).execute(&mut *tx).await.map_err(db_err)?;
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
@@ -76,7 +80,8 @@ pub async fn due(pool: &SqlitePool, as_of: NaiveDate) -> Result<Vec<(CustomerGro
         }
         let invoices = overdue(pool, &g, as_of).await?;
         if !invoices.is_empty() {
-            let total = invoices.iter().try_fold(0_i64, |sum, i| sum.checked_add(i.balance_cents)).ok_or("REMINDER_OVERFLOW: the overdue total is too large")?;
+            let total =
+                invoices.iter().try_fold(0_i64, |sum, i| sum.checked_add(i.balance_cents)).ok_or("REMINDER_OVERFLOW: the overdue total is too large")?;
             out.push((g, invoices.len(), total));
         }
     }

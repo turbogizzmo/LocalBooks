@@ -363,7 +363,10 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
             // aren't in IIF, so a per-item level comes in with no items (standard prices).
             "PRICELEVEL" => {
                 let Some(name) = row.text("NAME") else { continue };
-                let percent = ["FIXEDPERCENTAGE", "PERCENTAGE", "PERCENT", "PRICELEVELPERCENT"].iter().find_map(|c| row.get(c)).and_then(crate::price_levels::parse_percent_milli);
+                let percent = ["FIXEDPERCENTAGE", "PERCENTAGE", "PERCENT", "PRICELEVELPERCENT"]
+                    .iter()
+                    .find_map(|c| row.get(c))
+                    .and_then(crate::price_levels::parse_percent_milli);
                 let per_item = row.get("PRICELEVELTYPE").is_some_and(|t| t.to_ascii_uppercase().contains("ITEM"));
                 sales_lists.price_levels.push(crate::qbw_company::SourcePriceLevel {
                     name,
@@ -629,8 +632,12 @@ impl Transactions {
             "PAYMENT" => SourceDocument::Payment { customer_id: customer(&mut self.names)?, reference: number, method: method(), applied_to: Vec::new() },
             "DEPOSIT" => SourceDocument::Deposit { payments: Vec::new() },
             // An item receipt is a bill for goods received before the bill itself arrived.
-            "BILL" | "BILL REFUND" | "ITEMRECEIPT" | "ITEM RECEIPT" => SourceDocument::Bill { vendor_id: vendor(&mut self.names)?, number, due_date, lines: form },
-            "BILLPMT" | "BILL PMT" | "BILLCCARD" => SourceDocument::BillPayment { vendor_id: vendor(&mut self.names), reference: number, applied_to: Vec::new() },
+            "BILL" | "BILL REFUND" | "ITEMRECEIPT" | "ITEM RECEIPT" => {
+                SourceDocument::Bill { vendor_id: vendor(&mut self.names)?, number, due_date, lines: form }
+            }
+            "BILLPMT" | "BILL PMT" | "BILLCCARD" => {
+                SourceDocument::BillPayment { vendor_id: vendor(&mut self.names), reference: number, applied_to: Vec::new() }
+            }
             "CHECK" | "CREDIT CARD" | "CCARD REFUND" => {
                 // A check that pays bills names a vendor; any other payee stays on the memo line.
                 let pays_bills = self.has_kind(lines, "ACCOUNTS_PAYABLE");
@@ -669,9 +676,8 @@ impl Transactions {
 /// that pay bills) to the oldest open bills of their vendor, and matches deposits to the payments
 /// and sales receipts they swept out of Undeposited Funds. `transactions` is in date order.
 fn apply_payments(transactions: &mut [SourceTransaction], accounts: &Accounts) {
-    let sum = |t: &SourceTransaction, account_type: &str| -> i64 {
-        t.lines.iter().filter(|l| accounts.kind(l.account_id) == account_type).map(|l| l.cents).sum()
-    };
+    let sum =
+        |t: &SourceTransaction, account_type: &str| -> i64 { t.lines.iter().filter(|l| accounts.kind(l.account_id) == account_type).map(|l| l.cents).sum() };
     let undeposited = |id: i64| accounts.list.iter().any(|a| a.id == id && a.full_name.to_lowercase().contains("undeposited"));
 
     let mut invoices: HashMap<i64, VecDeque<(i64, i64)>> = HashMap::new();
@@ -711,9 +717,9 @@ fn apply_payments(transactions: &mut [SourceTransaction], accounts: &Accounts) {
             }
             Some(SourceDocument::SalesReceipt { .. }) if into_undeposited > 0 => waiting.push((id, into_undeposited)),
             Some(SourceDocument::Bill { vendor_id, .. }) if payable > 0 => bills.entry(*vendor_id).or_default().push_back((id, payable)),
-            Some(SourceDocument::BillPayment { vendor_id: Some(vendor), applied_to, .. } | SourceDocument::Expense { vendor_id: Some(vendor), applied_to, .. })
-                if payable < 0 =>
-            {
+            Some(
+                SourceDocument::BillPayment { vendor_id: Some(vendor), applied_to, .. } | SourceDocument::Expense { vendor_id: Some(vendor), applied_to, .. },
+            ) if payable < 0 => {
                 *applied_to = take(bills.entry(*vendor).or_default(), -payable);
             }
             Some(SourceDocument::Deposit { payments }) => {

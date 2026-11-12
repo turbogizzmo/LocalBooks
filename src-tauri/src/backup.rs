@@ -76,16 +76,16 @@ async fn open_read_only(path: &Path) -> Result<SqlitePool, String> {
     crate::wal_guard::check(path)?;
     // A copy of an encrypted company (gap R1) opens with its key, if those books are unlocked here.
     let options = crate::file_cipher::options_for(path)?.0.read_only(true).create_if_missing(false);
-    SqlitePoolOptions::new()
-        .max_connections(1)
-        .connect_with(options)
-        .await
-        .map_err(|e| format!("RESTORE_UNREADABLE: cannot open {}: {e}", path.display()))
+    SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|e| format!("RESTORE_UNREADABLE: cannot open {}: {e}", path.display()))
 }
 
 async fn quick_check(pool: &SqlitePool) -> Result<(), String> {
     let result: String = sqlx::query_scalar("PRAGMA quick_check").fetch_one(pool).await.map_err(|e| e.to_string())?;
-    if result == "ok" { Ok(()) } else { Err(format!("integrity check reported: {result}")) }
+    if result == "ok" {
+        Ok(())
+    } else {
+        Err(format!("integrity check reported: {result}"))
+    }
 }
 
 /// Writes a consistent snapshot of `pool`'s database to `destination` without blocking writers.
@@ -183,10 +183,8 @@ async fn inspect_pool(pool: &SqlitePool, path: &Path) -> Result<CompanyFileInfo,
         }
     }
 
-    let applied: Vec<(i64, Vec<u8>, bool)> = sqlx::query_as("SELECT version, checksum, success FROM _sqlx_migrations ORDER BY version")
-        .fetch_all(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let applied: Vec<(i64, Vec<u8>, bool)> =
+        sqlx::query_as("SELECT version, checksum, success FROM _sqlx_migrations ORDER BY version").fetch_all(pool).await.map_err(|e| e.to_string())?;
     for (version, checksum, success) in &applied {
         if !success {
             return Err(format!("RESTORE_INCOMPLETE: schema step {version} never finished in this file"));
@@ -206,10 +204,8 @@ async fn inspect_pool(pool: &SqlitePool, path: &Path) -> Result<CompanyFileInfo,
     }
     let schema_version = applied.iter().map(|a| a.0).max().unwrap_or(0);
 
-    let dangling: Option<String> = sqlx::query_scalar("SELECT \"table\" FROM pragma_foreign_key_check LIMIT 1")
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let dangling: Option<String> =
+        sqlx::query_scalar("SELECT \"table\" FROM pragma_foreign_key_check LIMIT 1").fetch_optional(pool).await.map_err(|e| e.to_string())?;
     if let Some(table) = dangling {
         return Err(format!("RESTORE_BROKEN_LINKS: records in '{table}' point to data that no longer exists"));
     }
@@ -227,15 +223,9 @@ async fn inspect_pool(pool: &SqlitePool, path: &Path) -> Result<CompanyFileInfo,
     }
 
     let (journal_entries, last_entry_date): (i64, Option<String>) =
-        sqlx::query_as("SELECT COUNT(*), MAX(entry_date) FROM journal_entries WHERE status = 'POSTED'")
-            .fetch_one(pool)
-            .await
-            .map_err(|e| e.to_string())?;
+        sqlx::query_as("SELECT COUNT(*), MAX(entry_date) FROM journal_entries WHERE status = 'POSTED'").fetch_one(pool).await.map_err(|e| e.to_string())?;
     let company_name = if table_exists(pool, "system_preferences").await? {
-        sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'company_name'")
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| e.to_string())?
+        sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'company_name'").fetch_optional(pool).await.map_err(|e| e.to_string())?
     } else {
         None
     };

@@ -313,7 +313,11 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
         .await
         .map_err(|e| {
             let msg = db_err(e);
-            if msg.contains("UNIQUE") { "DEP_ALREADY_DEPOSITED: a selected payment is already in another deposit".into() } else { msg }
+            if msg.contains("UNIQUE") {
+                "DEP_ALREADY_DEPOSITED: a selected payment is already in another deposit".into()
+            } else {
+                msg
+            }
         })?;
         credits.push(JournalLine::credit(*account, *amount).with_memo(Some(label)));
     }
@@ -361,12 +365,7 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
     let description = clean(input.memo.as_deref()).map_or_else(|| "Deposit".to_string(), |m| format!("Deposit: {m}"));
     let entry = JournalEntry { id: None, date: input.deposit_date, description, lines, currency: None };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::Deposit(deposit_id)).await?;
-    sqlx::query("UPDATE deposits SET journal_entry_id = ?1 WHERE id = ?2")
-        .bind(entry_id)
-        .bind(deposit_id)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    sqlx::query("UPDATE deposits SET journal_entry_id = ?1 WHERE id = ?2").bind(entry_id).bind(deposit_id).execute(&mut **tx).await.map_err(db_err)?;
     Ok((deposit_id, entry_id))
 }
 
@@ -403,12 +402,7 @@ pub async fn post_transfer(pool: &SqlitePool, input: TransferInput) -> Result<i6
             currency: None,
         };
         let entry_id = post_entry_in_tx(&mut tx, &entry, EntrySource::Transfer(transfer_id)).await?;
-        sqlx::query("UPDATE transfers SET journal_entry_id = ?1 WHERE id = ?2")
-            .bind(entry_id)
-            .bind(transfer_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_err)?;
+        sqlx::query("UPDATE transfers SET journal_entry_id = ?1 WHERE id = ?2").bind(entry_id).bind(transfer_id).execute(&mut *tx).await.map_err(db_err)?;
         Ok::<i64, String>(transfer_id)
     }
     .await;

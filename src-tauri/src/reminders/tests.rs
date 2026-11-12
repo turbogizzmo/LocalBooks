@@ -20,7 +20,16 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, due: Naive
             customer_name: customer.into(),
             issue_date: issue,
             due_date: due,
-            lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(cents), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput {
+                description: "Work".into(),
+                quantity_e4: 10_000,
+                rate_cents: Cents(cents),
+                income_account_id: services,
+                product_service_id: None,
+                class_id: None,
+                is_taxable: false,
+                service_date: None,
+            }],
             currency: None,
             tax_rate_id: None,
             discount_cents: Cents::ZERO,
@@ -44,17 +53,29 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, due: NaiveDate, cen
 
 /// A user straight in the table (the password is never checked here).
 async fn user(pool: &SqlitePool, username: &str, role: &str) -> i64 {
-    sqlx::query_scalar("INSERT INTO users (username, display_name, role, can_see_sensitive, password_verifier) VALUES (?1, ?1, ?2, ?3, 'argon2id$test') RETURNING id")
-        .bind(username)
-        .bind(role)
-        .bind(role == "ADMIN")
-        .fetch_one(pool)
-        .await
-        .expect("user")
+    sqlx::query_scalar(
+        "INSERT INTO users (username, display_name, role, can_see_sensitive, password_verifier) VALUES (?1, ?1, ?2, ?3, 'argon2id$test') RETURNING id",
+    )
+    .bind(username)
+    .bind(role)
+    .bind(role == "ADMIN")
+    .fetch_one(pool)
+    .await
+    .expect("user")
 }
 
 fn todo(title: &str, due: Option<NaiveDate>) -> TodoInput {
-    TodoInput { title: title.into(), note: String::new(), due_date: due, customer_id: None, vendor_id: None, employee_id: None, link_kind: None, link_id: None, assigned_user_id: None }
+    TodoInput {
+        title: title.into(),
+        note: String::new(),
+        due_date: due,
+        customer_id: None,
+        vendor_id: None,
+        employee_id: None,
+        link_kind: None,
+        link_id: None,
+        assigned_user_id: None,
+    }
 }
 
 const NOBODY: Viewer = Viewer { user_id: None, role: None };
@@ -125,8 +146,15 @@ async fn recurring_due_follows_next_date_activity_and_end_date() {
     let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
     let check = serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-01",
         "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 120_000, "memo": null }] });
-    let template = |name: &str, next: NaiveDate, end: Option<NaiveDate>| crate::workflows::RecurringInput { anchor_day: None,
-        name: name.into(), kind: "EXPENSE".into(), payload: check.clone(), frequency: "MONTHLY".into(), every: 1, next_date: next, end_date: end,
+    let template = |name: &str, next: NaiveDate, end: Option<NaiveDate>| crate::workflows::RecurringInput {
+        anchor_day: None,
+        name: name.into(),
+        kind: "EXPENSE".into(),
+        payload: check.clone(),
+        frequency: "MONTHLY".into(),
+        every: 1,
+        next_date: next,
+        end_date: end,
     };
     let rent_id = crate::workflows::save_recurring(&pool, None, template("Rent", d(3, 1), None)).await.unwrap();
     crate::workflows::save_recurring(&pool, None, template("Later", d(3, 15), None)).await.unwrap();
@@ -183,9 +211,20 @@ async fn settings_are_per_user_validated_and_choose_the_categories() {
     invoice(&pool, "Acme", d(1, 1), d(1, 31), 5_000).await;
     bill(&pool, "Staples", "S-1", d(3, 5), 3_000).await;
     let keys = |groups: Vec<ReminderGroup>| groups.into_iter().map(|g| g.key).collect::<Vec<_>>();
-    assert_eq!(keys(reminders(&pool, d(3, 1), ann_view, None).await.unwrap()), vec!["OVERDUE_INVOICES", "BILLS_DUE", "BACKUP", "BACKUP_SAFETY"], "April 15 is past the 30-day look-ahead; no copy off this computer or test restore yet");
+    assert_eq!(
+        keys(reminders(&pool, d(3, 1), ann_view, None).await.unwrap()),
+        vec!["OVERDUE_INVOICES", "BILLS_DUE", "BACKUP", "BACKUP_SAFETY"],
+        "April 15 is past the 30-day look-ahead; no copy off this computer or test restore yet"
+    );
 
-    let mine = ReminderSettings { overdue_invoices: Category { show: false, days: 0 }, bills_due: Category { show: true, days: 2 }, tax_dates: Category { show: true, days: 60 }, backup: Category { show: true, days: 30 }, backup_safety: Category { show: false, days: 30 }, ..Default::default() };
+    let mine = ReminderSettings {
+        overdue_invoices: Category { show: false, days: 0 },
+        bills_due: Category { show: true, days: 2 },
+        tax_dates: Category { show: true, days: 60 },
+        backup: Category { show: true, days: 30 },
+        backup_safety: Category { show: false, days: 30 },
+        ..Default::default()
+    };
     save_settings(&pool, ann_view, &mine).await.unwrap();
     assert_eq!(settings(&pool, ann_view).await.unwrap(), mine);
     assert_eq!(settings(&pool, NOBODY).await.unwrap(), ReminderSettings::default(), "settings are the user's own");
@@ -204,9 +243,20 @@ async fn todos_save_link_and_validate() {
     let pool = test_pool().await;
     let inv = invoice(&pool, "Acme", d(1, 1), d(1, 31), 5_000).await;
     let acme: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
-    let saved = save_todo(&pool, None, &TodoInput { customer_id: Some(acme), link_kind: Some("INVOICE".into()), link_id: Some(inv), note: " Ask about PO ".into(), ..todo(" Chase payment ", Some(d(2, 1))) }, NOBODY)
-        .await
-        .unwrap();
+    let saved = save_todo(
+        &pool,
+        None,
+        &TodoInput {
+            customer_id: Some(acme),
+            link_kind: Some("INVOICE".into()),
+            link_id: Some(inv),
+            note: " Ask about PO ".into(),
+            ..todo(" Chase payment ", Some(d(2, 1)))
+        },
+        NOBODY,
+    )
+    .await
+    .unwrap();
     assert_eq!((saved.title.as_str(), saved.note.as_str(), saved.customer_name.as_deref()), ("Chase payment", "Ask about PO", Some("Acme")));
     assert!(saved.link_label.as_deref().unwrap().starts_with("Invoice "));
     assert!(saved.link_entry_id.is_some());
@@ -218,7 +268,10 @@ async fn todos_save_link_and_validate() {
     let err = |r: Result<TodoView, String>| r.unwrap_err().split(':').next().unwrap().to_string();
     assert_eq!(err(save_todo(&pool, None, &todo("  ", None), NOBODY).await), "TODO_TITLE_REQUIRED");
     assert_eq!(err(save_todo(&pool, None, &TodoInput { customer_id: Some(acme), vendor_id: Some(acme), ..todo("x", None) }, NOBODY).await), "TODO_ONE_NAME");
-    assert_eq!(err(save_todo(&pool, None, &TodoInput { link_kind: Some("BILL".into()), link_id: Some(999), ..todo("x", None) }, NOBODY).await), "TODO_BAD_LINK");
+    assert_eq!(
+        err(save_todo(&pool, None, &TodoInput { link_kind: Some("BILL".into()), link_id: Some(999), ..todo("x", None) }, NOBODY).await),
+        "TODO_BAD_LINK"
+    );
     assert_eq!(err(save_todo(&pool, None, &TodoInput { assigned_user_id: Some(42), ..todo("x", None) }, NOBODY).await), "TODO_BAD_ASSIGNEE");
     assert_eq!(err(save_todo(&pool, Some(999), &todo("x", None), NOBODY).await), "TODO_NOT_FOUND");
 
@@ -242,7 +295,10 @@ async fn view_only_users_complete_only_their_own_todos() {
     assert!(done.is_done && done.done_at.is_some());
     let reopened = set_done(&pool, own.id, false, vic).await.unwrap();
     assert!(!reopened.is_done && reopened.done_at.is_none());
-    assert!(set_done(&pool, theirs.id, true, Viewer { user_id: Some(viewer), role: Some(Role::Standard) }).await.unwrap().is_done, "a Standard user completes anyone's");
+    assert!(
+        set_done(&pool, theirs.id, true, Viewer { user_id: Some(viewer), role: Some(Role::Standard) }).await.unwrap().is_done,
+        "a Standard user completes anyone's"
+    );
 }
 
 #[tokio::test]
@@ -252,12 +308,27 @@ async fn items_at_or_below_their_reorder_point_are_listed_to_reorder() {
     let equity: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'EQUITY' ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
     let mut items = Vec::new();
     for (name, on_hand, reorder) in [("Bolts", 4, Some(5)), ("Nuts", 5, Some(5)), ("Washers", 9, Some(5)), ("Rivets", 1, None)] {
-        let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: name.into(), description: None, rate_cents: Cents(100), income_account_id: sales, is_taxable: false })
-            .await
-            .unwrap()
-            .id;
-        let item = crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap();
-        let stock = crate::inventory::AdjustInput { item_id: item.id, date: d(1, 2), qty_change_e4: on_hand * 10_000, total_cost_cents: Some(on_hand * 50), offset_account_id: equity, memo: None };
+        let product = crate::sales::create_product(
+            &pool,
+            crate::sales::ProductInput { name: name.into(), description: None, rate_cents: Cents(100), income_account_id: sales, is_taxable: false },
+        )
+        .await
+        .unwrap()
+        .id;
+        let item = crate::inventory::track_product(
+            &pool,
+            &crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None },
+        )
+        .await
+        .unwrap();
+        let stock = crate::inventory::AdjustInput {
+            item_id: item.id,
+            date: d(1, 2),
+            qty_change_e4: on_hand * 10_000,
+            total_cost_cents: Some(on_hand * 50),
+            offset_account_id: equity,
+            memo: None,
+        };
         crate::inventory::adjust(&pool, &stock).await.unwrap();
         crate::info_panel::set_item_purchasing(&pool, product, reorder.map(|r| r * 10_000), None).await.unwrap();
         items.push(product);

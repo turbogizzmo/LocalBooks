@@ -17,7 +17,8 @@ fn at(day: u32, hour: u32) -> NaiveDateTime {
 
 async fn bill(pool: &SqlitePool, vendor: &str, number: Option<&str>, cents: i64) -> i64 {
     let rent = account_id(pool, "6300").await;
-    let input = BillInput { form_lines: Vec::new(),
+    let input = BillInput {
+        form_lines: Vec::new(),
         terms_id: None,
         vendor_name: vendor.into(),
         bill_number: number.map(str::to_string),
@@ -25,7 +26,17 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: Option<&str>, cents: i64)
         due_date: d(31),
         memo: None,
         total_cents: Cents(cents),
-        lines: vec![BillLineInput { account_id: rent, amount_cents: Cents(cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![BillLineInput {
+            account_id: rent,
+            amount_cents: Cents(cents),
+            memo: None,
+            quantity_e4: None,
+            rate_cents: None,
+            product_service_id: None,
+            class_id: None,
+            customer_id: None,
+            billable: None,
+        }],
     };
     post_vendor_bill(pool, input).await.unwrap().id
 }
@@ -135,7 +146,11 @@ async fn protected_bank_details_need_the_key() {
     let err = pay_bills_by_ach(&pool, request("locked-request", checking, &[(b, 10_000)]), without, at(26, 9)).await.unwrap_err();
     assert!(err.starts_with("BANK_DETAILS_LOCKED"), "{err}");
     let file = pay_bills_by_ach(&pool, request("keyed-request", checking, &[(b, 10_000)]), with_key, at(26, 9)).await.unwrap();
-    assert_eq!(count(&pool, "SELECT COUNT(*) FROM ach_entries WHERE account_number NOT LIKE 'lb1:%' OR routing_number NOT LIKE 'lb1:%'").await, 0, "the file's copy is encrypted");
+    assert_eq!(
+        count(&pool, "SELECT COUNT(*) FROM ach_entries WHERE account_number NOT LIKE 'lb1:%' OR routing_number NOT LIKE 'lb1:%'").await,
+        0,
+        "the file's copy is encrypted"
+    );
     let mut conn = pool.acquire().await.unwrap();
     assert!(render_ach_file(&mut conn, file.id, without).await.unwrap_err().starts_with("BANK_DETAILS_LOCKED"));
     let (text, _) = render_ach_file(&mut conn, file.id, with_key).await.unwrap();
@@ -167,13 +182,15 @@ async fn paying_by_ach_records_one_entry_per_vendor_and_writes_a_valid_file() {
     assert_eq!(file.entries[0].account_masked, "*****6789");
 
     // The bill payments are ordinary ones, marked ACH, referencing the trace number.
-    let payments: Vec<(i64, String, String)> = sqlx::query_as("SELECT bill_id, kind, reference FROM bill_payments ORDER BY bill_id").fetch_all(&pool).await.unwrap();
+    let payments: Vec<(i64, String, String)> =
+        sqlx::query_as("SELECT bill_id, kind, reference FROM bill_payments ORDER BY bill_id").fetch_all(&pool).await.unwrap();
     assert_eq!(
         payments,
         [(s1, "ACH".into(), "ACH 121042880000001".into()), (s2, "ACH".into(), "ACH 121042880000001".into()), (pat, "ACH".into(), "ACH 121042880000002".into())]
     );
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM bills WHERE status = 'PAID'").await, 3);
-    let checking_balance: i64 = sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1").bind(checking).fetch_one(&pool).await.unwrap();
+    let checking_balance: i64 =
+        sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1").bind(checking).fetch_one(&pool).await.unwrap();
     assert_eq!(checking_balance, -159_999);
 
     // The file validates, and holds what was recorded.
@@ -202,12 +219,17 @@ async fn paying_by_ach_records_one_entry_per_vendor_and_writes_a_valid_file() {
     let again = save_ach_file(&pool, file.id, &path, Access::OPEN).await.unwrap();
     assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
     assert_eq!(again.times_saved, 2);
-    let events: Vec<String> = sqlx::query_scalar("SELECT json_extract(payload_snapshot, '$.event') FROM ledger_audit_log WHERE action_type = 'ACH_FILE' ORDER BY id").fetch_all(&pool).await.unwrap();
+    let events: Vec<String> =
+        sqlx::query_scalar("SELECT json_extract(payload_snapshot, '$.event') FROM ledger_audit_log WHERE action_type = 'ACH_FILE' ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     assert_eq!(events, ["generated", "regenerated"]);
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM bill_payments").await, 3);
 
     // So does sending the same Pay again (a double click, a retry after an error).
-    let repeat = pay_bills_by_ach(&pool, request("request-0002", checking, &[(s1, 125_000), (pat, 30_000), (s2, 4_999)]), Access::OPEN, at(26, 10)).await.unwrap();
+    let repeat =
+        pay_bills_by_ach(&pool, request("request-0002", checking, &[(s1, 125_000), (pat, 30_000), (s2, 4_999)]), Access::OPEN, at(26, 10)).await.unwrap();
     assert_eq!(repeat.id, file.id);
     assert_eq!((count(&pool, "SELECT COUNT(*) FROM bill_payments").await, count(&pool, "SELECT COUNT(*) FROM ach_files").await), (3, 1));
     // And a new request for bills already paid is refused.
@@ -272,7 +294,11 @@ async fn originator_details_are_checked() {
     assert_eq!(get_ach_originator(&pool, checking).await.unwrap(), Some(saved));
 
     // Without originator details there is no file.
-    let savings_less = sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_type = 'BANK' AND id <> ?1").bind(checking).fetch_optional(&pool).await.unwrap();
+    let savings_less = sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_type = 'BANK' AND id <> ?1")
+        .bind(checking)
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
     if let Some(other) = savings_less {
         let b = bill(&pool, "Staples", None, 100).await;
         let err = pay_bills_by_ach(&pool, request("request-noorig", other, &[(b, 100)]), Access::OPEN, at(26, 9)).await.unwrap_err();

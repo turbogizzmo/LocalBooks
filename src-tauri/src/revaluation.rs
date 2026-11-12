@@ -72,9 +72,7 @@ pub async fn preview(pool: &SqlitePool, as_of: NaiveDate, rates: &BTreeMap<Strin
         let carrying_cents = home_total - relieved;
         let rate_e6 = rates.get(&currency_code).copied();
         let revalued_cents = match rate_e6 {
-            Some(r) if (1..=1_000_000 * RATE_SCALE).contains(&r) => {
-                Some(to_home_cents(foreign_open_cents, r).ok_or("FX_REVAL_OVERFLOW: amount out of range")?)
-            }
+            Some(r) if (1..=1_000_000 * RATE_SCALE).contains(&r) => Some(to_home_cents(foreign_open_cents, r).ok_or("FX_REVAL_OVERFLOW: amount out of range")?),
             Some(_) => return Err(format!("FX_REVAL_BAD_RATE: the {currency_code} rate must be greater than zero")),
             None => {
                 if !missing.contains(&currency_code) {
@@ -154,13 +152,12 @@ pub async fn post(pool: &SqlitePool, as_of: NaiveDate, rates: &BTreeMap<String, 
 
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
-        let live: Option<i64> = sqlx::query_scalar(
-            "SELECT r.id FROM fx_revaluations r JOIN journal_entries e ON e.id = r.journal_entry_id WHERE r.as_of = ?1 AND e.is_voided = 0",
-        )
-        .bind(as_of.to_string())
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?;
+        let live: Option<i64> =
+            sqlx::query_scalar("SELECT r.id FROM fx_revaluations r JOIN journal_entries e ON e.id = r.journal_entry_id WHERE r.as_of = ?1 AND e.is_voided = 0")
+                .bind(as_of.to_string())
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(db_err)?;
         if live.is_some() {
             return Err(format!("FX_REVAL_EXISTS: {as_of} has already been revalued; void that revaluation first"));
         }
@@ -170,12 +167,16 @@ pub async fn post(pool: &SqlitePool, as_of: NaiveDate, rates: &BTreeMap<String, 
             .map_err(db_err)?;
         let fx = account_named(&mut tx, "Unrealized Exchange Gain or Loss").await?;
         let net = preview.net_change_cents;
-        let (gain_lines, loss_lines) = (
-            vec![JournalLine::debit(ar, net), JournalLine::credit(fx, net)],
-            vec![JournalLine::debit(fx, -net), JournalLine::credit(ar, -net)],
-        );
+        let (gain_lines, loss_lines) =
+            (vec![JournalLine::debit(ar, net), JournalLine::credit(fx, net)], vec![JournalLine::debit(fx, -net), JournalLine::credit(ar, -net)]);
         let lines = if net > 0 { gain_lines } else { loss_lines };
-        let entry = JournalEntry { id: None, date: as_of, description: format!("Unrealized FX revaluation as of {as_of} ({rate_text})"), lines: lines.clone(), currency: None };
+        let entry = JournalEntry {
+            id: None,
+            date: as_of,
+            description: format!("Unrealized FX revaluation as of {as_of} ({rate_text})"),
+            lines: lines.clone(),
+            currency: None,
+        };
         let entry_id = ledger::post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await?;
         let reversal = JournalEntry {
             id: None,
@@ -211,11 +212,8 @@ pub async fn post(pool: &SqlitePool, as_of: NaiveDate, rates: &BTreeMap<String, 
 
 /// Undoes a revaluation by voiding both its entry and its reversal, atomically.
 pub async fn void(pool: &SqlitePool, id: i64) -> Result<(), String> {
-    let pair: Option<(i64, i64)> = sqlx::query_as("SELECT journal_entry_id, reversal_entry_id FROM fx_revaluations WHERE id = ?1")
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+    let pair: Option<(i64, i64)> =
+        sqlx::query_as("SELECT journal_entry_id, reversal_entry_id FROM fx_revaluations WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?;
     let (entry, reversal) = pair.ok_or("FX_REVAL_NOT_FOUND: that revaluation does not exist")?;
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {

@@ -45,8 +45,10 @@ async fn income_and_expense_match_profit_and_loss() {
         assert!(g.expense_slices.len() <= graphs::TOP_N + 1);
 
         // Each month equals that month's column of the multi-period Profit and Loss.
-        let columns = g.months.iter().map(|m| PeriodColumn { label: m.month.month.clone(), start_date: m.month.start_date, end_date: m.month.end_date }).collect();
-        let periods = statements::profit_and_loss_periods(&pool, &PeriodReportInput { columns, total: false, compare: false, basis, class_filter: None }).await.unwrap();
+        let columns =
+            g.months.iter().map(|m| PeriodColumn { label: m.month.month.clone(), start_date: m.month.start_date, end_date: m.month.end_date }).collect();
+        let periods =
+            statements::profit_and_loss_periods(&pool, &PeriodReportInput { columns, total: false, compare: false, basis, class_filter: None }).await.unwrap();
         let net = &periods.lines.iter().find(|l| l.kind == LineKind::Net).unwrap().amounts_cents;
         let income = total_row(&periods.lines, "Total Income");
         for (i, m) in g.months.iter().enumerate() {
@@ -69,14 +71,26 @@ async fn expense_slices_roll_subaccounts_into_their_parent() {
     let rent = account(&pool, "6300").await;
     let sub = crate::accounts::create_account(
         &pool,
-        crate::accounts::AccountInput { name: "Storage unit".into(), account_number: Some("6310".into()), account_type: "EXPENSE".into(), parent_id: Some(rent), description: None },
+        crate::accounts::AccountInput {
+            name: "Storage unit".into(),
+            account_number: Some("6310".into()),
+            account_type: "EXPENSE".into(),
+            parent_id: Some(rent),
+            description: None,
+        },
     )
     .await
     .unwrap();
     let checking = account(&pool, "1010").await;
     crate::ledger::post_journal_entry(
         &pool,
-        crate::ledger::JournalEntry { id: None, date: d(2025, 6, 2), description: String::new(), lines: vec![crate::ledger::JournalLine::debit(sub.id, 12_345), crate::ledger::JournalLine::credit(checking, 12_345)], currency: None },
+        crate::ledger::JournalEntry {
+            id: None,
+            date: d(2025, 6, 2),
+            description: String::new(),
+            lines: vec![crate::ledger::JournalLine::debit(sub.id, 12_345), crate::ledger::JournalLine::credit(checking, 12_345)],
+            currency: None,
+        },
     )
     .await
     .unwrap();
@@ -164,7 +178,10 @@ async fn budget_graph_matches_budget_vs_actual() {
     let report = statements::budget_vs_actual(&pool, budget.id, 1, 12).await.unwrap();
     let net = &report.lines.iter().find(|l| l.kind == LineKind::Net).unwrap().amounts_cents;
     assert_eq!((Some(g.actual.net_income_cents), Some(g.budget.net_income_cents)), (net[0], net[1]));
-    assert_eq!((Some(g.actual.income_cents), Some(g.budget.income_cents)), (total_row(&report.lines, "Total Income")[0], total_row(&report.lines, "Total Income")[1]));
+    assert_eq!(
+        (Some(g.actual.income_cents), Some(g.budget.income_cents)),
+        (total_row(&report.lines, "Total Income")[0], total_row(&report.lines, "Total Income")[1])
+    );
     assert_eq!(g.budget.income_cents, (1..=12).map(|p| 1_500_000 + p * 10_000).sum::<i64>());
     assert_eq!(g.budget.expense_cents, 12 * 270_000);
     // The months add up to the year, and the actuals are the year's Profit and Loss.
@@ -173,7 +190,10 @@ async fn budget_graph_matches_budget_vs_actual() {
         assert_eq!(g.months.iter().map(|m| pick(&m.budget)).sum::<i64>(), pick(&g.budget));
     }
     let pl = statements::profit_and_loss(&pool, d(2025, 1, 1), d(2025, 12, 31)).await.unwrap();
-    assert_eq!((g.actual.income_cents, g.actual.expense_cents, g.actual.net_income_cents), (pl.total_revenue_cents, pl.total_expenses_cents, pl.net_income_cents));
+    assert_eq!(
+        (g.actual.income_cents, g.actual.expense_cents, g.actual.net_income_cents),
+        (pl.total_revenue_cents, pl.total_expenses_cents, pl.net_income_cents)
+    );
     assert_eq!(g.months[3].budget.income_cents, 1_540_000);
     assert_eq!((g.months[3].month.start_date, g.months[3].month.end_date), (d(2025, 4, 1), d(2025, 4, 30)));
 

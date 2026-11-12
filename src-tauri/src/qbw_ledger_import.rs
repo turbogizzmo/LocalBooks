@@ -206,18 +206,16 @@ pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i6
             .map_err(db_err)?;
     }
     for level in &ledger.sales_lists.price_levels {
-        sqlx::query(
-            "INSERT OR IGNORE INTO ledger_import_price_levels (batch_id, name, kind, percent_milli, is_active, items) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        )
-        .bind(batch_id)
-        .bind(level.name.trim())
-        .bind(serde_json::to_value(level.kind).expect("kinds serialize").as_str().unwrap_or_default().to_string())
-        .bind(level.percent_milli)
-        .bind(level.active as i64)
-        .bind(serde_json::to_string(&level.items).expect("items serialize"))
-        .execute(&mut *tx)
-        .await
-        .map_err(db_err)?;
+        sqlx::query("INSERT OR IGNORE INTO ledger_import_price_levels (batch_id, name, kind, percent_milli, is_active, items) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+            .bind(batch_id)
+            .bind(level.name.trim())
+            .bind(serde_json::to_value(level.kind).expect("kinds serialize").as_str().unwrap_or_default().to_string())
+            .bind(level.percent_milli)
+            .bind(level.active as i64)
+            .bind(serde_json::to_string(&level.items).expect("items serialize"))
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
     }
     for group in &ledger.sales_lists.item_groups {
         sqlx::query(
@@ -416,7 +414,13 @@ pub fn balance_differences(accounts: &[SourceAccountView]) -> Result<Vec<Balance
         let expected = stored.checked_neg().ok_or_else(overflow)?;
         let imported = a.read_balance_cents.checked_neg().ok_or_else(overflow)?;
         let difference = imported.checked_sub(expected).ok_or_else(overflow)?;
-        out.push(BalanceDifference { source_id: a.source_id, full_name: a.full_name.clone(), expected_cents: expected, imported_cents: imported, difference_cents: difference });
+        out.push(BalanceDifference {
+            source_id: a.source_id,
+            full_name: a.full_name.clone(),
+            expected_cents: expected,
+            imported_cents: imported,
+            difference_cents: difference,
+        });
     }
     out.sort_by(|a, b| b.difference_cents.unsigned_abs().cmp(&a.difference_cents.unsigned_abs()).then_with(|| a.full_name.cmp(&b.full_name)));
     Ok(out)
@@ -458,24 +462,20 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         .await
         .map_err(db_err)?
         .ok_or_else(|| format!("QBW_NO_BATCH: import #{batch_id} does not exist"))?;
-    let (transaction_count, first_date, last_date, postable_count, live_entry_count): (i64, Option<String>, Option<String>, i64, i64) =
-        sqlx::query_as(
-            "SELECT COUNT(*), MIN(t.date), MAX(t.date),
+    let (transaction_count, first_date, last_date, postable_count, live_entry_count): (i64, Option<String>, Option<String>, i64, i64) = sqlx::query_as(
+        "SELECT COUNT(*), MIN(t.date), MAX(t.date),
                     COALESCE(SUM(t.imbalance_cents = 0 AND (t.journal_entry_id IS NULL OR e.is_voided = 1)
                                  AND EXISTS (SELECT 1 FROM ledger_import_lines l WHERE l.batch_id = t.batch_id AND l.source_txn_id = t.source_id)), 0),
                     COALESCE(SUM(t.journal_entry_id IS NOT NULL AND e.is_voided = 0), 0)
              FROM ledger_import_transactions t LEFT JOIN journal_entries e ON e.id = t.journal_entry_id
              WHERE t.batch_id = ?1",
-        )
-        .bind(batch_id)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
-    let line_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_import_lines WHERE batch_id = ?1")
-        .bind(batch_id)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    )
+    .bind(batch_id)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
+    let line_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM ledger_import_lines WHERE batch_id = ?1").bind(batch_id).fetch_one(pool).await.map_err(db_err)?;
     let by_kind: Vec<(String, i64)> = sqlx::query_as(
         "SELECT kind, COUNT(*) FROM ledger_import_transactions WHERE batch_id = ?1 AND imbalance_cents = 0 GROUP BY kind ORDER BY COUNT(*) DESC",
     )
@@ -582,7 +582,9 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         accounts_matching_stored: head.accounts_matching_stored,
         accounts_with_stored_balance: head.accounts_with_stored_balance,
         fractional_amounts: match head.fractional_amounts.as_deref() {
-            Some(json) => serde_json::from_str(json).map_err(|e| format!("QBW_BAD_BATCH: import #{batch_id}'s list of amounts not in whole cents can't be read: {e}"))?,
+            Some(json) => {
+                serde_json::from_str(json).map_err(|e| format!("QBW_BAD_BATCH: import #{batch_id}'s list of amounts not in whole cents can't be read: {e}"))?
+            }
             None => Vec::new(),
         },
         transaction_count,
@@ -603,10 +605,7 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
 fn start_over_point(path: &str) -> Option<StartOverPoint> {
     let meta = std::fs::metadata(path).ok()?;
     let taken: chrono::DateTime<chrono::Local> = meta.modified().ok()?.into();
-    Some(StartOverPoint {
-        file_name: Path::new(path).file_name()?.to_string_lossy().into_owned(),
-        taken_at: taken.format("%Y-%m-%dT%H:%M:%S").to_string(),
-    })
+    Some(StartOverPoint { file_name: Path::new(path).file_name()?.to_string_lossy().into_owned(), taken_at: taken.format("%Y-%m-%dT%H:%M:%S").to_string() })
 }
 
 /// Records the copy of the books taken just before this batch posted.
@@ -623,11 +622,8 @@ pub async fn set_pre_post_backup(pool: &SqlitePool, batch_id: i64, path: &Path) 
 /// The pre-import copy "Start over" restores, when it was taken and still exists.
 pub async fn pre_post_backup(pool: &SqlitePool, batch_id: i64) -> Result<std::path::PathBuf, String> {
     require_batch(pool, batch_id).await?;
-    let path: Option<String> = sqlx::query_scalar("SELECT pre_post_backup FROM ledger_import_batches WHERE id = ?1")
-        .bind(batch_id)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let path: Option<String> =
+        sqlx::query_scalar("SELECT pre_post_backup FROM ledger_import_batches WHERE id = ?1").bind(batch_id).fetch_one(pool).await.map_err(db_err)?;
     match path.map(std::path::PathBuf::from) {
         Some(p) if p.is_file() => Ok(p),
         Some(p) => Err(format!("QBW_NO_START_OVER: the copy taken before this import ({}) is no longer in the backups folder", p.display())),
@@ -636,10 +632,7 @@ pub async fn pre_post_backup(pool: &SqlitePool, batch_id: i64) -> Result<std::pa
 }
 
 pub async fn list_batches(pool: &SqlitePool) -> Result<Vec<LedgerBatchSummary>, String> {
-    let ids: Vec<i64> = sqlx::query_scalar("SELECT id FROM ledger_import_batches ORDER BY id DESC")
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?;
+    let ids: Vec<i64> = sqlx::query_scalar("SELECT id FROM ledger_import_batches ORDER BY id DESC").fetch_all(pool).await.map_err(db_err)?;
     let mut out = Vec::with_capacity(ids.len());
     for id in ids {
         out.push(batch_summary(pool, id).await?);
@@ -648,11 +641,8 @@ pub async fn list_batches(pool: &SqlitePool) -> Result<Vec<LedgerBatchSummary>, 
 }
 
 async fn require_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), String> {
-    let exists: Option<i64> = sqlx::query_scalar("SELECT id FROM ledger_import_batches WHERE id = ?1")
-        .bind(batch_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+    let exists: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM ledger_import_batches WHERE id = ?1").bind(batch_id).fetch_optional(pool).await.map_err(db_err)?;
     exists.map(|_| ()).ok_or_else(|| format!("QBW_NO_BATCH: import #{batch_id} does not exist"))
 }
 
@@ -660,26 +650,21 @@ async fn require_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), String> {
 pub async fn set_account(pool: &SqlitePool, batch_id: i64, source_id: i64, account_id: Option<i64>) -> Result<(), String> {
     require_batch(pool, batch_id).await?;
     if let Some(id) = account_id {
-        let active: Option<i64> = sqlx::query_scalar("SELECT is_active FROM chart_of_accounts WHERE id = ?1")
-            .bind(id)
-            .fetch_optional(pool)
-            .await
-            .map_err(db_err)?;
+        let active: Option<i64> =
+            sqlx::query_scalar("SELECT is_active FROM chart_of_accounts WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?;
         match active {
             None => return Err(format!("QBW_BAD_ACCOUNT: account #{id} does not exist")),
             Some(0) => return Err("QBW_BAD_ACCOUNT: that account is inactive".into()),
             Some(_) => {}
         }
     }
-    let updated = sqlx::query(
-        "UPDATE ledger_import_accounts SET account_id = ?3, created_by_import = 0 WHERE batch_id = ?1 AND source_id = ?2",
-    )
-    .bind(batch_id)
-    .bind(source_id)
-    .bind(account_id)
-    .execute(pool)
-    .await
-    .map_err(db_err)?;
+    let updated = sqlx::query("UPDATE ledger_import_accounts SET account_id = ?3, created_by_import = 0 WHERE batch_id = ?1 AND source_id = ?2")
+        .bind(batch_id)
+        .bind(source_id)
+        .bind(account_id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
     if updated.rows_affected() == 0 {
         return Err(format!("QBW_NO_ACCOUNT: import #{batch_id} has no source account #{source_id}"));
     }
@@ -701,11 +686,8 @@ pub struct AutoMapResult {
 /// (already mapped) parent. Parents are handled first.
 pub async fn auto_map_accounts(pool: &SqlitePool, batch_id: i64) -> Result<AutoMapResult, String> {
     require_batch(pool, batch_id).await?;
-    let file_name: String = sqlx::query_scalar("SELECT file_name FROM ledger_import_batches WHERE id = ?1")
-        .bind(batch_id)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let file_name: String =
+        sqlx::query_scalar("SELECT file_name FROM ledger_import_batches WHERE id = ?1").bind(batch_id).fetch_one(pool).await.map_err(db_err)?;
     #[derive(sqlx::FromRow, Clone)]
     struct Source {
         source_id: i64,
@@ -811,47 +793,43 @@ pub async fn auto_map_accounts(pool: &SqlitePool, batch_id: i64) -> Result<AutoM
                 // "Name", "Name (imported)", "Name (imported 2)", …
                 let mut name = s.name.clone();
                 for n in 1.. {
-                    let taken: Option<i64> = sqlx::query_scalar(
-                        "SELECT id FROM chart_of_accounts WHERE name = ?1 COLLATE NOCASE AND COALESCE(parent_id, 0) = COALESCE(?2, 0)",
-                    )
-                    .bind(&name)
-                    .bind(parent)
-                    .fetch_optional(&mut *tx)
-                    .await
-                    .map_err(db_err)?;
+                    let taken: Option<i64> =
+                        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = ?1 COLLATE NOCASE AND COALESCE(parent_id, 0) = COALESCE(?2, 0)")
+                            .bind(&name)
+                            .bind(parent)
+                            .fetch_optional(&mut *tx)
+                            .await
+                            .map_err(db_err)?;
                     if taken.is_none() {
                         break;
                     }
                     name = if n == 1 { format!("{} (imported)", s.name) } else { format!("{} (imported {n})", s.name) };
                 }
-                let id: i64 = match sqlx::query_scalar(
-                    "INSERT INTO chart_of_accounts (name, account_type, parent_id, description) VALUES (?1, ?2, ?3, ?4) RETURNING id",
-                )
-                .bind(&name)
-                .bind(&s.account_type)
-                .bind(parent)
-                .bind(note)
-                .fetch_one(&mut *tx)
-                .await
-                {
-                    Ok(id) => id,
-                    Err(e) => return Err(ledger::rollback(tx, format!("{} (account {})", db_err(e), s.full_name)).await),
-                };
+                let id: i64 =
+                    match sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type, parent_id, description) VALUES (?1, ?2, ?3, ?4) RETURNING id")
+                        .bind(&name)
+                        .bind(&s.account_type)
+                        .bind(parent)
+                        .bind(note)
+                        .fetch_one(&mut *tx)
+                        .await
+                    {
+                        Ok(id) => id,
+                        Err(e) => return Err(ledger::rollback(tx, format!("{} (account {})", db_err(e), s.full_name)).await),
+                    };
                 result.created += 1;
                 id
             }
         };
         // Created now, or reactivated: this import owns it, so reversing it deactivates it again.
         let created = existing.is_none_or(|(_, active)| active == 0) as i64;
-        if let Err(e) = sqlx::query(
-            "UPDATE ledger_import_accounts SET account_id = ?3, created_by_import = ?4 WHERE batch_id = ?1 AND source_id = ?2",
-        )
-        .bind(batch_id)
-        .bind(s.source_id)
-        .bind(account_id)
-        .bind(created)
-        .execute(&mut *tx)
-        .await
+        if let Err(e) = sqlx::query("UPDATE ledger_import_accounts SET account_id = ?3, created_by_import = ?4 WHERE batch_id = ?1 AND source_id = ?2")
+            .bind(batch_id)
+            .bind(s.source_id)
+            .bind(account_id)
+            .bind(created)
+            .execute(&mut *tx)
+            .await
         {
             return Err(ledger::rollback(tx, db_err(e)).await);
         }
@@ -946,11 +924,12 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     // Reps and shipping methods first, so customers can name their rep. Existing ones are matched
     // by initials or name; ones the file has hidden come in inactive.
-    let sales_lists: Vec<(String, String, i64)> = sqlx::query_as("SELECT kind, name, is_active FROM ledger_import_sales_lists WHERE batch_id = ?1 ORDER BY kind, name")
-        .bind(batch_id)
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let sales_lists: Vec<(String, String, i64)> =
+        sqlx::query_as("SELECT kind, name, is_active FROM ledger_import_sales_lists WHERE batch_id = ?1 ORDER BY kind, name")
+            .bind(batch_id)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(db_err)?;
     for (kind, name, active) in sales_lists {
         let (table, found) = if kind == "REP" {
             ("sales_reps", crate::sales_lists::find_or_create_rep(&mut tx, &name).await)
@@ -991,13 +970,15 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
                 };
                 let inserted = if p.kind == "CUSTOMER" {
                     let parent: Option<i64> = match p.parent_source_id {
-                        Some(ps) => sqlx::query_scalar("SELECT party_id FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'CUSTOMER' AND source_id = ?2")
-                            .bind(batch_id)
-                            .bind(ps)
-                            .fetch_optional(&mut *tx)
-                            .await
-                            .map_err(db_err)?
-                            .flatten(),
+                        Some(ps) => {
+                            sqlx::query_scalar("SELECT party_id FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'CUSTOMER' AND source_id = ?2")
+                                .bind(batch_id)
+                                .bind(ps)
+                                .fetch_optional(&mut *tx)
+                                .await
+                                .map_err(db_err)?
+                                .flatten()
+                        }
                         None => None,
                     };
                     sqlx::query_scalar(
@@ -1060,14 +1041,15 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
             (_, true) => result.vendors_created += 1,
             (_, false) => result.vendors_matched += 1,
         }
-        if let Err(e) = sqlx::query("UPDATE ledger_import_parties SET party_id = ?4, created_by_import = ?5 WHERE batch_id = ?1 AND kind = ?2 AND source_id = ?3")
-            .bind(batch_id)
-            .bind(&p.kind)
-            .bind(p.source_id)
-            .bind(id)
-            .bind(created as i64)
-            .execute(&mut *tx)
-            .await
+        if let Err(e) =
+            sqlx::query("UPDATE ledger_import_parties SET party_id = ?4, created_by_import = ?5 WHERE batch_id = ?1 AND kind = ?2 AND source_id = ?3")
+                .bind(batch_id)
+                .bind(&p.kind)
+                .bind(p.source_id)
+                .bind(id)
+                .bind(created as i64)
+                .execute(&mut *tx)
+                .await
         {
             return Err(ledger::rollback(tx, db_err(e)).await);
         }
@@ -1227,7 +1209,8 @@ async fn import_item_groups(tx: &mut sqlx::SqliteConnection, batch_id: i64, resu
     .await
     .map_err(db_err)?;
     for (source_id, name, description, print_items, active, members) in staged {
-        let existing: Option<i64> = sqlx::query_scalar("SELECT id FROM item_groups WHERE name = ?1 COLLATE NOCASE").bind(&name).fetch_optional(&mut *tx).await.map_err(db_err)?;
+        let existing: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM item_groups WHERE name = ?1 COLLATE NOCASE").bind(&name).fetch_optional(&mut *tx).await.map_err(db_err)?;
         let (id, created) = match existing {
             Some(id) => {
                 result.groups_matched += 1;
@@ -1252,8 +1235,11 @@ async fn import_item_groups(tx: &mut sqlx::SqliteConnection, batch_id: i64, resu
                         None => left_out += 1,
                     }
                 }
-                let name_taken: bool =
-                    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM products_services WHERE name = ?1 COLLATE NOCASE)").bind(&name).fetch_one(&mut *tx).await.map_err(db_err)?;
+                let name_taken: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM products_services WHERE name = ?1 COLLATE NOCASE)")
+                    .bind(&name)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
                 if products.is_empty() || name_taken {
                     result.groups_left_out += 1;
                     continue;
@@ -1305,7 +1291,8 @@ async fn import_price_levels(tx: &mut sqlx::SqliteConnection, batch_id: i64, res
     .await
     .map_err(db_err)?;
     for (name, kind, percent_milli, active, items) in staged {
-        let existing: Option<i64> = sqlx::query_scalar("SELECT id FROM price_levels WHERE name = ?1 COLLATE NOCASE").bind(&name).fetch_optional(&mut *tx).await.map_err(db_err)?;
+        let existing: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM price_levels WHERE name = ?1 COLLATE NOCASE").bind(&name).fetch_optional(&mut *tx).await.map_err(db_err)?;
         let (id, created) = match existing {
             Some(id) => {
                 result.price_levels_matched += 1;
@@ -1319,12 +1306,12 @@ async fn import_price_levels(tx: &mut sqlx::SqliteConnection, batch_id: i64, res
                         "SELECT i.product_id FROM ledger_import_items i JOIN products_services p ON p.id = i.product_id
                          WHERE i.batch_id = ?1 AND i.source_id = ?2 AND p.item_type <> 'DISCOUNT'",
                     )
-                        .bind(batch_id)
-                        .bind(item.product_id)
-                        .fetch_optional(&mut *tx)
-                        .await
-                        .map_err(db_err)?
-                        .flatten();
+                    .bind(batch_id)
+                    .bind(item.product_id)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .map_err(db_err)?
+                    .flatten();
                     if let Some(product_id) = product.filter(|p| !level_items.iter().any(|i: &LevelItem| i.product_id == *p)) {
                         level_items.push(LevelItem { product_id, ..item });
                     }
@@ -1417,13 +1404,12 @@ impl ClassMap {
 /// missing, records the match, and turns class tracking on. Every class is active until
 /// [`finish_classes`], since lines can only be posted to active classes.
 async fn bring_in_classes(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, batch_id: i64) -> Result<ClassMap, String> {
-    let rows: Vec<(String, bool, Option<i64>, bool)> = sqlx::query_as(
-        "SELECT full_name, is_active, class_id, created_by_import FROM ledger_import_classes WHERE batch_id = ?1 ORDER BY lower(full_name)",
-    )
-    .bind(batch_id)
-    .fetch_all(&mut **tx)
-    .await
-    .map_err(db_err)?;
+    let rows: Vec<(String, bool, Option<i64>, bool)> =
+        sqlx::query_as("SELECT full_name, is_active, class_id, created_by_import FROM ledger_import_classes WHERE batch_id = ?1 ORDER BY lower(full_name)")
+            .bind(batch_id)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(db_err)?;
     let mut map = ClassMap::default();
     for (name, active, earlier, created_earlier) in rows {
         let class = crate::classes::find_or_create_path(tx, &name).await?;
@@ -1567,15 +1553,14 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
     if !unmapped.is_empty() {
         return Err(format!("QBW_UNMAPPED: choose an account for {} before posting ({})", unmapped.len(), unmapped.join(", ")));
     }
-    let map: HashMap<i64, i64> = sqlx::query_as::<_, (i64, i64)>(
-        "SELECT source_id, account_id FROM ledger_import_accounts WHERE batch_id = ?1 AND account_id IS NOT NULL",
-    )
-    .bind(batch_id)
-    .fetch_all(pool)
-    .await
-    .map_err(db_err)?
-    .into_iter()
-    .collect();
+    let map: HashMap<i64, i64> =
+        sqlx::query_as::<_, (i64, i64)>("SELECT source_id, account_id FROM ledger_import_accounts WHERE batch_id = ?1 AND account_id IS NOT NULL")
+            .bind(batch_id)
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?
+            .into_iter()
+            .collect();
 
     #[derive(sqlx::FromRow)]
     struct Txn {
@@ -1746,11 +1731,7 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
 }
 
 async fn is_lists_only(pool: &SqlitePool, batch_id: i64) -> Result<bool, String> {
-    sqlx::query_scalar("SELECT NOT EXISTS (SELECT 1 FROM ledger_import_transactions WHERE batch_id = ?1)")
-        .bind(batch_id)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_scalar("SELECT NOT EXISTS (SELECT 1 FROM ledger_import_transactions WHERE batch_id = ?1)").bind(batch_id).fetch_one(pool).await.map_err(db_err)
 }
 
 /// "Posts" a batch with lists but no transactions: matches or creates every account, then adds
@@ -1758,11 +1739,7 @@ async fn is_lists_only(pool: &SqlitePool, batch_id: i64) -> Result<bool, String>
 /// Does nothing while the lists are already added; after a Reverse it puts back what that
 /// deactivated (records inactive in the file stay inactive).
 async fn add_lists(pool: &SqlitePool, batch_id: i64) -> Result<PostLedgerResult, String> {
-    let added: i64 = sqlx::query_scalar("SELECT lists_added FROM ledger_import_batches WHERE id = ?1")
-        .bind(batch_id)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let added: i64 = sqlx::query_scalar("SELECT lists_added FROM ledger_import_batches WHERE id = ?1").bind(batch_id).fetch_one(pool).await.map_err(db_err)?;
     if added != 0 {
         return Ok(PostLedgerResult::default());
     }
@@ -1813,11 +1790,8 @@ pub struct ReverseLedgerResult {
 /// vendors and items are deactivated.
 pub async fn reverse_batch(pool: &SqlitePool, batch_id: i64) -> Result<ReverseLedgerResult, String> {
     require_batch(pool, batch_id).await?;
-    let (mode, lists_added): (String, i64) = sqlx::query_as("SELECT mode, lists_added FROM ledger_import_batches WHERE id = ?1")
-        .bind(batch_id)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let (mode, lists_added): (String, i64) =
+        sqlx::query_as("SELECT mode, lists_added FROM ledger_import_batches WHERE id = ?1").bind(batch_id).fetch_one(pool).await.map_err(db_err)?;
     let lists_only = is_lists_only(pool, batch_id).await?;
     if lists_only && lists_added == 0 {
         return Err("QBW_NOTHING_TO_REVERSE: this import's lists are not in your books".into());

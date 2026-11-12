@@ -32,9 +32,10 @@ async fn finds_transactions_by_the_core_filters() {
     let jan_rent = pay(&pool, (checking, rent), "Landlord", "2026-01-01", Some("501"), 120_000, "January rent").await;
     let feb_rent = pay(&pool, (checking, rent), "Landlord", "2026-02-01", Some("502"), 120_000, "February rent").await;
     let paper = pay(&pool, (card, supplies), "Staples", "2026-02-10", None, 4_250, "Printer paper").await;
-    let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Acme", "issueDate": "2026-02-15", "dueDate": "2026-03-15",
+    let invoice: crate::invoices::InvoiceInput =
+        serde_json::from_value(serde_json::json!({ "customerName": "Acme", "issueDate": "2026-02-15", "dueDate": "2026-03-15",
         "lines": [{ "description": "Consulting", "quantityE4": 10_000, "rateCents": 50_000, "incomeAccountId": services, "isTaxable": false }] }))
-    .unwrap();
+        .unwrap();
     let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
     let inv_entry = inv.journal_entry_id.unwrap();
     let today = d(6, 30);
@@ -49,7 +50,10 @@ async fn finds_transactions_by_the_core_filters() {
     assert_eq!(ids(&all), [inv_entry, paper, feb_rent, jan_rent]);
     assert_eq!((all.match_count, all.total_cents, all.end_date), (4, 120_000 * 2 + 4_250 + 50_000, today));
     let check = &all.rows[2];
-    assert_eq!((check.type_label.as_str(), check.num.as_deref(), check.name.as_deref(), check.name_kind), ("Check", Some("502"), Some("Landlord"), Some(NameKind::Vendor)));
+    assert_eq!(
+        (check.type_label.as_str(), check.num.as_deref(), check.name.as_deref(), check.name_kind),
+        ("Check", Some("502"), Some("Landlord"), Some(NameKind::Vendor))
+    );
     assert_eq!(all.rows[0].name_kind, Some(NameKind::Customer));
     // Each row names the document that posted it, so a screen can open it.
     let check_id: i64 = sqlx::query_scalar("SELECT id FROM expenses WHERE journal_entry_id = ?1").bind(feb_rent).fetch_one(&pool).await.unwrap();

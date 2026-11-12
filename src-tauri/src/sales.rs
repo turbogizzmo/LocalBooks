@@ -37,16 +37,8 @@ pub(crate) async fn find_or_create_named(tx: &mut Transaction<'_, Sqlite>, party
     if matches!(party, Party::Customer) {
         return customer_path(tx, name).await;
     }
-    sqlx::query(&format!("INSERT OR IGNORE INTO {table} (name) VALUES (?1)"))
-        .bind(name)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
-    sqlx::query_scalar(&format!("SELECT id FROM {table} WHERE name = ?1 COLLATE NOCASE"))
-        .bind(name)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(db_err)
+    sqlx::query(&format!("INSERT OR IGNORE INTO {table} (name) VALUES (?1)")).bind(name).execute(&mut **tx).await.map_err(db_err)?;
+    sqlx::query_scalar(&format!("SELECT id FROM {table} WHERE name = ?1 COLLATE NOCASE")).bind(name).fetch_one(&mut **tx).await.map_err(db_err)
 }
 
 /// The error a form gets when it posts a name that is not on the list.
@@ -91,7 +83,8 @@ pub(crate) async fn require_listed_opt(pool: &SqlitePool, party: Party, name: Op
 /// an other name (Expenses › Other Names).
 pub(crate) async fn require_listed_payee(pool: &SqlitePool, name: Option<&str>) -> Result<(), String> {
     let Some(name) = name.map(str::trim).filter(|n| !n.is_empty()) else { return Ok(()) };
-    let other: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM other_names WHERE name = ?1 COLLATE NOCASE)").bind(name).fetch_one(pool).await.map_err(db_err)?;
+    let other: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM other_names WHERE name = ?1 COLLATE NOCASE)").bind(name).fetch_one(pool).await.map_err(db_err)?;
     if other {
         return Ok(());
     }
@@ -359,8 +352,7 @@ pub async fn list_customers(pool: &SqlitePool) -> Result<Vec<PartyView>, String>
 
 pub async fn create_customer(pool: &SqlitePool, name: &str, email: Option<&str>) -> Result<PartyView, String> {
     let id = create_party(pool, Party::Customer, name, email).await?;
-    list_customers(pool).await?.into_iter().find(|c| c.id == id)
-        .ok_or_else(|| "PARTY_NOT_FOUND: customer was not saved".into())
+    list_customers(pool).await?.into_iter().find(|c| c.id == id).ok_or_else(|| "PARTY_NOT_FOUND: customer was not saved".into())
 }
 
 pub(crate) async fn create_party(pool: &SqlitePool, party: Party, name: &str, email: Option<&str>) -> Result<i64, String> {
@@ -376,7 +368,9 @@ pub(crate) async fn create_party(pool: &SqlitePool, party: Party, name: &str, em
         None => None,
     };
     let created = match party {
-        Party::Customer => sqlx::query_scalar("INSERT INTO customers (name, email, parent_id) VALUES (?1, ?2, ?3) RETURNING id").bind(&full).bind(clean(email)).bind(parent),
+        Party::Customer => {
+            sqlx::query_scalar("INSERT INTO customers (name, email, parent_id) VALUES (?1, ?2, ?3) RETURNING id").bind(&full).bind(clean(email)).bind(parent)
+        }
         Party::Vendor => sqlx::query_scalar("INSERT INTO vendors (name, email) VALUES (?1, ?2) RETURNING id").bind(&full).bind(clean(email)),
     }
     .fetch_one(&mut *tx)
@@ -547,13 +541,12 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     let mut credits: Vec<((i64, Option<i64>), i64)> = Vec::new();
     for (idx, line) in input.lines.iter().enumerate() {
         let n = idx + 1;
-        let classification: Option<String> = sqlx::query_scalar(
-            "SELECT t.classification FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
-        )
-        .bind(line.income_account_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
+        let classification: Option<String> =
+            sqlx::query_scalar("SELECT t.classification FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1")
+                .bind(line.income_account_id)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(db_err)?;
         if classification.as_deref() != Some("INCOME") {
             return Err(format!("SR_NOT_INCOME_ACCOUNT: line {n} must use an Income account"));
         }
@@ -608,13 +601,8 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     let cost = crate::inventory::cost_of_sale(tx, &sold).await?;
     lines.extend(cost.lines.iter().cloned());
     let customer_label = clean(input.customer_name.as_deref()).map(|c| format!(" - {c}")).unwrap_or_default();
-    let entry = JournalEntry {
-        id: None,
-        date: input.receipt_date,
-        description: format!("Sales Receipt #{receipt_number}{customer_label}"),
-        lines,
-        currency: None,
-    };
+    let entry =
+        JournalEntry { id: None, date: input.receipt_date, description: format!("Sales Receipt #{receipt_number}{customer_label}"), lines, currency: None };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::SalesReceipt(receipt_id)).await?;
     // A combined rate's split by component, for the sales tax return.
     if let Some(t) = &tax {
@@ -622,12 +610,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     }
     cost.record(tx, input.receipt_date, entry_id).await?;
 
-    sqlx::query("UPDATE sales_receipts SET journal_entry_id = ?1 WHERE id = ?2")
-        .bind(entry_id)
-        .bind(receipt_id)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    sqlx::query("UPDATE sales_receipts SET journal_entry_id = ?1 WHERE id = ?2").bind(entry_id).bind(receipt_id).execute(&mut **tx).await.map_err(db_err)?;
     Ok(receipt_id)
 }
 

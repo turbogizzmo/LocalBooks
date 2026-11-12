@@ -76,7 +76,8 @@ async fn get_rate(pool: &SqlitePool, id: i64) -> Result<TaxRateView, String> {
 /// (created when the company has none).
 async fn liability_account(tx: &mut Transaction<'_, Sqlite>, chosen: Option<i64>) -> Result<i64, String> {
     if let Some(id) = chosen {
-        let kind: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+        let kind: Option<String> =
+            sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
         return match kind.as_deref() {
             Some("OTHER_CURRENT_LIABILITY") => Ok(id),
             _ => Err("TAX_BAD_ACCOUNT: sales tax accrues in an Other Current Liability account".into()),
@@ -116,7 +117,11 @@ async fn agency(tx: &mut Transaction<'_, Sqlite>, name: &Option<String>) -> Resu
 
 fn unique(err: sqlx::Error, name: &str) -> String {
     let msg = db_err(err);
-    if msg.contains("UNIQUE") { format!("TAX_DUPLICATE: there is already a rate named '{name}'") } else { msg }
+    if msg.contains("UNIQUE") {
+        format!("TAX_DUPLICATE: there is already a rate named '{name}'")
+    } else {
+        msg
+    }
 }
 
 pub async fn create_tax_rate(pool: &SqlitePool, input: TaxRateInput) -> Result<TaxRateView, String> {
@@ -149,7 +154,8 @@ pub async fn update_tax_rate(pool: &SqlitePool, id: i64, input: TaxRateInput) ->
     let name = validate_rate(&input)?;
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
-        let group: bool = sqlx::query_scalar("SELECT is_group FROM tax_rates WHERE id = ?1").bind(id).fetch_optional(&mut *tx).await.map_err(db_err)?.unwrap_or(false);
+        let group: bool =
+            sqlx::query_scalar("SELECT is_group FROM tax_rates WHERE id = ?1").bind(id).fetch_optional(&mut *tx).await.map_err(db_err)?.unwrap_or(false);
         if group {
             return Err("TAX_IS_COMBINED: a combined rate is changed by choosing its component rates".into());
         }
@@ -241,13 +247,19 @@ pub fn tax_on(taxable_cents: i64, rate_ppm: i64) -> Option<i64> {
 
 /// Works out the tax for a document from its rate and the amounts of its taxable lines.
 /// `None` when no rate is chosen.
-pub(crate) async fn document_tax(tx: &mut Transaction<'_, Sqlite>, rate_id: Option<i64>, taxable_cents: i64, code: &str) -> Result<Option<DocumentTax>, String> {
+pub(crate) async fn document_tax(
+    tx: &mut Transaction<'_, Sqlite>,
+    rate_id: Option<i64>,
+    taxable_cents: i64,
+    code: &str,
+) -> Result<Option<DocumentTax>, String> {
     let Some(rate_id) = rate_id else { return Ok(None) };
-    let row: Option<(String, i64, i64, bool, bool)> = sqlx::query_as("SELECT name, rate_ppm, liability_account_id, is_active, is_group FROM tax_rates WHERE id = ?1")
-        .bind(rate_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let row: Option<(String, i64, i64, bool, bool)> =
+        sqlx::query_as("SELECT name, rate_ppm, liability_account_id, is_active, is_group FROM tax_rates WHERE id = ?1")
+            .bind(rate_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(db_err)?;
     let (name, ppm, account, active, group) = row.ok_or_else(|| format!("{code}_UNKNOWN_TAX: that tax rate does not exist"))?;
     if !active {
         return Err(format!("{code}_INACTIVE_TAX: that tax rate is inactive"));
@@ -255,7 +267,12 @@ pub(crate) async fn document_tax(tx: &mut Transaction<'_, Sqlite>, rate_id: Opti
     let too_large = || format!("{code}_TAX_TOO_LARGE: the tax is out of range");
     let cents = tax_on(taxable_cents, ppm).filter(|c| *c <= MAX_LINE_CENTS).ok_or_else(too_large)?;
     if !group {
-        return Ok(Some(DocumentTax { rate_id: Some(rate_id), cents, parts: vec![TaxPart { rate_id, name, liability_account_id: account, cents }], combined: false }));
+        return Ok(Some(DocumentTax {
+            rate_id: Some(rate_id),
+            cents,
+            parts: vec![TaxPart { rate_id, name, liability_account_id: account, cents }],
+            combined: false,
+        }));
     }
     let components = combined::components(tx, rate_id).await?;
     if let Some(off) = components.iter().find(|c| !c.is_active) {
@@ -306,10 +323,11 @@ pub(crate) async fn document_discount(
     if discount_cents < 0 || discount_cents > subtotal {
         return Err(format!("{code}_BAD_DISCOUNT: a discount is between zero and the subtotal"));
     }
-    let existing: Option<i64> = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'INCOME' AND name = 'Discounts Given' AND parent_id IS NULL")
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let existing: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'INCOME' AND name = 'Discounts Given' AND parent_id IS NULL")
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(db_err)?;
     let account_id = match existing {
         Some(id) => id,
         None => sqlx::query_scalar(
@@ -369,11 +387,13 @@ pub async fn pay_sales_tax(pool: &SqlitePool, input: SalesTaxPaymentInput) -> Re
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let rate: Option<(String, i64, Option<String>, bool)> = match input.tax_rate_id {
-            Some(id) => sqlx::query_as("SELECT r.name, r.liability_account_id, v.name, r.is_group FROM tax_rates r LEFT JOIN vendors v ON v.id = r.agency_vendor_id WHERE r.id = ?1")
-                .bind(id)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(db_err)?,
+            Some(id) => sqlx::query_as(
+                "SELECT r.name, r.liability_account_id, v.name, r.is_group FROM tax_rates r LEFT JOIN vendors v ON v.id = r.agency_vendor_id WHERE r.id = ?1",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?,
             None => None,
         };
         // A combined rate pays each of its rates' accounts, its share by their percentages.
@@ -394,7 +414,11 @@ pub async fn pay_sales_tax(pool: &SqlitePool, input: SalesTaxPaymentInput) -> Re
             (None, Some((_, id, ..)), None) => *id,
             (None, None, None) => liability_account(&mut tx, None).await?,
         };
-        let kind: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1").bind(input.account_id).fetch_optional(&mut *tx).await.map_err(db_err)?;
+        let kind: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1")
+            .bind(input.account_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
         if !matches!(kind.as_deref(), Some("BANK" | "CREDIT_CARD")) {
             return Err("TAX_BAD_PAYMENT_ACCOUNT: pay sales tax from a Bank or Credit Card account".to_string());
         }
@@ -491,7 +515,11 @@ pub enum Basis {
 
 impl Basis {
     pub fn parse(text: &str) -> Self {
-        if text == "cash" { Self::Cash } else { Self::Accrual }
+        if text == "cash" {
+            Self::Cash
+        } else {
+            Self::Accrual
+        }
     }
 }
 

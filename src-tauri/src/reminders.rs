@@ -225,12 +225,10 @@ const TODO_SELECT: &str = "
 
 /// Every to-do: open ones first, by due date (undated last), then done ones, latest first.
 pub async fn list_todos(pool: &SqlitePool) -> Result<Vec<TodoView>, String> {
-    sqlx::query_as(&format!(
-        "{TODO_SELECT} ORDER BY t.is_done, CASE WHEN t.is_done = 1 THEN t.done_at END DESC, t.due_date IS NULL, t.due_date, t.id"
-    ))
-    .fetch_all(pool)
-    .await
-    .map_err(db_err)
+    sqlx::query_as(&format!("{TODO_SELECT} ORDER BY t.is_done, CASE WHEN t.is_done = 1 THEN t.done_at END DESC, t.due_date IS NULL, t.due_date, t.id"))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn get_todo(pool: &SqlitePool, id: i64) -> Result<TodoView, String> {
@@ -405,10 +403,7 @@ pub struct Assignee {
 
 /// Active users, for the Assigned to picker (empty in a file without users).
 pub async fn assignees(pool: &SqlitePool) -> Result<Vec<Assignee>, String> {
-    sqlx::query_as("SELECT id, display_name FROM users WHERE is_active = 1 ORDER BY display_name COLLATE NOCASE")
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as("SELECT id, display_name FROM users WHERE is_active = 1 ORDER BY display_name COLLATE NOCASE").fetch_all(pool).await.map_err(db_err)
 }
 
 /// An invoice or bill a to-do can link to.
@@ -486,7 +481,11 @@ fn ahead(as_of: NaiveDate, days: i64) -> String {
 }
 
 fn days_word(n: i64) -> String {
-    if n == 1 { "1 day".into() } else { format!("{n} days") }
+    if n == 1 {
+        "1 day".into()
+    } else {
+        format!("{n} days")
+    }
 }
 
 /// Posted, unvoided invoices with an open balance whose due date is more than `days` days before `as_of`.
@@ -659,7 +658,10 @@ pub async fn tax_dates(pool: &SqlitePool, as_of: NaiveDate, days: i64) -> Result
     // The sales tax return for the last period that ended, at the filing frequency in Preferences.
     if crate::preferences::flag(pool, "sales_tax_enabled").await.unwrap_or(false) {
         let periods = crate::sales_tax::company_filing_periods(pool, as_of).await?;
-        for (range, due) in [(periods.last, periods.last_due), (periods.current, crate::sales_tax::filing_periods(periods.current.end + Duration::days(1), periods.frequency, periods.basis).last_due)] {
+        for (range, due) in [
+            (periods.last, periods.last_due),
+            (periods.current, crate::sales_tax::filing_periods(periods.current.end + Duration::days(1), periods.frequency, periods.basis).last_due),
+        ] {
             calendar.push(crate::preferences::TaxDeadline {
                 due_date: due,
                 statutory_date: due,

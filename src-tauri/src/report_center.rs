@@ -350,7 +350,11 @@ pub async fn sales_by_product(pool: &SqlitePool, start_date: NaiveDate, end_date
 /// Average cost per unit of `value_cents` over `qty_e4` units, rounded to the cent; `None` unless
 /// there are units on hand.
 fn unit_cost(value_cents: i64, qty_e4: i64) -> Option<i64> {
-    if qty_e4 > 0 { mul_div_round(value_cents, QUANTITY_SCALE, qty_e4) } else { None }
+    if qty_e4 > 0 {
+        mul_div_round(value_cents, QUANTITY_SCALE, qty_e4)
+    } else {
+        None
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -507,7 +511,15 @@ pub async fn inventory_valuation_detail(pool: &SqlitePool, start_date: NaiveDate
             r.asset_value_cents = value;
             r.average_cost_cents = unit_cost(value, qty);
         }
-        out.push(InventoryItemDetail { item_id, name, opening_qty_e4: opening_qty, opening_value_cents: opening_value, rows, closing_qty_e4: qty, closing_value_cents: value });
+        out.push(InventoryItemDetail {
+            item_id,
+            name,
+            opening_qty_e4: opening_qty,
+            opening_value_cents: opening_value,
+            rows,
+            closing_qty_e4: qty,
+            closing_value_cents: value,
+        });
     }
     Ok(InventoryValuationDetail { start_date, end_date, total_value_cents: out.iter().map(|i| i.closing_value_cents).sum(), items: out })
 }

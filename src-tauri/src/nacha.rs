@@ -162,11 +162,8 @@ pub struct File {
 
 /// Text for an alphanumeric field: upper case, characters banks accept, cut or padded to `len`.
 fn alpha(text: &str, len: usize) -> String {
-    let cleaned: String = text
-        .chars()
-        .map(|c| c.to_ascii_uppercase())
-        .map(|c| if c.is_ascii_alphanumeric() || " &'.,/-#()+*:;=?!$%@".contains(c) { c } else { ' ' })
-        .collect();
+    let cleaned: String =
+        text.chars().map(|c| c.to_ascii_uppercase()).map(|c| if c.is_ascii_alphanumeric() || " &'.,/-#()+*:;=?!$%@".contains(c) { c } else { ' ' }).collect();
     format!("{:<len$}", cleaned.trim(), len = len).chars().take(len).collect()
 }
 
@@ -373,7 +370,8 @@ pub fn validate(text: &str) -> Result<Summary, String> {
         problems.push(format!("the file has {} records, not a multiple of 10", lines.len()));
     }
 
-    let mut summary = Summary { batch_count: 0, block_count: 0, entry_addenda_count: 0, entry_hash: 0, total_debit_cents: 0, total_credit_cents: 0, entries: vec![] };
+    let mut summary =
+        Summary { batch_count: 0, block_count: 0, entry_addenda_count: 0, entry_hash: 0, total_debit_cents: 0, total_credit_cents: 0, entries: vec![] };
     let mut pos = 0;
     let mut push = |p: Result<(), String>| {
         if let Err(e) = p {
@@ -579,7 +577,11 @@ pub fn validate(text: &str) -> Result<Summary, String> {
             break;
         }
     }
-    if problems.is_empty() { Ok(summary) } else { Err(problems.join("\n")) }
+    if problems.is_empty() {
+        Ok(summary)
+    } else {
+        Err(problems.join("\n"))
+    }
 }
 
 #[cfg(test)]

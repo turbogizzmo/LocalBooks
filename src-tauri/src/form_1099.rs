@@ -290,13 +290,14 @@ struct W9Brief {
 /// The 1099-NEC forms for payments in `year`, with the 1096 summary.
 pub async fn nec_summary(pool: &SqlitePool, year: i32, access: Access<'_>) -> Result<Summary1096, String> {
     let rows = crate::workflows::vendors_1099(pool, year, access).await?;
-    let w9s: std::collections::HashMap<i64, W9Brief> = sqlx::query_as::<_, W9Brief>("SELECT vendor_id, tin_type, legal_name, business_name, received_on FROM vendor_w9")
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?
-        .into_iter()
-        .map(|w| (w.vendor_id, w))
-        .collect();
+    let w9s: std::collections::HashMap<i64, W9Brief> =
+        sqlx::query_as::<_, W9Brief>("SELECT vendor_id, tin_type, legal_name, business_name, received_on FROM vendor_w9")
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?
+            .into_iter()
+            .map(|w| (w.vendor_id, w))
+            .collect();
     let threshold = crate::workflows::threshold_1099_cents("NEC-1", year);
     let mut forms = Vec::new();
     let mut under = Vec::new();
@@ -341,7 +342,13 @@ pub async fn nec_summary(pool: &SqlitePool, year: i32, access: Access<'_>) -> Re
         Some(n) => n,
         None => pref(pool, "company_name").await?.unwrap_or_default(),
     };
-    let payer = Payer { name, ein: pref(pool, "company_ein").await?, address: pref(pool, "company_address").await?, phone: pref(pool, "company_phone").await?, email: pref(pool, "company_email").await? };
+    let payer = Payer {
+        name,
+        ein: pref(pool, "company_ein").await?,
+        address: pref(pool, "company_address").await?,
+        phone: pref(pool, "company_phone").await?,
+        email: pref(pool, "company_email").await?,
+    };
     let mut payer_missing = Vec::new();
     if payer.name.is_empty() {
         payer_missing.push("company name".to_string());
@@ -353,7 +360,17 @@ pub async fn nec_summary(pool: &SqlitePool, year: i32, access: Access<'_>) -> Re
         payer_missing.push("company address".to_string());
     }
     let form_count = forms.len();
-    Ok(Summary1096 { year, payer, forms, form_count, total_cents: total, threshold_cents: threshold, under_threshold: under, payer_missing, full_tins: access.can_see() })
+    Ok(Summary1096 {
+        year,
+        payer,
+        forms,
+        form_count,
+        total_cents: total,
+        threshold_cents: threshold,
+        under_threshold: under,
+        payer_missing,
+        full_tins: access.can_see(),
+    })
 }
 
 #[cfg(test)]

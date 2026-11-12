@@ -46,7 +46,8 @@ async fn the_lists_read_back_through_the_iif_import() {
     assert!(ledger.vendors.iter().any(|v| v.is_1099 && v.tax_id.as_deref() == Some("12-3456789")));
 
     // Items the import keeps (services, parts, other charges) with their prices.
-    let products: Vec<(String, i64)> = sqlx::query_as("SELECT name, rate_cents FROM products_services WHERE item_type <> 'DISCOUNT' AND percent_ppm IS NULL").fetch_all(&pool).await.unwrap();
+    let products: Vec<(String, i64)> =
+        sqlx::query_as("SELECT name, rate_cents FROM products_services WHERE item_type <> 'DISCOUNT' AND percent_ppm IS NULL").fetch_all(&pool).await.unwrap();
     for (name, rate) in products {
         let item = ledger.items.iter().find(|i| i.name == name).unwrap_or_else(|| panic!("{name} exported"));
         assert_eq!(item.rate_cents, rate.abs(), "{name}");
@@ -56,7 +57,10 @@ async fn the_lists_read_back_through_the_iif_import() {
 #[tokio::test]
 async fn addresses_are_one_row_a_name() {
     let pool = crate::harness::fixture::harbor_lane().await;
-    sqlx::query("UPDATE customers SET billing_address = '1 Main St\nSuite 2\nPortland, OR 97201' WHERE id = (SELECT MIN(id) FROM customers)").execute(&pool).await.unwrap();
+    sqlx::query("UPDATE customers SET billing_address = '1 Main St\nSuite 2\nPortland, OR 97201' WHERE id = (SELECT MIN(id) FROM customers)")
+        .execute(&pool)
+        .await
+        .unwrap();
     let text = addresses_text(&pool).await.unwrap();
     let rows: Vec<Vec<&str>> = text.lines().map(|l| l.split('\t').collect()).collect();
     assert_eq!(rows[0][..3], ["Type", "Name", "Company"]);

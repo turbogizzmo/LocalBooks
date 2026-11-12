@@ -4,11 +4,7 @@ use crate::ledger::{post_journal_entry, JournalEntry, JournalLine};
 use crate::money::Cents;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
-    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
-        .bind(number)
-        .fetch_one(pool)
-        .await
-        .expect("seeded account exists")
+    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.expect("seeded account exists")
 }
 
 fn ymd(y: i32, m: u32, d: u32) -> NaiveDate {
@@ -18,7 +14,13 @@ fn ymd(y: i32, m: u32, d: u32) -> NaiveDate {
 async fn post(pool: &SqlitePool, date: NaiveDate, debit: i64, credit: i64, cents: i64) {
     post_journal_entry(
         pool,
-        JournalEntry { id: None, date, description: String::new(), lines: vec![JournalLine::debit(debit, cents), JournalLine::credit(credit, cents)], currency: None },
+        JournalEntry {
+            id: None,
+            date,
+            description: String::new(),
+            lines: vec![JournalLine::debit(debit, cents), JournalLine::credit(credit, cents)],
+            currency: None,
+        },
     )
     .await
     .expect("posts");
@@ -55,8 +57,13 @@ async fn profit_and_loss_by_class_splits_every_row_and_adds_across() {
     // Outside the range.
     post_journal_entry(
         &pool,
-        JournalEntry { id: None, date: ymd(2026, 6, 1), description: String::new(), currency: None,
-            lines: vec![JournalLine::debit(rent, 1).with_class(Some(idle)), JournalLine::credit(checking, 1)] },
+        JournalEntry {
+            id: None,
+            date: ymd(2026, 6, 1),
+            description: String::new(),
+            currency: None,
+            lines: vec![JournalLine::debit(rent, 1).with_class(Some(idle)), JournalLine::credit(checking, 1)],
+        },
     )
     .await
     .unwrap();
@@ -97,7 +104,17 @@ async fn cash_basis_counts_invoices_as_paid_and_periods_line_up() {
     let pay = |invoice_id, day, cents| {
         crate::invoices::record_payment(
             &pool,
-            crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: day, amount_cents: cents, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+            crate::invoices::PaymentInput {
+                discount_cents: Cents::ZERO,
+                payment_method_id: None,
+                invoice_id,
+                deposit_account_id: checking,
+                payment_date: day,
+                amount_cents: cents,
+                payment_method: "CHECK".into(),
+                reference: None,
+                exchange_rate_e6: None,
+            },
         )
     };
     let first = invoice("2026-01-10", 100_000).await;
@@ -107,19 +124,35 @@ async fn cash_basis_counts_invoices_as_paid_and_periods_line_up() {
     let second = invoice("2026-03-01", 50_000).await;
     let memo = crate::credits::create_credit_memo(
         &pool,
-        crate::credits::CreditMemoInput { credit_number: None, form_lines: Vec::new(),
+        crate::credits::CreditMemoInput {
+            credit_number: None,
+            form_lines: Vec::new(),
             customer_name: "Acme".into(),
             credit_date: ymd(2026, 3, 10),
             memo: None,
             refund_account_id: None,
-            lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Credit".into(), quantity_e4: 10_000, rate_cents: Cents(20_000), income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![crate::sales::SalesLineInput {
+                product_service_id: None,
+                description: "Credit".into(),
+                quantity_e4: 10_000,
+                rate_cents: Cents(20_000),
+                income_account_id: services,
+                class_id: None,
+                is_taxable: false,
+                service_date: None,
+            }],
             tax_rate_id: None,
             header: Default::default(),
         },
     )
     .await
     .unwrap();
-    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: memo.id, document_id: second, amount_cents: Cents(20_000), applied_date: ymd(2026, 3, 12) }).await.unwrap();
+    crate::credits::apply_customer_credit(
+        &pool,
+        crate::credits::ApplyCreditInput { credit_id: memo.id, document_id: second, amount_cents: Cents(20_000), applied_date: ymd(2026, 3, 12) },
+    )
+    .await
+    .unwrap();
     pay(second, ymd(2026, 3, 20), Cents(30_000)).await.unwrap();
 
     let net = |basis, m: u32, last: u32| profit_and_loss_basis(&pool, ymd(2026, m, 1), ymd(2026, m, last), None, basis);
@@ -166,7 +199,9 @@ async fn parent_classes_get_subclass_columns_other_and_a_total() {
     let wholesale = class("Wholesale", Some(east)).await.unwrap().id;
     let _quiet = class("Quiet", Some(east)).await.unwrap().id;
     let west = class("West", None).await.unwrap().id;
-    let post = |lines: Vec<JournalLine>| post_journal_entry(&pool, JournalEntry { id: None, date: ymd(2026, 5, 1), description: String::new(), lines, currency: None });
+    let post = |lines: Vec<JournalLine>| {
+        post_journal_entry(&pool, JournalEntry { id: None, date: ymd(2026, 5, 1), description: String::new(), lines, currency: None })
+    };
     post(vec![
         JournalLine::debit(checking, 1_000),
         JournalLine::credit(sales, 600).with_class(Some(retail)),
@@ -187,9 +222,11 @@ async fn parent_classes_get_subclass_columns_other_and_a_total() {
     assert_eq!(net.amounts_cents, [Some(600), Some(300), Some(-200), Some(700), Some(100), Some(800)]);
 
     // Filtering the plain Profit & Loss by East includes its subclasses; West alone excludes them.
-    let east_only = profit_and_loss_filtered(&pool, ymd(2026, 5, 1), ymd(2026, 5, 31), Some(&ClassFilter { class_ids: vec![east], unclassified: false })).await.unwrap();
+    let east_only =
+        profit_and_loss_filtered(&pool, ymd(2026, 5, 1), ymd(2026, 5, 31), Some(&ClassFilter { class_ids: vec![east], unclassified: false })).await.unwrap();
     assert_eq!(east_only.net_income_cents, 700);
-    let west_only = profit_and_loss_filtered(&pool, ymd(2026, 5, 1), ymd(2026, 5, 31), Some(&ClassFilter { class_ids: vec![west], unclassified: false })).await.unwrap();
+    let west_only =
+        profit_and_loss_filtered(&pool, ymd(2026, 5, 1), ymd(2026, 5, 31), Some(&ClassFilter { class_ids: vec![west], unclassified: false })).await.unwrap();
     assert_eq!(west_only.net_income_cents, 100);
     let none = profit_and_loss_filtered(&pool, ymd(2026, 5, 1), ymd(2026, 5, 31), Some(&ClassFilter { class_ids: vec![], unclassified: true })).await.unwrap();
     assert_eq!(none.net_income_cents, 0);
@@ -291,7 +328,8 @@ fn row<'l>(lines: &'l [ClassReportLine], label: &str) -> &'l [Option<i64>] {
 async fn balance_sheet_previous_year_comparison_lines_up_and_matches_each_date() {
     let pool = test_pool().await;
     let n = |s| account_id(&pool, s);
-    let (checking, savings, card, owner, services, rent) = (n("1010").await, n("1020").await, n("2100").await, n("3100").await, n("4100").await, n("6300").await);
+    let (checking, savings, card, owner, services, rent) =
+        (n("1010").await, n("1020").await, n("2100").await, n("3100").await, n("4100").await, n("6300").await);
     post(&pool, ymd(2025, 3, 1), checking, owner, 1_000_000).await;
     post(&pool, ymd(2025, 6, 1), checking, services, 200_000).await;
     // Only this year: a savings account and a card balance.
@@ -355,7 +393,11 @@ async fn balance_sheet_budget_vs_actual_compares_month_end_balances() {
     assert_eq!((report.start_date, report.end_date), (ymd(2026, 1, 1), ymd(2026, 2, 28)));
     assert_eq!(row(&report.lines, "1010 Checking"), [Some(580_000), Some(600_000), Some(-20_000), Some(9_667)]);
     assert_eq!(row(&report.lines, "2100 Credit Card"), [Some(30_000), Some(20_000), Some(10_000), Some(15_000)]);
-    assert_eq!(row(&report.lines, "Net Income"), [Some(50_000), Some(75_000), Some(-25_000), Some(6_667)], "100,000 income less 25,000 rent budgeted through February");
+    assert_eq!(
+        row(&report.lines, "Net Income"),
+        [Some(50_000), Some(75_000), Some(-25_000), Some(6_667)],
+        "100,000 income less 25,000 rent budgeted through February"
+    );
     let actual = balance_sheet(&pool, ymd(2026, 2, 28)).await.unwrap();
     assert_eq!(row(&report.lines, "TOTAL ASSETS")[0], Some(actual.total_assets_cents));
     assert_eq!(row(&report.lines, "TOTAL ASSETS")[1], Some(600_000));

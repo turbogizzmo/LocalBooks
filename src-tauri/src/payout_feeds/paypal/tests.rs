@@ -85,7 +85,10 @@ fn a_transaction_in_the_withdrawals_second_belongs_to_it() {
     let found = withdrawals(txns);
     assert_eq!(found[1].carried.as_ref().unwrap().iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), vec!["P1"]);
     assert!(format!("{:?}", PayPalCredentials { client_id: "id".into(), secret: "s3cret".into(), sandbox: false }).contains("…"));
-    assert!(!format!("{:?}", PayPalCredentials { client_id: "id".into(), secret: "s3cret".into(), sandbox: false }).contains("s3cret"), "Debug hides the secret");
+    assert!(
+        !format!("{:?}", PayPalCredentials { client_id: "id".into(), secret: "s3cret".into(), sandbox: false }).contains("s3cret"),
+        "Debug hides the secret"
+    );
 }
 
 // ---- a mock PayPal on 127.0.0.1 ----------------------------------------------------------------
@@ -138,7 +141,13 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn new_account(pool: &SqlitePool, number: &str, name: &str, kind: &str) -> i64 {
-    sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES (?1, ?2, ?3) RETURNING id").bind(number).bind(name).bind(kind).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES (?1, ?2, ?3) RETURNING id")
+        .bind(number)
+        .bind(name)
+        .bind(kind)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn balance(pool: &SqlitePool, id: i64) -> i64 {
@@ -174,7 +183,10 @@ async fn a_paypal_withdrawal_is_recorded_as_a_gross_deposit_that_lands_at_the_ne
     assert_eq!((f.processor.as_str(), f.account_ref.as_deref()), ("PAYPAL", Some("SANDBOX")));
     let kept = std::fs::read_to_string(dir.join(SECRETS_FILE)).unwrap();
     assert!(kept.contains("app-secret"), "the credentials are in the credential store");
-    let in_file: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM payout_feeds WHERE secret_key LIKE '%app-secret%' OR account_ref LIKE '%app-%'").fetch_one(&pool).await.unwrap();
+    let in_file: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM payout_feeds WHERE secret_key LIKE '%app-secret%' OR account_ref LIKE '%app-%'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(in_file, 0, "and not in the company file");
 
     let fetched = crate::payout_feeds::fetch(&pool, &store, &Apis::all(&api), f.id, now).await.unwrap();

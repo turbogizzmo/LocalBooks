@@ -96,7 +96,10 @@ async fn attempts_are_refused_counted_and_cleared() {
         assert!(t.attempt(FILE, Who::User("ann"), counts, wrong()).await.unwrap_err().starts_with("SIGN_IN_FAILED"));
     }
     for _ in 0..10 {
-        assert!(t.attempt(FILE, Who::User("ann"), counts, rule()).await.unwrap_err().starts_with("PASSWORD_TOO_SHORT"), "errors that aren't guesses don't count");
+        assert!(
+            t.attempt(FILE, Who::User("ann"), counts, rule()).await.unwrap_err().starts_with("PASSWORD_TOO_SHORT"),
+            "errors that aren't guesses don't count"
+        );
     }
     assert!(t.attempt(FILE, Who::User("ann"), counts, async { Ok(()) }).await.is_ok(), "still within the free tries");
     for _ in 0..=FREE_TRIES {
@@ -163,7 +166,11 @@ async fn futures_join_all<F: std::future::Future>(futures: Vec<F>) -> Vec<F::Out
                 }
             }
         }
-        if all { std::task::Poll::Ready(()) } else { std::task::Poll::Pending }
+        if all {
+            std::task::Poll::Ready(())
+        } else {
+            std::task::Poll::Pending
+        }
     })
     .await;
     done.into_iter().map(|o| o.expect("finished")).collect()

@@ -27,11 +27,8 @@ async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transacti
 
 /// The live journal entry of a document, or why it cannot be edited.
 async fn live_entry(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64, noun: &str) -> Result<i64, String> {
-    let row: Option<(Option<i64>, bool)> = sqlx::query_as(&format!("SELECT journal_entry_id, is_voided FROM {table} WHERE id = ?1"))
-        .bind(id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let row: Option<(Option<i64>, bool)> =
+        sqlx::query_as(&format!("SELECT journal_entry_id, is_voided FROM {table} WHERE id = ?1")).bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
     match row {
         None => Err(format!("EDIT_NOT_FOUND: that {noun} does not exist")),
         Some((_, true)) => Err(format!("EDIT_VOIDED: a voided {noun} cannot be edited")),
@@ -72,7 +69,11 @@ pub async fn replace_invoice(pool: &SqlitePool, invoice_id: i64, input: InvoiceI
         let reimbursed = crate::billable_costs::reimbursed_accounts(tx, invoice_id).await?;
         // Voided first, so stock the original sold is back before the edited version sells it.
         crate::ledger::void_for_replacement(tx, old).await?;
-        let number: i64 = sqlx::query_scalar("UPDATE invoices SET is_replaced = 1 WHERE id = ?1 RETURNING invoice_number").bind(invoice_id).fetch_one(&mut **tx).await.map_err(db_err)?;
+        let number: i64 = sqlx::query_scalar("UPDATE invoices SET is_replaced = 1 WHERE id = ?1 RETURNING invoice_number")
+            .bind(invoice_id)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(db_err)?;
         let input = InvoiceInput { invoice_number: Some(number), ..input.clone() };
         let new_id = crate::invoices::write_invoice_reimbursing(tx, &input, &carried, &reimbursed).await?;
         let new_entry = entry_of(tx, "invoices", new_id).await?;
@@ -96,7 +97,8 @@ pub async fn replace_bill(pool: &SqlitePool, bill_id: i64, input: BillInput) -> 
         if crate::item_receipts::is_receipt_bill(tx, bill_id).await? {
             return Err("EDIT_RECEIPT_BILL: this bill was entered for an item receipt; void it and enter it again from Enter Bill for Received Items".into());
         }
-        let carried_terms: Option<i64> = sqlx::query_scalar("SELECT terms_id FROM bills WHERE id = ?1").bind(bill_id).fetch_one(&mut **tx).await.map_err(db_err)?;
+        let carried_terms: Option<i64> =
+            sqlx::query_scalar("SELECT terms_id FROM bills WHERE id = ?1").bind(bill_id).fetch_one(&mut **tx).await.map_err(db_err)?;
         crate::ledger::void_for_replacement(tx, old).await?;
         let new_id = crate::expenses::write_bill_carrying(tx, &input, carried_terms).await?;
         let new_entry = entry_of(tx, "bills", new_id).await?;
@@ -114,17 +116,22 @@ async fn keep_applied(tx: &mut Transaction<'_, Sqlite>, to: AppliedTo, old_id: i
     // (number, total, paid, party, currency, rate, live applied rows) of each version.
     type Facts = (String, i64, i64, Option<i64>, Option<String>, Option<i64>, i64);
     let sql = match to {
-        AppliedTo::Invoice => "SELECT 'invoice #' || invoice_number, total_cents, amount_paid_cents, customer_id, currency_code, exchange_rate_e6,
+        AppliedTo::Invoice => {
+            "SELECT 'invoice #' || invoice_number, total_cents, amount_paid_cents, customer_id, currency_code, exchange_rate_e6,
                 (SELECT COUNT(*) FROM invoice_payments WHERE invoice_id = d.id AND is_voided = 0)
               + (SELECT COUNT(*) FROM credit_applications WHERE invoice_id = d.id AND is_voided = 0)
               + (SELECT COUNT(*) FROM bounced_checks WHERE invoice_id = d.id AND is_voided = 0)
-             FROM invoices d WHERE id = ?1",
-        AppliedTo::Bill => "SELECT 'this bill', total_cents, amount_paid_cents, vendor_id, NULL, NULL,
+             FROM invoices d WHERE id = ?1"
+        }
+        AppliedTo::Bill => {
+            "SELECT 'this bill', total_cents, amount_paid_cents, vendor_id, NULL, NULL,
                 (SELECT COUNT(*) FROM bill_payments WHERE bill_id = d.id AND is_voided = 0)
               + (SELECT COUNT(*) FROM vendor_credit_applications WHERE bill_id = d.id AND is_voided = 0)
-             FROM bills d WHERE id = ?1",
+             FROM bills d WHERE id = ?1"
+        }
     };
-    let facts = async |tx: &mut Transaction<'_, Sqlite>, id: i64| -> Result<Facts, String> { sqlx::query_as(sql).bind(id).fetch_one(&mut **tx).await.map_err(db_err) };
+    let facts =
+        async |tx: &mut Transaction<'_, Sqlite>, id: i64| -> Result<Facts, String> { sqlx::query_as(sql).bind(id).fetch_one(&mut **tx).await.map_err(db_err) };
     let (name, _, paid, party, currency, rate, applied) = facts(tx, old_id).await?;
     if applied == 0 {
         return crate::ledger::relink_applied(tx, to, old_id, new_id).await;
@@ -132,9 +139,7 @@ async fn keep_applied(tx: &mut Transaction<'_, Sqlite>, to: AppliedTo, old_id: i
     let (_, new_total, _, new_party, new_currency, new_rate, _) = facts(tx, new_id).await?;
     let who = if to == AppliedTo::Invoice { "customer" } else { "vendor" };
     if new_party != party {
-        return Err(format!(
-            "EDIT_PAID_PARTY: {name} has payments or credits applied, so its {who} can't change; void or remove them first"
-        ));
+        return Err(format!("EDIT_PAID_PARTY: {name} has payments or credits applied, so its {who} can't change; void or remove them first"));
     }
     if new_currency != currency || new_rate != rate {
         return Err(format!(
@@ -159,7 +164,13 @@ pub(crate) async fn record_replacement(tx: &mut Transaction<'_, Sqlite>, documen
     audit(tx, document, old, new, &[]).await
 }
 
-async fn audit(tx: &mut Transaction<'_, Sqlite>, document: &str, (old_id, old_entry): (i64, i64), (new_id, new_entry): (i64, i64), moved: &[Relinked]) -> Result<(), String> {
+async fn audit(
+    tx: &mut Transaction<'_, Sqlite>,
+    document: &str,
+    (old_id, old_entry): (i64, i64),
+    (new_id, new_entry): (i64, i64),
+    moved: &[Relinked],
+) -> Result<(), String> {
     let payload = serde_json::json!({
         "document": document,
         "oldDocumentId": old_id,
@@ -209,15 +220,17 @@ pub(crate) async fn expense_input_in_tx(tx: &mut Transaction<'_, Sqlite>, expens
         return Ok(None);
     }
     type LineRow = (i64, i64, Option<String>, Option<i64>, Option<i64>, bool);
-    let lines: Vec<LineRow> =
-        sqlx::query_as("SELECT account_id, amount_cents, memo, class_id, customer_id, is_billable FROM expense_lines WHERE expense_id = ?1 ORDER BY line_number")
-            .bind(expense_id)
-            .fetch_all(&mut **tx)
-            .await
-            .map_err(db_err)?;
+    let lines: Vec<LineRow> = sqlx::query_as(
+        "SELECT account_id, amount_cents, memo, class_id, customer_id, is_billable FROM expense_lines WHERE expense_id = ?1 ORDER BY line_number",
+    )
+    .bind(expense_id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(db_err)?;
     // The discount and charge lines go with it: they live in `purchase_form_lines`, not
     // `expense_lines`, so the split lines above are counted once.
-    let form_lines = crate::purchase_lines::inputs_of(&crate::purchase_lines::lines_of(&mut **tx, crate::purchase_lines::PurchaseDoc::Expense, expense_id).await?);
+    let form_lines =
+        crate::purchase_lines::inputs_of(&crate::purchase_lines::lines_of(&mut **tx, crate::purchase_lines::PurchaseDoc::Expense, expense_id).await?);
     Ok(Some(ExpenseInput {
         form_lines,
         kind,
@@ -229,7 +242,14 @@ pub(crate) async fn expense_input_in_tx(tx: &mut Transaction<'_, Sqlite>, expens
         memo,
         lines: lines
             .into_iter()
-            .map(|(account_id, amount_cents, memo, class_id, customer_id, billable)| crate::expenses::SplitLineInput { account_id, amount_cents: Cents(amount_cents), memo, class_id, customer_id, billable: Some(billable) })
+            .map(|(account_id, amount_cents, memo, class_id, customer_id, billable)| crate::expenses::SplitLineInput {
+                account_id,
+                amount_cents: Cents(amount_cents),
+                memo,
+                class_id,
+                customer_id,
+                billable: Some(billable),
+            })
             .collect(),
         currency: None,
         payment_method_id,
@@ -248,16 +268,17 @@ pub async fn replace_journal_entry(pool: &SqlitePool, journal_entry_id: i64, ent
 /// the original's mark.
 pub async fn replace_journal_entry_flagged(pool: &SqlitePool, journal_entry_id: i64, entry: JournalEntry, adjusting: Option<bool>) -> Result<i64, String> {
     run(pool, async |tx| {
-        let manual: Option<(bool, bool)> = sqlx::query_as(
-            &format!("SELECT e.is_voided = 0 AND {}, e.is_adjusting FROM journal_entries e WHERE e.id = ?1", crate::ledger::MANUAL_JOURNAL),
-        )
-        .bind(journal_entry_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
+        let manual: Option<(bool, bool)> =
+            sqlx::query_as(&format!("SELECT e.is_voided = 0 AND {}, e.is_adjusting FROM journal_entries e WHERE e.id = ?1", crate::ledger::MANUAL_JOURNAL))
+                .bind(journal_entry_id)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(db_err)?;
         let was_adjusting = match manual {
             None => return Err("EDIT_NOT_FOUND: that journal entry does not exist".into()),
-            Some((false, _)) => return Err("EDIT_NOT_MANUAL: only manual journal entries are edited here; edit the others from the screen that made them".into()),
+            Some((false, _)) => {
+                return Err("EDIT_NOT_MANUAL: only manual journal entries are edited here; edit the others from the screen that made them".into())
+            }
             Some((true, adjusting)) => adjusting,
         };
         void_in_tx(tx, journal_entry_id).await?;

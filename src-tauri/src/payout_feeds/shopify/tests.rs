@@ -84,22 +84,30 @@ async fn mock_shopify(requests: Arc<Mutex<Vec<String>>>) -> String {
                 let request = String::from_utf8_lossy(&buf[..n]).to_string();
                 let line = request.lines().next().unwrap_or("").to_string();
                 requests.lock().unwrap().push(line.clone());
-                let authorized = request.lines().any(|l| l.split_once(':').is_some_and(|(k, v)| k.eq_ignore_ascii_case("x-shopify-access-token") && v.trim() == "shpat_good"));
+                let authorized = request
+                    .lines()
+                    .any(|l| l.split_once(':').is_some_and(|(k, v)| k.eq_ignore_ascii_case("x-shopify-access-token") && v.trim() == "shpat_good"));
                 let (code, body) = if !line.starts_with(&format!("POST /admin/api/{API_VERSION}/graphql.json")) {
                     (404, json!({ "errors": "Not Found" }))
                 } else if !authorized {
                     (401, json!({ "errors": "[API] Invalid API key or access token (unrecognized login or wrong password)" }))
                 } else if request.contains("currencyCode } shopifyPaymentsAccount") {
-                    (200, json!({ "data": { "shop": { "currencyCode": "USD" }, "shopifyPaymentsAccount": { "id": "gid://shopify/ShopifyPaymentsAccount/1" } } }))
+                    (
+                        200,
+                        json!({ "data": { "shop": { "currencyCode": "USD" }, "shopifyPaymentsAccount": { "id": "gid://shopify/ShopifyPaymentsAccount/1" } } }),
+                    )
                 } else if request.contains("payouts(first") {
-                    (200, json!({ "data": { "shopifyPaymentsAccount": { "payouts": {
+                    (
+                        200,
+                        json!({ "data": { "shopifyPaymentsAccount": { "payouts": {
                         "pageInfo": { "hasNextPage": false, "endCursor": null },
                         "nodes": [
                             { "id": "gid://shopify/ShopifyPaymentsPayout/503", "legacyResourceId": "503", "issuedAt": "2026-03-11T00:00:00Z", "status": "SCHEDULED", "transactionType": "DEPOSIT", "net": { "amount": "10.00", "currencyCode": "USD" } },
                             { "id": "gid://shopify/ShopifyPaymentsPayout/502", "legacyResourceId": "502", "issuedAt": "2026-03-10T00:00:00Z", "status": "PAID", "transactionType": "DEPOSIT", "net": { "amount": "9.99", "currencyCode": "USD" } },
                             { "id": "gid://shopify/ShopifyPaymentsPayout/501", "legacyResourceId": "501", "issuedAt": "2026-03-09T00:00:00Z", "status": "PAID", "transactionType": "DEPOSIT", "net": { "amount": "243.05", "currencyCode": "USD" } },
                             { "id": "gid://shopify/ShopifyPaymentsPayout/400", "legacyResourceId": "400", "issuedAt": "2025-01-01T00:00:00Z", "status": "PAID", "transactionType": "DEPOSIT", "net": { "amount": "1.00", "currencyCode": "USD" } }
-                        ] } } } }))
+                        ] } } } }),
+                    )
                 } else if request.contains("balanceTransactions(first") && !throttled.swap(true, std::sync::atomic::Ordering::SeqCst) {
                     (200, json!({ "errors": [{ "message": "Throttled", "extensions": { "code": "THROTTLED" } }] }))
                 } else if request.contains("balanceTransactions(first") {
@@ -108,8 +116,12 @@ async fn mock_shopify(requests: Arc<Mutex<Vec<String>>>) -> String {
                     nodes.sort_by(|a, b| b["transactionDate"].as_str().cmp(&a["transactionDate"].as_str()));
                     let second = request.contains("\"after\":\"page2\"");
                     let (a, b) = nodes.split_at(nodes.len() / 2);
-                    let page_info = if second { json!({ "hasNextPage": false, "endCursor": null }) } else { json!({ "hasNextPage": true, "endCursor": "page2" }) };
-                    (200, json!({ "data": { "shopifyPaymentsAccount": { "balanceTransactions": { "pageInfo": page_info, "nodes": if second { b } else { a } } } } }))
+                    let page_info =
+                        if second { json!({ "hasNextPage": false, "endCursor": null }) } else { json!({ "hasNextPage": true, "endCursor": "page2" }) };
+                    (
+                        200,
+                        json!({ "data": { "shopifyPaymentsAccount": { "balanceTransactions": { "pageInfo": page_info, "nodes": if second { b } else { a } } } } }),
+                    )
                 } else {
                     (200, json!({ "errors": [{ "message": "unexpected query", "extensions": { "code": "BAD_REQUEST" } }] }))
                 };
@@ -128,7 +140,13 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn new_account(pool: &SqlitePool, number: &str, name: &str, kind: &str) -> i64 {
-    sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES (?1, ?2, ?3) RETURNING id").bind(number).bind(name).bind(kind).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES (?1, ?2, ?3) RETURNING id")
+        .bind(number)
+        .bind(name)
+        .bind(kind)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn balance(pool: &SqlitePool, id: i64) -> i64 {
@@ -159,7 +177,8 @@ async fn a_shopify_payout_is_recorded_as_a_gross_deposit_that_lands_at_the_net()
     let f = connect_shopify(&pool, &store, Some(&api), "https://Quill-Studio.myshopify.com/admin", " shpat_good ", &input).await.unwrap();
     assert_eq!((f.processor.as_str(), f.account_ref.as_deref()), ("SHOPIFY", Some("quill-studio.myshopify.com")));
     assert!(std::fs::read_to_string(dir.join(SECRETS_FILE)).unwrap().contains("shpat_good"), "the token is in the credential store");
-    let in_file: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM payout_feeds WHERE secret_key LIKE '%shpat%' OR account_ref LIKE '%shpat%'").fetch_one(&pool).await.unwrap();
+    let in_file: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM payout_feeds WHERE secret_key LIKE '%shpat%' OR account_ref LIKE '%shpat%'").fetch_one(&pool).await.unwrap();
     assert_eq!(in_file, 0, "and not in the company file");
 
     let now = DateTime::parse_from_rfc3339("2026-03-12T12:00:00Z").unwrap().with_timezone(&Utc);

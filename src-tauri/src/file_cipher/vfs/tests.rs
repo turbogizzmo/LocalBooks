@@ -105,7 +105,8 @@ async fn an_encrypted_file_keeps_its_header_and_hides_its_data() {
         Err(e) => Err(e),
     };
     assert!(no_key.unwrap_err().to_string().contains("not a database"));
-    let plain_vfs = sqlx::sqlite::SqliteConnectOptions::new().filename(&path).pragma("key", "\"x'0707070707070707070707070707070707070707070707070707070707070707'\"");
+    let plain_vfs =
+        sqlx::sqlite::SqliteConnectOptions::new().filename(&path).pragma("key", "\"x'0707070707070707070707070707070707070707070707070707070707070707'\"");
     let direct = match SqlitePoolOptions::new().max_connections(1).connect_with(plain_vfs).await {
         Ok(p) => count(&p).await.map(|_| ()),
         Err(e) => Err(e),

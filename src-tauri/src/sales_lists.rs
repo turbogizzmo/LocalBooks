@@ -138,10 +138,12 @@ pub async fn delete_sales_rep(pool: &SqlitePool, id: i64) -> Result<(), String> 
 // ------------------------------------------------------------------------------------------------
 
 pub async fn list_ship_methods(pool: &SqlitePool) -> Result<Vec<ShipMethodView>, String> {
-    sqlx::query_as::<_, ShipMethodView>(&format!("SELECT s.id, s.name, s.is_active, ({SHIP_USED}) AS is_used FROM ship_methods s ORDER BY s.name COLLATE NOCASE"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as::<_, ShipMethodView>(&format!(
+        "SELECT s.id, s.name, s.is_active, ({SHIP_USED}) AS is_used FROM ship_methods s ORDER BY s.name COLLATE NOCASE"
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 async fn get_ship_method(pool: &SqlitePool, id: i64) -> Result<ShipMethodView, String> {
@@ -347,7 +349,13 @@ pub(crate) async fn write_details(tx: &mut Transaction<'_, Sqlite>, doc: SalesDo
 /// `carried` comes over as it was, even when its rep or shipping method has since been made
 /// inactive or its custom field taken off sales forms, so a later list change cannot block it.
 /// Anything newly chosen is checked as for a new form.
-pub(crate) async fn write_details_carrying(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, details: &SalesDetails, carried: &SalesDetails) -> Result<(), String> {
+pub(crate) async fn write_details_carrying(
+    tx: &mut Transaction<'_, Sqlite>,
+    doc: SalesDoc,
+    id: i64,
+    details: &SalesDetails,
+    carried: &SalesDetails,
+) -> Result<(), String> {
     // Addresses left out of the input keep the carried document's own copy (an edited invoice, or an
     // estimate becoming one) rather than refilling from the customer's current record.
     let header = SalesHeader {
@@ -391,19 +399,27 @@ async fn write_columns(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64,
     let invoice = doc == SalesDoc::Invoice;
     let terms = if invoice { ", terms_id = ?6" } else { "" };
     let sql = format!("UPDATE {} SET sales_rep_id = ?1, ship_date = ?2, ship_method_id = ?3, customer_message_id = ?5{terms} WHERE id = ?4", doc.table());
-    let mut query = sqlx::query(&sql).bind(details.sales_rep_id).bind(details.ship_date).bind(details.ship_method_id).bind(id).bind(details.customer_message_id);
+    let mut query =
+        sqlx::query(&sql).bind(details.sales_rep_id).bind(details.ship_date).bind(details.ship_method_id).bind(id).bind(details.customer_message_id);
     // Only an invoice's statement has a sixth parameter.
     if invoice {
         query = query.bind(details.terms_id);
     }
     query.execute(&mut **tx).await.map_err(db_err)?;
     if let Some(style) = details.form_style_id {
-        let exists: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM form_styles WHERE id = ?1)").bind(style).fetch_one(&mut **tx).await.map_err(db_err)?;
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM form_styles WHERE id = ?1)").bind(style).fetch_one(&mut **tx).await.map_err(db_err)?;
         if !exists {
             return Err("FORM_STYLE_NOT_FOUND: that form style no longer exists".into());
         }
     }
-    sqlx::query(&format!("UPDATE {} SET form_style_id = ?1 WHERE id = ?2", doc.table())).bind(details.form_style_id).bind(id).execute(&mut **tx).await.map(|_| ()).map_err(db_err)
+    sqlx::query(&format!("UPDATE {} SET form_style_id = ?1 WHERE id = ?2", doc.table()))
+        .bind(details.form_style_id)
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map(|_| ())
+        .map_err(db_err)
 }
 
 /// `terms_id` on a document of this kind, as a column expression (only invoices have one).
@@ -418,7 +434,8 @@ fn terms_column(doc: SalesDoc) -> &'static str {
 /// A document's details as entered, for loading it back into its form (an edit, or an estimate
 /// becoming an invoice) and printing it.
 pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Result<SalesDetailsView, String> {
-    type Row = (Option<i64>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, Option<i64>, Option<String>, Option<i64>, Option<String>);
+    type Row =
+        (Option<i64>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, Option<i64>, Option<String>, Option<i64>, Option<String>);
     let row: Option<Row> = sqlx::query_as(&format!(
         "SELECT d.sales_rep_id, r.initials, r.name, d.ship_date, d.ship_method_id, s.name, tm.id, tm.name, d.customer_message_id, m.name
          FROM {} d LEFT JOIN sales_reps r ON r.id = d.sales_rep_id LEFT JOIN ship_methods s ON s.id = d.ship_method_id
@@ -431,11 +448,24 @@ pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Resu
     .fetch_optional(pool)
     .await
     .map_err(db_err)?;
-    let Some((sales_rep_id, sales_rep_initials, sales_rep_name, ship_date, ship_method_id, ship_method_name, terms_id, terms_name, customer_message_id, customer_message)) = row else {
+    let Some((
+        sales_rep_id,
+        sales_rep_initials,
+        sales_rep_name,
+        ship_date,
+        ship_method_id,
+        ship_method_name,
+        terms_id,
+        terms_name,
+        customer_message_id,
+        customer_message,
+    )) = row
+    else {
         return Ok(SalesDetailsView::default());
     };
     let header = crate::sales_header::read(pool, doc.table(), id).await?;
-    let form_style_id: Option<i64> = sqlx::query_scalar(&format!("SELECT form_style_id FROM {} WHERE id = ?1", doc.table())).bind(id).fetch_one(pool).await.map_err(db_err)?;
+    let form_style_id: Option<i64> =
+        sqlx::query_scalar(&format!("SELECT form_style_id FROM {} WHERE id = ?1", doc.table())).bind(id).fetch_one(pool).await.map_err(db_err)?;
     Ok(SalesDetailsView {
         sales_rep_id,
         sales_rep_initials,
@@ -456,12 +486,15 @@ pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Resu
 /// A document's details inside a write, to carry them onto another document.
 pub(crate) async fn details_in_tx(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64) -> Result<SalesDetails, String> {
     type DetailsRow = (Option<i64>, Option<NaiveDate>, Option<i64>, Option<i64>, Option<i64>, Option<i64>);
-    let (sales_rep_id, ship_date, ship_method_id, terms_id, customer_message_id, form_style_id): DetailsRow =
-        sqlx::query_as(&format!("SELECT d.sales_rep_id, d.ship_date, d.ship_method_id, {}, d.customer_message_id, d.form_style_id FROM {} d WHERE d.id = ?1", terms_column(doc), doc.table()))
-            .bind(id)
-            .fetch_one(&mut **tx)
-            .await
-            .map_err(db_err)?;
+    let (sales_rep_id, ship_date, ship_method_id, terms_id, customer_message_id, form_style_id): DetailsRow = sqlx::query_as(&format!(
+        "SELECT d.sales_rep_id, d.ship_date, d.ship_method_id, {}, d.customer_message_id, d.form_style_id FROM {} d WHERE d.id = ?1",
+        terms_column(doc),
+        doc.table()
+    ))
+    .bind(id)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_err)?;
     let custom_fields: Vec<(i64, String)> = sqlx::query_as("SELECT field_id, value FROM sales_document_fields WHERE document_kind = ?1 AND document_id = ?2")
         .bind(doc.key())
         .bind(id)

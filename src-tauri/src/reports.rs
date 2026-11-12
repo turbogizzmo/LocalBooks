@@ -127,8 +127,7 @@ pub async fn asset_liability_series(pool: &SqlitePool, today: NaiveDate) -> Resu
     .await
     .map_err(db_err)?;
 
-    let movement: HashMap<(String, String), i64> =
-        rows.into_iter().map(|(bucket, class, net)| ((bucket, class), net)).collect();
+    let movement: HashMap<(String, String), i64> = rows.into_iter().map(|(bucket, class, net)| ((bucket, class), net)).collect();
     let net = |bucket: &str, class: &str| movement.get(&(bucket.to_string(), class.to_string())).copied().unwrap_or(0);
 
     let mut assets = net("OPEN", "ASSET");
@@ -153,12 +152,7 @@ pub async fn dashboard(pool: &SqlitePool, today: NaiveDate) -> Result<Dashboard,
     .await
     .map_err(db_err)?;
 
-    Ok(Dashboard {
-        trial_balance: trial_balance(pool).await?,
-        series: asset_liability_series(pool, today).await?,
-        total_assets_cents,
-        total_liabilities_cents,
-    })
+    Ok(Dashboard { trial_balance: trial_balance(pool).await?, series: asset_liability_series(pool, today).await?, total_assets_cents, total_liabilities_cents })
 }
 
 #[cfg(test)]

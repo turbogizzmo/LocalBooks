@@ -71,15 +71,9 @@ fn the_version_has_its_changelog_and_whats_new() {
         .to_string();
     let minor = version.splitn(3, '.').take(2).collect::<Vec<_>>().join(".");
     let changelog = read(&repo().join("CHANGELOG.md"));
-    assert!(
-        changelog.contains(&format!("## [{version}]")),
-        "CHANGELOG.md needs a `## [{version}]` section: it becomes the release notes"
-    );
+    assert!(changelog.contains(&format!("## [{version}]")), "CHANGELOG.md needs a `## [{version}]` section: it becomes the release notes");
     let site = read(&repo().join("site/index.html"));
-    assert!(
-        site.contains(&format!("What’s new to test in {minor}<")),
-        "site/index.html's What's new should be for {minor}: update it in the release PR"
-    );
+    assert!(site.contains(&format!("What’s new to test in {minor}<")), "site/index.html's What's new should be for {minor}: update it in the release PR");
 }
 
 /// A heading's anchor as GitHub makes it (and as `headingId` in GuideView.jsx does in the app).
@@ -155,7 +149,11 @@ fn security_claims_point_at_code_that_exists() {
             problems.push(format!("link to {link}, which does not exist"));
         }
     }
-    let code: String = relative_links(&text).iter().filter(|l| l.ends_with(".rs") || l.ends_with(".jsx") || l.ends_with(".json")).filter_map(|l| std::fs::read_to_string(repo().join(l)).ok()).collect();
+    let code: String = relative_links(&text)
+        .iter()
+        .filter(|l| l.ends_with(".rs") || l.ends_with(".jsx") || l.ends_with(".json"))
+        .filter_map(|l| std::fs::read_to_string(repo().join(l)).ok())
+        .collect();
 
     let start = text.find("## How Tillhouse is built to be safe").expect("the built-to-be-safe section");
     let end = text.find("What this does not cover:").expect("the limits list");
@@ -178,7 +176,8 @@ fn security_claims_point_at_code_that_exists() {
         }
         // Names in backticks that look like code (snake_case or Type::name) must exist.
         for (i, name) in bullet.split('`').enumerate() {
-            let looks_like_code = i % 2 == 1 && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':') && (name.contains('_') || name.contains("::"));
+            let looks_like_code =
+                i % 2 == 1 && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':') && (name.contains('_') || name.contains("::"));
             let last = name.rsplit("::").next().unwrap_or(name);
             if looks_like_code && !code.contains(last) {
                 problems.push(format!("`{name}` is not in any file SECURITY.md links"));
@@ -244,7 +243,8 @@ fn every_screen_has_help_and_a_guide() {
     let mut problems = Vec::new();
     for id in screens() {
         match entries.iter().find(|(s, ..)| *s == id) {
-            None => problems.push(format!("{id}: add it to `screens` in the src/components/help/ file for its area, with `help` (what the screen is for) and `guide`")),
+            None => problems
+                .push(format!("{id}: add it to `screens` in the src/components/help/ file for its area, with `help` (what the screen is for) and `guide`")),
             Some((_, help, guide, file)) => {
                 if help.trim().len() < 40 {
                     problems.push(format!("{id} ({file}): `help` should say what the screen is for, in a sentence or two"));
@@ -359,7 +359,10 @@ fn every_preference_is_in_the_preferences_guide() {
             _ => headings.contains(&wanted) || bold.iter().any(|b| b.contains(&wanted)),
         };
         if !found {
-            missing.push(format!("{kind} \"{label}\" ({file}): {}", if kind == "setting" { "name it in bold, with its default and what it does" } else { "mention it under its category" }));
+            missing.push(format!(
+                "{kind} \"{label}\" ({file}): {}",
+                if kind == "setting" { "name it in bold, with its default and what it does" } else { "mention it under its category" }
+            ));
         }
     }
     assert!(missing.is_empty(), "docs/guide/preferences.md is missing:\n{}", missing.join("\n"));

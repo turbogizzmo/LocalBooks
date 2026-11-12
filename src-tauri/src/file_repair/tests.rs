@@ -1,8 +1,8 @@
 use super::*;
 use crate::db::test_pool;
 use crate::ledger::{post_journal_entry, JournalEntry, JournalLine};
-use chrono::NaiveDate;
 use crate::money::Cents;
+use chrono::NaiveDate;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -45,7 +45,10 @@ async fn rebuild_restores_a_dropped_safeguard_trigger_and_a_changed_index() {
     let pool = test_pool().await;
     let trigger: String = sqlx::query_scalar("SELECT name FROM sqlite_schema WHERE type = 'trigger' ORDER BY name LIMIT 1").fetch_one(&pool).await.unwrap();
     let (index, table): (String, String) =
-        sqlx::query_as("SELECT name, tbl_name FROM sqlite_schema WHERE type = 'index' AND sql IS NOT NULL ORDER BY name LIMIT 1").fetch_one(&pool).await.unwrap();
+        sqlx::query_as("SELECT name, tbl_name FROM sqlite_schema WHERE type = 'index' AND sql IS NOT NULL ORDER BY name LIMIT 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     sqlx::query(&format!("DROP TRIGGER {}", quote_ident(&trigger))).execute(&pool).await.unwrap();
     sqlx::query(&format!("DROP INDEX {}", quote_ident(&index))).execute(&pool).await.unwrap();
     sqlx::query(&format!("CREATE INDEX {} ON {} (id)", quote_ident(&index), quote_ident(&table))).execute(&pool).await.unwrap();
@@ -74,7 +77,10 @@ async fn rebuilding_a_healthy_file_changes_no_data() {
     let pool = test_pool().await;
     post_sale(&pool, 4_200).await;
     let count = |pool: SqlitePool| async move {
-        sqlx::query_scalar::<_, i64>("SELECT (SELECT COUNT(*) FROM journal_lines) * 1000 + (SELECT COUNT(*) FROM ledger_audit_log)").fetch_one(&pool).await.unwrap()
+        sqlx::query_scalar::<_, i64>("SELECT (SELECT COUNT(*) FROM journal_lines) * 1000 + (SELECT COUNT(*) FROM ledger_audit_log)")
+            .fetch_one(&pool)
+            .await
+            .unwrap()
     };
     let before = count(pool.clone()).await;
     let actions = rebuild_pool(&pool).await.unwrap();
@@ -132,7 +138,8 @@ async fn an_invoice_paid_total_out_of_step_with_its_payments_is_reported() {
                 income_account_id: account(&pool, "4000").await,
                 product_service_id: None,
                 class_id: None,
-                is_taxable: false, service_date: None,
+                is_taxable: false,
+                service_date: None,
             }],
             currency: None,
             tax_rate_id: None,

@@ -3,19 +3,11 @@ use crate::db::test_pool;
 use crate::statements::balance_sheet;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
-    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
-        .bind(number)
-        .fetch_one(pool)
-        .await
-        .expect("seeded account exists")
+    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.expect("seeded account exists")
 }
 
 async fn balance(pool: &SqlitePool, account: i64) -> i64 {
-    sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1")
-        .bind(account)
-        .fetch_one(pool)
-        .await
-        .unwrap()
+    sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1").bind(account).fetch_one(pool).await.unwrap()
 }
 
 fn d(day: u32) -> NaiveDate {
@@ -23,7 +15,8 @@ fn d(day: u32) -> NaiveDate {
 }
 
 fn bill(vendor: &str, lines: Vec<(i64, i64)>) -> BillInput {
-    BillInput { form_lines: Vec::new(),
+    BillInput {
+        form_lines: Vec::new(),
         terms_id: None,
         vendor_name: vendor.into(),
         bill_number: Some("INV-778".into()),
@@ -31,12 +24,32 @@ fn bill(vendor: &str, lines: Vec<(i64, i64)>) -> BillInput {
         due_date: d(31),
         memo: None,
         total_cents: Cents(lines.iter().map(|(_, cents)| cents).sum()),
-        lines: lines.into_iter().map(|(account, cents)| BillLineInput{ account_id: account, amount_cents: Cents(cents), memo: Some("Line".into()), quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }).collect(),
+        lines: lines
+            .into_iter()
+            .map(|(account, cents)| BillLineInput {
+                account_id: account,
+                amount_cents: Cents(cents),
+                memo: Some("Line".into()),
+                quantity_e4: None,
+                rate_cents: None,
+                product_service_id: None,
+                class_id: None,
+                customer_id: None,
+                billable: None,
+            })
+            .collect(),
     }
 }
 
 fn pay(bill_id: i64, account: i64, cents: i64) -> BillPaymentInput {
-    BillPaymentInput { bill_id, payment_account_id: account, payment_date: d(10), amount_cents: Cents(cents), reference: Some("1001".into()), to_be_printed: false }
+    BillPaymentInput {
+        bill_id,
+        payment_account_id: account,
+        payment_date: d(10),
+        amount_cents: Cents(cents),
+        reference: Some("1001".into()),
+        to_be_printed: false,
+    }
 }
 
 #[tokio::test]
@@ -113,12 +126,11 @@ async fn bill_rejects_bad_categories_and_rolls_back() {
         let err = post_vendor_bill(&pool, bill("Oops Inc", vec![(rent, 1_000), (bad, 500)])).await.expect_err("bad category");
         assert!(err.starts_with("BILL_BAD_CATEGORY: line 2"), "{err}");
     }
-    let (bills, entries, vendors): (i64, i64, i64) = sqlx::query_as(
-        "SELECT (SELECT COUNT(*) FROM bills), (SELECT COUNT(*) FROM journal_entries), (SELECT COUNT(*) FROM vendors)",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let (bills, entries, vendors): (i64, i64, i64) =
+        sqlx::query_as("SELECT (SELECT COUNT(*) FROM bills), (SELECT COUNT(*) FROM journal_entries), (SELECT COUNT(*) FROM vendors)")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!((bills, entries, vendors), (0, 0, 0));
 
     let mut early = bill("Late Co", vec![(rent, 1_000)]);
@@ -138,13 +150,12 @@ async fn split_bill_must_match_total_and_debits_each_account_once() {
 
     // Two splits to the same account collapse into one debit line on the journal entry.
     let posted = post_vendor_bill(&pool, bill("Landlord LLC", vec![(rent, 100_000), (utilities, 20_000), (rent, 5_000)])).await.unwrap();
-    let lines: Vec<(i64, i64, i64)> = sqlx::query_as(
-        "SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number",
-    )
-    .bind(posted.journal_entry_id)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let lines: Vec<(i64, i64, i64)> =
+        sqlx::query_as("SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number")
+            .bind(posted.journal_entry_id)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     assert_eq!(lines, vec![(rent, 105_000, 0), (utilities, 20_000, 0), (ap, 0, 125_000)]);
     assert_eq!((posted.line_count, posted.category_account_id), (3, None));
 }
@@ -152,9 +163,15 @@ async fn split_bill_must_match_total_and_debits_each_account_once() {
 #[tokio::test]
 async fn expenses_and_checks_credit_the_payment_account() {
     let pool = test_pool().await;
-    let (checking, card, rent, fuel, ar) =
-        (account_id(&pool, "1010").await, account_id(&pool, "2100").await, account_id(&pool, "6300").await, account_id(&pool, "6100").await, account_id(&pool, "1200").await);
-    let input = |kind: &str, account: i64, lines: Vec<(i64, i64)>| ExpenseInput { form_lines: Vec::new(),
+    let (checking, card, rent, fuel, ar) = (
+        account_id(&pool, "1010").await,
+        account_id(&pool, "2100").await,
+        account_id(&pool, "6300").await,
+        account_id(&pool, "6100").await,
+        account_id(&pool, "1200").await,
+    );
+    let input = |kind: &str, account: i64, lines: Vec<(i64, i64)>| ExpenseInput {
+        form_lines: Vec::new(),
         payment_method_id: None,
         kind: kind.into(),
         payee_name: Some("Shell".into()),
@@ -163,7 +180,17 @@ async fn expenses_and_checks_credit_the_payment_account() {
         check_number: Some("1042".into()),
         payment_method: None,
         memo: None,
-        lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents: Cents(amount_cents), memo: None, class_id: None, customer_id: None, billable: None }).collect(),
+        lines: lines
+            .into_iter()
+            .map(|(account_id, amount_cents)| SplitLineInput {
+                account_id,
+                amount_cents: Cents(amount_cents),
+                memo: None,
+                class_id: None,
+                customer_id: None,
+                billable: None,
+            })
+            .collect(),
         currency: None,
     };
 
@@ -216,7 +243,8 @@ async fn foreign_expense_credits_the_bank_in_home_currency() {
     let (checking, travel, meals) = (account_id(&pool, "1010").await, account_id(&pool, "6450").await, account_id(&pool, "6200").await);
     let posted = post_expense(
         &pool,
-        ExpenseInput { form_lines: Vec::new(),
+        ExpenseInput {
+            form_lines: Vec::new(),
             payment_method_id: None,
             kind: "EXPENSE".into(),
             payee_name: Some("Hotel Tokyo".into()),
@@ -226,7 +254,14 @@ async fn foreign_expense_credits_the_bank_in_home_currency() {
             payment_method: Some("CREDIT_CARD".into()),
             memo: None,
             lines: vec![
-                SplitLineInput { account_id: travel, amount_cents: Cents(3_200_000), memo: Some("2 nights".into()), class_id: None, customer_id: None, billable: None },
+                SplitLineInput {
+                    account_id: travel,
+                    amount_cents: Cents(3_200_000),
+                    memo: Some("2 nights".into()),
+                    class_id: None,
+                    customer_id: None,
+                    billable: None,
+                },
                 SplitLineInput { account_id: meals, amount_cents: Cents(450_050), memo: None, class_id: None, customer_id: None, billable: None },
             ],
             currency: Some(ForeignCurrency { code: "JPY".into(), exchange_rate_e6: 6_667 }),
@@ -247,7 +282,17 @@ async fn foreign_expense_credits_the_bank_in_home_currency() {
 async fn bill_lines_can_be_priced_by_quantity_and_rate() {
     let pool = test_pool().await;
     let (ap, supplies) = (account_id(&pool, "2000").await, account_id(&pool, "6250").await);
-    let priced = |q: i64, r: i64, amount: i64| BillLineInput{ account_id: supplies, amount_cents: Cents(amount), memo: Some("Paper".into()), quantity_e4: Some(q), rate_cents: Some(Cents(r)), product_service_id: None, class_id: None, customer_id: None, billable: None };
+    let priced = |q: i64, r: i64, amount: i64| BillLineInput {
+        account_id: supplies,
+        amount_cents: Cents(amount),
+        memo: Some("Paper".into()),
+        quantity_e4: Some(q),
+        rate_cents: Some(Cents(r)),
+        product_service_id: None,
+        class_id: None,
+        customer_id: None,
+        billable: None,
+    };
     let mut input = bill("Staples", vec![]);
     input.lines = vec![priced(25_000, 1_299, 3_248)];
     input.total_cents = Cents(3_248);
@@ -266,7 +311,8 @@ async fn card_credits_debit_the_card_and_credit_the_splits() {
     let pool = test_pool().await;
     let (checking, card, office, fuel) =
         (account_id(&pool, "1010").await, account_id(&pool, "2100").await, account_id(&pool, "6250").await, account_id(&pool, "6100").await);
-    let input = |kind: &str, account: i64, lines: Vec<(i64, i64)>| ExpenseInput { form_lines: Vec::new(),
+    let input = |kind: &str, account: i64, lines: Vec<(i64, i64)>| ExpenseInput {
+        form_lines: Vec::new(),
         payment_method_id: None,
         kind: kind.into(),
         payee_name: Some("Office Depot".into()),
@@ -275,7 +321,17 @@ async fn card_credits_debit_the_card_and_credit_the_splits() {
         check_number: Some("ignored".into()),
         payment_method: None,
         memo: Some("Returned chair".into()),
-        lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents: Cents(amount_cents), memo: None, class_id: None, customer_id: None, billable: None }).collect(),
+        lines: lines
+            .into_iter()
+            .map(|(account_id, amount_cents)| SplitLineInput {
+                account_id,
+                amount_cents: Cents(amount_cents),
+                memo: None,
+                class_id: None,
+                customer_id: None,
+                billable: None,
+            })
+            .collect(),
         currency: None,
     };
     post_expense(&pool, input("EXPENSE", card, vec![(office, 20_000), (fuel, 5_000)])).await.unwrap();
@@ -285,16 +341,18 @@ async fn card_credits_debit_the_card_and_credit_the_splits() {
     assert_eq!((balance(&pool, office).await, balance(&pool, fuel).await), (8_000, 4_500));
 
     // The entry: Dr the card, Cr each split, labelled as a card credit in the register.
-    let lines: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number")
-        .bind(credit.journal_entry_id)
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+    let lines: Vec<(i64, i64, i64)> =
+        sqlx::query_as("SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number")
+            .bind(credit.journal_entry_id)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     assert_eq!(lines, vec![(office, 0, 12_000), (fuel, 0, 500), (card, 12_500, 0)]);
     let register = crate::registers::account_register(&pool, card, None, None, false).await.unwrap();
     let types: Vec<&str> = register.rows.iter().map(|r| r.source_type.as_str()).collect();
     assert_eq!(types, vec!["EXPENSE", "CARD_CREDIT"]);
-    let description: String = sqlx::query_scalar("SELECT memo FROM journal_entries WHERE id = ?1").bind(credit.journal_entry_id).fetch_one(&pool).await.unwrap();
+    let description: String =
+        sqlx::query_scalar("SELECT memo FROM journal_entries WHERE id = ?1").bind(credit.journal_entry_id).fetch_one(&pool).await.unwrap();
     assert_eq!(description, "Credit Card Credit - Office Depot");
 
     // Only a credit card account takes a card credit.
@@ -331,13 +389,26 @@ async fn the_database_holds_card_credits_to_their_rules() {
 
     // A card credit whose entry runs the charge's way is refused when the entry is attached.
     let mut tx = pool.begin().await.unwrap();
-    let id: i64 = sqlx::query_scalar("INSERT INTO expenses (kind, payment_account_id, expense_date, total_cents, is_credit) VALUES ('EXPENSE', ?1, '2026-10-08', 100, 1) RETURNING id")
-        .bind(card)
-        .fetch_one(&mut *tx)
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO expenses (kind, payment_account_id, expense_date, total_cents, is_credit) VALUES ('EXPENSE', ?1, '2026-10-08', 100, 1) RETURNING id",
+    )
+    .bind(card)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents) VALUES (?1, 1, ?2, 100)")
+        .bind(id)
+        .bind(office)
+        .execute(&mut *tx)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents) VALUES (?1, 1, ?2, 100)").bind(id).bind(office).execute(&mut *tx).await.unwrap();
-    let wrong_way = JournalEntry { id: None, date: d(8), description: "x".into(), lines: vec![JournalLine::debit(office, 100), JournalLine::credit(card, 100)], currency: None };
+    let wrong_way = JournalEntry {
+        id: None,
+        date: d(8),
+        description: "x".into(),
+        lines: vec![JournalLine::debit(office, 100), JournalLine::credit(card, 100)],
+        currency: None,
+    };
     let entry = post_entry_in_tx(&mut tx, &wrong_way, EntrySource::Expense(id)).await.unwrap();
     let err = sqlx::query("UPDATE expenses SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut *tx).await.unwrap_err();
     assert!(err.to_string().contains("EXP_WRONG_DIRECTION"), "{err}");
@@ -346,7 +417,8 @@ async fn the_database_holds_card_credits_to_their_rules() {
     // A posted charge cannot be turned into a credit.
     let charge = post_expense(
         &pool,
-        ExpenseInput { form_lines: Vec::new(),
+        ExpenseInput {
+            form_lines: Vec::new(),
             payment_method_id: None,
             kind: "EXPENSE".into(),
             payee_name: None,
@@ -371,7 +443,8 @@ async fn foreign_card_credit_debits_the_card_in_home_currency() {
     let (card, travel) = (account_id(&pool, "2100").await, account_id(&pool, "6450").await);
     let posted = post_expense(
         &pool,
-        ExpenseInput { form_lines: Vec::new(),
+        ExpenseInput {
+            form_lines: Vec::new(),
             payment_method_id: None,
             kind: "CARD_CREDIT".into(),
             payee_name: Some("Hotel Tokyo".into()),

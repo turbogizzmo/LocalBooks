@@ -76,19 +76,19 @@ fn snapshot_nets(snapshot: &Value) -> Nets {
 }
 
 async fn live_nets(conn: &mut SqliteConnection, entry_id: i64) -> Result<Nets, String> {
-    let rows: Vec<(i64, i64)> = sqlx::query_as(
-        "SELECT account_id, SUM(debit_cents) - SUM(credit_cents) FROM journal_lines WHERE journal_entry_id = ?1 GROUP BY account_id",
-    )
-    .bind(entry_id)
-    .fetch_all(&mut *conn)
-    .await
-    .map_err(db_err)?;
+    let rows: Vec<(i64, i64)> =
+        sqlx::query_as("SELECT account_id, SUM(debit_cents) - SUM(credit_cents) FROM journal_lines WHERE journal_entry_id = ?1 GROUP BY account_id")
+            .bind(entry_id)
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(db_err)?;
     Ok(rows.into_iter().collect())
 }
 
 async fn propose_for(conn: &mut SqliteConnection, entry_id: i64, snapshot: &Value) -> Result<CorrectionProposal, String> {
     let entry_number = snapshot["entryNumber"].as_i64();
-    let exists: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM journal_entries WHERE id = ?1)").bind(entry_id).fetch_one(&mut *conn).await.map_err(db_err)?;
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM journal_entries WHERE id = ?1)").bind(entry_id).fetch_one(&mut *conn).await.map_err(db_err)?;
     let mut proposal = CorrectionProposal {
         entry_id,
         entry_number,
@@ -146,7 +146,8 @@ async fn propose_for(conn: &mut SqliteConnection, entry_id: i64, snapshot: &Valu
     }
 
     for (account, delta) in &deltas {
-        let name: Option<String> = sqlx::query_scalar("SELECT full_name FROM v_chart_of_accounts WHERE id = ?1").bind(account).fetch_optional(&mut *conn).await.map_err(db_err)?;
+        let name: Option<String> =
+            sqlx::query_scalar("SELECT full_name FROM v_chart_of_accounts WHERE id = ?1").bind(account).fetch_optional(&mut *conn).await.map_err(db_err)?;
         let Some(account_name) = name else {
             proposal.status = CorrectionStatus::MissingAccount;
             proposal.lines.clear();
@@ -211,7 +212,8 @@ pub async fn apply_correction(pool: &SqlitePool, input: &ApplyCorrectionInput) -
         .fetch_optional(&mut *tx)
         .await
         .map_err(db_err)?;
-    let snapshot: Value = serde_json::from_str(&payload.ok_or("HEAL_NO_SNAPSHOT: that entry has no posting snapshot")?).map_err(|e| format!("AUDIT_SNAPSHOT: {e}"))?;
+    let snapshot: Value =
+        serde_json::from_str(&payload.ok_or("HEAL_NO_SNAPSHOT: that entry has no posting snapshot")?).map_err(|e| format!("AUDIT_SNAPSHOT: {e}"))?;
     let proposal = propose_for(&mut tx, input.entry_id, &snapshot).await?;
     if proposal.status != CorrectionStatus::Fixable {
         return Err(format!("HEAL_NOT_FIXABLE: {}", proposal.explanation));
@@ -239,7 +241,8 @@ pub async fn apply_correction(pool: &SqlitePool, input: &ApplyCorrectionInput) -
         Err(err) => return Err(ledger::rollback(tx, err).await),
     };
     let recorded = async {
-        let number: i64 = sqlx::query_scalar("SELECT entry_number FROM journal_entries WHERE id = ?1").bind(correction_id).fetch_one(&mut *tx).await.map_err(db_err)?;
+        let number: i64 =
+            sqlx::query_scalar("SELECT entry_number FROM journal_entries WHERE id = ?1").bind(correction_id).fetch_one(&mut *tx).await.map_err(db_err)?;
         let payload = json!({
             "entryId": input.entry_id,
             "entryNumber": proposal.entry_number,

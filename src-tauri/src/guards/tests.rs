@@ -13,7 +13,8 @@ fn d(y: i32, m: u32, day: u32) -> NaiveDate {
 }
 
 fn check(account: i64, rent: i64, number: &str, date: NaiveDate) -> ExpenseInput {
-    ExpenseInput { form_lines: Vec::new(),
+    ExpenseInput {
+        form_lines: Vec::new(),
         kind: "CHECK".into(),
         payee_name: Some("Harbor Hardware".into()),
         payment_account_id: account,
@@ -28,7 +29,8 @@ fn check(account: i64, rent: i64, number: &str, date: NaiveDate) -> ExpenseInput
 }
 
 fn bill(vendor: &str, number: &str, expense: i64, date: NaiveDate) -> BillInput {
-    BillInput { form_lines: Vec::new(),
+    BillInput {
+        form_lines: Vec::new(),
         vendor_name: vendor.into(),
         bill_number: Some(number.into()),
         bill_date: date,
@@ -36,7 +38,17 @@ fn bill(vendor: &str, number: &str, expense: i64, date: NaiveDate) -> BillInput 
         memo: None,
         total_cents: Cents(2_500),
         terms_id: None,
-        lines: vec![BillLineInput { account_id: expense, amount_cents: Cents(2_500), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![BillLineInput {
+            account_id: expense,
+            amount_cents: Cents(2_500),
+            memo: None,
+            quantity_e4: None,
+            rate_cents: None,
+            product_service_id: None,
+            class_id: None,
+            customer_id: None,
+            billable: None,
+        }],
     }
 }
 
@@ -174,15 +186,31 @@ async fn selling_below_zero_warns_stops_or_is_allowed() {
     use serde_json::json;
     let pool = test_pool().await;
     let sales = account(&pool, "4000").await;
-    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false })
-        .await
-        .unwrap()
-        .id;
-    let item = crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap();
+    let product = crate::sales::create_product(
+        &pool,
+        crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false },
+    )
+    .await
+    .unwrap()
+    .id;
+    let item =
+        crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None })
+            .await
+            .unwrap();
     let equity = account(&pool, "3000").await;
-    crate::inventory::adjust(&pool, &crate::inventory::AdjustInput { item_id: item.id, date: d(2026, 4, 1), qty_change_e4: 50_000, total_cost_cents: Some(5_000), offset_account_id: equity, memo: None })
-        .await
-        .unwrap();
+    crate::inventory::adjust(
+        &pool,
+        &crate::inventory::AdjustInput {
+            item_id: item.id,
+            date: d(2026, 4, 1),
+            qty_change_e4: 50_000,
+            total_cost_cents: Some(5_000),
+            offset_account_id: equity,
+            memo: None,
+        },
+    )
+    .await
+    .unwrap();
     let sale = |qty_e4: i64| -> crate::invoices::InvoiceInput {
         serde_json::from_value(json!({ "customerName": "Acme", "issueDate": "2026-04-10", "dueDate": "2026-05-10",
             "lines": [{ "description": "Widget", "quantityE4": qty_e4, "rateCents": 2_500, "incomeAccountId": sales, "productServiceId": product },
@@ -228,12 +256,19 @@ fn sale_posting(product: i64, qty_e4: i64) -> Posting<'static> {
 async fn inventory_can_be_turned_off() {
     let pool = test_pool().await;
     let sales = account(&pool, "4000").await;
-    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Bolt".into(), description: None, rate_cents: Cents(100), income_account_id: sales, is_taxable: false }).await.unwrap().id;
+    let product = crate::sales::create_product(
+        &pool,
+        crate::sales::ProductInput { name: "Bolt".into(), description: None, rate_cents: Cents(100), income_account_id: sales, is_taxable: false },
+    )
+    .await
+    .unwrap()
+    .id;
     crate::preferences::set(&pool, "inventory_enabled", "false").await.unwrap();
     let track = crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None };
     assert!(crate::inventory::track_product(&pool, &track).await.unwrap_err().starts_with("INV_OFF"));
     let po: crate::workflows::PurchaseOrderInput = serde_json::from_value(serde_json::json!({ "vendorName": "Supplier", "poDate": "2026-04-01", "memo": null,
-        "lines": [{ "description": "Bolts", "quantityE4": 10_000, "rateCents": 100, "amountCents": 100, "accountId": account(&pool, "6250").await }] })).unwrap();
+        "lines": [{ "description": "Bolts", "quantityE4": 10_000, "rateCents": 100, "amountCents": 100, "accountId": account(&pool, "6250").await }] }))
+    .unwrap();
     assert!(crate::workflows::create_purchase_order(&pool, po).await.unwrap_err().starts_with("INV_OFF"));
     crate::preferences::set(&pool, "inventory_enabled", "true").await.unwrap();
     crate::inventory::track_product(&pool, &track).await.unwrap();
@@ -263,12 +298,17 @@ async fn paying_a_vendor_or_customer_around_open_bills_and_invoices_warns() {
     assert!(warnings_on(&pool, &expense(&pay, None), today).await.unwrap().is_empty());
 
     let receipt = |customer: &str| -> crate::sales::SalesReceiptInput {
-        serde_json::from_value(serde_json::json!({ "customerName": customer, "receiptDate": "2026-05-01", "depositAccountId": checking, "paymentMethod": "CASH",
-            "lines": [{ "description": "Mulch", "quantityE4": 10_000, "rateCents": 4_000, "incomeAccountId": services, "isTaxable": false }] })).unwrap()
+        serde_json::from_value(
+            serde_json::json!({ "customerName": customer, "receiptDate": "2026-05-01", "depositAccountId": checking, "paymentMethod": "CASH",
+            "lines": [{ "description": "Mulch", "quantityE4": 10_000, "rateCents": 4_000, "incomeAccountId": services, "isTaxable": false }] }),
+        )
+        .unwrap()
     };
     assert!(warnings_on(&pool, &sales_receipt(&receipt("Elm Street")), today).await.unwrap().is_empty());
-    let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Elm Street:Front Yard", "issueDate": "2026-05-01", "dueDate": "2026-05-31",
-        "lines": [{ "description": "Pruning", "quantityE4": 10_000, "rateCents": 30_000, "incomeAccountId": services, "isTaxable": false }] })).unwrap();
+    let invoice: crate::invoices::InvoiceInput =
+        serde_json::from_value(serde_json::json!({ "customerName": "Elm Street:Front Yard", "issueDate": "2026-05-01", "dueDate": "2026-05-31",
+        "lines": [{ "description": "Pruning", "quantityE4": 10_000, "rateCents": 30_000, "incomeAccountId": services, "isTaxable": false }] }))
+        .unwrap();
     crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
     // The customer's job's invoice counts, and so does the job's own.
     assert_eq!(codes(&warnings_on(&pool, &sales_receipt(&receipt("Elm Street:Front Yard")), today).await.unwrap()), ["CUSTOMER_OPEN_INVOICES"]);

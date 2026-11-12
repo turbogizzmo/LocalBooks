@@ -99,7 +99,12 @@ pub async fn date_warning(pool: &SqlitePool, date: NaiveDate, today: NaiveDate) 
 }
 
 /// A check number already used on another live check from the same account.
-pub async fn duplicate_check_warning(pool: &SqlitePool, payment_account_id: i64, check_number: Option<&str>, except_expense_id: Option<i64>) -> Result<Option<Warning>, String> {
+pub async fn duplicate_check_warning(
+    pool: &SqlitePool,
+    payment_account_id: i64,
+    check_number: Option<&str>,
+    except_expense_id: Option<i64>,
+) -> Result<Option<Warning>, String> {
     let Some(number) = check_number.map(str::trim).filter(|n| !n.is_empty()) else { return Ok(None) };
     if !preferences::flag(pool, WARN_DUPLICATE_CHECKS).await? {
         return Ok(None);
@@ -125,7 +130,12 @@ pub async fn duplicate_check_warning(pool: &SqlitePool, payment_account_id: i64,
 }
 
 /// A bill number already used on another live bill from the same vendor.
-pub async fn duplicate_bill_warning(pool: &SqlitePool, vendor_name: &str, bill_number: Option<&str>, except_bill_id: Option<i64>) -> Result<Option<Warning>, String> {
+pub async fn duplicate_bill_warning(
+    pool: &SqlitePool,
+    vendor_name: &str,
+    bill_number: Option<&str>,
+    except_bill_id: Option<i64>,
+) -> Result<Option<Warning>, String> {
     let Some(number) = bill_number.map(str::trim).filter(|n| !n.is_empty()) else { return Ok(None) };
     if !preferences::flag(pool, WARN_DUPLICATE_BILLS).await? {
         return Ok(None);
@@ -144,9 +154,7 @@ pub async fn duplicate_bill_warning(pool: &SqlitePool, vendor_name: &str, bill_n
     .fetch_optional(pool)
     .await
     .map_err(db_err)?;
-    Ok(used.map(|date| {
-        Warning::new("DUPLICATE_BILL_NUMBER", format!("{} already has a bill numbered {number} (dated {date}).", vendor_name.trim()))
-    }))
+    Ok(used.map(|date| Warning::new("DUPLICATE_BILL_NUMBER", format!("{} already has a bill numbered {number} (dated {date}).", vendor_name.trim()))))
 }
 
 /// A line posting straight to Retained Earnings, which normally only the year-end close changes.
@@ -198,12 +206,14 @@ pub async fn stock_warning(pool: &SqlitePool, sold: &[(i64, i64)], returned_by: 
         .map_err(db_err)?;
         let Some((item_id, name, on_hand)) = item else { continue };
         let back: i64 = match returned_by {
-            Some(entry) => sqlx::query_scalar("SELECT COALESCE(-SUM(qty_change_e4), 0) FROM stock_ledger_entries WHERE item_id = ?1 AND journal_entry_id = ?2 AND kind = 'SALE'")
-                .bind(item_id)
-                .bind(entry)
-                .fetch_one(pool)
-                .await
-                .map_err(db_err)?,
+            Some(entry) => sqlx::query_scalar(
+                "SELECT COALESCE(-SUM(qty_change_e4), 0) FROM stock_ledger_entries WHERE item_id = ?1 AND journal_entry_id = ?2 AND kind = 'SALE'",
+            )
+            .bind(item_id)
+            .bind(entry)
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?,
             None => 0,
         };
         let available = on_hand.saturating_add(back);
@@ -218,7 +228,10 @@ pub async fn stock_warning(pool: &SqlitePool, sold: &[(i64, i64)], returned_by: 
     if mode == "stop" {
         return Err(format!("INV_NOT_ENOUGH_STOCK: not enough on hand to sell: {list}. Record the purchase or an adjustment first (Preferences › Items & Inventory stops sales below zero)."));
     }
-    Ok(Some(Warning::new("NEGATIVE_STOCK", format!("This sale takes stock below zero: {list}. It is costed at the last purchase cost until the stock arrives."))))
+    Ok(Some(Warning::new(
+        "NEGATIVE_STOCK",
+        format!("This sale takes stock below zero: {list}. It is costed at the last purchase cost until the stock arrives."),
+    )))
 }
 
 /// Selling to a customer (or one of its jobs, or the customer a job belongs to) that has invoices
@@ -250,15 +263,16 @@ pub async fn overdue_customer_warning(pool: &SqlitePool, customer_name: &str, to
     let invoices = if count == 1 { "1 overdue invoice".to_string() } else { format!("{count} overdue invoices") };
     Ok(Some(Warning::new(
         "CUSTOMER_OVERDUE",
-        format!(
-            "{name} has {invoices} with {} still open (the oldest was due {oldest}).",
-            crate::ledger::format_cents(open.unwrap_or_default())
-        ),
+        format!("{name} has {invoices} with {} still open (the oldest was due {oldest}).", crate::ledger::format_cents(open.unwrap_or_default())),
     )))
 }
 
 fn count_text(count: i64, one: &str, many: &str) -> String {
-    if count == 1 { format!("1 {one}") } else { format!("{count} {many}") }
+    if count == 1 {
+        format!("1 {one}")
+    } else {
+        format!("{count} {many}")
+    }
 }
 
 /// Paying a vendor directly (a check or expense) while the vendor has unpaid bills: the payment

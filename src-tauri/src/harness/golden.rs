@@ -170,7 +170,15 @@ async fn sales_tax_liability() {
         writeln!(out, "{:<24}{:>10}{:>16}{:>16}{:>16}", "Rate", "ppm", "Taxable", "Non-taxable", "Tax").unwrap();
         for r in &report.rows {
             let ppm = r.rate_ppm.map(|p| p.to_string()).unwrap_or_default();
-            writeln!(out, "{:<24}{ppm:>10}{:>16}{:>16}{:>16}", r.name, money(r.taxable_sales_cents), money(r.non_taxable_sales_cents), money(r.tax_collected_cents)).unwrap();
+            writeln!(
+                out,
+                "{:<24}{ppm:>10}{:>16}{:>16}{:>16}",
+                r.name,
+                money(r.taxable_sales_cents),
+                money(r.non_taxable_sales_cents),
+                money(r.tax_collected_cents)
+            )
+            .unwrap();
         }
         row(&mut out, 0, "Tax collected", Some(report.tax_collected_cents));
         row(&mut out, 0, "Tax paid in period", Some(report.paid_cents));
@@ -235,7 +243,8 @@ async fn budget_vs_actual() {
         let pool = pool.clone();
         async move { sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_one(&pool).await.unwrap() }
     };
-    let (checking, card, services, rent, office) = (account("1010").await, account("2100").await, account("4100").await, account("6300").await, account("6250").await);
+    let (checking, card, services, rent, office) =
+        (account("1010").await, account("2100").await, account("4100").await, account("6300").await, account("6250").await);
     let budget = crate::statements::create_budget(&pool, "2025 plan", d(2025, 1, 1)).await.unwrap();
     let mut amounts = Vec::new();
     for period in 1..=12 {
@@ -296,11 +305,23 @@ async fn inventory_reports() {
     let checking: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(p).await.unwrap();
     let mut items = Vec::new();
     for (name, price) in [("Framed Print", 12_000), ("Sketchbook", 2_400)] {
-        let product = crate::sales::create_product(p, crate::sales::ProductInput { name: name.into(), description: Some(format!("{name}, stocked")), rate_cents: Cents(price), income_account_id: sales, is_taxable: false })
-            .await
-            .unwrap()
-            .id;
-        let item = crate::inventory::track_product(p, &crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap();
+        let product = crate::sales::create_product(
+            p,
+            crate::sales::ProductInput {
+                name: name.into(),
+                description: Some(format!("{name}, stocked")),
+                rate_cents: Cents(price),
+                income_account_id: sales,
+                is_taxable: false,
+            },
+        )
+        .await
+        .unwrap()
+        .id;
+        let item =
+            crate::inventory::track_product(p, &crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None })
+                .await
+                .unwrap();
         items.push((product, item.asset_account_id));
     }
     let buy = |date: NaiveDate, (product, asset): (i64, i64), qty: i64, rate: i64| {
@@ -331,7 +352,17 @@ async fn inventory_reports() {
     let v = crate::report_center::inventory_valuation(p, d(2025, 12, 31)).await.unwrap();
     let mut out = format!("Inventory Valuation Summary as of {}\n\n", v.as_of);
     for r in &v.rows {
-        writeln!(out, "{:<16}{:>10}{:>12}{:>14}{:>12}{:>14}", r.name, qty(r.qty_on_hand_e4), cost(r.average_cost_cents), money(r.asset_value_cents), money(r.sales_price_cents), money(r.retail_value_cents)).unwrap();
+        writeln!(
+            out,
+            "{:<16}{:>10}{:>12}{:>14}{:>12}{:>14}",
+            r.name,
+            qty(r.qty_on_hand_e4),
+            cost(r.average_cost_cents),
+            money(r.asset_value_cents),
+            money(r.sales_price_cents),
+            money(r.retail_value_cents)
+        )
+        .unwrap();
     }
     writeln!(out, "{:<50}{:>14}{:>26}", "Total", money(v.total_asset_value_cents), money(v.total_retail_value_cents)).unwrap();
 
@@ -340,7 +371,19 @@ async fn inventory_reports() {
     for item in &detail.items {
         writeln!(out, "{}  (opening {} worth {})", item.name, qty(item.opening_qty_e4), money(item.opening_value_cents)).unwrap();
         for r in &item.rows {
-            writeln!(out, "  {}  {:<10}{:<20}{:>8}{:>12}{:>8}{:>12}{:>12}", r.movement_date, r.kind, r.party_name.as_deref().unwrap_or("-"), qty(r.qty_change_e4), money(r.value_change_cents), qty(r.qty_on_hand_e4), cost(r.average_cost_cents), money(r.asset_value_cents)).unwrap();
+            writeln!(
+                out,
+                "  {}  {:<10}{:<20}{:>8}{:>12}{:>8}{:>12}{:>12}",
+                r.movement_date,
+                r.kind,
+                r.party_name.as_deref().unwrap_or("-"),
+                qty(r.qty_change_e4),
+                money(r.value_change_cents),
+                qty(r.qty_on_hand_e4),
+                cost(r.average_cost_cents),
+                money(r.asset_value_cents)
+            )
+            .unwrap();
         }
     }
     writeln!(out, "Total value {}", money(detail.total_value_cents)).unwrap();
@@ -348,7 +391,8 @@ async fn inventory_reports() {
     let status = crate::report_center::stock_status(p, d(2025, 11, 1), d(2025, 12, 31)).await.unwrap();
     writeln!(out, "\nInventory Stock Status by Item, {} to {}\n", status.start_date, status.end_date).unwrap();
     for r in &status.rows {
-        writeln!(out, "{:<16}{:>10}{:>10}{:>10}{:>12}", r.name, qty(r.qty_on_hand_e4), qty(r.qty_on_order_e4), qty(r.qty_sold_e4), qty(r.sales_per_week_e4)).unwrap();
+        writeln!(out, "{:<16}{:>10}{:>10}{:>10}{:>12}", r.name, qty(r.qty_on_hand_e4), qty(r.qty_on_order_e4), qty(r.qty_sold_e4), qty(r.sales_per_week_e4))
+            .unwrap();
     }
     insta::assert_snapshot!(out);
 }

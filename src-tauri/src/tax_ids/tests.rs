@@ -49,7 +49,12 @@ async fn no_plain_tax_id_is_left_in_the_file_after_turning_users_on() {
     let path = dir.join("books.localbooks");
     let pool = crate::db::open(&path).await.unwrap();
     for i in 0..200 {
-        sqlx::query("INSERT INTO vendors (name, tax_id) VALUES (?1, ?2)").bind(format!("Vendor {i}")).bind(format!("987-65-{i:04}")).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO vendors (name, tax_id) VALUES (?1, ?2)")
+            .bind(format!("Vendor {i}"))
+            .bind(format!("987-65-{i:04}"))
+            .execute(&pool)
+            .await
+            .unwrap();
     }
     sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&pool).await.unwrap();
     crate::users::turn_on(&pool, "Owner", None, "owner password").await.unwrap();
@@ -88,7 +93,15 @@ const QB_VALUE: &str = "AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAexampleOnlyNotAKey12==";
 fn only_quickbooks_encrypted_values_match() {
     assert!(is_quickbooks_encrypted(QB_VALUE));
     assert!(is_quickbooks_encrypted(&format!("  {QB_VALUE} ")));
-    for kept in ["12-3456789", "123-45-6789", "n/a", "W-9 requested 2026/01/05", "123456789012345678901234567890", "ABCDEFGHIJKLMNOPQRSTUVWXYZ12", "Pending: see email from pat@x.com"] {
+    for kept in [
+        "12-3456789",
+        "123-45-6789",
+        "n/a",
+        "W-9 requested 2026/01/05",
+        "123456789012345678901234567890",
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ12",
+        "Pending: see email from pat@x.com",
+    ] {
         assert!(!is_quickbooks_encrypted(kept), "{kept}");
     }
 }
@@ -97,9 +110,23 @@ fn only_quickbooks_encrypted_values_match() {
 #[tokio::test]
 async fn the_migration_clears_exactly_what_the_rule_matches() {
     let pool = test_pool().await;
-    let samples = [QB_VALUE, "12-3456789", "n/a", "W-9 requested 2026/01/05", "123456789012345678901234567890", "ABCDEFGHIJKLMNOPQRSTUVWXYZ12", "abc/def+ghi=jkl/mno+pqr1=", "lb1:not-checked-by-sql"];
+    let samples = [
+        QB_VALUE,
+        "12-3456789",
+        "n/a",
+        "W-9 requested 2026/01/05",
+        "123456789012345678901234567890",
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ12",
+        "abc/def+ghi=jkl/mno+pqr1=",
+        "lb1:not-checked-by-sql",
+    ];
     for (n, value) in samples.iter().enumerate() {
-        sqlx::query("INSERT INTO vendors (name, tax_id, tax_id_masked) VALUES (?1, ?2, 'masked')").bind(format!("Vendor {n}")).bind(value).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO vendors (name, tax_id, tax_id_masked) VALUES (?1, ?2, 'masked')")
+            .bind(format!("Vendor {n}"))
+            .bind(value)
+            .execute(&pool)
+            .await
+            .unwrap();
     }
     sqlx::raw_sql(include_str!("../../migrations/0046_clear_quickbooks_encrypted_tax_ids.sql")).execute(&pool).await.unwrap();
     for (n, value) in samples.iter().enumerate() {
@@ -137,7 +164,7 @@ async fn quickbooks_values_encrypted_before_the_check_are_cleared_at_the_next_un
     sqlx::query("UPDATE vendors SET tax_id = ?1, tax_id_masked = ?2 WHERE id = ?3").bind(stored).bind(masked).bind(id).execute(&pool).await.unwrap();
 
     assert_eq!(protect_all(&mut pool.acquire().await.unwrap(), key).await.unwrap(), 0);
-    let (tax_id, masked): (Option<String>, Option<String>) = sqlx::query_as("SELECT tax_id, tax_id_masked FROM vendors WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
+    let (tax_id, masked): (Option<String>, Option<String>) =
+        sqlx::query_as("SELECT tax_id, tax_id_masked FROM vendors WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
     assert_eq!((tax_id, masked), (None, None));
 }
-

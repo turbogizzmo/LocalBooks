@@ -1,8 +1,8 @@
 use super::*;
-use sqlx::sqlite::SqliteConnectOptions;
-use std::path::PathBuf;
 use crate::ledger::{post_journal_entry, JournalEntry, JournalLine};
 use chrono::NaiveDate;
+use sqlx::sqlite::SqliteConnectOptions;
+use std::path::PathBuf;
 
 struct TempDir(PathBuf);
 impl TempDir {
@@ -58,12 +58,11 @@ async fn opening_an_older_company_file_saves_a_copy_before_upgrading_it() {
             ..sqlx::migrate::Migrator::DEFAULT
         };
         db::migrate_with(&pool, &previous).await.unwrap();
-        let entry: i64 = sqlx::query_scalar(
-            "INSERT INTO journal_entries (entry_number, entry_date, memo) VALUES (1, '2026-10-01', 'Sale \u{2014} \"cash\"') RETURNING id",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let entry: i64 =
+            sqlx::query_scalar("INSERT INTO journal_entries (entry_number, entry_date, memo) VALUES (1, '2026-10-01', 'Sale \u{2014} \"cash\"') RETURNING id")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         sqlx::query(
             "INSERT INTO journal_lines (journal_entry_id, line_number, account_id, debit_cents, credit_cents)
                  SELECT ?1, 1, id, 12345, 0 FROM chart_of_accounts WHERE account_number = '1010'
@@ -150,10 +149,7 @@ async fn restore_rejects_foreign_newer_tampered_and_unbalanced_files() {
 
     let other = tmp.0.join("other.db");
     {
-        let pool = SqlitePoolOptions::new()
-            .connect_with(SqliteConnectOptions::new().filename(&other).create_if_missing(true))
-            .await
-            .unwrap();
+        let pool = SqlitePoolOptions::new().connect_with(SqliteConnectOptions::new().filename(&other).create_if_missing(true)).await.unwrap();
         sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY)").execute(&pool).await.unwrap();
         crate::db::close_pool(&pool).await;
     }
@@ -175,11 +171,13 @@ async fn restore_rejects_foreign_newer_tampered_and_unbalanced_files() {
         }
     };
     post_sale(&db.pool().await, 5_000).await;
-    let newer = make("newer.db", "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (9999, 'future', 1, x'00', 0)").await;
+    let newer =
+        make("newer.db", "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (9999, 'future', 1, x'00', 0)").await;
     assert!(reject(newer).await.starts_with("RESTORE_NEWER"));
     let tampered = make("tampered.db", "UPDATE _sqlx_migrations SET checksum = x'00' WHERE version = 1").await;
     assert!(reject(tampered).await.starts_with("RESTORE_TAMPERED"));
-    let unbalanced = make("unbalanced.db", "DROP TRIGGER trg_jl_update_draft_only; UPDATE journal_lines SET debit_cents = debit_cents + 1 WHERE debit_cents > 0").await;
+    let unbalanced =
+        make("unbalanced.db", "DROP TRIGGER trg_jl_update_draft_only; UPDATE journal_lines SET debit_cents = debit_cents + 1 WHERE debit_cents > 0").await;
     assert!(reject(unbalanced).await.starts_with("RESTORE_UNBALANCED"));
 
     // None of the rejected files touched the live books.
@@ -228,7 +226,14 @@ async fn twenty_restores_in_a_row_all_swap_cleanly() {
         post_sale(&db.pool().await, 1).await;
         // Queries that finish just before the swap: their connections are still on their way back.
         let pool = db.pool().await;
-        let reads: Vec<_> = (0..4).map(|_| tokio::spawn({ let pool = pool.clone(); async move { total_posted(&pool).await } })).collect();
+        let reads: Vec<_> = (0..4)
+            .map(|_| {
+                tokio::spawn({
+                    let pool = pool.clone();
+                    async move { total_posted(&pool).await }
+                })
+            })
+            .collect();
         for read in reads {
             read.await.unwrap();
         }

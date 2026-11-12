@@ -115,7 +115,12 @@ impl FormLineInput {
     /// A group heading over the next `count` item lines.
     #[cfg(test)]
     pub fn group(after_lines: usize, count: usize, print_items: bool) -> Self {
-        FormLineInput { group_line_count: count, group_quantity_e4: Some(10_000), print_items: Some(print_items), ..Self::blank(after_lines, FormLineKind::Group) }
+        FormLineInput {
+            group_line_count: count,
+            group_quantity_e4: Some(10_000),
+            print_items: Some(print_items),
+            ..Self::blank(after_lines, FormLineKind::Group)
+        }
     }
 
     pub fn subtotal(after_lines: usize) -> Self {
@@ -129,7 +134,13 @@ impl FormLineInput {
 
     /// A discount of a percentage (`percent_ppm`) or an amount off the line above.
     pub fn discount(after_lines: usize, account_id: i64, percent_ppm: Option<i64>, amount_cents: Option<i64>, is_taxable: bool) -> Self {
-        FormLineInput { account_id: Some(account_id), percent_ppm, amount_cents: amount_cents.map(Cents), is_taxable, ..Self::blank(after_lines, FormLineKind::Discount) }
+        FormLineInput {
+            account_id: Some(account_id),
+            percent_ppm,
+            amount_cents: amount_cents.map(Cents),
+            is_taxable,
+            ..Self::blank(after_lines, FormLineKind::Discount)
+        }
     }
 
     fn text(&self) -> String {
@@ -228,9 +239,10 @@ pub fn lay_out(items: &[ItemAmount], form: &[FormLineInput], code: &str) -> Resu
                 }
                 FormLineKind::Discount => {
                     let n = number;
-                    let above = base.take().filter(|b| *b > 0).ok_or_else(|| {
-                        format!("{code}_DISCOUNT_NEEDS_BASE: the discount on line {n} must come right after an item or a subtotal")
-                    })?;
+                    let above = base
+                        .take()
+                        .filter(|b| *b > 0)
+                        .ok_or_else(|| format!("{code}_DISCOUNT_NEEDS_BASE: the discount on line {n} must come right after an item or a subtotal"))?;
                     let off = match (f.percent_ppm, f.amount_cents) {
                         (Some(ppm), None) if (1..=1_000_000).contains(&ppm) => mul_div_round(above, ppm, 1_000_000).unwrap_or(0),
                         (None, Some(cents)) if cents.is_positive() => cents.get(),
@@ -251,9 +263,10 @@ pub fn lay_out(items: &[ItemAmount], form: &[FormLineInput], code: &str) -> Resu
                 }
                 FormLineKind::Charge => {
                     let n = number;
-                    let above = base.take().filter(|b| *b > 0).ok_or_else(|| {
-                        format!("{code}_CHARGE_NEEDS_BASE: the percent charge on line {n} must come right after an item or a subtotal")
-                    })?;
+                    let above = base
+                        .take()
+                        .filter(|b| *b > 0)
+                        .ok_or_else(|| format!("{code}_CHARGE_NEEDS_BASE: the percent charge on line {n} must come right after an item or a subtotal"))?;
                     let ppm = f.percent_ppm.filter(|p| (1..=1_000_000).contains(p)).ok_or_else(|| {
                         format!("{code}_BAD_CHARGE_PERCENT: the charge on line {n} needs a percentage up to 100% (a fixed charge is an item line)")
                     })?;
@@ -358,7 +371,8 @@ pub(crate) async fn check_form_lines(tx: &mut Transaction<'_, Sqlite>, form: &[F
             FormLineKind::Subtotal => continue,
             FormLineKind::Group => {
                 if let Some(group) = f.item_group_id {
-                    let found: Option<i64> = sqlx::query_scalar("SELECT id FROM item_groups WHERE id = ?1").bind(group).fetch_optional(&mut **tx).await.map_err(db_err)?;
+                    let found: Option<i64> =
+                        sqlx::query_scalar("SELECT id FROM item_groups WHERE id = ?1").bind(group).fetch_optional(&mut **tx).await.map_err(db_err)?;
                     if found.is_none() {
                         return Err(format!("{code}_UNKNOWN_GROUP: the group on line {n} does not exist"));
                     }
@@ -440,7 +454,13 @@ pub fn charge_rows(form: &[FormLineInput], layout: &Layout) -> Vec<ChargeRow> {
 }
 
 /// Writes a document's percent charges to its item table (`<table>` keyed by `<key>`).
-pub(crate) async fn write_charges(tx: &mut Transaction<'_, Sqlite>, doc: impl Into<LineTables>, id: i64, charges: &[ChargeRow], taxed: bool) -> Result<(), String> {
+pub(crate) async fn write_charges(
+    tx: &mut Transaction<'_, Sqlite>,
+    doc: impl Into<LineTables>,
+    id: i64,
+    charges: &[ChargeRow],
+    taxed: bool,
+) -> Result<(), String> {
     let LineTables { items: table, key, .. } = doc.into();
     for c in charges {
         sqlx::query(&format!(
@@ -465,7 +485,14 @@ pub(crate) async fn write_charges(tx: &mut Transaction<'_, Sqlite>, doc: impl In
 
 /// Writes a document's form lines, after its row is inserted and before it posts. `taxed`: the
 /// document has a tax rate (as for item lines, a line is stored taxable only then).
-pub(crate) async fn write_form_lines(tx: &mut Transaction<'_, Sqlite>, doc: impl Into<LineTables>, id: i64, form: &[FormLineInput], layout: &Layout, taxed: bool) -> Result<(), String> {
+pub(crate) async fn write_form_lines(
+    tx: &mut Transaction<'_, Sqlite>,
+    doc: impl Into<LineTables>,
+    id: i64,
+    form: &[FormLineInput],
+    layout: &Layout,
+    taxed: bool,
+) -> Result<(), String> {
     let (table, key) = table(doc);
     for (number, index, amount_cents) in layout.form_rows() {
         let f = &form[index];
@@ -520,20 +547,35 @@ pub struct FormLineView {
 }
 
 /// A document's form lines in line order.
-pub async fn form_lines_of<'e, E: sqlx::Executor<'e, Database = Sqlite>>(executor: E, doc: impl Into<LineTables>, id: i64) -> Result<Vec<FormLineView>, String> {
+pub async fn form_lines_of<'e, E: sqlx::Executor<'e, Database = Sqlite>>(
+    executor: E,
+    doc: impl Into<LineTables>,
+    id: i64,
+) -> Result<Vec<FormLineView>, String> {
     let (table, key) = table(doc);
-    sqlx::query_as::<_, FormLineView>(&format!("SELECT line_number, kind, description, amount_cents, product_service_id, percent_ppm, account_id, class_id, is_taxable,
-                item_group_id, group_quantity_e4, group_line_count, print_items FROM {table} WHERE {key} = ?1 ORDER BY line_number"))
-        .bind(id)
-        .fetch_all(executor)
-        .await
-        .map_err(db_err)
+    sqlx::query_as::<_, FormLineView>(&format!(
+        "SELECT line_number, kind, description, amount_cents, product_service_id, percent_ppm, account_id, class_id, is_taxable,
+                item_group_id, group_quantity_e4, group_line_count, print_items FROM {table} WHERE {key} = ?1 ORDER BY line_number"
+    ))
+    .bind(id)
+    .fetch_all(executor)
+    .await
+    .map_err(db_err)
 }
 
 /// A stored percent charge (an item row with a percent) back as a form line input, placed among
 /// the plain item lines numbered `item_numbers`.
 #[allow(clippy::too_many_arguments)]
-pub fn charge_input(line_number: i64, description: &str, percent_ppm: i64, account_id: i64, product_service_id: Option<i64>, class_id: Option<i64>, is_taxable: bool, item_numbers: &[i64]) -> FormLineInput {
+pub fn charge_input(
+    line_number: i64,
+    description: &str,
+    percent_ppm: i64,
+    account_id: i64,
+    product_service_id: Option<i64>,
+    class_id: Option<i64>,
+    is_taxable: bool,
+    item_numbers: &[i64],
+) -> FormLineInput {
     FormLineInput {
         after_lines: item_numbers.iter().filter(|n| **n < line_number).count(),
         description: description.to_string(),
@@ -644,7 +686,10 @@ pub struct ItemGroup {
 /// Every group with its items, by name.
 pub async fn list_groups(pool: &SqlitePool) -> Result<Vec<ItemGroup>, String> {
     let groups: Vec<(i64, String, Option<String>, bool, bool)> =
-        sqlx::query_as("SELECT id, name, description, print_items, is_active FROM item_groups ORDER BY name COLLATE NOCASE").fetch_all(pool).await.map_err(db_err)?;
+        sqlx::query_as("SELECT id, name, description, print_items, is_active FROM item_groups ORDER BY name COLLATE NOCASE")
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
     let members: Vec<(i64, i64, String, i64)> = sqlx::query_as(
         "SELECT m.group_id, m.product_id, p.name, m.quantity_e4 FROM item_group_members m JOIN products_services p ON p.id = m.product_id ORDER BY m.group_id, m.position",
     )
@@ -662,7 +707,11 @@ pub async fn list_groups(pool: &SqlitePool) -> Result<Vec<ItemGroup>, String> {
             members: members
                 .iter()
                 .filter(|m| m.0 == id)
-                .map(|(_, product_id, product_name, quantity_e4)| GroupMember { product_id: *product_id, product_name: product_name.clone(), quantity_e4: *quantity_e4 })
+                .map(|(_, product_id, product_name, quantity_e4)| GroupMember {
+                    product_id: *product_id,
+                    product_name: product_name.clone(),
+                    quantity_e4: *quantity_e4,
+                })
                 .collect(),
         })
         .collect())

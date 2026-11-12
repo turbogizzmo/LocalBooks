@@ -129,7 +129,9 @@ pub fn lay_out(splits: &[i64], form: &[PurchaseFormLineInput], code: &str) -> Re
             return Err(format!("{code}_FORM_LINE_PLACE: a {what} line must follow one of the split lines"));
         }
         if placed.contains(&after) {
-            return Err(format!("{code}_FORM_LINE_NEEDS_BASE: split line {after} already has a discount or charge after it; a {what} applies to the split line just above it"));
+            return Err(format!(
+                "{code}_FORM_LINE_NEEDS_BASE: split line {after} already has a discount or charge after it; a {what} applies to the split line just above it"
+            ));
         }
         placed.push(after);
         let base = splits[after - 1];
@@ -190,12 +192,20 @@ pub async fn check(tx: &mut Transaction<'_, Sqlite>, form: &[PurchaseFormLineInp
             Some(_) => {}
         }
         if let Some(item) = line.product_service_id {
-            let row: Option<(String, bool)> =
-                sqlx::query_as("SELECT item_type, is_active FROM products_services WHERE id = ?1").bind(item).fetch_optional(&mut **tx).await.map_err(db_err)?;
+            let row: Option<(String, bool)> = sqlx::query_as("SELECT item_type, is_active FROM products_services WHERE id = ?1")
+                .bind(item)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(db_err)?;
             match row {
                 Some((kind, true)) if kind == line.kind.item_type() => {}
                 Some((_, false)) => return Err(format!("{code}_INACTIVE_ITEM: the {what} after split line {n} uses an inactive item")),
-                _ => return Err(format!("{code}_FORM_LINE_ITEM: the {what} after split line {n} must use a {} item", if line.kind == PurchaseLineKind::Discount { "Discount" } else { "Other Charge" })),
+                _ => {
+                    return Err(format!(
+                        "{code}_FORM_LINE_ITEM: the {what} after split line {n} must use a {} item",
+                        if line.kind == PurchaseLineKind::Discount { "Discount" } else { "Other Charge" }
+                    ))
+                }
             }
         }
         if let Some(class) = line.class_id {

@@ -7,15 +7,27 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn post(pool: &SqlitePool, lines: Vec<JournalLine>) -> i64 {
-    post_journal_entry(pool, JournalEntry { id: None, date: "2026-05-01".parse().unwrap(), description: "original".into(), lines, currency: None }).await.unwrap()
+    post_journal_entry(pool, JournalEntry { id: None, date: "2026-05-01".parse().unwrap(), description: "original".into(), lines, currency: None })
+        .await
+        .unwrap()
 }
 
 async fn balance(pool: &SqlitePool, account: i64) -> i64 {
-    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1").bind(account).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1")
+        .bind(account)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn tamper(pool: &SqlitePool, sql: &str) {
-    for s in ["PRAGMA foreign_keys = OFF", "DROP TRIGGER IF EXISTS trg_jl_update_draft_only", "DROP TRIGGER IF EXISTS trg_jl_delete_draft_only", "DROP TRIGGER IF EXISTS trg_je_no_delete_posted", "DROP TRIGGER IF EXISTS trg_je_posted_header_immutable"] {
+    for s in [
+        "PRAGMA foreign_keys = OFF",
+        "DROP TRIGGER IF EXISTS trg_jl_update_draft_only",
+        "DROP TRIGGER IF EXISTS trg_jl_delete_draft_only",
+        "DROP TRIGGER IF EXISTS trg_je_no_delete_posted",
+        "DROP TRIGGER IF EXISTS trg_je_posted_header_immutable",
+    ] {
         sqlx::query(s).execute(pool).await.unwrap();
     }
     sqlx::query(sql).execute(pool).await.unwrap();
@@ -29,7 +41,8 @@ fn today() -> NaiveDate {
 #[tokio::test]
 async fn reviewed_corrections_restore_balanced_changes_and_refuse_the_rest() {
     let pool = test_pool().await;
-    let (checking, sales, services, savings) = (account(&pool, "1010").await, account(&pool, "4000").await, account(&pool, "4100").await, account(&pool, "1020").await);
+    let (checking, sales, services, savings) =
+        (account(&pool, "1010").await, account(&pool, "4000").await, account(&pool, "4100").await, account(&pool, "1020").await);
     let moved = post(&pool, vec![JournalLine::debit(checking, 50_000), JournalLine::credit(sales, 50_000)]).await;
     let deleted = post(&pool, vec![JournalLine::debit(savings, 7_000), JournalLine::credit(services, 7_000)]).await;
     let skewed = post(&pool, vec![JournalLine::debit(checking, 3_000), JournalLine::credit(sales, 3_000)]).await;
@@ -66,17 +79,26 @@ async fn reviewed_corrections_restore_balanced_changes_and_refuse_the_rest() {
     let applied = apply_correction(&pool, &ApplyCorrectionInput { entry_id: moved, lines: p.lines.clone(), date: today() }).await.unwrap();
     assert_eq!(balance(&pool, sales).await, sales_before - 50_000, "sales gets its income back");
     assert_eq!(balance(&pool, services).await, services_before + 50_000);
-    assert!(apply_correction(&pool, &ApplyCorrectionInput { entry_id: moved, lines: p.lines.clone(), date: today() }).await.unwrap_err().starts_with("HEAL_NOT_FIXABLE"));
+    assert!(apply_correction(&pool, &ApplyCorrectionInput { entry_id: moved, lines: p.lines.clone(), date: today() })
+        .await
+        .unwrap_err()
+        .starts_with("HEAL_NOT_FIXABLE"));
     let after = propose_corrections(&pool).await.unwrap();
     let corrected = after.iter().find(|p| p.entry_id == moved).unwrap();
     assert_eq!((corrected.status, corrected.corrected_by_entry_number), (CorrectionStatus::Corrected, Some(applied.correction_entry_number)));
 
-    let heal: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'FORENSIC_HEAL' AND target_entity_id = ?1").bind(moved).fetch_one(&pool).await.unwrap();
+    let heal: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'FORENSIC_HEAL' AND target_entity_id = ?1")
+        .bind(moved)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     let heal: Value = serde_json::from_str(&heal).unwrap();
     assert_eq!(heal["correctionEntryId"], applied.correction_entry_id);
 
     // Corrections respect the closing date like every other entry, and nothing is recorded.
-    crate::closing::set_closing_date(&pool, &crate::closing::ClosingInput { lock_date: Some(today()), current_passcode: None, new_passcode: None }).await.unwrap();
+    crate::closing::set_closing_date(&pool, &crate::closing::ClosingInput { lock_date: Some(today()), current_passcode: None, new_passcode: None })
+        .await
+        .unwrap();
     let err = apply_correction(&pool, &ApplyCorrectionInput { entry_id: deleted, lines: d.lines.clone(), date: today() }).await.unwrap_err();
     assert_eq!(err, crate::closing::CLOSED_MESSAGE);
     let heals: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'FORENSIC_HEAL'").fetch_one(&pool).await.unwrap();
@@ -88,8 +110,14 @@ async fn reviewed_corrections_restore_balanced_changes_and_refuse_the_rest() {
     assert_eq!(balance(&pool, savings).await, 7_000);
 
     // Out-of-balance and date-only changes cannot be "healed" with an entry.
-    assert!(apply_correction(&pool, &ApplyCorrectionInput { entry_id: skewed, lines: vec![], date: today() }).await.unwrap_err().starts_with("HEAL_NOT_FIXABLE"));
-    assert!(apply_correction(&pool, &ApplyCorrectionInput { entry_id: redated, lines: vec![], date: today() }).await.unwrap_err().starts_with("HEAL_NOT_FIXABLE"));
+    assert!(apply_correction(&pool, &ApplyCorrectionInput { entry_id: skewed, lines: vec![], date: today() })
+        .await
+        .unwrap_err()
+        .starts_with("HEAL_NOT_FIXABLE"));
+    assert!(apply_correction(&pool, &ApplyCorrectionInput { entry_id: redated, lines: vec![], date: today() })
+        .await
+        .unwrap_err()
+        .starts_with("HEAL_NOT_FIXABLE"));
 }
 
 #[tokio::test]

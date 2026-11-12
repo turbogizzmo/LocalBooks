@@ -185,7 +185,12 @@ fn describe(kind: Kind, input: &Value) -> Result<(String, i64, NaiveDate, Option
 }
 
 async fn get(pool: &SqlitePool, id: i64) -> Result<ApprovalRequest, String> {
-    sqlx::query_as(&format!("{SELECT} WHERE id = ?1")).bind(id).fetch_optional(pool).await.map_err(db_err)?.ok_or_else(|| format!("APPROVAL_NOT_FOUND: no request {id}"))
+    sqlx::query_as(&format!("{SELECT} WHERE id = ?1"))
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| format!("APPROVAL_NOT_FOUND: no request {id}"))
 }
 
 /// Saves a bill or purchase order as a request waiting for approval.
@@ -216,7 +221,8 @@ pub async fn submit_purchase_order_bill(pool: &SqlitePool, order_id: i64, bill: 
     let (vendor, total, date, reference) = describe(Kind::Bill, &input)?;
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result: Result<i64, String> = async {
-        let head: Option<(String, i64)> = sqlx::query_as("SELECT status, po_number FROM purchase_orders WHERE id = ?1").bind(order_id).fetch_optional(&mut *tx).await.map_err(db_err)?;
+        let head: Option<(String, i64)> =
+            sqlx::query_as("SELECT status, po_number FROM purchase_orders WHERE id = ?1").bind(order_id).fetch_optional(&mut *tx).await.map_err(db_err)?;
         let (status, number) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
         if status != "OPEN" {
             return Err("PO_NOT_OPEN: only an open purchase order can be billed".into());
@@ -255,7 +261,11 @@ pub async fn submit_purchase_order_bill(pool: &SqlitePool, order_id: i64, bill: 
 
 /// Requests with `status` (all when `None`), newest first.
 pub async fn list(pool: &SqlitePool, status: Option<&str>) -> Result<Vec<ApprovalRequest>, String> {
-    sqlx::query_as(&format!("{SELECT} WHERE ?1 IS NULL OR status = ?1 ORDER BY (status = 'PENDING') DESC, id DESC")).bind(status).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(&format!("{SELECT} WHERE ?1 IS NULL OR status = ?1 ORDER BY (status = 'PENDING') DESC, id DESC"))
+        .bind(status)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 fn now() -> String {
@@ -329,14 +339,15 @@ pub async fn reject(pool: &SqlitePool, id: i64, decided_by: &str, note: &str) ->
     if note.chars().count() > 1000 {
         return Err("APPROVAL_NOTE: keep the note under 1,000 characters".into());
     }
-    let done = sqlx::query("UPDATE approval_requests SET status = 'REJECTED', decided_by = ?1, decided_at = ?2, note = ?3 WHERE id = ?4 AND status = 'PENDING'")
-        .bind(decided_by)
-        .bind(now())
-        .bind(note)
-        .bind(id)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
+    let done =
+        sqlx::query("UPDATE approval_requests SET status = 'REJECTED', decided_by = ?1, decided_at = ?2, note = ?3 WHERE id = ?4 AND status = 'PENDING'")
+            .bind(decided_by)
+            .bind(now())
+            .bind(note)
+            .bind(id)
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
     if done.rows_affected() != 1 {
         let request = get(pool, id).await?;
         return Err(format!("APPROVAL_DECIDED: this request was already {}", request.status.to_lowercase()));

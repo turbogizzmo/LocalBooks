@@ -107,11 +107,12 @@ mod imp {
             return Err(super::UNSUPPORTED.into());
         }
         // A desktop app names the window the prompt belongs to, so it opens in front of it.
-        let interop = windows::core::factory::<UserConsentVerifier, IUserConsentVerifierInterop>().map_err(|e| format!("MFA_DEVICE: Windows Hello can't be reached ({e})"))?;
+        let interop = windows::core::factory::<UserConsentVerifier, IUserConsentVerifierInterop>()
+            .map_err(|e| format!("MFA_DEVICE: Windows Hello can't be reached ({e})"))?;
         let hwnd = HWND(parent.unwrap_or(0) as *mut core::ffi::c_void);
         // SAFETY: `hwnd` is the app's own window handle (or null, which Windows accepts).
-        let op: IAsyncOperation<UserConsentVerificationResult> =
-            unsafe { interop.RequestVerificationForWindowAsync(hwnd, &HSTRING::from(reason)) }.map_err(|e| format!("MFA_DEVICE: Windows Hello can't be reached ({e})"))?;
+        let op: IAsyncOperation<UserConsentVerificationResult> = unsafe { interop.RequestVerificationForWindowAsync(hwnd, &HSTRING::from(reason)) }
+            .map_err(|e| format!("MFA_DEVICE: Windows Hello can't be reached ({e})"))?;
         match op.join() {
             Ok(UserConsentVerificationResult::Verified) => Ok(()),
             _ => Err(super::NOT_CONFIRMED.into()),

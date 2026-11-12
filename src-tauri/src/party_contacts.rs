@@ -94,11 +94,8 @@ pub async fn save_contacts(pool: &SqlitePool, kind: &str, party_id: i64, contact
 pub(crate) async fn write_contacts(tx: &mut Transaction<'_, Sqlite>, kind: &str, party_id: i64, contacts: &[ContactInput]) -> Result<(), String> {
     let column = owner(kind)?;
     let table = if kind == "customer" { "customers" } else { "vendors" };
-    let exists: bool = sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM {table} WHERE id = ?1)"))
-        .bind(party_id)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let exists: bool =
+        sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM {table} WHERE id = ?1)")).bind(party_id).fetch_one(&mut **tx).await.map_err(db_err)?;
     if !exists {
         return Err(format!("PARTY_NOT_FOUND: that {kind} does not exist"));
     }
@@ -111,11 +108,8 @@ pub(crate) async fn write_contacts(tx: &mut Transaction<'_, Sqlite>, kind: &str,
     if kind == "vendor" && contacts.iter().any(|c| c.for_statements) {
         return Err("CONTACT_VENDOR_STATEMENTS: vendors have no statements".into());
     }
-    let current: Vec<(i64,)> = sqlx::query_as(&format!("SELECT id FROM party_contacts WHERE {column} = ?1"))
-        .bind(party_id)
-        .fetch_all(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let current: Vec<(i64,)> =
+        sqlx::query_as(&format!("SELECT id FROM party_contacts WHERE {column} = ?1")).bind(party_id).fetch_all(&mut **tx).await.map_err(db_err)?;
     let current: Vec<i64> = current.into_iter().map(|(id,)| id).collect();
     for contact in contacts {
         if let Some(id) = contact.id {

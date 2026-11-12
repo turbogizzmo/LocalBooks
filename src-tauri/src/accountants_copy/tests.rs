@@ -49,21 +49,37 @@ async fn the_accountants_changes_come_back_with_an_audit_record() {
     assert_eq!((rec.status.as_str(), rec.dividing_date), ("OUTSTANDING", d(3, 31)));
     assert!(create(&pool, &live, &tmp.0.join("again.localbooks"), d(3, 31), "Dana").await.unwrap_err().starts_with("ACCOUNTANT_COPY_OUT"));
     // The client can't post in the accountant's period, and keeps working after it.
-    let early = post_journal_entry(&pool, entry(d(3, 20), "Late March", vec![JournalLine::debit(office, 100), JournalLine::credit(checking, 100)])).await.unwrap_err();
+    let early =
+        post_journal_entry(&pool, entry(d(3, 20), "Late March", vec![JournalLine::debit(office, 100), JournalLine::credit(checking, 100)])).await.unwrap_err();
     assert!(early.starts_with("ACCOUNTANT_COPY_LOCKED"), "{early}");
     post_journal_entry(&pool, entry(d(4, 2), "April supplies", vec![JournalLine::debit(office, 2_500), JournalLine::credit(checking, 2_500)])).await.unwrap();
 
     // The accountant works in the copy: a new account, an adjusting entry, and a voided mistake.
     let copy = db::open(&copy_path).await.unwrap();
     assert_eq!(copy_dividing_date(&copy).await.unwrap(), Some(d(3, 31)));
-    let prepaid: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES ('1450', 'Prepaid Insurance', 'OTHER_CURRENT_ASSET') RETURNING id").fetch_one(&copy).await.unwrap();
+    let prepaid: i64 = sqlx::query_scalar(
+        "INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES ('1450', 'Prepaid Insurance', 'OTHER_CURRENT_ASSET') RETURNING id",
+    )
+    .fetch_one(&copy)
+    .await
+    .unwrap();
     let adjusting = entry(d(3, 31), "Prepaid insurance", vec![JournalLine::debit(prepaid, 12_000), JournalLine::credit(account(&copy, "6250").await, 12_000)]);
     let mut tx = crate::ledger::begin_write(&copy).await.unwrap();
     crate::ledger::post_entry_in_tx_flagged(&mut tx, &adjusting, EntrySource::Journal, true).await.unwrap();
     crate::ledger::commit_write(tx).await.unwrap();
-    let mistake = post_journal_entry(&copy, entry(d(3, 30), "Oops", vec![JournalLine::debit(account(&copy, "6250").await, 99), JournalLine::credit(account(&copy, "1010").await, 99)])).await.unwrap();
+    let mistake = post_journal_entry(
+        &copy,
+        entry(d(3, 30), "Oops", vec![JournalLine::debit(account(&copy, "6250").await, 99), JournalLine::credit(account(&copy, "1010").await, 99)]),
+    )
+    .await
+    .unwrap();
     crate::ledger::void_transaction(&copy, mistake).await.unwrap();
-    let after = post_journal_entry(&copy, entry(d(4, 1), "Too late", vec![JournalLine::debit(account(&copy, "6250").await, 1), JournalLine::credit(account(&copy, "1010").await, 1)])).await.unwrap_err();
+    let after = post_journal_entry(
+        &copy,
+        entry(d(4, 1), "Too late", vec![JournalLine::debit(account(&copy, "6250").await, 1), JournalLine::credit(account(&copy, "1010").await, 1)]),
+    )
+    .await
+    .unwrap_err();
     assert!(after.starts_with("ACCOUNTANT_COPY_LIMIT"), "{after}");
     let changes_path = tmp.0.join("changes.json");
     let file = export(&copy, &changes_path).await.unwrap();
@@ -82,7 +98,8 @@ async fn the_accountants_changes_come_back_with_an_audit_record() {
     assert_eq!(done.changes_sha256.as_deref().map(str::len), Some(64));
     let new_prepaid = account(&pool, "1450").await;
     assert_eq!(balance(&pool, new_prepaid).await, 12_000);
-    let (memo, adj): (String, bool) = sqlx::query_as("SELECT memo, is_adjusting = 1 FROM journal_entries ORDER BY id DESC LIMIT 1").fetch_one(&pool).await.unwrap();
+    let (memo, adj): (String, bool) =
+        sqlx::query_as("SELECT memo, is_adjusting = 1 FROM journal_entries ORDER BY id DESC LIMIT 1").fetch_one(&pool).await.unwrap();
     assert_eq!((memo.as_str(), adj), ("Prepaid insurance (from the accountant)", true));
     // The lock is lifted, and the same changes can't come in twice.
     post_journal_entry(&pool, entry(d(3, 20), "Late March", vec![JournalLine::debit(office, 100), JournalLine::credit(checking, 100)])).await.unwrap();

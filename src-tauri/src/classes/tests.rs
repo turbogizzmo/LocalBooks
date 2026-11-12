@@ -73,7 +73,9 @@ async fn reclassifying_moves_lines_between_classes_and_voids_in_order() {
     let lines = vec![JournalLine::debit(rent, 800).with_class(Some(east)), JournalLine::credit(checking, 800)];
     let original = post_journal_entry(&pool, JournalEntry { id: None, date, description: "Rent".into(), lines, currency: None }).await.unwrap();
     let class_net = |class: i64| {
-        sqlx::query_scalar::<_, i64>("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1 AND class_id = ?2").bind(rent).bind(class)
+        sqlx::query_scalar::<_, i64>("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1 AND class_id = ?2")
+            .bind(rent)
+            .bind(class)
     };
     let query = ReclassQuery { start_date: date, end_date: date, account_id: None, class_id: None, unclassified: false };
     let candidates = reclass_candidates(&pool, &query).await.unwrap();

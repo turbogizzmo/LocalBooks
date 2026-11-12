@@ -8,7 +8,11 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn gl(pool: &SqlitePool, account: i64) -> i64 {
-    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1").bind(account).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1")
+        .bind(account)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn item(pool: &SqlitePool, id: i64) -> InventoryItemView {
@@ -35,7 +39,8 @@ async fn shop() -> Shop {
     .await
     .unwrap()
     .id;
-    let tracked = track_product(&pool, &TrackInput { product_id: product, sku: Some("W-1".into()), asset_account_id: None, cogs_account_id: None }).await.unwrap();
+    let tracked =
+        track_product(&pool, &TrackInput { product_id: product, sku: Some("W-1".into()), asset_account_id: None, cogs_account_id: None }).await.unwrap();
     Shop { inventory: tracked.asset_account_id, cogs: tracked.cogs_account_id, item: tracked.id, product, sales, checking: account(&pool, "1010").await, pool }
 }
 
@@ -119,9 +124,19 @@ async fn moving_average_cost_flows_through_purchases_sales_and_voids() {
     let obe: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Opening Balance Equity'").fetch_one(&s.pool).await.unwrap();
 
     // Opening stock: 10 units worth $50.00 in total.
-    adjust(&s.pool, &AdjustInput { item_id: s.item, date: "2026-04-01".parse().unwrap(), qty_change_e4: 100_000, total_cost_cents: Some(5_000), offset_account_id: obe, memo: Some("Opening stock".into()) })
-        .await
-        .unwrap();
+    adjust(
+        &s.pool,
+        &AdjustInput {
+            item_id: s.item,
+            date: "2026-04-01".parse().unwrap(),
+            qty_change_e4: 100_000,
+            total_cost_cents: Some(5_000),
+            offset_account_id: obe,
+            memo: Some("Opening stock".into()),
+        },
+    )
+    .await
+    .unwrap();
     // Bought 10 more at $7.00: 20 on hand worth $120.00, average $6.00.
     bill(&s, 10, 700, s.inventory).await.unwrap();
     let w = item(&s.pool, s.item).await;
@@ -130,11 +145,12 @@ async fn moving_average_cost_flows_through_purchases_sales_and_voids() {
 
     // Selling 5 on an invoice costs 5 × $6.00 = $30.00, in the invoice's own journal entry.
     let inv = invoice(&s, 50_000, None).await.unwrap();
-    let lines: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number")
-        .bind(inv.journal_entry_id.unwrap())
-        .fetch_all(&s.pool)
-        .await
-        .unwrap();
+    let lines: Vec<(i64, i64, i64)> =
+        sqlx::query_as("SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number")
+            .bind(inv.journal_entry_id.unwrap())
+            .fetch_all(&s.pool)
+            .await
+            .unwrap();
     assert!(lines.contains(&(s.cogs, 3_000, 0)) && lines.contains(&(s.inventory, 0, 3_000)), "{lines:?}");
     assert_eq!(gl(&s.pool, s.cogs).await, 3_000);
     assert_reconciled(&s).await;
@@ -154,9 +170,19 @@ async fn moving_average_cost_flows_through_purchases_sales_and_voids() {
 
     // Counting 1 short writes it off at average cost.
     let shrink = account(&s.pool, "5000").await;
-    adjust(&s.pool, &AdjustInput { item_id: s.item, date: "2026-04-30".parse().unwrap(), qty_change_e4: -10_000, total_cost_cents: None, offset_account_id: shrink, memo: Some("Count".into()) })
-        .await
-        .unwrap();
+    adjust(
+        &s.pool,
+        &AdjustInput {
+            item_id: s.item,
+            date: "2026-04-30".parse().unwrap(),
+            qty_change_e4: -10_000,
+            total_cost_cents: None,
+            offset_account_id: shrink,
+            memo: Some("Count".into()),
+        },
+    )
+    .await
+    .unwrap();
     assert_eq!(item(&s.pool, s.item).await.value_cents, 8_400);
     assert_reconciled(&s).await;
 
@@ -165,9 +191,19 @@ async fn moving_average_cost_flows_through_purchases_sales_and_voids() {
 
     // A write-off can't remove stock that isn't there.
     let shrink = account(&s.pool, "5000").await;
-    let err = adjust(&s.pool, &AdjustInput { item_id: s.item, date: "2026-04-30".parse().unwrap(), qty_change_e4: -1_000_000, total_cost_cents: None, offset_account_id: shrink, memo: None })
-        .await
-        .unwrap_err();
+    let err = adjust(
+        &s.pool,
+        &AdjustInput {
+            item_id: s.item,
+            date: "2026-04-30".parse().unwrap(),
+            qty_change_e4: -1_000_000,
+            total_cost_cents: None,
+            offset_account_id: shrink,
+            memo: None,
+        },
+    )
+    .await
+    .unwrap_err();
     assert!(err.starts_with("STOCK_SHORT"), "{err}");
 }
 
@@ -188,7 +224,11 @@ async fn selling_before_the_bill_costs_at_the_last_purchase_cost_and_trues_up_on
     assert_eq!(gl(&s.pool, s.cogs).await, 2_400);
     assert_reconciled(&s).await;
     let bill_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM bills WHERE id = ?1").bind(b.id).fetch_one(&s.pool).await.unwrap();
-    let entry_lines: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1").bind(bill_entry).fetch_all(&s.pool).await.unwrap();
+    let entry_lines: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1")
+        .bind(bill_entry)
+        .fetch_all(&s.pool)
+        .await
+        .unwrap();
     assert!(entry_lines.contains(&(s.cogs, 2_400, 0)) && entry_lines.contains(&(s.inventory, 0, 2_400)), "{entry_lines:?}");
 
     // Selling past zero again: 3 covered by stock ($36.00), 2 more at the last cost of $12.00.
@@ -215,9 +255,19 @@ async fn selling_before_the_bill_costs_at_the_last_purchase_cost_and_trues_up_on
 
     // Opening stock added by adjustment while below zero trues up too: 4 for $40.00.
     let obe: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Opening Balance Equity'").fetch_one(&s.pool).await.unwrap();
-    adjust(&s.pool, &AdjustInput { item_id: s.item, date: "2026-04-20".parse().unwrap(), qty_change_e4: 40_000, total_cost_cents: Some(4_000), offset_account_id: obe, memo: None })
-        .await
-        .unwrap();
+    adjust(
+        &s.pool,
+        &AdjustInput {
+            item_id: s.item,
+            date: "2026-04-20".parse().unwrap(),
+            qty_change_e4: 40_000,
+            total_cost_cents: Some(4_000),
+            offset_account_id: obe,
+            memo: None,
+        },
+    )
+    .await
+    .unwrap();
     let w = item(&s.pool, s.item).await;
     assert_eq!((w.qty_on_hand_e4, w.value_cents), (20_000, 2_000), "2 left at $10.00 each");
     assert_eq!(gl(&s.pool, s.cogs).await, 8_400 - 400, "the 2 sold at $12.00 provisional really cost $10.00");
@@ -255,7 +305,8 @@ async fn random_sequences_never_divide_by_zero_and_stay_reconciled() {
             }
         }
         let w = item(&s.pool, s.item).await;
-        let consistent = (w.qty_on_hand_e4 > 0 && w.value_cents >= 0) || (w.qty_on_hand_e4 == 0 && w.value_cents == 0) || (w.qty_on_hand_e4 < 0 && w.value_cents <= 0);
+        let consistent =
+            (w.qty_on_hand_e4 > 0 && w.value_cents >= 0) || (w.qty_on_hand_e4 == 0 && w.value_cents == 0) || (w.qty_on_hand_e4 < 0 && w.value_cents <= 0);
         assert!(consistent, "{} on hand valued at {}", w.qty_on_hand_e4, w.value_cents);
         assert_reconciled(&s).await;
     }
@@ -291,5 +342,8 @@ async fn costs_round_without_drift_and_rules_hold() {
     assert!(err.starts_with("STOCK_DIRECT_EDIT"), "{err}");
     let err = sqlx::query("DELETE FROM stock_ledger_entries").execute(&s.pool).await.map_err(db_err).unwrap_err();
     assert!(err.starts_with("STOCK_IMMUTABLE"), "{err}");
-    assert!(track_product(&s.pool, &TrackInput { product_id: s.product, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap_err().starts_with("STOCK_ALREADY_TRACKED"));
+    assert!(track_product(&s.pool, &TrackInput { product_id: s.product, sku: None, asset_account_id: None, cogs_account_id: None })
+        .await
+        .unwrap_err()
+        .starts_with("STOCK_ALREADY_TRACKED"));
 }

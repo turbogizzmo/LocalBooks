@@ -5,19 +5,11 @@ use crate::ledger::void_transaction;
 use crate::money::Cents;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
-    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
-        .bind(number)
-        .fetch_one(pool)
-        .await
-        .expect("seeded account exists")
+    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.expect("seeded account exists")
 }
 
 async fn balance(pool: &SqlitePool, account: i64) -> i64 {
-    sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1")
-        .bind(account)
-        .fetch_one(pool)
-        .await
-        .unwrap()
+    sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1").bind(account).fetch_one(pool).await.unwrap()
 }
 
 fn d(day: u32) -> NaiveDate {
@@ -36,7 +28,16 @@ async fn deposit_sweeps_undeposited_funds_and_other_lines() {
             customer_name: "Acme".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: Cents(80_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput {
+                description: "Work".into(),
+                quantity_e4: 10000,
+                rate_cents: Cents(80_000),
+                income_account_id: services,
+                product_service_id: None,
+                class_id: None,
+                is_taxable: false,
+                service_date: None,
+            }],
             currency: None,
             tax_rate_id: None,
             discount_cents: Cents::ZERO,
@@ -67,7 +68,14 @@ async fn deposit_sweeps_undeposited_funds_and_other_lines() {
         deposit_date: d(4),
         memo: Some("Branch deposit".into()),
         items: items.iter().map(|i| DepositItemRef { kind: i.kind.clone(), id: i.id }).collect(),
-        other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: Cents(125), memo: Some("Interest".into()), class_id: None, customer_id: None, vendor_id: None }],
+        other_lines: vec![DepositOtherLine {
+            account_id: interest,
+            amount_cents: Cents(125),
+            memo: Some("Interest".into()),
+            class_id: None,
+            customer_id: None,
+            vendor_id: None,
+        }],
         cash_back: None,
         deductions: Vec::new(),
     };
@@ -79,19 +87,12 @@ async fn deposit_sweeps_undeposited_funds_and_other_lines() {
     // The same payment cannot be deposited twice, and a deposited payment cannot be voided.
     let err = post_bank_deposit(&pool, deposit_input(waiting.iter().take(1).collect())).await.expect_err("double deposit");
     assert!(err.starts_with("DEP_ALREADY_DEPOSITED"), "{err}");
-    let payment_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM invoice_payments ORDER BY id LIMIT 1")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let payment_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM invoice_payments ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
     let err = void_transaction(&pool, payment_entry).await.expect_err("deposited payment");
     assert!(err.starts_with("VOID_DEPOSITED"), "{err}");
 
     // Voiding the deposit puts the payments back into Undeposited Funds.
-    let deposit_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1")
-        .bind(deposit_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let deposit_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(deposit_id).fetch_one(&pool).await.unwrap();
     void_transaction(&pool, deposit_entry).await.expect("deposit voids");
     assert_eq!(balance(&pool, checking).await, 0);
     assert_eq!(balance(&pool, undeposited).await, 80_000);
@@ -126,7 +127,14 @@ async fn cash_back_comes_out_of_what_the_bank_gets() {
         deposit_date: d(5),
         memo: None,
         items: vec![],
-        other_lines: vec![DepositOtherLine { account_id: services, amount_cents: Cents(50_000), memo: Some("Market stall".into()), class_id: None, customer_id: None, vendor_id: None }],
+        other_lines: vec![DepositOtherLine {
+            account_id: services,
+            amount_cents: Cents(50_000),
+            memo: Some("Market stall".into()),
+            class_id: None,
+            customer_id: None,
+            vendor_id: None,
+        }],
         cash_back: cash,
         deductions: Vec::new(),
     };
@@ -140,7 +148,8 @@ async fn cash_back_comes_out_of_what_the_bank_gets() {
     assert_eq!(balance(&pool, checking).await, 42_500);
     assert_eq!(balance(&pool, supplies).await, 7_500);
     assert_eq!(balance(&pool, services).await, 50_000);
-    let stored: (i64, i64, Option<String>) = sqlx::query_as("SELECT total_cents, cash_back_cents, cash_back_memo FROM deposits WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
+    let stored: (i64, i64, Option<String>) =
+        sqlx::query_as("SELECT total_cents, cash_back_cents, cash_back_memo FROM deposits WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
     assert_eq!(stored, (50_000, 7_500, Some("Float".into())));
     // The register lists what the bank got.
     let row = list_banking_activity(&pool).await.unwrap().into_iter().find(|r| r.kind == "DEPOSIT" && r.id == id).unwrap();

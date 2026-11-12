@@ -8,7 +8,8 @@ fn walks_tables_of_a_real_file() {
     let pages = crate::qbw_pages::load_page_cache(&std::env::var("LOCALBOOKS_QBW_PAGES").expect("set LOCALBOOKS_QBW_PAGES"));
     let catalog = read_catalog(&pages);
     println!("tables named {}, tables with columns {}", catalog.names.len(), catalog.columns.len());
-    let mut names: Vec<(&u32, &String)> = catalog.names.iter().filter(|(_, n)| n.starts_with("abmc_") && (n.ends_with("_lineitem") || n.ends_with("_header"))).collect();
+    let mut names: Vec<(&u32, &String)> =
+        catalog.names.iter().filter(|(_, n)| n.starts_with("abmc_") && (n.ends_with("_lineitem") || n.ends_with("_header"))).collect();
     names.sort_by_key(|(_, n)| n.as_str());
     let mut txn: HashMap<i64, i64> = HashMap::new();
     let mut acct: HashMap<i64, i64> = HashMap::new();
@@ -22,7 +23,9 @@ fn walks_tables_of_a_real_file() {
             if r.get("is_no_post_bool").as_int() == Some(1) {
                 continue;
             }
-            let (Some(tid), Some(aid), Some(c)) = (r.get("transaction_id").as_int(), r.get("account_id").as_int(), r.get("amount_amt").as_cents()) else { continue };
+            let (Some(tid), Some(aid), Some(c)) = (r.get("transaction_id").as_int(), r.get("account_id").as_int(), r.get("amount_amt").as_cents()) else {
+                continue;
+            };
             *txn.entry(tid).or_default() += c;
             *acct.entry(aid).or_default() += c;
         }
@@ -151,11 +154,7 @@ fn synthetic_row(bitmap: u8, values: &[&[u8]]) -> Vec<u8> {
 /// the column still read: the walk tries the column as not stored, then as each likely type.
 #[test]
 fn rows_read_when_the_catalog_lost_a_column() {
-    let mut cols = vec![
-        column(4, "amount_amt", 3, true, 20),
-        column(1, "target_id", 2, false, 4),
-        column(3, "account_id", 2, true, 4),
-    ];
+    let mut cols = vec![column(4, "amount_amt", 3, true, 20), column(1, "target_id", 2, false, 4), column(3, "account_id", 2, true, 4)];
     fill_missing_columns(&mut cols);
     assert_eq!(cols.iter().map(|c| (c.id, c.domain)).collect::<Vec<_>>(), [(1, 2), (2, MISSING_DOMAIN), (3, 2), (4, 3)]);
     assert_eq!(cols[1].name, "column_2");
@@ -191,7 +190,6 @@ fn rows_read_when_the_catalog_lost_a_column() {
     assert!(zero.iter().any(|c| c.id == 2 && c.domain == MISSING_DOMAIN));
 }
 
-
 /// A table that lost more column definitions than each row can afford to guess learns its layout
 /// once: the search over every guess finds the reading that fits, and the other rows of the table
 /// read with that layout directly.
@@ -204,7 +202,10 @@ fn a_table_that_lost_many_columns_learns_its_layout_once() {
     let amount: &[u8] = &[2, 0x40, 20, 7];
     let row = |target: u32, account: u32| {
         // Nullable columns in order: column 2, column 3, account, amount; all present.
-        synthetic_row(0b1111_0000, &[&target.to_le_bytes(), &9u32.to_le_bytes(), &3u16.to_le_bytes(), &[1], &5u32.to_le_bytes(), &account.to_le_bytes(), amount])
+        synthetic_row(
+            0b1111_0000,
+            &[&target.to_le_bytes(), &9u32.to_le_bytes(), &3u16.to_le_bytes(), &[1], &5u32.to_le_bytes(), &account.to_le_bytes(), amount],
+        )
     };
     let first = row(41_997, 30);
     assert!(walk_row(&first, &cols).is_none(), "four lost columns are more than each row guesses");

@@ -9,7 +9,11 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 
 /// Debit-positive balance.
 async fn balance(pool: &SqlitePool, account: i64) -> i64 {
-    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1").bind(account).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1")
+        .bind(account)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 fn d(day: u32) -> NaiveDate {
@@ -28,7 +32,8 @@ fn check(checking: i64, supplies: i64, rent: i64, job: i64, billable: Option<boo
 #[tokio::test]
 async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
     let pool = test_pool().await;
-    let (checking, supplies, rent, services) = (account(&pool, "1010").await, account(&pool, "6250").await, account(&pool, "6300").await, account(&pool, "4100").await);
+    let (checking, supplies, rent, services) =
+        (account(&pool, "1010").await, account(&pool, "6250").await, account(&pool, "6300").await, account(&pool, "4100").await);
     let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
 
     // Not marked: not billable (Preferences › "Mark all expenses as billable" is off by default).
@@ -72,7 +77,16 @@ async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
         due_date: d(31),
         lines: lines
             .iter()
-            .map(|l| crate::invoices::InvoiceLineInput { description: l.description.clone(), quantity_e4: l.quantity_e4, rate_cents: Cents(l.rate_cents), income_account_id: l.income_account_id, product_service_id: None, class_id: None, is_taxable: false, service_date: None })
+            .map(|l| crate::invoices::InvoiceLineInput {
+                description: l.description.clone(),
+                quantity_e4: l.quantity_e4,
+                rate_cents: Cents(l.rate_cents),
+                income_account_id: l.income_account_id,
+                product_service_id: None,
+                class_id: None,
+                is_taxable: false,
+                service_date: None,
+            })
             .collect(),
         currency: None,
         tax_rate_id: None,
@@ -144,7 +158,8 @@ async fn printed_checks_take_the_print_date() {
 
     // Off: the check keeps its date.
     crate::print_queue::mark_checks_printed_on(&pool, printed(queued.id, "501"), d(9)).await.unwrap();
-    let kept: (String, Option<String>) = sqlx::query_as("SELECT expense_date, check_number FROM expenses WHERE id = ?1").bind(queued.id).fetch_one(&pool).await.unwrap();
+    let kept: (String, Option<String>) =
+        sqlx::query_as("SELECT expense_date, check_number FROM expenses WHERE id = ?1").bind(queued.id).fetch_one(&pool).await.unwrap();
     assert_eq!(kept, ("2026-05-02".into(), Some("501".into())));
 
     // On: re-dated by an edit, with the number on the replacement, which stays billable.
@@ -153,7 +168,8 @@ async fn printed_checks_take_the_print_date() {
     crate::print_queue::mark_checks_printed_on(&pool, printed(second.id, "502"), d(9)).await.unwrap();
     let old: bool = sqlx::query_scalar("SELECT is_voided FROM expenses WHERE id = ?1").bind(second.id).fetch_one(&pool).await.unwrap();
     assert!(old, "the queued check is replaced");
-    let new: (i64, String, Option<String>, bool) = sqlx::query_as("SELECT id, expense_date, check_number, to_be_printed FROM expenses WHERE check_number = '502'").fetch_one(&pool).await.unwrap();
+    let new: (i64, String, Option<String>, bool) =
+        sqlx::query_as("SELECT id, expense_date, check_number, to_be_printed FROM expenses WHERE check_number = '502'").fetch_one(&pool).await.unwrap();
     assert_eq!((new.1.as_str(), new.2.as_deref(), new.3), ("2026-05-09", Some("502"), false));
     let billable: Vec<i64> = list_unbilled(&pool, Some(acme)).await.unwrap().iter().map(|c| c.line_id).collect();
     assert_eq!(billable.len(), 2, "the first check's cost and the replacement's");
@@ -197,7 +213,15 @@ async fn reimbursements_go_to_the_expense_accounts_own_income_account() {
     assert_eq!(listed.reimbursement_income_account_id, Some(services));
 
     let cost = list_unbilled(&pool, Some(acme)).await.unwrap().remove(0);
-    let input = BillCostsInput { customer_id: acme, costs: vec![CostRef { source: "EXPENSE".into(), line_id: cost.line_id }], time: Vec::new(), issue_date: d(10), due_date: d(31), markup_percent: Some("0".into()), tax_rate_id: None };
+    let input = BillCostsInput {
+        customer_id: acme,
+        costs: vec![CostRef { source: "EXPENSE".into(), line_id: cost.line_id }],
+        time: Vec::new(),
+        issue_date: d(10),
+        due_date: d(31),
+        markup_percent: Some("0".into()),
+        tax_rate_id: None,
+    };
     bill_costs(&pool, input).await.unwrap();
     assert_eq!(balance(&pool, services).await, -20_000, "the supplies account's own income account");
     assert_eq!(balance(&pool, sales).await, 0, "not the one in Preferences");
@@ -208,10 +232,13 @@ async fn billable_time_is_invoiced_once_at_its_hours_and_rate() {
     let pool = test_pool().await;
     let services = account(&pool, "4100").await;
     let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
-    let design = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Design".into(), description: None, rate_cents: Cents(9_500), income_account_id: services, is_taxable: false })
-        .await
-        .unwrap()
-        .id;
+    let design = crate::sales::create_product(
+        &pool,
+        crate::sales::ProductInput { name: "Design".into(), description: None, rate_cents: Cents(9_500), income_account_id: services, is_taxable: false },
+    )
+    .await
+    .unwrap()
+    .id;
     let dana = crate::timesheet::create_employee(&pool, "Dana", None).await.unwrap().id;
     let entry = |minutes: i64, item: Option<i64>, billable: bool| crate::timesheet::TimeActivityInput {
         employee_id: dana,
@@ -229,7 +256,15 @@ async fn billable_time_is_invoiced_once_at_its_hours_and_rate() {
     assert_eq!(time.iter().map(|t| (t.minutes, t.amount_cents)).collect::<Vec<_>>(), [(90, 14_250), (60, 9_500)], "billable only; 1.5 h × $95");
     assert_eq!(time[0].hours_e4, 15_000, "hours as the invoice line's quantity");
 
-    let bill = |ids: Vec<i64>| BillCostsInput { customer_id: acme, costs: Vec::new(), time: ids, issue_date: d(10), due_date: d(31), markup_percent: Some("0".into()), tax_rate_id: None };
+    let bill = |ids: Vec<i64>| BillCostsInput {
+        customer_id: acme,
+        costs: Vec::new(),
+        time: ids,
+        issue_date: d(10),
+        due_date: d(31),
+        markup_percent: Some("0".into()),
+        tax_rate_id: None,
+    };
     // Time with no service item can't be billed: the item gives the invoice line its income account.
     assert!(bill_costs(&pool, bill(vec![time[1].id])).await.unwrap_err().starts_with("TIME_NO_ITEM"));
     let invoice = bill_costs(&pool, bill(vec![time[0].id])).await.unwrap();
@@ -295,7 +330,15 @@ async fn an_edited_reimbursement_line_can_move_to_another_expense_account() {
     let cost = list_unbilled(&pool, Some(acme)).await.unwrap()[0].line_id;
     let invoice = bill_costs(
         &pool,
-        BillCostsInput { customer_id: acme, costs: vec![CostRef { source: "EXPENSE".into(), line_id: cost }], time: Vec::new(), issue_date: d(10), due_date: d(31), markup_percent: Some("0".into()), tax_rate_id: None },
+        BillCostsInput {
+            customer_id: acme,
+            costs: vec![CostRef { source: "EXPENSE".into(), line_id: cost }],
+            time: Vec::new(),
+            issue_date: d(10),
+            due_date: d(31),
+            markup_percent: Some("0".into()),
+            tax_rate_id: None,
+        },
     )
     .await
     .unwrap();
@@ -304,7 +347,16 @@ async fn an_edited_reimbursement_line_can_move_to_another_expense_account() {
         customer_name: "Acme".into(),
         issue_date: d(11),
         due_date: d(31),
-        lines: vec![crate::invoices::InvoiceLineInput { description: "Lumber".into(), quantity_e4: 10_000, rate_cents: Cents(20_000), income_account_id: account_id, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![crate::invoices::InvoiceLineInput {
+            description: "Lumber".into(),
+            quantity_e4: 10_000,
+            rate_cents: Cents(20_000),
+            income_account_id: account_id,
+            product_service_id: None,
+            class_id: None,
+            is_taxable: false,
+            service_date: None,
+        }],
         currency: None,
         tax_rate_id: None,
         discount_cents: Cents::ZERO,
@@ -314,7 +366,11 @@ async fn an_edited_reimbursement_line_can_move_to_another_expense_account() {
     assert!(err.starts_with("INV_NOT_INCOME_ACCOUNT"), "{err}");
     let (supplies_before, rent_before) = (balance(&pool, supplies).await, balance(&pool, rent).await);
     crate::edits::replace_invoice(&pool, invoice.id, edited(rent)).await.unwrap();
-    assert_eq!((balance(&pool, supplies).await - supplies_before, balance(&pool, rent).await - rent_before), (20_000, -20_000), "the reimbursement moved to Rent");
+    assert_eq!(
+        (balance(&pool, supplies).await - supplies_before, balance(&pool, rent).await - rent_before),
+        (20_000, -20_000),
+        "the reimbursement moved to Rent"
+    );
     assert!(list_unbilled(&pool, Some(acme)).await.unwrap().is_empty(), "the cost stays billed");
 }
 
@@ -332,7 +388,10 @@ async fn a_billable_card_charge_is_invoiced_from_the_invoice_form() {
     .unwrap();
     crate::expenses::post_expense(&pool, charge).await.unwrap();
     let unbilled = list_unbilled(&pool, Some(job)).await.unwrap();
-    assert_eq!(unbilled.iter().map(|c| (c.source.as_str(), c.amount_cents, c.customer_name.as_str())).collect::<Vec<_>>(), [("EXPENSE", 12_000, "Acme:Kitchen")]);
+    assert_eq!(
+        unbilled.iter().map(|c| (c.source.as_str(), c.amount_cents, c.customer_name.as_str())).collect::<Vec<_>>(),
+        [("EXPENSE", 12_000, "Acme:Kitchen")]
+    );
 
     crate::preferences::set(&pool, "billable_markup_account_id", &services.to_string()).await.unwrap();
     let form = |customer: &str| crate::invoices::InvoiceInput {
@@ -340,13 +399,23 @@ async fn a_billable_card_charge_is_invoiced_from_the_invoice_form() {
         customer_name: customer.into(),
         issue_date: d(10),
         due_date: d(31),
-        lines: vec![crate::invoices::InvoiceLineInput { description: "Installation".into(), quantity_e4: QUANTITY_SCALE, rate_cents: Cents(50_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![crate::invoices::InvoiceLineInput {
+            description: "Installation".into(),
+            quantity_e4: QUANTITY_SCALE,
+            rate_cents: Cents(50_000),
+            income_account_id: services,
+            product_service_id: None,
+            class_id: None,
+            is_taxable: false,
+            service_date: None,
+        }],
         currency: None,
         tax_rate_id: None,
         discount_cents: Cents::ZERO,
         details: Default::default(),
     };
-    let chosen = OnInvoice { costs: vec![CostRef { source: "EXPENSE".into(), line_id: unbilled[0].line_id }], time: Vec::new(), markup_percent: Some("10".into()) };
+    let chosen =
+        OnInvoice { costs: vec![CostRef { source: "EXPENSE".into(), line_id: unbilled[0].line_id }], time: Vec::new(), markup_percent: Some("10".into()) };
     // The costs are the job's: an invoice to its parent customer can't bill them.
     let refused = crate::print_queue::create_invoice(&pool, form("Acme"), &chosen, false, None).await.unwrap_err();
     assert!(refused.starts_with("COST_OTHER_CUSTOMER"), "{refused}");
@@ -367,7 +436,8 @@ async fn a_billable_card_charge_is_invoiced_from_the_invoice_form() {
     assert_eq!(lines.iter().map(|l| l.rate_cents).collect::<Vec<_>>(), [50_000, 12_000, 1_200], "the form's lines first, then the cost and its markup");
     assert_eq!(balance(&pool, supplies).await, expense_before - 12_000, "the reimbursement reduces the expense, as Bill Costs does");
     assert!(list_unbilled(&pool, Some(job)).await.unwrap().is_empty(), "the charge is marked billed by the invoice");
-    let billed: i64 = sqlx::query_scalar("SELECT invoice_id FROM billed_costs WHERE expense_line_id = ?1").bind(unbilled[0].line_id).fetch_one(&pool).await.unwrap();
+    let billed: i64 =
+        sqlx::query_scalar("SELECT invoice_id FROM billed_costs WHERE expense_line_id = ?1").bind(unbilled[0].line_id).fetch_one(&pool).await.unwrap();
     assert_eq!(billed, invoice.id);
     let twice = crate::print_queue::create_invoice(&pool, form("Acme:Kitchen"), &chosen, false, None).await.unwrap_err();
     assert!(twice.starts_with("COST_NOT_BILLABLE"), "never billed twice: {twice}");

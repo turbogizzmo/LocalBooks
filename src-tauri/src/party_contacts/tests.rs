@@ -60,12 +60,21 @@ async fn a_customer_keeps_any_number_of_contacts_and_uses_the_defaults() {
         id,
         &[
             ContactInput { id: Some(ids[2]), email: Some("cy@acme.example".into()), for_invoices: true, ..contact("Cy Diaz") },
-            ContactInput { id: Some(ids[1]), role: Some("Accounts payable".into()), email: Some("ap@acme.example".into()), for_statements: true, ..contact("Bo Park") },
+            ContactInput {
+                id: Some(ids[1]),
+                role: Some("Accounts payable".into()),
+                email: Some("ap@acme.example".into()),
+                for_statements: true,
+                ..contact("Bo Park")
+            },
         ],
     )
     .await
     .unwrap();
-    assert_eq!(saved.iter().map(|c| (c.name.as_str(), c.for_invoices, c.for_statements)).collect::<Vec<_>>(), [("Cy Diaz", true, false), ("Bo Park", false, true)]);
+    assert_eq!(
+        saved.iter().map(|c| (c.name.as_str(), c.for_invoices, c.for_statements)).collect::<Vec<_>>(),
+        [("Cy Diaz", true, false), ("Bo Park", false, true)]
+    );
     assert_eq!(saved[0].mobile, None, "a field left out is cleared");
     assert_eq!(recipient(&pool, id, "invoices").await.as_deref(), Some("cy@acme.example"));
     let acme = get_party(&pool, "customer", id, Access::OPEN).await.unwrap();

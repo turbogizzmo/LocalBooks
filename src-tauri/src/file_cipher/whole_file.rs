@@ -109,7 +109,8 @@ pub async fn encrypt(db: &Db, admin: &Session, input: EncryptInput) -> Result<(S
     }
     let (pool, _) = db.pool_and_session().await?;
     // The Admin's password, checked like a sign-in: it is what will open the file.
-    let fresh = users::sign_in(&pool, &admin.user.username, &input.password).await.map_err(|_| "ENCRYPT_WRONG_PASSWORD: that is not your password".to_string())?;
+    let fresh =
+        users::sign_in(&pool, &admin.user.username, &input.password).await.map_err(|_| "ENCRYPT_WRONG_PASSWORD: that is not your password".to_string())?;
     let others: Vec<_> = users::list(&pool).await?.into_iter().filter(|u| u.is_active && u.id != admin.user.id).collect();
     let missing: Vec<_> = others.iter().filter(|u| !input.temporary_passwords.iter().any(|t| t.user_id == u.id)).map(|u| u.username.clone()).collect();
     if !missing.is_empty() {
@@ -141,11 +142,21 @@ pub async fn encrypt(db: &Db, admin: &Session, input: EncryptInput) -> Result<(S
         let prepared = async {
             check_copy(&digest, open_options(&staged, Some(&key))?).await?;
             // The copy's own changes, through a pool so the user functions work as they always do.
-            let copy_pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect_with(open_options(&staged, Some(&key))?.foreign_keys(true)).await.map_err(|e| e.to_string())?;
+            let copy_pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(open_options(&staged, Some(&key))?.foreign_keys(true))
+                .await
+                .map_err(|e| e.to_string())?;
             let changed = async {
                 for u in &others {
                     let password = input.temporary_passwords.iter().find(|t| t.user_id == u.id).expect("checked above").password.clone();
-                    let update = UserUpdate { display_name: u.display_name.clone(), role: u.role, can_see_sensitive: u.can_see_sensitive, is_active: true, new_password: Some(password) };
+                    let update = UserUpdate {
+                        display_name: u.display_name.clone(),
+                        role: u.role,
+                        can_see_sensitive: u.can_see_sensitive,
+                        is_active: true,
+                        new_password: Some(password),
+                    };
                     users::update(&copy_pool, &fresh, u.id, update).await?;
                 }
                 let recovery = users::replace_recovery_key(&copy_pool, &fresh).await?;
@@ -215,7 +226,11 @@ pub async fn decrypt(db: &Db, admin: &Session, password: &str) -> Result<Session
         // On the live connection, which has the key: the attached file is plain (an empty key).
         let mut conn = pool.acquire().await.map_err(|e| e.to_string())?.detach();
         let result = async {
-            sqlx::query("ATTACH DATABASE ?1 AS plain KEY ''").bind(staged.to_string_lossy().into_owned()).execute(&mut conn).await.map_err(|e| e.to_string())?;
+            sqlx::query("ATTACH DATABASE ?1 AS plain KEY ''")
+                .bind(staged.to_string_lossy().into_owned())
+                .execute(&mut conn)
+                .await
+                .map_err(|e| e.to_string())?;
             sqlx::query("SELECT sqlcipher_export('plain')").execute(&mut conn).await.map_err(|e| e.to_string())?;
             sqlx::query("DETACH DATABASE plain").execute(&mut conn).await.map_err(|e| e.to_string())?;
             Ok::<(), String>(())

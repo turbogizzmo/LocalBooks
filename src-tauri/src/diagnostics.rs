@@ -42,7 +42,8 @@ pub fn install(dir: PathBuf) {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let place = info.location().map_or_else(|| "unknown place".to_string(), |l| format!("{}:{}", l.file(), l.line()));
-        let message = info.payload().downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| info.payload().downcast_ref::<String>().cloned()).unwrap_or_default();
+        let message =
+            info.payload().downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| info.payload().downcast_ref::<String>().cloned()).unwrap_or_default();
         log(&format!("CRASH at {place}: {message}"));
         previous(info);
     }));
@@ -156,14 +157,15 @@ fn startup_line(total_ms: u128, steps: &[(&'static str, u128)]) -> String {
 }
 
 /// What goes in the bundle: (name in the zip, text).
-pub async fn bundle(pool: Option<&SqlitePool>, company_file: Option<&Path>, log_dir: Option<&Path>, app_version: &str) -> Result<Vec<(String, String)>, String> {
+pub async fn bundle(
+    pool: Option<&SqlitePool>,
+    company_file: Option<&Path>,
+    log_dir: Option<&Path>,
+    app_version: &str,
+) -> Result<Vec<(String, String)>, String> {
     let mut files = Vec::new();
-    let mut versions = format!(
-        "Tillhouse {app_version}\nOperating system: {} ({})\nProcessor: {}\n",
-        std::env::consts::OS,
-        std::env::consts::FAMILY,
-        std::env::consts::ARCH
-    );
+    let mut versions =
+        format!("Tillhouse {app_version}\nOperating system: {} ({})\nProcessor: {}\n", std::env::consts::OS, std::env::consts::FAMILY, std::env::consts::ARCH);
     if let Some(pool) = pool {
         let sqlite: String = sqlx::query_scalar("SELECT sqlite_version()").fetch_one(pool).await.map_err(db_err)?;
         versions.push_str(&format!("SQLite: {sqlite}\n"));
@@ -184,15 +186,14 @@ pub async fn bundle(pool: Option<&SqlitePool>, company_file: Option<&Path>, log_
             }
             let check: Vec<String> = sqlx::query_scalar("PRAGMA quick_check").fetch_all(pool).await.map_err(db_err)?;
             db.push_str(&format!("Integrity (quick check): {}\n", check.join("; ")));
-            let (pages, page_size): (i64, i64) = sqlx::query_as("SELECT (SELECT page_count FROM pragma_page_count), CAST((SELECT page_size FROM pragma_page_size) AS INTEGER)")
-                .fetch_one(pool)
-                .await
-                .map_err(db_err)?;
+            let (pages, page_size): (i64, i64) =
+                sqlx::query_as("SELECT (SELECT page_count FROM pragma_page_count), CAST((SELECT page_size FROM pragma_page_size) AS INTEGER)")
+                    .fetch_one(pool)
+                    .await
+                    .map_err(db_err)?;
             db.push_str(&format!("Pages: {pages} of {page_size} bytes\n\nSchema migrations:\n"));
-            let migrations: Vec<(i64, String, bool)> = sqlx::query_as("SELECT version, description, success FROM _sqlx_migrations ORDER BY version")
-                .fetch_all(pool)
-                .await
-                .map_err(db_err)?;
+            let migrations: Vec<(i64, String, bool)> =
+                sqlx::query_as("SELECT version, description, success FROM _sqlx_migrations ORDER BY version").fetch_all(pool).await.map_err(db_err)?;
             for (version, description, success) in migrations {
                 db.push_str(&format!("  {version:04} {description}{}\n", if success { "" } else { " (FAILED)" }));
             }
@@ -202,7 +203,8 @@ pub async fn bundle(pool: Option<&SqlitePool>, company_file: Option<&Path>, log_
                 .await
                 .map_err(db_err)?;
             for table in tables {
-                let count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM \"{}\"", table.replace('"', "\"\""))).fetch_one(pool).await.map_err(db_err)?;
+                let count: i64 =
+                    sqlx::query_scalar(&format!("SELECT COUNT(*) FROM \"{}\"", table.replace('"', "\"\""))).fetch_one(pool).await.map_err(db_err)?;
                 db.push_str(&format!("  {table}: {count}\n"));
             }
             files.push(("database.txt".to_string(), db));
@@ -273,9 +275,10 @@ mod tests {
     async fn the_bundle_has_versions_schema_and_counts_but_no_business_data() {
         let pool = test_pool().await;
         let income: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
-        let input: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Secret Customer Ltd", "issueDate": "2026-10-01", "dueDate": "2026-10-31",
+        let input: crate::invoices::InvoiceInput =
+            serde_json::from_value(serde_json::json!({ "customerName": "Secret Customer Ltd", "issueDate": "2026-10-01", "dueDate": "2026-10-31",
             "lines": [{ "description": "Confidential work", "quantityE4": 10_000, "rateCents": 123_456, "incomeAccountId": income, "isTaxable": false }] }))
-        .unwrap();
+            .unwrap();
         crate::invoices::create_and_post_invoice(&pool, input).await.unwrap();
 
         let files = bundle(Some(&pool), None, None, "9.9.9").await.unwrap();

@@ -90,7 +90,8 @@ const SYSTEM_NUMBERS: &[(&str, &str, &str)] = &[
 /// QuickBooks' five-digit number, description).
 pub const INVENTORY_ASSET: StandardAccount = ("Inventory Asset", "OTHER_CURRENT_ASSET", "1400", "12100", "Cost of products on hand for sale");
 pub const COST_OF_GOODS_SOLD: StandardAccount = ("Cost of Goods Sold", "COST_OF_GOODS_SOLD", "5000", "50000", "Cost of products sold");
-pub const SALES_TAX_PAYABLE: StandardAccount = ("Sales Tax Payable", "OTHER_CURRENT_LIABILITY", "2200", "25500", "Sales tax collected and owed to the tax agency");
+pub const SALES_TAX_PAYABLE: StandardAccount =
+    ("Sales Tax Payable", "OTHER_CURRENT_LIABILITY", "2200", "25500", "Sales tax collected and owed to the tax agency");
 pub type StandardAccount = (&'static str, &'static str, &'static str, &'static str, &'static str);
 
 #[derive(Debug, Clone, Serialize)]
@@ -293,7 +294,12 @@ pub async fn apply(pool: &SqlitePool, setup: &CompanySetup) -> Result<(), String
     if let Some(form) = tax_form {
         prefs.push(("tax_form", form.to_string()));
     }
-    for (key, value) in [("company_legal_name", &setup.legal_name), ("company_address", &setup.address), ("company_ein", &setup.ein), ("fiscal_year_start", &setup.fiscal_year_start)] {
+    for (key, value) in [
+        ("company_legal_name", &setup.legal_name),
+        ("company_address", &setup.address),
+        ("company_ein", &setup.ein),
+        ("fiscal_year_start", &setup.fiscal_year_start),
+    ] {
         if let Some(v) = text(value) {
             prefs.push((key, v));
         }
@@ -304,7 +310,14 @@ pub async fn apply(pool: &SqlitePool, setup: &CompanySetup) -> Result<(), String
     Ok(())
 }
 
-async fn insert(conn: &mut SqliteConnection, number: &str, name: &str, account_type: &str, parent_number: Option<&str>, description: Option<&str>) -> Result<i64, String> {
+async fn insert(
+    conn: &mut SqliteConnection,
+    number: &str,
+    name: &str,
+    account_type: &str,
+    parent_number: Option<&str>,
+    description: Option<&str>,
+) -> Result<i64, String> {
     sqlx::query_scalar(
         "INSERT INTO chart_of_accounts (account_number, name, account_type, parent_id, description)
          VALUES (?1, ?2, ?3, (SELECT id FROM chart_of_accounts WHERE account_number = ?4), ?5) RETURNING id",

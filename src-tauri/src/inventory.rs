@@ -61,7 +61,11 @@ pub(crate) fn format_qty(qty_e4: i64) -> String {
     let abs = qty_e4.unsigned_abs();
     let frac = format!("{:04}", abs % 10_000);
     let frac = frac.trim_end_matches('0');
-    if frac.is_empty() { format!("{sign}{}", abs / 10_000) } else { format!("{sign}{}.{frac}", abs / 10_000) }
+    if frac.is_empty() {
+        format!("{sign}{}", abs / 10_000)
+    } else {
+        format!("{sign}{}.{frac}", abs / 10_000)
+    }
 }
 
 /// One stock movement for `record_movement`.
@@ -78,13 +82,12 @@ struct Movement<'a> {
 /// Appends a movement continuing from the item's current quantity and value.
 async fn record_movement(tx: &mut Transaction<'_, Sqlite>, movement: Movement<'_>) -> Result<i64, String> {
     let Movement { item_id, date, kind, qty_change_e4, value_change_cents, journal_entry_id, reverses_id } = movement;
-    let (name, qty, value): (String, i64, i64) = sqlx::query_as(
-        "SELECT p.name, i.qty_on_hand_e4, i.value_cents FROM inventory_items i JOIN products_services p ON p.id = i.product_id WHERE i.id = ?1",
-    )
-    .bind(item_id)
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(db_err)?;
+    let (name, qty, value): (String, i64, i64) =
+        sqlx::query_as("SELECT p.name, i.qty_on_hand_e4, i.value_cents FROM inventory_items i JOIN products_services p ON p.id = i.product_id WHERE i.id = ?1")
+            .bind(item_id)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(db_err)?;
     let qty_after = qty.checked_add(qty_change_e4).ok_or("STOCK_OVERFLOW: quantity out of range")?;
     let value_after = value.checked_add(value_change_cents).ok_or("STOCK_OVERFLOW: value out of range")?;
     // Quantity and value must agree in sign (also enforced by the table's CHECK constraint).
@@ -209,8 +212,7 @@ pub(crate) async fn cost_of_sale(tx: &mut Transaction<'_, Sqlite>, lines: &[(Opt
         }
         movements.push((item.id, qty, cost));
     }
-    let mut out: Vec<JournalLine> =
-        debits.into_iter().filter(|(_, c)| *c != 0).map(|((a, class), c)| JournalLine::debit(a, c).with_class(class)).collect();
+    let mut out: Vec<JournalLine> = debits.into_iter().filter(|(_, c)| *c != 0).map(|((a, class), c)| JournalLine::debit(a, c).with_class(class)).collect();
     out.extend(credits.into_iter().map(|(a, c)| JournalLine::credit(a, c)));
     Ok(SaleCost { lines: out, movements })
 }
@@ -237,7 +239,11 @@ impl SaleCost {
     /// Records the stock leaving, against the sale's posted journal entry.
     pub async fn record(&self, tx: &mut Transaction<'_, Sqlite>, date: NaiveDate, journal_entry_id: i64) -> Result<(), String> {
         for (item, qty, cost) in &self.movements {
-            record_movement(tx, Movement { item_id: *item, date, kind: "SALE", qty_change_e4: -qty, value_change_cents: -cost, journal_entry_id, reverses_id: None }).await?;
+            record_movement(
+                tx,
+                Movement { item_id: *item, date, kind: "SALE", qty_change_e4: -qty, value_change_cents: -cost, journal_entry_id, reverses_id: None },
+            )
+            .await?;
         }
         Ok(())
     }
@@ -245,7 +251,13 @@ impl SaleCost {
 
 /// A purchase line for a tracked product: the line must post to that item's Inventory Asset account.
 /// Returns the item id to record once the bill's journal entry exists.
-pub(crate) async fn check_purchase_line(tx: &mut Transaction<'_, Sqlite>, product_id: i64, account_id: i64, quantity_e4: Option<i64>, n: usize) -> Result<Option<i64>, String> {
+pub(crate) async fn check_purchase_line(
+    tx: &mut Transaction<'_, Sqlite>,
+    product_id: i64,
+    account_id: i64,
+    quantity_e4: Option<i64>,
+    n: usize,
+) -> Result<Option<i64>, String> {
     let Some(item) = item_for_product(tx, product_id).await? else { return Ok(None) };
     if account_id != item.asset_account_id {
         return Err(format!("STOCK_PURCHASE_ACCOUNT: line {n} buys {}, so it must post to its inventory account", item.name));
@@ -292,9 +304,25 @@ impl Receipt {
             // The true-up comes first: recorded alone, a purchase into negative stock could leave a
             // moment where quantity is still below zero but value is above it.
             if variance != 0 {
-                record_movement(tx, Movement { item_id: item, date, kind: "COST_TRUE_UP", qty_change_e4: 0, value_change_cents: -variance, journal_entry_id, reverses_id: None }).await?;
+                record_movement(
+                    tx,
+                    Movement {
+                        item_id: item,
+                        date,
+                        kind: "COST_TRUE_UP",
+                        qty_change_e4: 0,
+                        value_change_cents: -variance,
+                        journal_entry_id,
+                        reverses_id: None,
+                    },
+                )
+                .await?;
             }
-            record_movement(tx, Movement { item_id: item, date, kind: "PURCHASE", qty_change_e4: qty, value_change_cents: cost, journal_entry_id, reverses_id: None }).await?;
+            record_movement(
+                tx,
+                Movement { item_id: item, date, kind: "PURCHASE", qty_change_e4: qty, value_change_cents: cost, journal_entry_id, reverses_id: None },
+            )
+            .await?;
             remember_unit_cost(tx, item, qty, cost).await?;
         }
         Ok(())
@@ -313,7 +341,13 @@ pub(crate) struct PriceDifference {
 
 /// Plans how a difference of `diff_cents` on `qty_e4` received units of `product_id` posts; `None`
 /// when the product isn't tracked.
-pub(crate) async fn plan_price_difference(tx: &mut Transaction<'_, Sqlite>, product_id: i64, qty_e4: i64, diff_cents: i64, class_id: Option<i64>) -> Result<Option<PriceDifference>, String> {
+pub(crate) async fn plan_price_difference(
+    tx: &mut Transaction<'_, Sqlite>,
+    product_id: i64,
+    qty_e4: i64,
+    diff_cents: i64,
+    class_id: Option<i64>,
+) -> Result<Option<PriceDifference>, String> {
     let Some(item) = item_for_product(tx, product_id).await? else { return Ok(None) };
     if diff_cents == 0 || qty_e4 <= 0 {
         return Ok(Some(PriceDifference { lines: Vec::new(), movement: None }));
@@ -340,7 +374,11 @@ impl PriceDifference {
     /// Records the change in the stock's value against the bill's posted entry.
     pub async fn record(&self, tx: &mut Transaction<'_, Sqlite>, date: NaiveDate, journal_entry_id: i64) -> Result<(), String> {
         if let Some((item, value)) = self.movement {
-            record_movement(tx, Movement { item_id: item, date, kind: "COST_TRUE_UP", qty_change_e4: 0, value_change_cents: value, journal_entry_id, reverses_id: None }).await?;
+            record_movement(
+                tx,
+                Movement { item_id: item, date, kind: "COST_TRUE_UP", qty_change_e4: 0, value_change_cents: value, journal_entry_id, reverses_id: None },
+            )
+            .await?;
         }
         Ok(())
     }
@@ -400,7 +438,19 @@ pub(crate) async fn reverse_for_entry(tx: &mut Transaction<'_, Sqlite>, journal_
     .await
     .map_err(db_err)?;
     for (id, item, qty, value) in movements {
-        record_movement(tx, Movement { item_id: item, date, kind: "VOID", qty_change_e4: -qty, value_change_cents: -value, journal_entry_id: reversal_entry_id, reverses_id: Some(id) }).await?;
+        record_movement(
+            tx,
+            Movement {
+                item_id: item,
+                date,
+                kind: "VOID",
+                qty_change_e4: -qty,
+                value_change_cents: -value,
+                journal_entry_id: reversal_entry_id,
+                reverses_id: Some(id),
+            },
+        )
+        .await?;
     }
     Ok(())
 }
@@ -475,25 +525,23 @@ pub async fn track_product(pool: &SqlitePool, input: &TrackInput) -> Result<Inve
     };
     drop(conn);
     let sku = input.sku.as_deref().map(str::trim).filter(|s| !s.is_empty());
-    let id: i64 = sqlx::query_scalar(
-        "INSERT INTO inventory_items (product_id, sku, asset_account_id, cogs_account_id) VALUES (?1, ?2, ?3, ?4) RETURNING id",
-    )
-    .bind(input.product_id)
-    .bind(sku)
-    .bind(asset)
-    .bind(cogs)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| {
-        let msg = db_err(e);
-        if msg.contains("UNIQUE") && msg.contains("product_id") {
-            "STOCK_ALREADY_TRACKED: that product is already tracked".into()
-        } else if msg.contains("UNIQUE") {
-            "STOCK_SKU_TAKEN: another item already uses that SKU".into()
-        } else {
-            msg
-        }
-    })?;
+    let id: i64 = sqlx::query_scalar("INSERT INTO inventory_items (product_id, sku, asset_account_id, cogs_account_id) VALUES (?1, ?2, ?3, ?4) RETURNING id")
+        .bind(input.product_id)
+        .bind(sku)
+        .bind(asset)
+        .bind(cogs)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| {
+            let msg = db_err(e);
+            if msg.contains("UNIQUE") && msg.contains("product_id") {
+                "STOCK_ALREADY_TRACKED: that product is already tracked".into()
+            } else if msg.contains("UNIQUE") {
+                "STOCK_SKU_TAKEN: another item already uses that SKU".into()
+            } else {
+                msg
+            }
+        })?;
     list_items(pool).await?.into_iter().find(|i| i.id == id).ok_or_else(|| "STOCK_NOT_FOUND".into())
 }
 
@@ -562,9 +610,33 @@ pub async fn adjust(pool: &SqlitePool, input: &AdjustInput) -> Result<InventoryI
             return Err("STOCK_ADJUST_FREE: adding stock at no cost needs a cost of at least 0.01, so the books record it".to_string());
         };
         if variance != 0 {
-            record_movement(&mut tx, Movement { item_id: item.id, date: input.date, kind: "COST_TRUE_UP", qty_change_e4: 0, value_change_cents: -variance, journal_entry_id: entry_id, reverses_id: None }).await?;
+            record_movement(
+                &mut tx,
+                Movement {
+                    item_id: item.id,
+                    date: input.date,
+                    kind: "COST_TRUE_UP",
+                    qty_change_e4: 0,
+                    value_change_cents: -variance,
+                    journal_entry_id: entry_id,
+                    reverses_id: None,
+                },
+            )
+            .await?;
         }
-        record_movement(&mut tx, Movement { item_id: item.id, date: input.date, kind: "ADJUSTMENT", qty_change_e4: input.qty_change_e4, value_change_cents: value, journal_entry_id: entry_id, reverses_id: None }).await?;
+        record_movement(
+            &mut tx,
+            Movement {
+                item_id: item.id,
+                date: input.date,
+                kind: "ADJUSTMENT",
+                qty_change_e4: input.qty_change_e4,
+                value_change_cents: value,
+                journal_entry_id: entry_id,
+                reverses_id: None,
+            },
+        )
+        .await?;
         if value > 0 {
             remember_unit_cost(&mut tx, item.id, input.qty_change_e4, value).await?;
         }

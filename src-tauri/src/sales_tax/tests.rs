@@ -6,7 +6,11 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn balance(pool: &SqlitePool, account: i64) -> i64 {
-    sqlx::query_scalar("SELECT COALESCE(SUM(credit_cents - debit_cents), 0) FROM v_posted_lines WHERE account_id = ?1").bind(account).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("SELECT COALESCE(SUM(credit_cents - debit_cents), 0) FROM v_posted_lines WHERE account_id = ?1")
+        .bind(account)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 fn d(day: u32) -> NaiveDate {
@@ -23,8 +27,14 @@ fn tax_rounds_half_up() {
 #[tokio::test]
 async fn sales_tax_is_charged_reported_and_paid() {
     let pool = test_pool().await;
-    let (checking, ar, payable, services) = (account(&pool, "1010").await, account(&pool, "1200").await, account(&pool, "2200").await, account(&pool, "4100").await);
-    let rate = create_tax_rate(&pool, TaxRateInput { name: "State 8.25%".into(), rate_ppm: 82_500, agency_name: Some("Dept. of Revenue".into()), liability_account_id: None }).await.unwrap();
+    let (checking, ar, payable, services) =
+        (account(&pool, "1010").await, account(&pool, "1200").await, account(&pool, "2200").await, account(&pool, "4100").await);
+    let rate = create_tax_rate(
+        &pool,
+        TaxRateInput { name: "State 8.25%".into(), rate_ppm: 82_500, agency_name: Some("Dept. of Revenue".into()), liability_account_id: None },
+    )
+    .await
+    .unwrap();
     assert_eq!((rate.liability_account_id, rate.agency_name.as_deref()), (payable, Some("Dept. of Revenue")));
 
     let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
@@ -48,13 +58,24 @@ async fn sales_tax_is_charged_reported_and_paid() {
 
     let memo = crate::credits::create_credit_memo(
         &pool,
-        crate::credits::CreditMemoInput { credit_number: None, form_lines: Vec::new(),
+        crate::credits::CreditMemoInput {
+            credit_number: None,
+            form_lines: Vec::new(),
             customer_name: "Acme".into(),
             credit_date: d(3),
             memo: None,
             refund_account_id: None,
             tax_rate_id: Some(rate.id),
-            lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: Cents(1_000), income_account_id: services, class_id: None, is_taxable: true, service_date: None }],
+            lines: vec![crate::sales::SalesLineInput {
+                product_service_id: None,
+                description: "Return".into(),
+                quantity_e4: 10_000,
+                rate_cents: Cents(1_000),
+                income_account_id: services,
+                class_id: None,
+                is_taxable: true,
+                service_date: None,
+            }],
             header: Default::default(),
         },
     )
@@ -72,7 +93,8 @@ async fn sales_tax_is_charged_reported_and_paid() {
     let est = crate::estimates::create_estimate(&pool, estimate).await.unwrap();
     assert_eq!((est.total_cents, est.tax_cents), (4_330, 330));
     let converted = crate::estimates::convert_to_invoice(&pool, est.id, d(5), d(30)).await.unwrap();
-    let invoice_total: i64 = sqlx::query_scalar("SELECT total_cents FROM invoices WHERE id = ?1").bind(converted.converted_to_invoice_id).fetch_one(&pool).await.unwrap();
+    let invoice_total: i64 =
+        sqlx::query_scalar("SELECT total_cents FROM invoices WHERE id = ?1").bind(converted.converted_to_invoice_id).fetch_one(&pool).await.unwrap();
     assert_eq!(invoice_total, 4_330);
 
     let report = tax_liability(&pool, d(1), d(31)).await.unwrap();
@@ -80,7 +102,19 @@ async fn sales_tax_is_charged_reported_and_paid() {
     assert_eq!((row.taxable_sales_cents, row.non_taxable_sales_cents, row.tax_collected_cents), (10_000 + 2_000 - 1_000 + 4_000, 5_000, 825 + 165 - 83 + 330));
     assert_eq!(report.owed_cents, 1_237);
 
-    pay_sales_tax(&pool, SalesTaxPaymentInput { tax_rate_id: Some(rate.id), liability_account_id: None, account_id: checking, payment_date: d(31), amount_cents: Cents::from(1_237), reference: Some("Q3".into()) }).await.unwrap();
+    pay_sales_tax(
+        &pool,
+        SalesTaxPaymentInput {
+            tax_rate_id: Some(rate.id),
+            liability_account_id: None,
+            account_id: checking,
+            payment_date: d(31),
+            amount_cents: Cents::from(1_237),
+            reference: Some("Q3".into()),
+        },
+    )
+    .await
+    .unwrap();
     let after = tax_liability(&pool, d(1), d(31)).await.unwrap();
     assert_eq!((after.paid_cents, after.owed_cents), (1_237, 0));
     assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
@@ -91,7 +125,8 @@ async fn sales_tax_is_charged_reported_and_paid() {
 async fn sales_tax_is_owed_when_invoiced_or_when_paid() {
     let pool = test_pool().await;
     let (checking, services) = (account(&pool, "1010").await, account(&pool, "4100").await);
-    let rate = create_tax_rate(&pool, TaxRateInput { name: "State 10%".into(), rate_ppm: 100_000, agency_name: None, liability_account_id: None }).await.unwrap();
+    let rate =
+        create_tax_rate(&pool, TaxRateInput { name: "State 10%".into(), rate_ppm: 100_000, agency_name: None, liability_account_id: None }).await.unwrap();
     // July 1: $1,000 taxable + $200 labor, $100 tax → $1,300.
     let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
         "customerName": "Acme", "issueDate": "2026-07-01", "dueDate": "2026-07-31", "taxRateId": rate.id,
@@ -111,11 +146,22 @@ async fn sales_tax_is_owed_when_invoiced_or_when_paid() {
     .unwrap();
     crate::sales::post_sales_receipt(&pool, receipt).await.unwrap();
     // August 10: Acme pays $650, half the invoice.
-    let pay = |date: NaiveDate, cents: i64| crate::invoices::PaymentInput { discount_cents: Cents::ZERO, invoice_id: inv.id, deposit_account_id: checking, payment_date: date, amount_cents: Cents(cents), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None, payment_method_id: None };
+    let pay = |date: NaiveDate, cents: i64| crate::invoices::PaymentInput {
+        discount_cents: Cents::ZERO,
+        invoice_id: inv.id,
+        deposit_account_id: checking,
+        payment_date: date,
+        amount_cents: Cents(cents),
+        payment_method: "CHECK".into(),
+        reference: None,
+        exchange_rate_e6: None,
+        payment_method_id: None,
+    };
     crate::invoices::record_payment(&pool, pay(NaiveDate::from_ymd_opt(2026, 8, 10).unwrap(), 65_000)).await.unwrap();
 
     let (july, august) = ((d(1), d(31)), (NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 8, 31).unwrap()));
-    let row = |r: &TaxLiabilityReport| r.rows.iter().map(|r| (r.taxable_sales_cents, r.non_taxable_sales_cents, r.tax_collected_cents)).next().unwrap_or_default();
+    let row =
+        |r: &TaxLiabilityReport| r.rows.iter().map(|r| (r.taxable_sales_cents, r.non_taxable_sales_cents, r.tax_collected_cents)).next().unwrap_or_default();
 
     // Accrual, the default: all of the invoice in July.
     let accrual = tax_liability(&pool, july.0, july.1).await.unwrap();
@@ -151,11 +197,20 @@ async fn filing_frequency_sets_the_period_and_the_reminder() {
     let day = |y, m, d| NaiveDate::from_ymd_opt(y, m, d).unwrap();
     let range = |r: crate::preferences::DateRange| (r.start, r.end);
     let monthly = filing_periods(day(2026, 11, 6), Frequency::Monthly, Basis::Accrual);
-    assert_eq!((range(monthly.current), range(monthly.last), monthly.last_due), ((day(2026, 11, 1), day(2026, 11, 30)), (day(2026, 10, 1), day(2026, 10, 31)), day(2026, 11, 20)));
+    assert_eq!(
+        (range(monthly.current), range(monthly.last), monthly.last_due),
+        ((day(2026, 11, 1), day(2026, 11, 30)), (day(2026, 10, 1), day(2026, 10, 31)), day(2026, 11, 20))
+    );
     let quarterly = filing_periods(day(2026, 11, 6), Frequency::Quarterly, Basis::Accrual);
-    assert_eq!((range(quarterly.current), range(quarterly.last), quarterly.last_due), ((day(2026, 10, 1), day(2026, 12, 31)), (day(2026, 7, 1), day(2026, 9, 30)), day(2026, 10, 20)));
+    assert_eq!(
+        (range(quarterly.current), range(quarterly.last), quarterly.last_due),
+        ((day(2026, 10, 1), day(2026, 12, 31)), (day(2026, 7, 1), day(2026, 9, 30)), day(2026, 10, 20))
+    );
     let yearly = filing_periods(day(2026, 2, 1), Frequency::Yearly, Basis::Cash);
-    assert_eq!((range(yearly.current), range(yearly.last), yearly.last_due), ((day(2026, 1, 1), day(2026, 12, 31)), (day(2025, 1, 1), day(2025, 12, 31)), day(2026, 1, 20)));
+    assert_eq!(
+        (range(yearly.current), range(yearly.last), yearly.last_due),
+        ((day(2026, 1, 1), day(2026, 12, 31)), (day(2025, 1, 1), day(2025, 12, 31)), day(2026, 1, 20))
+    );
 
     let pool = test_pool().await;
     assert_eq!(company_filing_periods(&pool, day(2026, 11, 6)).await.unwrap().frequency, Frequency::Quarterly, "quarterly by default");
@@ -176,7 +231,8 @@ async fn cash_basis_counts_a_credit_applied_to_an_invoice_as_settling_it() {
     let pool = test_pool().await;
     let services = account(&pool, "4100").await;
     crate::preferences::set(&pool, "sales_tax_basis", "cash").await.unwrap();
-    let rate = create_tax_rate(&pool, TaxRateInput { name: "State 10%".into(), rate_ppm: 100_000, agency_name: None, liability_account_id: None }).await.unwrap();
+    let rate =
+        create_tax_rate(&pool, TaxRateInput { name: "State 10%".into(), rate_ppm: 100_000, agency_name: None, liability_account_id: None }).await.unwrap();
     let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
         "customerName": "Acme", "issueDate": "2026-07-01", "dueDate": "2026-07-31", "taxRateId": rate.id,
         "lines": [{ "description": "Widgets", "quantityE4": 10_000, "rateCents": 10_000, "incomeAccountId": services, "isTaxable": true }]
@@ -186,13 +242,24 @@ async fn cash_basis_counts_a_credit_applied_to_an_invoice_as_settling_it() {
     // A full credit for the invoice, dated July 5 and applied August 3.
     let memo = crate::credits::create_credit_memo(
         &pool,
-        crate::credits::CreditMemoInput { credit_number: None, form_lines: Vec::new(),
+        crate::credits::CreditMemoInput {
+            credit_number: None,
+            form_lines: Vec::new(),
             customer_name: "Acme".into(),
             credit_date: d(5),
             memo: None,
             refund_account_id: None,
             tax_rate_id: Some(rate.id),
-            lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: Cents(10_000), income_account_id: services, class_id: None, is_taxable: true, service_date: None }],
+            lines: vec![crate::sales::SalesLineInput {
+                product_service_id: None,
+                description: "Return".into(),
+                quantity_e4: 10_000,
+                rate_cents: Cents(10_000),
+                income_account_id: services,
+                class_id: None,
+                is_taxable: true,
+                service_date: None,
+            }],
             header: Default::default(),
         },
     )
@@ -200,20 +267,30 @@ async fn cash_basis_counts_a_credit_applied_to_an_invoice_as_settling_it() {
     .unwrap();
     assert_eq!(memo.total_cents, inv.total_cents);
     let aug = |day| NaiveDate::from_ymd_opt(2026, 8, day).unwrap();
-    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: memo.id, document_id: inv.id, amount_cents: Cents(memo.total_cents), applied_date: aug(3) }).await.unwrap();
+    crate::credits::apply_customer_credit(
+        &pool,
+        crate::credits::ApplyCreditInput { credit_id: memo.id, document_id: inv.id, amount_cents: Cents(memo.total_cents), applied_date: aug(3) },
+    )
+    .await
+    .unwrap();
 
     let tax = |r: &TaxLiabilityReport| r.tax_collected_cents;
     assert_eq!(tax(&tax_liability(&pool, d(1), d(31)).await.unwrap()), -1_000, "July: the memo on its date");
     assert_eq!(tax(&tax_liability(&pool, aug(1), aug(31)).await.unwrap()), 1_000, "August: the invoice, settled by the credit");
     let year = tax_liability(&pool, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()).await.unwrap();
     assert_eq!((tax(&year), year.owed_cents), (0, 0), "nothing owed either way");
-    assert_eq!(tax_liability_on(&pool, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(), Basis::Accrual).await.unwrap().owed_cents, 0);
+    assert_eq!(
+        tax_liability_on(&pool, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(), Basis::Accrual)
+            .await
+            .unwrap()
+            .owed_cents,
+        0
+    );
 }
 
 #[test]
 fn a_tax_payment_amount_arrives_as_a_bare_integer() {
-    let input: SalesTaxPaymentInput =
-        serde_json::from_str(r#"{"accountId":3,"paymentDate":"2025-07-31","amountCents":1237,"reference":null}"#).unwrap();
+    let input: SalesTaxPaymentInput = serde_json::from_str(r#"{"accountId":3,"paymentDate":"2025-07-31","amountCents":1237,"reference":null}"#).unwrap();
     assert_eq!(input.amount_cents, Cents::from(1_237));
     assert!(serde_json::from_str::<SalesTaxPaymentInput>(r#"{"accountId":3,"paymentDate":"2025-07-31","amountCents":12.37,"reference":null}"#).is_err());
 }
@@ -222,7 +299,10 @@ fn a_tax_payment_amount_arrives_as_a_bare_integer() {
 async fn discounts_lower_taxable_sales_on_the_liability_report_and_the_return() {
     let pool = test_pool().await;
     let services = account(&pool, "4100").await;
-    let rate = create_tax_rate(&pool, TaxRateInput { name: "State 8%".into(), rate_ppm: 80_000, agency_name: Some("State".into()), liability_account_id: None }).await.unwrap();
+    let rate =
+        create_tax_rate(&pool, TaxRateInput { name: "State 8%".into(), rate_ppm: 80_000, agency_name: Some("State".into()), liability_account_id: None })
+            .await
+            .unwrap();
     // A $100 taxable + $100 non-taxable invoice with $20 off the whole form: $10 of the discount is
     // off the taxable half, so $90 is taxed ($7.20).
     let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
@@ -244,7 +324,16 @@ async fn discounts_lower_taxable_sales_on_the_liability_report_and_the_return() 
             memo: None,
             refund_account_id: None,
             tax_rate_id: Some(rate.id),
-            lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: Cents(10_000), income_account_id: services, class_id: None, is_taxable: true, service_date: None }],
+            lines: vec![crate::sales::SalesLineInput {
+                product_service_id: None,
+                description: "Return".into(),
+                quantity_e4: 10_000,
+                rate_cents: Cents(10_000),
+                income_account_id: services,
+                class_id: None,
+                is_taxable: true,
+                service_date: None,
+            }],
             header: Default::default(),
             form_lines: vec![crate::item_types::FormLineInput::discount(1, services, Some(100_000), None, true)],
         },
@@ -255,7 +344,11 @@ async fn discounts_lower_taxable_sales_on_the_liability_report_and_the_return() 
 
     let report = tax_liability_on(&pool, d(1), d(31), Basis::Accrual).await.unwrap();
     let row = report.rows.iter().find(|r| r.tax_rate_id == Some(rate.id)).unwrap();
-    assert_eq!((row.taxable_sales_cents, row.non_taxable_sales_cents, row.tax_collected_cents), (9_000 - 9_000, 9_000, 0), "invoice $90 taxable less the memo's $90; $90 non-taxable");
+    assert_eq!(
+        (row.taxable_sales_cents, row.non_taxable_sales_cents, row.tax_collected_cents),
+        (9_000 - 9_000, 9_000, 0),
+        "invoice $90 taxable less the memo's $90; $90 non-taxable"
+    );
 
     let r = combined::sales_tax_return(&pool, d(1), d(31), Basis::Accrual).await.unwrap();
     assert_eq!(r.agencies[0].lines[0].taxable_sales_cents, 0, "the invoice's $90 less the credit memo's $90");

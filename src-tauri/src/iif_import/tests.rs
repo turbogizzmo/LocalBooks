@@ -318,7 +318,10 @@ async fn a_full_import_brings_in_reps_shipping_and_custom_fields() {
     assert_eq!(methods, [("FedEx".to_string(), true), ("Pony Express".into(), false), ("UPS".into(), true)]);
 
     let (acme, rep): (i64, Option<String>) =
-        sqlx::query_as("SELECT c.id, r.initials FROM customers c LEFT JOIN sales_reps r ON r.id = c.sales_rep_id WHERE c.name = 'Acme'").fetch_one(&pool).await.unwrap();
+        sqlx::query_as("SELECT c.id, r.initials FROM customers c LEFT JOIN sales_reps r ON r.id = c.sales_rep_id WHERE c.name = 'Acme'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(rep.as_deref(), Some("JS"));
     let values: Vec<(String, String)> = record_fields(&pool, FieldList::Customer, acme).await.unwrap().into_iter().map(|f| (f.label, f.value)).collect();
     assert_eq!(values, [("Region".to_string(), "West".to_string()), ("Custom field 2".into(), "Loyal".into())]);
@@ -359,8 +362,12 @@ ENDTRNS\r";
 fn reads_price_levels_and_customer_defaults() {
     use crate::price_levels::LevelKind;
     let ledger = read(PRICE_LEVELS.as_bytes()).unwrap();
-    let levels: Vec<(&str, bool, LevelKind, i64)> = ledger.sales_lists.price_levels.iter().map(|l| (l.name.as_str(), l.active, l.kind, l.percent_milli)).collect();
-    assert_eq!(levels, [("Wholesale", true, LevelKind::FixedPercent, -10_000), ("Premium", false, LevelKind::FixedPercent, 12_500), ("Contract", true, LevelKind::PerItem, 0)]);
+    let levels: Vec<(&str, bool, LevelKind, i64)> =
+        ledger.sales_lists.price_levels.iter().map(|l| (l.name.as_str(), l.active, l.kind, l.percent_milli)).collect();
+    assert_eq!(
+        levels,
+        [("Wholesale", true, LevelKind::FixedPercent, -10_000), ("Premium", false, LevelKind::FixedPercent, 12_500), ("Contract", true, LevelKind::PerItem, 0)]
+    );
     let acme = ledger.customers.iter().find(|c| c.name == "Acme").unwrap().id;
     assert_eq!(ledger.sales_lists.customer_price_levels, [(acme, "Wholesale".to_string())]);
 }
@@ -379,22 +386,24 @@ async fn an_import_brings_in_price_levels_and_sets_customer_defaults() {
         active: true,
         kind: LevelKind::PerItem,
         percent_milli: 0,
-        items: vec![LevelItem { product_id: widget_source, basis: ItemBasis::Fixed, price_cents: Some(1_500), percent_milli: None }, LevelItem {
-            product_id: 9_999,
-            basis: ItemBasis::Fixed,
-            price_cents: Some(1),
-            percent_milli: None,
-        }],
+        items: vec![
+            LevelItem { product_id: widget_source, basis: ItemBasis::Fixed, price_cents: Some(1_500), percent_milli: None },
+            LevelItem { product_id: 9_999, basis: ItemBasis::Fixed, price_cents: Some(1), percent_milli: None },
+        ],
     });
     // One level already in the books is matched by name and left alone.
-    crate::price_levels::save(&pool, None, crate::price_levels::PriceLevelInput {
-        name: "premium".into(),
-        kind: LevelKind::FixedPercent,
-        percent_milli: 5_000,
-        rounding: crate::item_prices::Rounding::None,
-        items: vec![],
-        is_active: true,
-    })
+    crate::price_levels::save(
+        &pool,
+        None,
+        crate::price_levels::PriceLevelInput {
+            name: "premium".into(),
+            kind: LevelKind::FixedPercent,
+            percent_milli: 5_000,
+            rounding: crate::item_prices::Rounding::None,
+            items: vec![],
+            is_active: true,
+        },
+    )
     .await
     .unwrap();
     let batch = stage(&pool, std::path::Path::new("/exports/Lists.iif"), PRICE_LEVELS.len() as i64, &ledger).await.unwrap();
@@ -467,10 +476,7 @@ fn a_file_with_only_a_class_list_reads() {
 }
 
 async fn class_of_lines(pool: &sqlx::SqlitePool, table: &str) -> Vec<Option<String>> {
-    sqlx::query_scalar(&format!("SELECT k.full_name FROM {table} l LEFT JOIN v_classes k ON k.id = l.class_id ORDER BY l.id"))
-        .fetch_all(pool)
-        .await
-        .unwrap()
+    sqlx::query_scalar(&format!("SELECT k.full_name FROM {table} l LEFT JOIN v_classes k ON k.id = l.class_id ORDER BY l.id")).fetch_all(pool).await.unwrap()
 }
 
 async fn class_active(pool: &sqlx::SqlitePool, full_name: &str) -> bool {

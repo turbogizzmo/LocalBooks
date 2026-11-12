@@ -29,7 +29,8 @@ fn invoice(customer: &str, account: i64, cents: i64, details: SalesDetails) -> I
             income_account_id: account,
             product_service_id: None,
             class_id: None,
-            is_taxable: false, service_date: None,
+            is_taxable: false,
+            service_date: None,
         }],
         currency: None,
         tax_rate_id: None,
@@ -107,9 +108,12 @@ async fn an_invoice_keeps_its_rep_shipping_and_printed_fields() {
     assert!(err.starts_with("INV_INACTIVE_SALES_REP"), "{err}");
     set_sales_rep_active(&pool, js.id, true).await.unwrap();
     let hidden = create_custom_field(&pool, FieldList::Customer, CustomFieldInput { label: "Birthday".into(), on_sales_forms: false }).await.unwrap();
-    let err = create_and_post_invoice(&pool, invoice("Acme", services, 100, SalesDetails { custom_fields: vec![FieldValue { field_id: hidden.id, value: "May".into() }], ..details }))
-        .await
-        .unwrap_err();
+    let err = create_and_post_invoice(
+        &pool,
+        invoice("Acme", services, 100, SalesDetails { custom_fields: vec![FieldValue { field_id: hidden.id, value: "May".into() }], ..details }),
+    )
+    .await
+    .unwrap_err();
     assert!(err.starts_with("CF_NOT_ON_FORMS"), "{err}");
     // Nothing from the refused invoices was kept.
     assert_eq!(crate::invoices::list_invoices(&pool).await.unwrap().len(), 1);
@@ -136,7 +140,8 @@ async fn an_estimate_carries_its_details_to_its_invoice() {
                 rate_cents: Cents(5_000),
                 income_account_id: services,
                 class_id: None,
-                is_taxable: false, service_date: None,
+                is_taxable: false,
+                service_date: None,
             }],
             tax_rate_id: None,
             discount_cents: Cents::ZERO,
@@ -178,7 +183,8 @@ async fn sales_by_rep_totals_invoices_and_receipts() {
                 rate_cents: Cents(1_000),
                 income_account_id: services,
                 class_id: None,
-                is_taxable: false, service_date: None,
+                is_taxable: false,
+                service_date: None,
             }],
             tax_rate_id: None,
             discount_cents: Cents::ZERO,
@@ -242,7 +248,8 @@ async fn carried_details_survive_later_list_changes() {
             rate_cents: Cents(5_000),
             income_account_id: services,
             class_id: None,
-            is_taxable: false, service_date: None,
+            is_taxable: false,
+            service_date: None,
         }],
         tax_rate_id: None,
         discount_cents: Cents::ZERO,

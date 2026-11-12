@@ -102,7 +102,9 @@ async fn account(pool: &SqlitePool, name: &str, allowed: &[&str]) -> Result<Opti
     .map_err(db_err)?;
     Ok(rows
         .into_iter()
-        .find(|(_, kind, _, system, active)| *active && allowed.iter().any(|a| *a == kind.as_str() || (*a == "UNDEPOSITED" && kind == "OTHER_CURRENT_ASSET" && *system)))
+        .find(|(_, kind, _, system, active)| {
+            *active && allowed.iter().any(|a| *a == kind.as_str() || (*a == "UNDEPOSITED" && kind == "OTHER_CURRENT_ASSET" && *system))
+        })
         .map(|(id, _, name, _, _)| (id, name)))
 }
 
@@ -262,7 +264,8 @@ pub async fn post(pool: &SqlitePool, kind: SheetKind, sheet: &Sheet, mapping: &M
     if resolved.len() != rows.len() {
         return Err("SHEET_PROBLEMS: the books changed since the check; check the sheet again".into());
     }
-    let total_cents = rows.iter().try_fold(0i64, |t, r| t.checked_add(r.amount_cents)).ok_or("SHEET_TOO_LARGE: the payments add up to more than Tillhouse can hold")?;
+    let total_cents =
+        rows.iter().try_fold(0i64, |t, r| t.checked_add(r.amount_cents)).ok_or("SHEET_TOO_LARGE: the payments add up to more than Tillhouse can hold")?;
     if kind == SheetKind::CustomerPayments {
         let inputs: Vec<crate::invoices::PaymentInput> = rows
             .iter()

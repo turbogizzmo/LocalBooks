@@ -40,7 +40,9 @@ use chrono::{Datelike, Duration, NaiveDate};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteRow};
 use sqlx::{ConnectOptions, Connection, Row, SqliteConnection};
 
-use crate::qbw_company::{Ledger, LedgerQuality, LineOutcome, SourceAccount, SourceItem, SourceLine, SourceParty, SourceSalesLists, SourceTransaction, UnreadableLine};
+use crate::qbw_company::{
+    Ledger, LedgerQuality, LineOutcome, SourceAccount, SourceItem, SourceLine, SourceParty, SourceSalesLists, SourceTransaction, UnreadableLine,
+};
 use crate::qbw_documents::{payment_method, Applied, DocumentLine, SourceDocument, SourceSales};
 use crate::text_import::blank_party;
 
@@ -132,7 +134,11 @@ fn locate(path: &Path) -> Result<(PathBuf, Option<Format>), String> {
     }
     // A store that is not encrypted wins over an encrypted one; then the first by path.
     found.sort_by_key(|(f, p)| (*f != Format::Sqlite, p.clone()));
-    found.into_iter().next().map(|(f, p)| (p, Some(f))).ok_or_else(|| format!("QBMAC_NOT_COMPANY: no QuickBooks company file was found inside {}", path.display()))
+    found
+        .into_iter()
+        .next()
+        .map(|(f, p)| (p, Some(f)))
+        .ok_or_else(|| format!("QBMAC_NOT_COMPANY: no QuickBooks company file was found inside {}", path.display()))
 }
 
 /// Reads a QuickBooks for Mac company file, or refuses one this reader cannot open.
@@ -319,7 +325,8 @@ pub fn cents(raw: Option<&str>) -> Result<Option<i64>, ()> {
 
 /// The columns a table has, so a file whose model lacks one still reads (it reads as empty).
 async fn columns(conn: &mut SqliteConnection, table: &str) -> Result<HashSet<String>, String> {
-    let rows = sqlx::query(&format!("PRAGMA table_info({table})")).fetch_all(&mut *conn).await.map_err(|e| format!("QBMAC_PARSE_FAILED: table {table}: {e}"))?;
+    let rows =
+        sqlx::query(&format!("PRAGMA table_info({table})")).fetch_all(&mut *conn).await.map_err(|e| format!("QBMAC_PARSE_FAILED: table {table}: {e}"))?;
     Ok(rows.iter().filter_map(|r| r.try_get::<String, _>("name").ok()).map(|c| c.to_ascii_uppercase()).collect())
 }
 
@@ -373,8 +380,27 @@ pub async fn read_connection(conn: &mut SqliteConnection) -> Result<Book, String
         });
     }
     let name_columns = [
-        "Z_PK", "ZTYPE", "ZNAME", "ZPARENTMO", "ZHIDDEN", "ZQBDELETED", "ZCOMPANYNAME", "ZFIRST", "ZLAST", "ZTEL1", "ZEMAIL", "ZADDR0", "ZADDR1", "ZADDR2", "ZADDR3",
-        "ZADDR4", "ZTERMS", "ZTAXID", "ZIS1099VENDOR", "ZENDINGBAL", "ZNOTE",
+        "Z_PK",
+        "ZTYPE",
+        "ZNAME",
+        "ZPARENTMO",
+        "ZHIDDEN",
+        "ZQBDELETED",
+        "ZCOMPANYNAME",
+        "ZFIRST",
+        "ZLAST",
+        "ZTEL1",
+        "ZEMAIL",
+        "ZADDR0",
+        "ZADDR1",
+        "ZADDR2",
+        "ZADDR3",
+        "ZADDR4",
+        "ZTERMS",
+        "ZTAXID",
+        "ZIS1099VENDOR",
+        "ZENDINGBAL",
+        "ZNOTE",
     ];
     for r in rows(conn, "ZNAMES", &name_columns).await? {
         let (Some(pk), Some(name)) = (int(&r, "Z_PK"), text(&r, "ZNAME")) else { continue };
@@ -397,7 +423,8 @@ pub async fn read_connection(conn: &mut SqliteConnection) -> Result<Book, String
             note: text(&r, "ZNOTE"),
         });
     }
-    let item_columns = ["Z_PK", "ZTYPE", "ZNAME", "ZPARENTMO", "ZHIDDEN", "ZQBDELETED", "ZDESC", "ZSALESPRICE", "ZTAXABLE", "ZPOSTACCNTMO", "ZCOGSACCNTMO", "ZINVACCNTMO"];
+    let item_columns =
+        ["Z_PK", "ZTYPE", "ZNAME", "ZPARENTMO", "ZHIDDEN", "ZQBDELETED", "ZDESC", "ZSALESPRICE", "ZTAXABLE", "ZPOSTACCNTMO", "ZCOGSACCNTMO", "ZINVACCNTMO"];
     for r in rows(conn, "ZITEMS", &item_columns).await? {
         let (Some(pk), Some(name)) = (int(&r, "Z_PK"), text(&r, "ZNAME")) else { continue };
         book.items.push(Item {
@@ -419,8 +446,25 @@ pub async fn read_connection(conn: &mut SqliteConnection) -> Result<Book, String
         book.masters.push(Master { pk, date: date(&r, "ZDATE"), ship_date: date(&r, "ZSHIPDATE"), ship_via: int(&r, "ZVIAMO") });
     }
     let targ_columns = [
-        "Z_PK", "ZMASTERMO", "ZRECNUM", "ZVIEW", "ZACCNTMO", "ZNAMEMO", "ZITEMMO", "ZAMOUNT", "ZCOGSAMOUNT", "ZQUANTITY", "ZUNITPRICE", "ZISSOURCE", "ZNOPOST", "ZMEMO",
-        "ZDOCUMENT", "ZDATE", "ZDUEDATE", "ZPAYMETHMO", "ZRECEIVED",
+        "Z_PK",
+        "ZMASTERMO",
+        "ZRECNUM",
+        "ZVIEW",
+        "ZACCNTMO",
+        "ZNAMEMO",
+        "ZITEMMO",
+        "ZAMOUNT",
+        "ZCOGSAMOUNT",
+        "ZQUANTITY",
+        "ZUNITPRICE",
+        "ZISSOURCE",
+        "ZNOPOST",
+        "ZMEMO",
+        "ZDOCUMENT",
+        "ZDATE",
+        "ZDUEDATE",
+        "ZPAYMETHMO",
+        "ZRECEIVED",
     ];
     for r in rows(conn, "ZTARGS", &targ_columns).await? {
         let Some(pk) = int(&r, "Z_PK") else { continue };
@@ -447,7 +491,13 @@ pub async fn read_connection(conn: &mut SqliteConnection) -> Result<Book, String
         });
     }
     for r in rows(conn, "ZLINKS", &["ZTYPE", "ZTONEMO", "ZTTWOMO", "ZTONEISSOURCE", "ZAMOUNT"]).await? {
-        book.links.push(Link { kind: int(&r, "ZTYPE"), one: int(&r, "ZTONEMO"), two: int(&r, "ZTTWOMO"), one_is_source: flag(&r, "ZTONEISSOURCE"), amount: text(&r, "ZAMOUNT") });
+        book.links.push(Link {
+            kind: int(&r, "ZTYPE"),
+            one: int(&r, "ZTONEMO"),
+            two: int(&r, "ZTTWOMO"),
+            one_is_source: flag(&r, "ZTONEISSOURCE"),
+            amount: text(&r, "ZAMOUNT"),
+        });
     }
     for r in rows(conn, "ZPAYMENTTERMS", &["ZRECNUM", "ZTERMSTYPE", "ZDUEDAYS", "ZQBDELETED"]).await? {
         let Some(recnum) = int(&r, "ZRECNUM") else { continue };
@@ -742,13 +792,28 @@ pub fn ledger(book: &Book) -> Ledger {
                     let account_id = t.account.filter(|a| known.contains(a))?;
                     let c = cents(t.amount.as_deref()).ok().flatten().filter(|c| *c != 0)?.abs();
                     let (quantity_e4, rate_cents) = quantity_and_rate(t, c);
-                    Some(DocumentLine { item_id: t.item, description: t.memo.clone(), quantity_e4, rate_cents, cents: c, account_id, class: None, subtotal: false })
+                    Some(DocumentLine {
+                        item_id: t.item,
+                        description: t.memo.clone(),
+                        quantity_e4,
+                        rate_cents,
+                        cents: c,
+                        account_id,
+                        class: None,
+                        subtotal: false,
+                    })
                 })
                 .collect();
             let document = match (view, customer, vendor) {
-                (Some(0), Some(customer_id), _) => {
-                    SourceDocument::Estimate { customer_id, date, number: doc_num.clone(), expires: source.due, memo: memo.clone(), lines, sales: SourceSales::default() }
-                }
+                (Some(0), Some(customer_id), _) => SourceDocument::Estimate {
+                    customer_id,
+                    date,
+                    number: doc_num.clone(),
+                    expires: source.due,
+                    memo: memo.clone(),
+                    lines,
+                    sales: SourceSales::default(),
+                },
                 (Some(17), _, Some(vendor_id)) => SourceDocument::PurchaseOrder {
                     vendor_id,
                     date,
@@ -796,13 +861,18 @@ pub fn ledger(book: &Book) -> Ledger {
                     // The cost moves the item's inventory asset account by the cost (in the file's
                     // signs) and cost of goods sold the other way. An item without both accounts
                     // posts no cost, which shows as a balance that differs from the file's.
-                    if let Some((Some(cogs), Some(asset))) = item.map(|i| (i.cogs_account.filter(|a| known.contains(a)), i.asset_account.filter(|a| known.contains(a)))) {
+                    if let Some((Some(cogs), Some(asset))) =
+                        item.map(|i| (i.cogs_account.filter(|a| known.contains(a)), i.asset_account.filter(|a| known.contains(a))))
+                    {
                         cost.push(SourceLine { account_id: cogs, cents: c, memo: t.memo.clone(), class: None });
                         cost.push(SourceLine { account_id: asset, cents: -c, memo: t.memo.clone(), class: None });
                     }
                 }
                 Err(()) => {
-                    problem.get_or_insert((NOT_WHOLE_CENTS, format!("an inventory cost of {} is not a whole number of cents", t.cogs.as_deref().unwrap_or_default())));
+                    problem.get_or_insert((
+                        NOT_WHOLE_CENTS,
+                        format!("an inventory cost of {} is not a whole number of cents", t.cogs.as_deref().unwrap_or_default()),
+                    ));
                 }
             }
         }
@@ -854,7 +924,16 @@ pub fn ledger(book: &Book) -> Ledger {
                 .filter(|(t, a, _)| !is_arap(*a) && (all || !t.is_source))
                 .map(|(t, a, c)| {
                     let (quantity_e4, rate_cents) = quantity_and_rate(t, *c);
-                    DocumentLine { item_id: t.item.filter(|i| items_by.contains_key(i)), description: t.memo.clone(), quantity_e4, rate_cents, cents: *c, account_id: *a, class: None, subtotal: false }
+                    DocumentLine {
+                        item_id: t.item.filter(|i| items_by.contains_key(i)),
+                        description: t.memo.clone(),
+                        quantity_e4,
+                        rate_cents,
+                        cents: *c,
+                        account_id: *a,
+                        class: None,
+                        subtotal: false,
+                    }
                 })
                 .collect()
         };
@@ -866,10 +945,25 @@ pub fn ledger(book: &Book) -> Ledger {
             ship_via: read.master.and_then(|m| m.ship_via).and_then(|v| book.ship_types.get(&v)).map(|(n, _)| n.clone()),
         };
         let document = match view {
-            Some(4) => customer.map(|customer_id| SourceDocument::Invoice { customer_id, number: doc_num.clone(), due_date: source.due, lines: form(true), sales: sales() }),
-            Some(6) => customer.map(|customer_id| SourceDocument::CreditMemo { customer_id, number: doc_num.clone(), lines: form(true), applied_to: Vec::new() }),
-            Some(5) => Some(SourceDocument::SalesReceipt { customer_id: customer, number: doc_num.clone(), method: method(), lines: form(true), sales: sales() }),
-            Some(7) => customer.map(|customer_id| SourceDocument::Payment { customer_id, reference: doc_num.clone(), method: method(), applied_to: applied_to(LINK_PAYMENT) }),
+            Some(4) => customer.map(|customer_id| SourceDocument::Invoice {
+                customer_id,
+                number: doc_num.clone(),
+                due_date: source.due,
+                lines: form(true),
+                sales: sales(),
+            }),
+            Some(6) => {
+                customer.map(|customer_id| SourceDocument::CreditMemo { customer_id, number: doc_num.clone(), lines: form(true), applied_to: Vec::new() })
+            }
+            Some(5) => {
+                Some(SourceDocument::SalesReceipt { customer_id: customer, number: doc_num.clone(), method: method(), lines: form(true), sales: sales() })
+            }
+            Some(7) => customer.map(|customer_id| SourceDocument::Payment {
+                customer_id,
+                reference: doc_num.clone(),
+                method: method(),
+                applied_to: applied_to(LINK_PAYMENT),
+            }),
             Some(2) => Some(SourceDocument::Deposit { payments: deposits.get(&pk).cloned().unwrap_or_default() }),
             Some(9 | 12) => vendor.map(|vendor_id| SourceDocument::Bill { vendor_id, number: doc_num.clone(), due_date: source.due, lines: form(true) }),
             Some(14) => Some(SourceDocument::BillPayment { vendor_id: vendor, reference: doc_num.clone(), applied_to: applied_to(LINK_BILL_PAYMENT) }),

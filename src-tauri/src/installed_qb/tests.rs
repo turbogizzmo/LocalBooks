@@ -53,7 +53,8 @@ const INVENTORY_ITEM: &str = "<ItemInventoryRet><ListID>50000-2</ListID><Name>Ca
 <PurchaseCost>1.50</PurchaseCost><COGSAccountRef><FullName>Job Materials</FullName></COGSAccountRef></ItemInventoryRet>";
 const DISCOUNT_ITEM: &str = "<ItemDiscountRet><ListID>50000-3</ListID><Name>Prompt Pay</Name><FullName>Prompt Pay</FullName><IsActive>true</IsActive><DiscountRate>10.0</DiscountRate></ItemDiscountRet>";
 
-const CLASSES: &str = "<ClassRet><ListID>60000-1</ListID><Name>Remodel</Name><FullName>Remodel</FullName><IsActive>true</IsActive><Sublevel>0</Sublevel></ClassRet>\
+const CLASSES: &str =
+    "<ClassRet><ListID>60000-1</ListID><Name>Remodel</Name><FullName>Remodel</FullName><IsActive>true</IsActive><Sublevel>0</Sublevel></ClassRet>\
 <ClassRet><ListID>60000-2</ListID><Name>New Construction</Name><FullName>New Construction</FullName><IsActive>true</IsActive><Sublevel>0</Sublevel></ClassRet>";
 
 const INVOICES: &str = "<InvoiceRet><TxnID>1-1</TxnID><TxnNumber>1</TxnNumber><CustomerRef><FullName>Kristy Abercrombie</FullName></CustomerRef><TxnDate>2024-01-05</TxnDate><RefNumber>1001</RefNumber><Subtotal>1250.00</Subtotal><BalanceRemaining>250.00</BalanceRemaining></InvoiceRet>";
@@ -70,12 +71,30 @@ fn data_row(n: usize, cells: [&str; 9]) -> String {
 /// on each transaction's first row only, a subtotal row after each, and a total row at the end.
 fn journal_report() -> String {
     let txns: [&[[&str; 9]]; 6] = [
-        &[["1", "Invoice", "2024-01-05", "1001", "Kristy Abercrombie", "", "Accounts Receivable", "1250.00", ""], ["", "", "", "", "Kristy Abercrombie", "Framing labor", "Construction Income:Labor", "", "1250.00"]],
-        &[["2", "Payment", "2024-01-20", "555", "Kristy Abercrombie", "", "Undeposited Funds", "1000.00", ""], ["", "", "", "", "Kristy Abercrombie", "", "Accounts Receivable", "", "1000.00"]],
-        &[["3", "Deposit", "2024-01-21", "", "", "Deposit", "Checking", "1000.00", ""], ["", "", "", "", "Kristy Abercrombie", "Deposit", "Undeposited Funds", "", "1000.00"]],
-        &[["4", "Bill", "2024-01-08", "A-77", "Timberloft Lumber", "", "Accounts Payable", "", "400.00"], ["", "", "", "", "Timberloft Lumber", "Lumber", "Job Materials", "400.00", ""]],
-        &[["5", "Bill Pmt -Check", "2024-01-25", "240", "Timberloft Lumber", "", "Checking", "", "400.00"], ["", "", "", "", "Timberloft Lumber", "", "Accounts Payable", "400.00", ""]],
-        &[["6", "General Journal", "2024-01-01", "JE-1", "", "Opening balance", "Checking", "5000.00", ""], ["", "", "", "", "", "Opening balance", "Opening Balance Equity", "", "5000.00"]],
+        &[
+            ["1", "Invoice", "2024-01-05", "1001", "Kristy Abercrombie", "", "Accounts Receivable", "1250.00", ""],
+            ["", "", "", "", "Kristy Abercrombie", "Framing labor", "Construction Income:Labor", "", "1250.00"],
+        ],
+        &[
+            ["2", "Payment", "2024-01-20", "555", "Kristy Abercrombie", "", "Undeposited Funds", "1000.00", ""],
+            ["", "", "", "", "Kristy Abercrombie", "", "Accounts Receivable", "", "1000.00"],
+        ],
+        &[
+            ["3", "Deposit", "2024-01-21", "", "", "Deposit", "Checking", "1000.00", ""],
+            ["", "", "", "", "Kristy Abercrombie", "Deposit", "Undeposited Funds", "", "1000.00"],
+        ],
+        &[
+            ["4", "Bill", "2024-01-08", "A-77", "Timberloft Lumber", "", "Accounts Payable", "", "400.00"],
+            ["", "", "", "", "Timberloft Lumber", "Lumber", "Job Materials", "400.00", ""],
+        ],
+        &[
+            ["5", "Bill Pmt -Check", "2024-01-25", "240", "Timberloft Lumber", "", "Checking", "", "400.00"],
+            ["", "", "", "", "Timberloft Lumber", "", "Accounts Payable", "400.00", ""],
+        ],
+        &[
+            ["6", "General Journal", "2024-01-01", "JE-1", "", "Opening balance", "Checking", "5000.00", ""],
+            ["", "", "", "", "", "Opening balance", "Opening Balance Equity", "", "5000.00"],
+        ],
     ];
     let mut rows = String::new();
     let mut n = 0;
@@ -93,11 +112,24 @@ fn journal_report() -> String {
         rows.push_str(&format!("<SubtotalRow rowNumber=\"{n}\"><ColData colID=\"8\" value=\"x\" /><ColData colID=\"9\" value=\"x\" /></SubtotalRow>"));
     }
     rows.push_str("<TotalRow rowNumber=\"99\"><ColData colID=\"1\" value=\"TOTAL\" /><ColData colID=\"8\" value=\"9050.00\" /><ColData colID=\"9\" value=\"9050.00\" /></TotalRow>");
-    let cols = [("TxnNumber", "Trans #"), ("TxnType", "Type"), ("Date", "Date"), ("RefNumber", "Num"), ("Name", "Name"), ("Memo", "Memo"), ("Account", "Account"), ("Debit", "Debit"), ("Credit", "Credit"), ("Class", "Class")];
+    let cols = [
+        ("TxnNumber", "Trans #"),
+        ("TxnType", "Type"),
+        ("Date", "Date"),
+        ("RefNumber", "Num"),
+        ("Name", "Name"),
+        ("Memo", "Memo"),
+        ("Account", "Account"),
+        ("Debit", "Debit"),
+        ("Credit", "Credit"),
+        ("Class", "Class"),
+    ];
     let desc: String = cols
         .iter()
         .enumerate()
-        .map(|(i, (ty, title))| format!("<ColDesc colID=\"{}\" dataType=\"STRTYPE\"><ColTitle titleRow=\"1\" value=\"{title}\" /><ColType>{ty}</ColType></ColDesc>", i + 1))
+        .map(|(i, (ty, title))| {
+            format!("<ColDesc colID=\"{}\" dataType=\"STRTYPE\"><ColTitle titleRow=\"1\" value=\"{title}\" /><ColType>{ty}</ColType></ColDesc>", i + 1)
+        })
         .collect();
     format!("<ReportRet><ReportTitle>Journal</ReportTitle><ReportSubtitle>All Transactions</ReportSubtitle><NumRows>{n}</NumRows><NumColumns>10</NumColumns><NumColTitleRows>1</NumColTitleRows>{desc}<ReportData>{rows}</ReportData></ReportRet>")
 }
@@ -181,7 +213,11 @@ fn mac_qb() -> Fake {
 }
 
 fn by_kind<'a>(ledger: &'a Ledger, kind: &str) -> &'a SourceTransaction {
-    ledger.transactions.iter().find(|t| t.kind == kind).unwrap_or_else(|| panic!("no {kind}: {:?}", ledger.transactions.iter().map(|t| t.kind).collect::<Vec<_>>()))
+    ledger
+        .transactions
+        .iter()
+        .find(|t| t.kind == kind)
+        .unwrap_or_else(|| panic!("no {kind}: {:?}", ledger.transactions.iter().map(|t| t.kind).collect::<Vec<_>>()))
 }
 
 fn account_type<'a>(ledger: &'a Ledger, full_name: &str) -> &'a str {
@@ -253,7 +289,8 @@ fn only_queries_the_platform_answers_are_sent() {
 
 #[test]
 fn requests_that_could_change_quickbooks_are_refused() {
-    let wrap = |inner: &str| format!("<?xml version=\"1.0\"?><?qbxml version=\"13.0\"?><QBXML><QBXMLMsgsRq onError=\"stopOnError\">{inner}</QBXMLMsgsRq></QBXML>");
+    let wrap =
+        |inner: &str| format!("<?xml version=\"1.0\"?><?qbxml version=\"13.0\"?><QBXML><QBXMLMsgsRq onError=\"stopOnError\">{inner}</QBXMLMsgsRq></QBXML>");
     for bad in [
         wrap("<AccountAddRq><AccountAdd><Name>X</Name><AccountType>Bank</AccountType></AccountAdd></AccountAddRq>"),
         wrap("<CustomerModRq><CustomerMod><ListID>1</ListID></CustomerMod></CustomerModRq>"),
@@ -382,14 +419,17 @@ fn windows_export_reads_into_the_ledger() {
     assert!(ledger.quality.accounts_with_stored_balance >= 5);
 
     let kristy = ledger.customers.iter().find(|c| c.name == "Kristy Abercrombie").unwrap();
-    assert_eq!((kristy.terms_days, kristy.email.as_deref(), kristy.company_name.as_deref()), (Some(30), Some("kristy@samplename.com"), Some("Abercrombie Homes")));
+    assert_eq!(
+        (kristy.terms_days, kristy.email.as_deref(), kristy.company_name.as_deref()),
+        (Some(30), Some("kristy@samplename.com"), Some("Abercrombie Homes"))
+    );
     assert!(!ledger.customers.iter().find(|c| c.name == "Kristy Abercrombie:Kitchen").unwrap().active);
     let lumber = ledger.vendors.iter().find(|v| v.name == "Timberloft Lumber").unwrap();
     assert_eq!((lumber.terms_days, lumber.is_1099, lumber.tax_id.as_deref()), (Some(30), true, Some("94-1234567")));
-    assert_eq!(ledger.items.iter().map(|i| (i.name.as_str(), i.kind, i.rate_cents, i.taxable)).collect::<Vec<_>>(), [
-        ("Cabinets:Cabinet Pulls", "Inventory part", 300, true),
-        ("Framing", "Service", 5_500, false),
-    ]);
+    assert_eq!(
+        ledger.items.iter().map(|i| (i.name.as_str(), i.kind, i.rate_cents, i.taxable)).collect::<Vec<_>>(),
+        [("Cabinets:Cabinet Pulls", "Inventory part", 300, true), ("Framing", "Service", 5_500, false),]
+    );
 
     assert_eq!(export.read.sources.len(), 5);
     assert!(export.read.sources.iter().any(|s| s == "Journal (from QuickBooks).csv: QuickBooks Desktop Journal"), "{:?}", export.read.sources);
@@ -426,10 +466,13 @@ fn a_journal_missing_transactions_is_flagged() {
     qb.replies.insert("BillPaymentCheckQueryRq", reply("BillPaymentCheckQueryRs", BILL_PAYMENTS));
     qb.replies.insert("InvoiceQueryRq", reply("InvoiceQueryRs", &INVOICES.repeat(2)));
     let export = export(&mut qb, Platform::Mac, &mut |_, _| {}).unwrap();
-    assert_eq!(export.notes, [
-        "QuickBooks lists 2 invoices but the Journal holds 1: check that the Journal report covers all dates before posting",
-        "QuickBooks lists 1 bill payments but the Journal holds 0: check that the Journal report covers all dates before posting",
-    ]);
+    assert_eq!(
+        export.notes,
+        [
+            "QuickBooks lists 2 invoices but the Journal holds 1: check that the Journal report covers all dates before posting",
+            "QuickBooks lists 1 bill payments but the Journal holds 0: check that the Journal report covers all dates before posting",
+        ]
+    );
 }
 
 #[test]

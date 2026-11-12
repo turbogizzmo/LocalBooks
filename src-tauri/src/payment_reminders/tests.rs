@@ -14,9 +14,10 @@ async fn overdue_invoices_come_up_for_review_and_sending_queues_them() {
         let pool = pool.clone();
         let customer = customer.to_string();
         async move {
-            let input: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": customer, "issueDate": due - chrono::Duration::days(30), "dueDate": due,
+            let input: crate::invoices::InvoiceInput =
+                serde_json::from_value(serde_json::json!({ "customerName": customer, "issueDate": due - chrono::Duration::days(30), "dueDate": due,
                 "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": cents, "incomeAccountId": services }] }))
-            .unwrap();
+                .unwrap();
             crate::invoices::create_and_post_invoice(&pool, input).await.unwrap()
         }
     };
@@ -27,7 +28,13 @@ async fn overdue_invoices_come_up_for_review_and_sending_queues_them() {
     let group = crate::customer_groups::save(
         &pool,
         None,
-        &CustomerGroupInput { name: "Regulars".into(), rules: vec![], member_ids: vec![alder], statement: StatementReminder::default(), payments: PaymentReminder { every_days: Some(14), min_days_overdue: 7, last_sent: None } },
+        &CustomerGroupInput {
+            name: "Regulars".into(),
+            rules: vec![],
+            member_ids: vec![alder],
+            statement: StatementReminder::default(),
+            payments: PaymentReminder { every_days: Some(14), min_days_overdue: 7, last_sent: None },
+        },
     )
     .await
     .unwrap();

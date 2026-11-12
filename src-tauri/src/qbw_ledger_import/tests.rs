@@ -87,8 +87,26 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
         number: Some("501".into()),
         due_date: "2024-02-09".parse().ok(),
         lines: vec![
-            DocumentLine { item_id: Some(200), description: None, quantity_e4: 20_000, rate_cents: 5_000, cents: 10_000, account_id: 6, class: None, subtotal: false },
-            DocumentLine { item_id: None, description: Some("Sales tax".into()), quantity_e4: 10_000, rate_cents: 1_000, cents: 1_000, account_id: 8, class: None, subtotal: false },
+            DocumentLine {
+                item_id: Some(200),
+                description: None,
+                quantity_e4: 20_000,
+                rate_cents: 5_000,
+                cents: 10_000,
+                account_id: 6,
+                class: None,
+                subtotal: false,
+            },
+            DocumentLine {
+                item_id: None,
+                description: Some("Sales tax".into()),
+                quantity_e4: 10_000,
+                rate_cents: 1_000,
+                cents: 1_000,
+                account_id: 8,
+                class: None,
+                subtotal: false,
+            },
         ],
         sales: Default::default(),
     };
@@ -168,12 +186,11 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
     let full = posted.full.unwrap();
     assert_eq!((full.invoices, full.payments, full.deposits, full.fell_back), (1, 2, 1, 1), "{full:?}");
 
-    let (number, status, total, tax, items): (i64, String, i64, i64, i64) = sqlx::query_as(
-        "SELECT invoice_number, status, total_cents, tax_cents, (SELECT COUNT(*) FROM invoice_items WHERE invoice_id = i.id) FROM invoices i",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let (number, status, total, tax, items): (i64, String, i64, i64, i64) =
+        sqlx::query_as("SELECT invoice_number, status, total_cents, tax_cents, (SELECT COUNT(*) FROM invoice_items WHERE invoice_id = i.id) FROM invoices i")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!((number, status.as_str(), total, tax, items), (501, "PAID", 11_000, 1_000, 1), "the prepayment applies too");
     let (deposit_total, linked): (i64, i64) =
         sqlx::query_as("SELECT d.total_cents, (SELECT COUNT(invoice_payment_id) FROM deposit_lines WHERE deposit_id = d.id) FROM deposits d")
@@ -208,7 +225,8 @@ async fn a_deposit_split_between_banks_still_banks_its_payments() {
         document: Some(document),
         ..txn(id, date, lines)
     };
-    let payment = |cents| SourceDocument::Payment { customer_id: 100, reference: None, method: "CASH".into(), applied_to: vec![Applied { transaction_id: 20, cents }] };
+    let payment =
+        |cents| SourceDocument::Payment { customer_id: 100, reference: None, method: "CASH".into(), applied_to: vec![Applied { transaction_id: 20, cents }] };
     let mut ledger = ledger();
     ledger.accounts = vec![
         account(1, "Riverside Bank", "BANK", None),
@@ -229,7 +247,16 @@ async fn a_deposit_split_between_banks_still_banks_its_payments() {
                 customer_id: 100,
                 number: Some("7".into()),
                 due_date: None,
-                lines: vec![DocumentLine { item_id: None, description: Some("Work".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None, subtotal: false }],
+                lines: vec![DocumentLine {
+                    item_id: None,
+                    description: Some("Work".into()),
+                    quantity_e4: 10_000,
+                    rate_cents: 9_000,
+                    cents: 9_000,
+                    account_id: 6,
+                    class: None,
+                    subtotal: false,
+                }],
                 sales: Default::default(),
             },
         ),
@@ -284,7 +311,8 @@ async fn a_deposit_into_a_non_bank_account_clears_its_payments_as_a_transfer() {
         document: Some(document),
         ..txn(id, date, lines)
     };
-    let payment = |cents| SourceDocument::Payment { customer_id: 100, reference: None, method: "CASH".into(), applied_to: vec![Applied { transaction_id: 20, cents }] };
+    let payment =
+        |cents| SourceDocument::Payment { customer_id: 100, reference: None, method: "CASH".into(), applied_to: vec![Applied { transaction_id: 20, cents }] };
     let mut ledger = ledger();
     ledger.accounts = vec![
         account(1, "Riverside Bank", "BANK", None),
@@ -305,7 +333,16 @@ async fn a_deposit_into_a_non_bank_account_clears_its_payments_as_a_transfer() {
                 customer_id: 100,
                 number: Some("7".into()),
                 due_date: None,
-                lines: vec![DocumentLine { item_id: None, description: Some("Work".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None, subtotal: false }],
+                lines: vec![DocumentLine {
+                    item_id: None,
+                    description: Some("Work".into()),
+                    quantity_e4: 10_000,
+                    rate_cents: 9_000,
+                    cents: 9_000,
+                    account_id: 6,
+                    class: None,
+                    subtotal: false,
+                }],
                 sales: Default::default(),
             },
         ),
@@ -342,7 +379,8 @@ async fn a_deposit_into_a_non_bank_account_clears_its_payments_as_a_transfer() {
     assert_eq!((full.deposits, full.transfers, full.fell_back), (0, 1, 0), "{full:?}");
     assert!(crate::banking::list_undeposited(&pool).await.unwrap().is_empty(), "the transfer cleared both payments");
 
-    let undeposited: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'OTHER_CURRENT_ASSET' AND is_system = 1").fetch_one(&pool).await.unwrap();
+    let undeposited: i64 =
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'OTHER_CURRENT_ASSET' AND is_system = 1").fetch_one(&pool).await.unwrap();
     assert_eq!(balance(&pool, undeposited).await, 0, "the trial balance matches the file");
     let entry: i64 = sqlx::query_scalar("SELECT DISTINCT journal_entry_id FROM undeposited_transfers").fetch_one(&pool).await.unwrap();
     let debited: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = ?1").bind(entry).fetch_one(&pool).await.unwrap();
@@ -393,7 +431,11 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
                 "Bill payment",
                 "2024-02-05",
                 &[(1, 5_000), (5, -5_000)],
-                SourceDocument::BillPayment { vendor_id: Some(300), reference: Some("990".into()), applied_to: vec![Applied { transaction_id: 30, cents: 5_000 }] },
+                SourceDocument::BillPayment {
+                    vendor_id: Some(300),
+                    reference: Some("990".into()),
+                    applied_to: vec![Applied { transaction_id: 30, cents: 5_000 }],
+                },
             ),
             doc(
                 30,
@@ -404,7 +446,16 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
                     vendor_id: 300,
                     number: Some("B-7".into()),
                     due_date: "2024-03-10".parse().ok(),
-                    lines: vec![DocumentLine { item_id: None, description: Some("Paper".into()), quantity_e4: 10_000, rate_cents: 5_000, cents: -5_000, account_id: 10, class: None, subtotal: false }],
+                    lines: vec![DocumentLine {
+                        item_id: None,
+                        description: Some("Paper".into()),
+                        quantity_e4: 10_000,
+                        rate_cents: 5_000,
+                        cents: -5_000,
+                        account_id: 10,
+                        class: None,
+                        subtotal: false,
+                    }],
                 },
             ),
             doc(32, "Check", "2024-02-12", &[(1, 2_500), (12, -2_500)], expense(Some("1001"))),
@@ -449,10 +500,7 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
     assert_eq!((status.as_str(), bill_number.as_deref(), lines), ("PAID", Some("B-7"), 1), "the payment dated before the bill still applies");
     let checks: Vec<(String, Option<String>, i64, bool)> =
         sqlx::query_as("SELECT kind, check_number, total_cents, is_credit FROM expenses ORDER BY id").fetch_all(&pool).await.unwrap();
-    assert_eq!(
-        checks,
-        vec![("CHECK".into(), Some("1001".into()), 2_500, false), ("EXPENSE".into(), None, 1_200, false), ("EXPENSE".into(), None, 300, true)]
-    );
+    assert_eq!(checks, vec![("CHECK".into(), Some("1001".into()), 2_500, false), ("EXPENSE".into(), None, 1_200, false), ("EXPENSE".into(), None, 300, true)]);
     let credit = crate::expenses::list_expenses(&pool).await.unwrap().into_iter().find(|x| x.kind == "CARD_CREDIT").unwrap();
     assert_eq!((credit.payee_name.as_deref(), credit.line_count, credit.category_account_id), (Some("Paper Supply Co"), 2, None));
     let credit_lines: Vec<i64> =
@@ -468,8 +516,7 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
     assert_eq!(balance(&pool, mapped("Office Expense")).await, 6_000);
     assert_eq!(balance(&pool, mapped("Supplies")).await, 2_000);
     assert_eq!(balance(&pool, mapped("Accounts Payable")).await, 0);
-    let (debits, credits): (i64, i64) =
-        sqlx::query_as("SELECT SUM(debit_cents), SUM(credit_cents) FROM journal_lines").fetch_one(&pool).await.unwrap();
+    let (debits, credits): (i64, i64) = sqlx::query_as("SELECT SUM(debit_cents), SUM(credit_cents) FROM journal_lines").fetch_one(&pool).await.unwrap();
     assert_eq!(debits, credits, "the books balance");
 }
 
@@ -479,14 +526,35 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
 async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
     use crate::qbw_documents::{DocumentLine, SourceDocument};
     let pool = test_pool().await;
-    let line = |item_id, cents, account_id| DocumentLine { item_id, description: None, quantity_e4: 30_000, rate_cents: 1_000, cents, account_id, class: None, subtotal: false };
+    let line = |item_id, cents, account_id| DocumentLine {
+        item_id,
+        description: None,
+        quantity_e4: 30_000,
+        rate_cents: 1_000,
+        cents,
+        account_id,
+        class: None,
+        subtotal: false,
+    };
     let estimate = |customer_id| SourceDocument::Estimate {
         customer_id,
         date: "2024-04-01".parse().unwrap(),
         number: Some("77".into()),
         expires: "2024-05-01".parse().ok(),
         memo: Some("Spring work".into()),
-        lines: vec![line(Some(200), 3_000, 6), DocumentLine { item_id: None, description: Some("Tax".into()), quantity_e4: 10_000, rate_cents: 240, cents: 240, account_id: 8, class: None, subtotal: false }],
+        lines: vec![
+            line(Some(200), 3_000, 6),
+            DocumentLine {
+                item_id: None,
+                description: Some("Tax".into()),
+                quantity_e4: 10_000,
+                rate_cents: 240,
+                cents: 240,
+                account_id: 8,
+                class: None,
+                subtotal: false,
+            },
+        ],
         sales: Default::default(),
     };
     let lineless = |id, kind, document: SourceDocument| SourceTransaction { kind, document: Some(document), ..txn(id, "2024-04-01", &[]) };
@@ -574,9 +642,11 @@ async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
     .await
     .unwrap();
     assert_eq!((number, total, tax, status.as_str(), lines), (77, 3_240, 240, "PENDING", 1));
-    let (po_number, po_status, po_total): (i64, String, i64) = sqlx::query_as("SELECT po_number, status, total_cents FROM purchase_orders").fetch_one(&pool).await.unwrap();
+    let (po_number, po_status, po_total): (i64, String, i64) =
+        sqlx::query_as("SELECT po_number, status, total_cents FROM purchase_orders").fetch_one(&pool).await.unwrap();
     assert_eq!((po_number, po_status.as_str(), po_total), (1, "CLOSED", 3_000), "PO-5 is not a number, so it gets the next one");
-    let (from, to, amount): (i64, i64, i64) = sqlx::query_as("SELECT from_account_id, to_account_id, amount_cents FROM transfers").fetch_one(&pool).await.unwrap();
+    let (from, to, amount): (i64, i64, i64) =
+        sqlx::query_as("SELECT from_account_id, to_account_id, amount_cents FROM transfers").fetch_one(&pool).await.unwrap();
 
     let summary = batch_summary(&pool, batch).await.unwrap();
     let mapped = |name: &str| summary.accounts.iter().find(|a| a.full_name == name).and_then(|a| a.account_id).unwrap();
@@ -652,21 +722,19 @@ async fn posts_a_real_company_file() {
         for (kind, reason, n) in fallbacks {
             println!("  fell back: {n:>5} {kind}: {reason}");
         }
-        let (open, open_cents): (i64, i64) = sqlx::query_as(
-            "SELECT COUNT(*), COALESCE(SUM(total_cents - amount_paid_cents), 0) FROM invoices WHERE status IN ('UNPAID', 'PARTIAL')",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let (open, open_cents): (i64, i64) =
+            sqlx::query_as("SELECT COUNT(*), COALESCE(SUM(total_cents - amount_paid_cents), 0) FROM invoices WHERE status IN ('UNPAID', 'PARTIAL')")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         let (linked, deposit_lines): (i64, i64) =
             sqlx::query_as("SELECT COUNT(invoice_payment_id) + COUNT(sales_receipt_id), COUNT(*) FROM deposit_lines").fetch_one(&pool).await.unwrap();
         println!("open invoices: {open}, {}; deposit lines linked to a payment or receipt: {linked}/{deposit_lines}", crate::ledger::format_cents(open_cents));
-        let (bills, bills_cents): (i64, i64) = sqlx::query_as(
-            "SELECT COUNT(*), COALESCE(SUM(total_cents - amount_paid_cents), 0) FROM bills WHERE status IN ('UNPAID', 'PARTIAL')",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let (bills, bills_cents): (i64, i64) =
+            sqlx::query_as("SELECT COUNT(*), COALESCE(SUM(total_cents - amount_paid_cents), 0) FROM bills WHERE status IN ('UNPAID', 'PARTIAL')")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         println!("open bills: {bills}, {}", crate::ledger::format_cents(bills_cents));
         let waiting = crate::banking::list_undeposited(&pool).await.unwrap();
         let uf: i64 = sqlx::query_scalar(
@@ -767,9 +835,7 @@ async fn reimporting_after_a_reverse_reuses_the_accounts_it_created() {
     auto_map_accounts(&pool, first).await.unwrap();
     let mapped = |batch: i64| {
         let pool = pool.clone();
-        async move {
-            batch_summary(&pool, batch).await.unwrap().accounts.into_iter().find(|a| a.full_name == "Equipment").unwrap().account_id.unwrap()
-        }
+        async move { batch_summary(&pool, batch).await.unwrap().accounts.into_iter().find(|a| a.full_name == "Equipment").unwrap().account_id.unwrap() }
     };
     let equipment = mapped(first).await;
     let name: String = sqlx::query_scalar("SELECT name FROM chart_of_accounts WHERE id = ?1").bind(equipment).fetch_one(&pool).await.unwrap();
@@ -838,11 +904,8 @@ async fn lists_are_matched_by_name_or_created_with_their_details() {
     let pool = test_pool().await;
     sqlx::query("INSERT INTO customers (name) VALUES ('Acme')").execute(&pool).await.unwrap();
     let mut books = ledger();
-    books.customers = vec![
-        party(1, "Acme", None, None),
-        party(2, "Beta Co", None, Some("ap@beta.com")),
-        party(3, "Beta Co:Roof job", Some(2), Some("not an email")),
-    ];
+    books.customers =
+        vec![party(1, "Acme", None, None), party(2, "Beta Co", None, Some("ap@beta.com")), party(3, "Beta Co:Roof job", Some(2), Some("not an email"))];
     books.vendors = vec![party(9, "Hosting Inc", None, Some("billing@hosting.example"))];
     let item = |id, name: &str, account| SourceItem {
         id,
@@ -879,7 +942,8 @@ async fn lists_are_matched_by_name_or_created_with_their_details() {
     assert_eq!((terms, address.as_deref()), (Some(30), Some("1 Main St\nSpringfield")));
     let summary = batch_summary(&pool, batch).await.unwrap();
     let consulting = summary.accounts.iter().find(|a| a.full_name == "Consulting Income").unwrap().account_id.unwrap();
-    let labor_account: i64 = sqlx::query_scalar("SELECT income_account_id FROM products_services WHERE name = 'Business Labor'").fetch_one(&pool).await.unwrap();
+    let labor_account: i64 =
+        sqlx::query_scalar("SELECT income_account_id FROM products_services WHERE name = 'Business Labor'").fetch_one(&pool).await.unwrap();
     assert_eq!(labor_account, consulting, "posts to the account its source account maps to");
     assert_eq!((summary.lists.customers_done, summary.lists.vendors_done, summary.lists.items_done), (3, 1, 3));
 
@@ -921,10 +985,11 @@ async fn a_ledger_maps_posts_once_and_reverses() {
     assert_eq!(posted, PostLedgerResult { entries_posted: 2, lines_posted: 4, skipped_unbalanced: 1, skipped_already_posted: 0, ..Default::default() });
     assert_eq!(balance(&pool, domains).await, 12_000);
     assert_eq!(balance(&pool, id("Riverside Bank").unwrap()).await, -12_500);
-    let memo: String = sqlx::query_scalar("SELECT memo FROM journal_entries WHERE id = (SELECT journal_entry_id FROM ledger_import_transactions WHERE source_id = 10)")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let memo: String =
+        sqlx::query_scalar("SELECT memo FROM journal_entries WHERE id = (SELECT journal_entry_id FROM ledger_import_transactions WHERE source_id = 10)")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(memo, "Check #10 · Vendor");
 
     // Posting again posts nothing new; a second import of the same books is refused.
@@ -974,10 +1039,12 @@ async fn a_lists_only_file_adds_its_lists_once_and_reverses() {
     assert_eq!(accounts.matched + accounts.created, 5, "every account is mapped, used or not");
     let lists = posted.lists.unwrap();
     assert_eq!((lists.customers_created, lists.vendors_created, lists.items_created), (1, 1, 1));
-    let labor: i64 = sqlx::query_scalar("SELECT a.id FROM chart_of_accounts a JOIN chart_of_accounts p ON p.id = a.parent_id WHERE a.name = 'Labor' AND p.name = 'Construction'")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let labor: i64 = sqlx::query_scalar(
+        "SELECT a.id FROM chart_of_accounts a JOIN chart_of_accounts p ON p.id = a.parent_id WHERE a.name = 'Labor' AND p.name = 'Construction'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     let framing: i64 = sqlx::query_scalar("SELECT income_account_id FROM products_services WHERE name = 'Framing'").fetch_one(&pool).await.unwrap();
     assert_eq!(framing, labor);
     let summary = batch_summary(&pool, batch).await.unwrap();
@@ -1019,12 +1086,15 @@ async fn a_lists_only_file_adds_its_lists_once_and_reverses() {
     assert_eq!(readded.lists.unwrap(), ImportListsResult::default());
     assert_eq!(count("SELECT is_active FROM products_services WHERE name = 'Framing'").await, 1);
     assert_eq!(count("SELECT is_active FROM vendors WHERE name = 'Vendor'").await, 1);
-    assert_eq!(after, (
-        count("SELECT COUNT(*) FROM chart_of_accounts").await,
-        count("SELECT COUNT(*) FROM customers").await,
-        count("SELECT COUNT(*) FROM vendors").await,
-        count("SELECT COUNT(*) FROM products_services").await,
-    ));
+    assert_eq!(
+        after,
+        (
+            count("SELECT COUNT(*) FROM chart_of_accounts").await,
+            count("SELECT COUNT(*) FROM customers").await,
+            count("SELECT COUNT(*) FROM vendors").await,
+            count("SELECT COUNT(*) FROM products_services").await,
+        )
+    );
     reverse_batch(&pool, batch).await.unwrap();
     discard_batch(&pool, batch).await.unwrap();
 }
@@ -1084,27 +1154,30 @@ async fn discount_and_subtotal_items_become_form_lines() {
     }];
     // Design 100.00, a subtotal, then 10% off it: receivable 90.00.
     let subtotal = DocumentLine { subtotal: true, quantity_e4: 0, rate_cents: 0, account_id: 0, ..line(300, 0, 0) };
-    l.transactions = vec![SourceTransaction {
-        kind: "Invoice",
-        document: Some(SourceDocument::Invoice {
-            customer_id: 100,
-            number: Some("12".into()),
-            due_date: None,
-            lines: vec![line(200, 10_000, 6), subtotal.clone(), line(301, -1_000, 11)],
-            sales: Default::default(),
-        }),
-        ..txn(50, "2024-04-01", &[(4, -9_000), (6, 10_000), (11, -1_000)])
-    }, SourceTransaction {
-        kind: "Sales receipt",
-        document: Some(SourceDocument::SalesReceipt {
-            customer_id: Some(100),
-            number: Some("13".into()),
-            method: "CASH".into(),
-            lines: vec![line(200, 10_000, 6), subtotal, line(301, -1_000, 11)],
-            sales: Default::default(),
-        }),
-        ..txn(51, "2024-04-02", &[(1, -9_000), (6, 10_000), (11, -1_000)])
-    }];
+    l.transactions = vec![
+        SourceTransaction {
+            kind: "Invoice",
+            document: Some(SourceDocument::Invoice {
+                customer_id: 100,
+                number: Some("12".into()),
+                due_date: None,
+                lines: vec![line(200, 10_000, 6), subtotal.clone(), line(301, -1_000, 11)],
+                sales: Default::default(),
+            }),
+            ..txn(50, "2024-04-01", &[(4, -9_000), (6, 10_000), (11, -1_000)])
+        },
+        SourceTransaction {
+            kind: "Sales receipt",
+            document: Some(SourceDocument::SalesReceipt {
+                customer_id: Some(100),
+                number: Some("13".into()),
+                method: "CASH".into(),
+                lines: vec![line(200, 10_000, 6), subtotal, line(301, -1_000, 11)],
+                sales: Default::default(),
+            }),
+            ..txn(51, "2024-04-02", &[(1, -9_000), (6, 10_000), (11, -1_000)])
+        },
+    ];
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &l).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
     let full = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().full.unwrap();
@@ -1148,8 +1221,21 @@ async fn the_summary_lists_amounts_that_are_not_whole_cents() {
 async fn sold_inventory_cost_stays_with_its_invoice_and_sales_receipt() {
     use crate::qbw_documents::{DocumentLine, SourceDocument};
     let pool = test_pool().await;
-    let doc = |id: i64, kind: &'static str, lines: &[(i64, i64)], document: SourceDocument| SourceTransaction { kind, document: Some(document), ..txn(id, "2024-03-01", lines) };
-    let sold = vec![DocumentLine { item_id: None, description: Some("Tile".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None, subtotal: false }];
+    let doc = |id: i64, kind: &'static str, lines: &[(i64, i64)], document: SourceDocument| SourceTransaction {
+        kind,
+        document: Some(document),
+        ..txn(id, "2024-03-01", lines)
+    };
+    let sold = vec![DocumentLine {
+        item_id: None,
+        description: Some("Tile".into()),
+        quantity_e4: 10_000,
+        rate_cents: 9_000,
+        cents: 9_000,
+        account_id: 6,
+        class: None,
+        subtotal: false,
+    }];
     let mut l = ledger();
     l.accounts.extend([
         account(6, "Materials Income", "INCOME", None),
@@ -1159,20 +1245,18 @@ async fn sold_inventory_cost_stays_with_its_invoice_and_sales_receipt() {
     l.unbalanced.clear();
     l.unreadable.clear();
     l.transactions = vec![
-        doc(40, "Invoice", &[(4, -9_000), (6, 9_000), (30, -5_500), (31, 5_500)], SourceDocument::Invoice {
-            customer_id: 100,
-            number: Some("7".into()),
-            due_date: None,
-            lines: sold.clone(),
-            sales: Default::default(),
-        }),
-        doc(41, "Sales receipt", &[(1, -9_000), (6, 9_000), (30, -5_500), (31, 5_500)], SourceDocument::SalesReceipt {
-            customer_id: Some(100),
-            number: Some("8".into()),
-            method: "CASH".into(),
-            lines: sold,
-            sales: Default::default(),
-        }),
+        doc(
+            40,
+            "Invoice",
+            &[(4, -9_000), (6, 9_000), (30, -5_500), (31, 5_500)],
+            SourceDocument::Invoice { customer_id: 100, number: Some("7".into()), due_date: None, lines: sold.clone(), sales: Default::default() },
+        ),
+        doc(
+            41,
+            "Sales receipt",
+            &[(1, -9_000), (6, 9_000), (30, -5_500), (31, 5_500)],
+            SourceDocument::SalesReceipt { customer_id: Some(100), number: Some("8".into()), method: "CASH".into(), lines: sold, sales: Default::default() },
+        ),
     ];
     l.customers = vec![SourceParty {
         id: 100,
@@ -1297,8 +1381,18 @@ async fn receipts_and_discounts_the_form_cannot_show_as_they_were() {
         sales_rep: None,
         custom_fields: Vec::new(),
     }];
-    let receipt = |lines: Vec<DocumentLine>| SourceDocument::SalesReceipt { customer_id: Some(100), number: None, method: "CASH".into(), lines, sales: Default::default() };
-    let doc = |id: i64, kind: &'static str, lines: &[(i64, i64)], document: SourceDocument| SourceTransaction { kind, document: Some(document), ..txn(id, "2024-05-01", lines) };
+    let receipt = |lines: Vec<DocumentLine>| SourceDocument::SalesReceipt {
+        customer_id: Some(100),
+        number: None,
+        method: "CASH".into(),
+        lines,
+        sales: Default::default(),
+    };
+    let doc = |id: i64, kind: &'static str, lines: &[(i64, i64)], document: SourceDocument| SourceTransaction {
+        kind,
+        document: Some(document),
+        ..txn(id, "2024-05-01", lines)
+    };
     l.transactions = vec![
         doc(60, "Sales receipt", &[(7, -9_000), (6, 9_000), (31, -500), (30, 500)], receipt(vec![line(200, 9_000, 6)])),
         doc(
@@ -1311,7 +1405,13 @@ async fn receipts_and_discounts_the_form_cannot_show_as_they_were() {
             62,
             "Invoice",
             &[(4, -9_000), (6, 10_000), (11, -1_000)],
-            SourceDocument::Invoice { customer_id: 100, number: Some("20".into()), due_date: None, lines: vec![line(200, 10_000, 6), subtotal, line(302, -1_000, 11)], sales: Default::default() },
+            SourceDocument::Invoice {
+                customer_id: 100,
+                number: Some("20".into()),
+                due_date: None,
+                lines: vec![line(200, 10_000, 6), subtotal, line(302, -1_000, 11)],
+                sales: Default::default(),
+            },
         ),
     ];
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &l).await.unwrap();
@@ -1359,10 +1459,7 @@ async fn older_desktop_batches_get_their_fixed_assets_back() {
         let pool = pool.clone();
         async move { sqlx::query_scalar::<_, String>("SELECT item_kind FROM ledger_import_items WHERE batch_id = ?1").bind(batch).fetch_one(&pool).await.unwrap() }
     };
-    assert_eq!(
-        (kind(desktop).await.as_str(), kind(iif).await.as_str(), kind(newer).await.as_str()),
-        ("Fixed asset", "Other charge", "Other charge")
-    );
+    assert_eq!((kind(desktop).await.as_str(), kind(iif).await.as_str(), kind(newer).await.as_str()), ("Fixed asset", "Other charge", "Other charge"));
 }
 
 /// A company file's item groups come in as LocalBooks groups, with their items in order and their
@@ -1373,11 +1470,20 @@ async fn older_desktop_batches_get_their_fixed_assets_back() {
 #[tokio::test]
 async fn item_groups_come_in_as_groups() {
     let pool = test_pool().await;
-    let product: i64 = sqlx::query_scalar("INSERT INTO products_services (name, rate_cents, income_account_id)
+    let product: i64 = sqlx::query_scalar(
+        "INSERT INTO products_services (name, rate_cents, income_account_id)
          SELECT 'Paint', 1000, a.id FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE t.classification = 'INCOME' LIMIT 1
-         RETURNING id").fetch_one(&pool).await.unwrap();
+         RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     sqlx::query("INSERT INTO item_groups (name) VALUES ('Starter set')").execute(&pool).await.unwrap();
-    sqlx::query("INSERT INTO item_group_members (group_id, position, product_id, quantity_e4) VALUES (1, 1, ?1, 10000)").bind(product).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO item_group_members (group_id, position, product_id, quantity_e4) VALUES (1, 1, ?1, 10000)")
+        .bind(product)
+        .execute(&pool)
+        .await
+        .unwrap();
     // A file with lists only, so adding its lists again after a reversal puts them back.
     let mut books = ledger();
     (books.transactions, books.unbalanced, books.unreadable) = (Vec::new(), Vec::new(), Vec::new());
@@ -1396,7 +1502,8 @@ async fn item_groups_come_in_as_groups() {
         purchase_cost_cents: None,
         percent_ppm: None,
     };
-    books.items = vec![item(20, "Door frame", "Inventory part"), item(21, "Hinge", "Inventory part"), item(22, "Install", "Service"), item(23, "Promo", "Discount")];
+    books.items =
+        vec![item(20, "Door frame", "Inventory part"), item(21, "Hinge", "Inventory part"), item(22, "Install", "Service"), item(23, "Promo", "Discount")];
     let group = |id: i64, name: &str, print_items: bool, members: Vec<(i64, i64)>| SourceItemGroup {
         id,
         name: name.into(),

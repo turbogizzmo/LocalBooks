@@ -65,7 +65,15 @@ pub(crate) fn split_payment(amount: i64, components: &[Component]) -> Option<Vec
         .enumerate()
         .map(|(i, c)| {
             // Rates that are all 0%: the whole payment goes to the first.
-            let cents = if total == 0 { if i == 0 { Some(amount) } else { Some(0) } } else { mul_div_round(amount, c.rate_ppm, total) };
+            let cents = if total == 0 {
+                if i == 0 {
+                    Some(amount)
+                } else {
+                    Some(0)
+                }
+            } else {
+                mul_div_round(amount, c.rate_ppm, total)
+            };
             cents.map(|cents| TaxPart { rate_id: c.id, name: c.name.clone(), liability_account_id: c.liability_account_id, cents })
         })
         .collect::<Option<_>>()?;
@@ -80,7 +88,8 @@ pub(crate) fn split_payment(amount: i64, components: &[Component]) -> Option<Vec
 
 /// Fills in each combined rate's component ids.
 pub(crate) async fn fill_components(pool: &SqlitePool, rates: &mut [TaxRateView]) -> Result<(), String> {
-    let rows: Vec<(i64, i64)> = sqlx::query_as("SELECT group_id, component_id FROM tax_rate_components ORDER BY group_id, position").fetch_all(pool).await.map_err(db_err)?;
+    let rows: Vec<(i64, i64)> =
+        sqlx::query_as("SELECT group_id, component_id FROM tax_rate_components ORDER BY group_id, position").fetch_all(pool).await.map_err(db_err)?;
     for r in rates.iter_mut().filter(|r| r.is_group) {
         r.component_ids = rows.iter().filter(|(g, _)| *g == r.id).map(|(_, c)| *c).collect();
     }
@@ -124,7 +133,11 @@ pub async fn save_combined_rate(pool: &SqlitePool, id: Option<i64>, input: &Comb
         let mut total: i64 = 0;
         let mut first_account = None;
         for c in &ids {
-            let row: Option<(i64, i64, bool, bool)> = sqlx::query_as("SELECT rate_ppm, liability_account_id, is_group, is_active FROM tax_rates WHERE id = ?1").bind(c).fetch_optional(&mut *tx).await.map_err(db_err)?;
+            let row: Option<(i64, i64, bool, bool)> = sqlx::query_as("SELECT rate_ppm, liability_account_id, is_group, is_active FROM tax_rates WHERE id = ?1")
+                .bind(c)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(db_err)?;
             match row {
                 None => return Err(format!("TAX_NOT_FOUND: tax rate {c} does not exist")),
                 Some((_, _, true, _)) => return Err("TAX_COMBINED_PARTS: a combined rate can't include another combined rate".into()),
@@ -167,7 +180,13 @@ pub async fn save_combined_rate(pool: &SqlitePool, id: Option<i64>, input: &Comb
                 .map_err(|e| super::unique(e, name))?,
         };
         for (i, c) in ids.iter().enumerate() {
-            sqlx::query("INSERT INTO tax_rate_components (group_id, component_id, position) VALUES (?1, ?2, ?3)").bind(group_id).bind(c).bind(i as i64 + 1).execute(&mut *tx).await.map_err(db_err)?;
+            sqlx::query("INSERT INTO tax_rate_components (group_id, component_id, position) VALUES (?1, ?2, ?3)")
+                .bind(group_id)
+                .bind(c)
+                .bind(i as i64 + 1)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_err)?;
         }
         Ok(group_id)
     }
@@ -278,12 +297,17 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
     let docs: Vec<TaxedDoc> = sqlx::query_as(&sql).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)?;
     // Each combined-rate entry's split, by entry.
     let mut parts: std::collections::HashMap<i64, Vec<(i64, i64)>> = std::collections::HashMap::new();
-    for (entry, rate_id, cents) in sqlx::query_as::<_, (i64, i64, i64)>("SELECT journal_entry_id, tax_rate_id, cents FROM document_tax_parts").fetch_all(pool).await.map_err(db_err)? {
+    for (entry, rate_id, cents) in
+        sqlx::query_as::<_, (i64, i64, i64)>("SELECT journal_entry_id, tax_rate_id, cents FROM document_tax_parts").fetch_all(pool).await.map_err(db_err)?
+    {
         parts.entry(entry).or_default().push((rate_id, cents));
     }
     type RateRow = (i64, String, i64, Option<i64>, Option<String>);
     let rates: Vec<RateRow> =
-        sqlx::query_as("SELECT r.id, r.name, r.rate_ppm, r.agency_vendor_id, v.name FROM tax_rates r LEFT JOIN vendors v ON v.id = r.agency_vendor_id").fetch_all(pool).await.map_err(db_err)?;
+        sqlx::query_as("SELECT r.id, r.name, r.rate_ppm, r.agency_vendor_id, v.name FROM tax_rates r LEFT JOIN vendors v ON v.id = r.agency_vendor_id")
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
     let rate = |id: i64| rates.iter().find(|r| r.0 == id);
     let overflow = || "TAX_OVERFLOW: the sales tax return is out of range".to_string();
     let share = |amount: i64, counted: i64, total: i64| -> Result<i64, String> {
@@ -320,11 +344,18 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
     // Grouped by agency.
     let mut agencies: Vec<AgencyReturn> = Vec::new();
     for (rate_id, (taxable, tax)) in sums {
-        let (name, ppm, agency_id, agency_name) = rate(rate_id).map_or_else(|| (format!("Rate {rate_id}"), 0, None, None), |r| (r.1.clone(), r.2, r.3, r.4.clone()));
+        let (name, ppm, agency_id, agency_name) =
+            rate(rate_id).map_or_else(|| (format!("Rate {rate_id}"), 0, None, None), |r| (r.1.clone(), r.2, r.3, r.4.clone()));
         let at = match agencies.iter().position(|a| a.agency_vendor_id == agency_id) {
             Some(i) => i,
             None => {
-                agencies.push(AgencyReturn { agency_vendor_id: agency_id, agency_name: agency_name.unwrap_or_else(|| "No agency".into()), lines: Vec::new(), tax_cents: 0, paid_cents: 0 });
+                agencies.push(AgencyReturn {
+                    agency_vendor_id: agency_id,
+                    agency_name: agency_name.unwrap_or_else(|| "No agency".into()),
+                    lines: Vec::new(),
+                    tax_cents: 0,
+                    paid_cents: 0,
+                });
                 agencies.len() - 1
             }
         };
@@ -374,7 +405,13 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
             let (agency_id, agency_name) = paid_rate.and_then(rate).map_or((None, None), |r| (r.3, r.4.clone()));
             match agencies.iter_mut().find(|a| a.agency_vendor_id == agency_id) {
                 Some(a) => a.paid_cents = a.paid_cents.checked_add(cents).ok_or_else(overflow)?,
-                None => agencies.push(AgencyReturn { agency_vendor_id: agency_id, agency_name: agency_name.unwrap_or_else(|| "No agency".into()), lines: Vec::new(), tax_cents: 0, paid_cents: cents }),
+                None => agencies.push(AgencyReturn {
+                    agency_vendor_id: agency_id,
+                    agency_name: agency_name.unwrap_or_else(|| "No agency".into()),
+                    lines: Vec::new(),
+                    tax_cents: 0,
+                    paid_cents: cents,
+                }),
             }
         }
     }

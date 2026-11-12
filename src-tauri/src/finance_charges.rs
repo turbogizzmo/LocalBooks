@@ -68,7 +68,11 @@ pub fn parse_rate(text: &str) -> Result<i64, String> {
 pub fn format_rate(milli_percent: i64) -> String {
     let frac = format!("{:03}", milli_percent % 1000);
     let frac = frac.trim_end_matches('0');
-    if frac.is_empty() { (milli_percent / 1000).to_string() } else { format!("{}.{frac}", milli_percent / 1000) }
+    if frac.is_empty() {
+        (milli_percent / 1000).to_string()
+    } else {
+        format!("{}.{frac}", milli_percent / 1000)
+    }
 }
 
 /// Parses the minimum charge (`2`, `2.50`, `$2.50`) to cents.
@@ -286,9 +290,8 @@ pub async fn assess(pool: &SqlitePool, input: AssessInput) -> Result<Vec<Invoice
 }
 
 async fn write_charges(tx: &mut Transaction<'_, Sqlite>, input: &AssessInput, settings: &Settings) -> Result<Vec<i64>, String> {
-    let account = settings
-        .income_account_id
-        .ok_or("FC_NO_ACCOUNT: choose the income account for finance charges in Settings › Preferences Console › Finance charges")?;
+    let account =
+        settings.income_account_id.ok_or("FC_NO_ACCOUNT: choose the income account for finance charges in Settings › Preferences Console › Finance charges")?;
     let customers = compute(tx, input.as_of, settings).await?;
     let mut seen: Vec<&str> = Vec::new();
     let mut ids = Vec::with_capacity(input.charges.len());
@@ -311,13 +314,18 @@ async fn write_charges(tx: &mut Transaction<'_, Sqlite>, input: &AssessInput, se
             issue_date: input.as_of,
             due_date: input.as_of,
             lines: vec![InvoiceLineInput {
-                description: format!("Finance charge on overdue balance of {} through {}", format_cents(customer.overdue_balance_cents), input.as_of.format("%m/%d/%Y")),
+                description: format!(
+                    "Finance charge on overdue balance of {} through {}",
+                    format_cents(customer.overdue_balance_cents),
+                    input.as_of.format("%m/%d/%Y")
+                ),
                 quantity_e4: QUANTITY_SCALE,
                 rate_cents: Cents(charge.charge_cents),
                 income_account_id: account,
                 product_service_id: None,
                 class_id: None,
-                is_taxable: false, service_date: None,
+                is_taxable: false,
+                service_date: None,
             }],
             currency: None,
             tax_rate_id: None,

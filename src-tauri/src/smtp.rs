@@ -60,7 +60,16 @@ pub struct SmtpSettings {
 
 impl Default for SmtpSettings {
     fn default() -> Self {
-        SmtpSettings { enabled: false, host: String::new(), port: 587, security: Security::Starttls, username: String::new(), from_email: String::new(), from_name: String::new(), copy_to_self: true }
+        SmtpSettings {
+            enabled: false,
+            host: String::new(),
+            port: 587,
+            security: Security::Starttls,
+            username: String::new(),
+            from_email: String::new(),
+            from_name: String::new(),
+            copy_to_self: true,
+        }
     }
 }
 
@@ -102,7 +111,8 @@ impl SmtpSettings {
 }
 
 pub async fn get_settings(pool: &SqlitePool) -> Result<SmtpSettings, String> {
-    let stored: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(SETTINGS_KEY).fetch_optional(pool).await.map_err(db_err)?;
+    let stored: Option<String> =
+        sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(SETTINGS_KEY).fetch_optional(pool).await.map_err(db_err)?;
     Ok(stored.and_then(|json| serde_json::from_str(&json).ok()).unwrap_or_default())
 }
 
@@ -167,7 +177,10 @@ async fn transport(settings: &SmtpSettings, secrets: &SecretStore, password: Opt
     if !settings.username.is_empty() {
         let password = match password.filter(|p| !p.is_empty()) {
             Some(p) => p,
-            None => secrets.get(&settings.secret_key()).await?.ok_or("SMTP_NO_PASSWORD: enter the email password in Settings › Email (it is kept on this computer only)")?,
+            None => secrets
+                .get(&settings.secret_key())
+                .await?
+                .ok_or("SMTP_NO_PASSWORD: enter the email password in Settings › Email (it is kept on this computer only)")?,
         };
         builder = builder.credentials(Credentials::new(settings.username.clone(), password));
     }

@@ -31,7 +31,13 @@ async fn customer(pool: &SqlitePool, name: &str) -> i64 {
 }
 
 async fn new_account(pool: &SqlitePool, number: &str, name: &str, account_type: &str) -> i64 {
-    let input = crate::accounts::AccountInput { name: name.into(), account_number: Some(number.into()), account_type: account_type.into(), parent_id: None, description: None };
+    let input = crate::accounts::AccountInput {
+        name: name.into(),
+        account_number: Some(number.into()),
+        account_type: account_type.into(),
+        parent_id: None,
+        description: None,
+    };
     crate::accounts::create_account(pool, input).await.expect("account").id
 }
 
@@ -49,11 +55,19 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     let materials = new_account(p, "5100", "Job Materials", "COST_OF_GOODS_SOLD").await;
     let rental = new_account(p, "5200", "Equipment Rental", "COST_OF_GOODS_SOLD").await;
 
-    let product = |name: &str, rate: i64, income: i64| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: Cents(rate), income_account_id: income, is_taxable: false };
+    let product = |name: &str, rate: i64, income: i64| crate::sales::ProductInput {
+        name: name.into(),
+        description: None,
+        rate_cents: Cents(rate),
+        income_account_id: income,
+        is_taxable: false,
+    };
     let labor = crate::sales::create_product(p, product("Framing Labor", 8_500, services)).await.expect("product").id;
     let survey = crate::sales::create_product(p, product("Site Survey", 60_000, services)).await.expect("product").id;
     let oak = crate::sales::create_product(p, product("Oak Panels", 30_000, sales)).await.expect("product").id;
-    let stock = crate::inventory::track_product(p, &crate::inventory::TrackInput { product_id: oak, sku: None, asset_account_id: None, cogs_account_id: None }).await.expect("track");
+    let stock = crate::inventory::track_product(p, &crate::inventory::TrackInput { product_id: oak, sku: None, asset_account_id: None, cogs_account_id: None })
+        .await
+        .expect("track");
     for name in [LAKEVIEW, MAPLE] {
         crate::sales::create_customer(p, name, None).await.expect("job");
     }
@@ -66,7 +80,8 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
         rate_cents: Cents(rate),
         income_account_id: income,
         class_id: None,
-        is_taxable: false, service_date: None,
+        is_taxable: false,
+        service_date: None,
     };
     let invoice_line = |l: SalesLineInput| InvoiceLineInput {
         description: l.description,
@@ -75,7 +90,8 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
         income_account_id: l.income_account_id,
         product_service_id: l.product_service_id,
         class_id: None,
-        is_taxable: false, service_date: None,
+        is_taxable: false,
+        service_date: None,
     };
     let bill_line = |account_id: i64, cents: i64, memo: &str, job: Option<i64>| BillLineInput {
         account_id,
@@ -92,7 +108,8 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     // Twenty oak panels into stock at $150.
     let mut panels = bill_line(stock.asset_account_id, 300_000, "Oak panels", None);
     (panels.product_service_id, panels.quantity_e4, panels.rate_cents) = (Some(oak), Some(200_000), Some(Cents(15_000)));
-    let bill = |vendor: &str, number: &str, date, lines: Vec<BillLineInput>| BillInput { form_lines: Vec::new(),
+    let bill = |vendor: &str, number: &str, date, lines: Vec<BillLineInput>| BillInput {
+        form_lines: Vec::new(),
         terms_id: None,
         vendor_name: vendor.into(),
         bill_number: Some(number.into()),
@@ -118,7 +135,12 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     };
     let lakeview_estimate = crate::estimates::create_estimate(
         p,
-        estimate(LAKEVIEW, d(2025, 10, 5), vec![sale(labor, "Framing", 40, 8_500, services), sale(oak, "Oak panels", 10, 30_000, sales), sale(survey, "Survey", 1, 60_000, services)], Cents::ZERO),
+        estimate(
+            LAKEVIEW,
+            d(2025, 10, 5),
+            vec![sale(labor, "Framing", 40, 8_500, services), sale(oak, "Oak panels", 10, 30_000, sales), sale(survey, "Survey", 1, 60_000, services)],
+            Cents::ZERO,
+        ),
     )
     .await
     .expect("estimate")
@@ -126,9 +148,12 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     crate::estimates::convert_to_invoice(p, lakeview_estimate, d(2025, 10, 20), d(2025, 11, 19)).await.expect("convert");
 
     // Maple St: estimate $5,700 less a $200 discount, still pending; billed for 30 hours so far.
-    crate::estimates::create_estimate(p, estimate(MAPLE, d(2025, 11, 1), vec![sale(labor, "Framing", 60, 8_500, services), sale(survey, "Survey", 1, 60_000, services)], Cents(20_000)))
-        .await
-        .expect("estimate");
+    crate::estimates::create_estimate(
+        p,
+        estimate(MAPLE, d(2025, 11, 1), vec![sale(labor, "Framing", 60, 8_500, services), sale(survey, "Survey", 1, 60_000, services)], Cents(20_000)),
+    )
+    .await
+    .expect("estimate");
     let invoice = |name: &str, date, lines: Vec<SalesLineInput>| InvoiceInput {
         invoice_number: None,
         customer_name: name.into(),
@@ -140,9 +165,13 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
         discount_cents: Cents::ZERO,
         details: Default::default(),
     };
-    crate::invoices::create_and_post_invoice(p, invoice(MAPLE, d(2025, 11, 15), vec![sale(labor, "Framing, first draw", 30, 8_500, services)])).await.expect("invoice");
+    crate::invoices::create_and_post_invoice(p, invoice(MAPLE, d(2025, 11, 15), vec![sale(labor, "Framing, first draw", 30, 8_500, services)]))
+        .await
+        .expect("invoice");
     // Kestrel Homes itself: a survey of another lot.
-    crate::invoices::create_and_post_invoice(p, invoice("Kestrel Homes", d(2025, 11, 20), vec![sale(survey, "Lot survey", 1, 60_000, services)])).await.expect("invoice");
+    crate::invoices::create_and_post_invoice(p, invoice("Kestrel Homes", d(2025, 11, 20), vec![sale(survey, "Lot survey", 1, 60_000, services)]))
+        .await
+        .expect("invoice");
 
     // One bill for both jobs and the shop: one ledger line for Job Materials, shared out.
     crate::expenses::post_vendor_bill(
@@ -162,8 +191,16 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     .await
     .expect("job bill");
 
-    let split = |account_id: i64, cents: i64, job: i64| SplitLineInput { account_id, amount_cents: Cents(cents), memo: None, class_id: None, customer_id: Some(job), billable: None };
-    let expense = |kind: &str, payee: &str, from: i64, date, lines| ExpenseInput { form_lines: Vec::new(),
+    let split = |account_id: i64, cents: i64, job: i64| SplitLineInput {
+        account_id,
+        amount_cents: Cents(cents),
+        memo: None,
+        class_id: None,
+        customer_id: Some(job),
+        billable: None,
+    };
+    let expense = |kind: &str, payee: &str, from: i64, date, lines| ExpenseInput {
+        form_lines: Vec::new(),
         payment_method_id: None,
         kind: kind.into(),
         payee_name: Some(payee.into()),
@@ -175,14 +212,21 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
         lines,
         currency: None,
     };
-    crate::expenses::post_expense(p, expense("CHECK", "Metro Equipment Rental", checking, d(2025, 11, 12), vec![split(rental, 45_000, maple)])).await.expect("check");
-    crate::expenses::post_expense(p, expense("EXPENSE", "Hardware Depot", card, d(2025, 11, 18), vec![split(materials, 12_000, lakeview)])).await.expect("card charge");
-    let mistake = crate::expenses::post_expense(p, expense("EXPENSE", "Hardware Depot", card, d(2025, 11, 19), vec![split(materials, 7_500, maple)])).await.expect("card charge");
+    crate::expenses::post_expense(p, expense("CHECK", "Metro Equipment Rental", checking, d(2025, 11, 12), vec![split(rental, 45_000, maple)]))
+        .await
+        .expect("check");
+    crate::expenses::post_expense(p, expense("EXPENSE", "Hardware Depot", card, d(2025, 11, 18), vec![split(materials, 12_000, lakeview)]))
+        .await
+        .expect("card charge");
+    let mistake = crate::expenses::post_expense(p, expense("EXPENSE", "Hardware Depot", card, d(2025, 11, 19), vec![split(materials, 7_500, maple)]))
+        .await
+        .expect("card charge");
     crate::ledger::void_transaction(p, mistake.journal_entry_id.expect("posted")).await.expect("void");
 
     crate::credits::create_vendor_credit(
         p,
-        VendorCreditInput { form_lines: Vec::new(),
+        VendorCreditInput {
+            form_lines: Vec::new(),
             vendor_name: "Timberline Supply".into(),
             reference: Some("TS-C9".into()),
             credit_date: d(2025, 11, 25),
@@ -194,7 +238,17 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     .expect("vendor credit");
     crate::credits::create_credit_memo(
         p,
-        CreditMemoInput { credit_number: None, form_lines: Vec::new(), customer_name: LAKEVIEW.into(), credit_date: d(2025, 11, 28), memo: None, refund_account_id: None, lines: vec![sale(labor, "Billing correction", 2, 8_500, services)], tax_rate_id: None, header: Default::default() },
+        CreditMemoInput {
+            credit_number: None,
+            form_lines: Vec::new(),
+            customer_name: LAKEVIEW.into(),
+            credit_date: d(2025, 11, 28),
+            memo: None,
+            refund_account_id: None,
+            lines: vec![sale(labor, "Billing correction", 2, 8_500, services)],
+            tax_rate_id: None,
+            header: Default::default(),
+        },
     )
     .await
     .expect("credit memo");
@@ -235,7 +289,20 @@ fn cents(v: &Value) -> i64 {
 
 fn render(title: &str, report: &JobReport) -> String {
     let mut out = format!("{title}, {} to {}\n\n", report.start_date.map_or("all dates".into(), |s| s.to_string()), report.end_date);
-    let widths: Vec<usize> = report.columns.iter().enumerate().map(|(i, c)| if i == 0 { 34 } else if matches!(c.kind, ColumnKind::Text) { 22 } else { 13 }).collect();
+    let widths: Vec<usize> = report
+        .columns
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            if i == 0 {
+                34
+            } else if matches!(c.kind, ColumnKind::Text) {
+                22
+            } else {
+                13
+            }
+        })
+        .collect();
     let right = |k: ColumnKind| !matches!(k, ColumnKind::Text | ColumnKind::Date);
     let mut head = String::new();
     for (c, w) in report.columns.iter().zip(&widths) {
@@ -374,7 +441,8 @@ async fn reports_add_up_to_the_profit_and_loss() {
         let totals: Vec<Option<i64>> = by_job.lines.iter().map(|l| *l.amounts_cents.last().unwrap()).collect();
         let plain: Vec<Option<i64>> = pl.lines.iter().map(|l| l.amount_cents).collect();
         assert_eq!(totals, plain, "P&L by Job total column {start} to {end}");
-        let leaves: Vec<usize> = by_job.columns.iter().enumerate().filter(|(_, c)| matches!(c.kind, "class" | "other" | "unclassified")).map(|(i, _)| i).collect();
+        let leaves: Vec<usize> =
+            by_job.columns.iter().enumerate().filter(|(_, c)| matches!(c.kind, "class" | "other" | "unclassified")).map(|(i, _)| i).collect();
         for l in &by_job.lines {
             if let Some(total) = l.amounts_cents.last().copied().flatten() {
                 let across: i64 = leaves.iter().map(|i| l.amounts_cents[*i].unwrap_or(0)).sum();

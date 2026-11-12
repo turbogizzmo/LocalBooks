@@ -76,13 +76,17 @@ async fn the_gate_follows_the_open_file_and_its_sign_in() {
     db.refresh_gate().await;
     assert!(db.check(Need::Admin, true).is_ok());
 
-    let viewer = crate::users::add(&pool, slot.lock().await.as_ref().unwrap(), crate::users::NewUserInput {
-        username: "viewer".into(),
-        display_name: None,
-        role: Role::ViewOnly,
-        can_see_sensitive: false,
-        password: "temporary pw".into(),
-    })
+    let viewer = crate::users::add(
+        &pool,
+        slot.lock().await.as_ref().unwrap(),
+        crate::users::NewUserInput {
+            username: "viewer".into(),
+            display_name: None,
+            role: Role::ViewOnly,
+            can_see_sensitive: false,
+            password: "temporary pw".into(),
+        },
+    )
     .await
     .unwrap();
     *slot.lock().await = None;
@@ -126,16 +130,20 @@ async fn the_gate_follows_the_open_file_and_its_sign_in() {
     db.refresh_gate().await;
     let cash: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(&pool).await.unwrap();
     let sales: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4000'").fetch_one(&pool).await.unwrap();
-    crate::ledger::post_journal_entry(&pool, crate::ledger::JournalEntry {
-        id: None,
-        date: chrono::NaiveDate::from_ymd_opt(2026, 10, 24).unwrap(),
-        description: "Sale".into(),
-        lines: vec![crate::ledger::JournalLine::debit(cash, 500), crate::ledger::JournalLine::credit(sales, 500)],
-        currency: None,
-    })
+    crate::ledger::post_journal_entry(
+        &pool,
+        crate::ledger::JournalEntry {
+            id: None,
+            date: chrono::NaiveDate::from_ymd_opt(2026, 10, 24).unwrap(),
+            description: "Sale".into(),
+            lines: vec![crate::ledger::JournalLine::debit(cash, 500), crate::ledger::JournalLine::credit(sales, 500)],
+            currency: None,
+        },
+    )
     .await
     .unwrap();
-    let actor: String = sqlx::query_scalar("SELECT actor FROM ledger_audit_log WHERE action_type = 'POST' ORDER BY id DESC LIMIT 1").fetch_one(&pool).await.unwrap();
+    let actor: String =
+        sqlx::query_scalar("SELECT actor FROM ledger_audit_log WHERE action_type = 'POST' ORDER BY id DESC LIMIT 1").fetch_one(&pool).await.unwrap();
     assert!(actor.starts_with(&format!("{} as ", admin.username)), "{actor}");
 
     db.close().await;

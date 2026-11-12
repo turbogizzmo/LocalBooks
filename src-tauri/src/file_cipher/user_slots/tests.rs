@@ -24,7 +24,13 @@ async fn encrypted_company(dir: &std::path::Path) -> (std::path::PathBuf, String
     let pool = crate::db::open(&plain).await.unwrap();
     crate::preferences::set(&pool, "company_name", MARKER).await.unwrap();
     let (ann, recovery) = users::turn_on(&pool, "ann", None, "ann password 1").await.unwrap();
-    let bob = users::add(&pool, &ann, NewUserInput { username: "bob".into(), display_name: None, role: Role::ViewOnly, can_see_sensitive: false, password: "bob password 1".into() }).await.unwrap();
+    let bob = users::add(
+        &pool,
+        &ann,
+        NewUserInput { username: "bob".into(), display_name: None, role: Role::ViewOnly, can_see_sensitive: false, password: "bob password 1".into() },
+    )
+    .await
+    .unwrap();
     crate::db::close_pool(&pool).await;
 
     let key = keys::PageKey::generate().unwrap();
@@ -91,7 +97,13 @@ async fn slots_follow_users_and_passwords() {
     let ann = sign_in(&db, "ann", "ann password 1").await.unwrap();
 
     // A new user can unlock with their temporary password.
-    let carol = add_user(&db, &ann, NewUserInput { username: "carol".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "carol temp 1".into() }).await.unwrap();
+    let carol = add_user(
+        &db,
+        &ann,
+        NewUserInput { username: "carol".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "carol temp 1".into() },
+    )
+    .await
+    .unwrap();
     relock(&db).await;
     let carol_session = sign_in(&db, "carol", "carol temp 1").await.unwrap();
     assert!(carol_session.user.must_change_password);
@@ -115,7 +127,8 @@ async fn slots_follow_users_and_passwords() {
 
     // An Admin's reset gives Bob a new slot and retires the old one.
     let ann = sign_in(&db, "ann", "ann password 1").await.unwrap();
-    let reset = UserUpdate { display_name: "bob".into(), role: Role::ViewOnly, can_see_sensitive: false, is_active: true, new_password: Some("bob reset 1".into()) };
+    let reset =
+        UserUpdate { display_name: "bob".into(), role: Role::ViewOnly, can_see_sensitive: false, is_active: true, new_password: Some("bob reset 1".into()) };
     update_user(&db, &ann, ann_bob_id(&db).await, reset).await.unwrap();
     relock(&db).await;
     assert_eq!(sign_in(&db, "bob", "bob password 1").await.unwrap_err(), users::SIGN_IN_FAILED);
@@ -198,11 +211,26 @@ async fn a_locked_file_refuses_every_command_except_unlock() {
     let unlock = ["sign_in", "sign_in_remembered", "recover_with_recovery_key"];
     // - or are refused on an encrypted file, or need a signed-in user, or only read what the sign-in
     //   screen needs (no business data: the locked file's stand-in database is empty);
-    let refused_or_harmless = ["turn_on_users", "remove_all_users", "change_my_password", "sign_out", "sign_out_if_idle", "forget_remembered_sign_in", "get_sign_in_state", "get_storage_status",
+    let refused_or_harmless = [
+        "turn_on_users",
+        "remove_all_users",
+        "change_my_password",
+        "sign_out",
+        "sign_out_if_idle",
+        "forget_remembered_sign_in",
+        "get_sign_in_state",
+        "get_storage_status",
         // Two-step sign-in: a code step only exists after a password unlocked the file; set-up needs a signed-in user.
-        "get_two_step_sign_in", "finish_two_step_sign_in", "cancel_two_step_sign_in", "begin_two_step_setup", "finish_two_step_setup", "set_two_step_policy",
+        "get_two_step_sign_in",
+        "finish_two_step_sign_in",
+        "cancel_two_step_sign_in",
+        "begin_two_step_setup",
+        "finish_two_step_setup",
+        "set_two_step_policy",
         // This computer's check (gap R29) also only finishes a sign-in a password already unlocked.
-        "get_two_step_computer_sign_in", "finish_two_step_sign_in_with_computer"];
+        "get_two_step_computer_sign_in",
+        "finish_two_step_sign_in_with_computer",
+    ];
     // - and the rest don't touch the open file's books at all (windows, files, the start screen).
     let elsewhere = [
         "get_startup_failure",
@@ -227,7 +255,10 @@ async fn a_locked_file_refuses_every_command_except_unlock() {
         "set_menu_view_enabled",
     ];
     for name in crate::permissions::open_commands() {
-        assert!(unlock.contains(name) || refused_or_harmless.contains(name) || elsewhere.contains(name), "{name} runs without a sign-in: check what it does on a locked encrypted file, then list it here");
+        assert!(
+            unlock.contains(name) || refused_or_harmless.contains(name) || elsewhere.contains(name),
+            "{name} runs without a sign-in: check what it does on a locked encrypted file, then list it here"
+        );
     }
 
     assert!(turn_on(&db, "eve", None, "eve password 1").await.unwrap_err().starts_with("USERS_ALREADY_ON"));
@@ -254,8 +285,15 @@ async fn a_plain_file_is_unchanged() {
     assert!(!db.is_encrypted().await && !db.is_locked().await);
     assert_eq!(db.encrypted_file_id().await, None);
     let mut ann = sign_in(&db, "ann", "ann password 1").await.unwrap();
-    let bob = add_user(&db, &ann, NewUserInput { username: "bob".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "bob password 1".into() }).await.unwrap();
-    let reset = UserUpdate { display_name: "bob".into(), role: Role::Standard, can_see_sensitive: false, is_active: true, new_password: Some("bob reset 1".into()) };
+    let bob = add_user(
+        &db,
+        &ann,
+        NewUserInput { username: "bob".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "bob password 1".into() },
+    )
+    .await
+    .unwrap();
+    let reset =
+        UserUpdate { display_name: "bob".into(), role: Role::Standard, can_see_sensitive: false, is_active: true, new_password: Some("bob reset 1".into()) };
     update_user(&db, &ann, bob.id, reset).await.unwrap();
     change_own_password(&db, &mut ann, "ann password 1", "ann password 2").await.unwrap();
     replace_recovery_key(&db, &ann).await.unwrap();

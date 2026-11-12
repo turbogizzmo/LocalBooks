@@ -108,12 +108,7 @@ impl Chart {
     }
 
     fn natural(&self, debit_net: &HashMap<i64, i64>) -> HashMap<i64, i64> {
-        self.accounts
-            .iter()
-            .filter_map(|a| {
-                debit_net.get(&a.id).map(|&net| (a.id, if a.is_debit_normal { net } else { -net }))
-            })
-            .collect()
+        self.accounts.iter().filter_map(|a| debit_net.get(&a.id).map(|&net| (a.id, if a.is_debit_normal { net } else { -net }))).collect()
     }
 }
 
@@ -197,7 +192,13 @@ const DEFERRED_ENTRIES: &str = "WITH deferred AS (
 /// invoice, bill or credit counts in proportion to how much of it was settled in the period, on
 /// the settlement dates (payments, and credits applied or refunded). Two documents settled against
 /// each other with a credit cancel out, as no cash moved.
-async fn cash_basis_movement(pool: &SqlitePool, chart: &Chart, start: NaiveDate, end: NaiveDate, filter: Option<&ClassFilter>) -> Result<HashMap<i64, i64>, String> {
+async fn cash_basis_movement(
+    pool: &SqlitePool,
+    chart: &Chart,
+    start: NaiveDate,
+    end: NaiveDate,
+    filter: Option<&ClassFilter>,
+) -> Result<HashMap<i64, i64>, String> {
     let ids = filter.map(|f| serde_json::to_string(&f.class_ids).unwrap_or_else(|_| "[]".into()));
     let unclassified = filter.is_some_and(|f| f.unclassified);
     let class_clause = "(?3 IS NULL
@@ -260,8 +261,7 @@ async fn cash_basis_movement(pool: &SqlitePool, chart: &Chart, start: NaiveDate,
     .await
     .map_err(db_err)?;
 
-    let pl_accounts: std::collections::HashSet<i64> =
-        chart.accounts.iter().filter(|a| PL_TYPES.contains(&a.account_type.as_str())).map(|a| a.id).collect();
+    let pl_accounts: std::collections::HashSet<i64> = chart.accounts.iter().filter(|a| PL_TYPES.contains(&a.account_type.as_str())).map(|a| a.id).collect();
     for (entry_id, total, paid) in settled {
         let lines: Vec<(i64, i64)> = sqlx::query_as(&format!(
             "SELECT l.account_id, l.debit_cents - l.credit_cents FROM journal_lines l WHERE l.journal_entry_id = ?5 AND {class_clause}"
@@ -284,12 +284,7 @@ async fn cash_basis_movement(pool: &SqlitePool, chart: &Chart, start: NaiveDate,
 
 /// Net income (credit-positive) of all P&L accounts in a debit-net movement map.
 fn net_income(chart: &Chart, debit_net: &HashMap<i64, i64>) -> i64 {
-    -chart
-        .accounts
-        .iter()
-        .filter(|a| PL_TYPES.contains(&a.account_type.as_str()))
-        .filter_map(|a| debit_net.get(&a.id))
-        .sum::<i64>()
+    -chart.accounts.iter().filter(|a| PL_TYPES.contains(&a.account_type.as_str())).filter_map(|a| debit_net.get(&a.id)).sum::<i64>()
 }
 
 struct Builder<'a> {
@@ -358,15 +353,7 @@ impl<'a> Builder<'a> {
     }
 
     /// A headed group closed by a total line. Inactive groups are dropped unless `always`.
-    fn group(
-        &mut self,
-        title: &str,
-        total_label: &str,
-        total_kind: LineKind,
-        depth: u32,
-        always: bool,
-        body: impl FnOnce(&mut Self) -> (i64, bool),
-    ) -> i64 {
+    fn group(&mut self, title: &str, total_label: &str, total_kind: LineKind, depth: u32, always: bool, body: impl FnOnce(&mut Self) -> (i64, bool)) -> i64 {
         let start = self.lines.len();
         self.push(LineKind::Section, title, depth, None, None);
         let (total, active) = body(self);
@@ -388,7 +375,12 @@ pub async fn profit_and_loss(pool: &SqlitePool, start_date: NaiveDate, end_date:
 }
 
 /// Profit & Loss limited to the lines of the classes in `filter` (all lines when `None`).
-pub async fn profit_and_loss_filtered(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate, filter: Option<&ClassFilter>) -> Result<ProfitAndLoss, String> {
+pub async fn profit_and_loss_filtered(
+    pool: &SqlitePool,
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+    filter: Option<&ClassFilter>,
+) -> Result<ProfitAndLoss, String> {
     profit_and_loss_basis(pool, start_date, end_date, filter, Basis::Accrual).await
 }
 
@@ -540,8 +532,7 @@ pub(crate) async fn profit_and_loss_by_columns(
     none_label: &str,
 ) -> Result<ProfitAndLossByClass, String> {
     let chart = Chart::load(pool).await?;
-    let pl_accounts: std::collections::HashSet<i64> =
-        chart.accounts.iter().filter(|a| PL_TYPES.contains(&a.account_type.as_str())).map(|a| a.id).collect();
+    let pl_accounts: std::collections::HashSet<i64> = chart.accounts.iter().filter(|a| PL_TYPES.contains(&a.account_type.as_str())).map(|a| a.id).collect();
     let mut by_class: HashMap<Option<i64>, HashMap<i64, i64>> = HashMap::new();
     let mut total: HashMap<i64, i64> = HashMap::new();
     for (class, account, net) in rows {
@@ -724,7 +715,8 @@ pub async fn cash_flow(pool: &SqlitePool, start_date: NaiveDate, end_date: Naive
     };
     let net = net_income(&chart, &movement);
     let mut lines: Vec<ReportLine> = Vec::new();
-    let mut push = |kind, label: String, depth, amount: Option<i64>, account_id| lines.push(ReportLine { kind, label, depth, amount_cents: amount, account_id });
+    let mut push =
+        |kind, label: String, depth, amount: Option<i64>, account_id| lines.push(ReportLine { kind, label, depth, amount_cents: amount, account_id });
     // Cash goes up when an asset goes down or a liability or equity account goes up.
     let overrides = cash_flow_overrides(pool).await?;
     let section = |wanted: CashFlowSection| -> Vec<(i64, String, i64)> {
@@ -817,15 +809,17 @@ pub async fn create_budget(pool: &SqlitePool, name: &str, in_year: NaiveDate) ->
         return Err("BUDGET_NAME_REQUIRED: name the budget".into());
     }
     let (start, _) = fiscal_year_bounds(in_year, fiscal_start_month(pool).await?);
-    let id: i64 = sqlx::query_scalar("INSERT INTO budgets (name, fiscal_year_start) VALUES (?1, ?2) RETURNING id")
-        .bind(name)
-        .bind(start)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| {
-            let msg = db_err(e);
-            if msg.contains("UNIQUE") { format!("BUDGET_DUPLICATE: there is already a budget named '{name}'") } else { msg }
-        })?;
+    let id: i64 =
+        sqlx::query_scalar("INSERT INTO budgets (name, fiscal_year_start) VALUES (?1, ?2) RETURNING id").bind(name).bind(start).fetch_one(pool).await.map_err(
+            |e| {
+                let msg = db_err(e);
+                if msg.contains("UNIQUE") {
+                    format!("BUDGET_DUPLICATE: there is already a budget named '{name}'")
+                } else {
+                    msg
+                }
+            },
+        )?;
     Ok(BudgetView { id, name: name.into(), fiscal_year_start: start })
 }
 
@@ -883,15 +877,14 @@ pub async fn budget_vs_actual(pool: &SqlitePool, budget_id: i64, from_period: i6
     let end = start.checked_add_months(chrono::Months::new(to_period as u32)).and_then(|d| d.pred_opt()).ok_or("RPT_BAD_RANGE: date out of range")?;
     let chart = Chart::load(pool).await?;
     let actual = debit_net(pool, Some(from), end).await?;
-    let rows: Vec<(i64, i64)> = sqlx::query_as(
-        "SELECT account_id, SUM(amount_cents) FROM budget_amounts WHERE budget_id = ?1 AND period BETWEEN ?2 AND ?3 GROUP BY account_id",
-    )
-    .bind(budget_id)
-    .bind(from_period)
-    .bind(to_period)
-    .fetch_all(pool)
-    .await
-    .map_err(db_err)?;
+    let rows: Vec<(i64, i64)> =
+        sqlx::query_as("SELECT account_id, SUM(amount_cents) FROM budget_amounts WHERE budget_id = ?1 AND period BETWEEN ?2 AND ?3 GROUP BY account_id")
+            .bind(budget_id)
+            .bind(from_period)
+            .bind(to_period)
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
     // Budgets are entered on the natural side; the builder works from debit-net movement.
     let budget: HashMap<i64, i64> = rows
         .into_iter()
@@ -907,7 +900,9 @@ pub async fn budget_vs_actual(pool: &SqlitePool, budget_id: i64, from_period: i6
     }
     let shape = chart.natural(&union);
     let shaped = build_pl(Builder::new(&chart, shape.clone()), None);
-    let columns_of = |m: &HashMap<i64, i64>| build_pl(Builder { chart: &chart, shape: shape.clone(), natural: chart.natural(m), lines: Vec::new() }, Some(shaped.has_net_other));
+    let columns_of = |m: &HashMap<i64, i64>| {
+        build_pl(Builder { chart: &chart, shape: shape.clone(), natural: chart.natural(m), lines: Vec::new() }, Some(shaped.has_net_other))
+    };
     let (a, b) = (columns_of(&actual), columns_of(&budget));
     let lines = shaped
         .lines
@@ -917,7 +912,13 @@ pub async fn budget_vs_actual(pool: &SqlitePool, budget_id: i64, from_period: i6
             let (act, bud) = (a.lines[i].amount_cents, b.lines[i].amount_cents);
             let over = act.zip(bud).map(|(x, y)| x - y);
             let pct = act.zip(bud).and_then(|(x, y)| if y == 0 { None } else { mul_div_round(x, 10_000, y) });
-            ClassReportLine { kind: line.kind, label: line.label.clone(), depth: line.depth, account_id: line.account_id, amounts_cents: vec![act, bud, over, pct] }
+            ClassReportLine {
+                kind: line.kind,
+                label: line.label.clone(),
+                depth: line.depth,
+                account_id: line.account_id,
+                amounts_cents: vec![act, bud, over, pct],
+            }
         })
         .collect();
     let column = |label: &str, kind| ClassColumn { class_id: None, label: label.into(), kind, depth: 0, is_total: false };
@@ -1108,27 +1109,26 @@ fn build_bs(mut b: Builder<'_>, year_net_income: i64, show_net_income: bool) -> 
 
     let mut liabilities = 0;
     let mut equity = 0;
-    let liabilities_and_equity =
-        b.group("LIABILITIES AND EQUITY", "TOTAL LIABILITIES AND EQUITY", LineKind::Net, 0, true, |b| {
-            liabilities = b.group("Liabilities", "Total Liabilities", LineKind::Total, 1, true, |b| {
-                let current = b.group("Current Liabilities", "Total Current Liabilities", LineKind::Total, 2, true, |b| {
-                    let ap = b.section("Accounts Payable", &["ACCOUNTS_PAYABLE"], 3, false);
-                    let cards = b.section("Credit Cards", &["CREDIT_CARD"], 3, false);
-                    let other = b.section("Other Current Liabilities", &["OTHER_CURRENT_LIABILITY"], 3, false);
-                    (ap + cards + other, true)
-                });
-                let long_term = b.section("Long-Term Liabilities", &["LONG_TERM_LIABILITY"], 2, false);
-                (current + long_term, true)
+    let liabilities_and_equity = b.group("LIABILITIES AND EQUITY", "TOTAL LIABILITIES AND EQUITY", LineKind::Net, 0, true, |b| {
+        liabilities = b.group("Liabilities", "Total Liabilities", LineKind::Total, 1, true, |b| {
+            let current = b.group("Current Liabilities", "Total Current Liabilities", LineKind::Total, 2, true, |b| {
+                let ap = b.section("Accounts Payable", &["ACCOUNTS_PAYABLE"], 3, false);
+                let cards = b.section("Credit Cards", &["CREDIT_CARD"], 3, false);
+                let other = b.section("Other Current Liabilities", &["OTHER_CURRENT_LIABILITY"], 3, false);
+                (ap + cards + other, true)
             });
-            equity = b.group("Equity", "Total Equity", LineKind::Total, 1, true, |b| {
-                let (accounts, _) = b.accounts(&["EQUITY"], 2);
-                if show_net_income {
-                    b.push(LineKind::Account, "Net Income", 2, Some(year_net_income), None);
-                }
-                (accounts + year_net_income, true)
-            });
-            (liabilities + equity, true)
+            let long_term = b.section("Long-Term Liabilities", &["LONG_TERM_LIABILITY"], 2, false);
+            (current + long_term, true)
         });
+        equity = b.group("Equity", "Total Equity", LineKind::Total, 1, true, |b| {
+            let (accounts, _) = b.accounts(&["EQUITY"], 2);
+            if show_net_income {
+                b.push(LineKind::Account, "Net Income", 2, Some(year_net_income), None);
+            }
+            (accounts + year_net_income, true)
+        });
+        (liabilities + equity, true)
+    });
     BsBody { lines: b.lines, assets, liabilities, equity, liabilities_and_equity }
 }
 
@@ -1171,7 +1171,11 @@ fn bs_columns(chart: &Chart, columns: &[(HashMap<i64, i64>, i64)]) -> (Vec<Repor
 
 /// `% Change` / `% of Budget` in basis points (12.5% = 1250), or `None` against zero.
 fn percent_of(part: i64, whole: i64) -> Option<i64> {
-    if whole == 0 { None } else { mul_div_round(part, 10_000, whole.abs()) }
+    if whole == 0 {
+        None
+    } else {
+        mul_div_round(part, 10_000, whole.abs())
+    }
 }
 
 /// One column of a multi-date Balance Sheet.
@@ -1268,7 +1272,13 @@ pub async fn balance_sheet_budget_vs_actual(pool: &SqlitePool, budget_id: i64, p
             let (act, bud) = (bodies[0].lines[i].amount_cents, bodies[1].lines[i].amount_cents);
             let over = act.zip(bud).map(|(x, y)| x - y);
             let pct = act.zip(bud).and_then(|(x, y)| if y == 0 { None } else { mul_div_round(x, 10_000, y) });
-            ClassReportLine { kind: line.kind, label: line.label.clone(), depth: line.depth, account_id: line.account_id, amounts_cents: vec![act, bud, over, pct] }
+            ClassReportLine {
+                kind: line.kind,
+                label: line.label.clone(),
+                depth: line.depth,
+                account_id: line.account_id,
+                amounts_cents: vec![act, bud, over, pct],
+            }
         })
         .collect();
     let column = |label: &str, kind| ClassColumn { class_id: None, label: label.into(), kind, depth: 0, is_total: false };

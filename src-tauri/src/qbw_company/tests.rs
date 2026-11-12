@@ -53,8 +53,25 @@ fn lists_unreadable_line_rows() {
         for r in &page.rows {
             let walks = r.chained && walk_row(page.row(r), cols).is_some();
             if !walks {
-                let zone = if r.start as usize >= S7_START { "s7" } else if (r.start + r.len) as usize > S7_START { "crosses" } else { "s0-6" };
-                println!("{name:<36} page {:>5} kind {} row {:>4}+{:<4} chained {:<5} {zone:<7} s7 {:?} q {} r7 {} rows on page {}", page.number, page.kind, r.start, r.len, r.chained, page.sector7, page.q, page.r7, page.rows.len());
+                let zone = if r.start as usize >= S7_START {
+                    "s7"
+                } else if (r.start + r.len) as usize > S7_START {
+                    "crosses"
+                } else {
+                    "s0-6"
+                };
+                println!(
+                    "{name:<36} page {:>5} kind {} row {:>4}+{:<4} chained {:<5} {zone:<7} s7 {:?} q {} r7 {} rows on page {}",
+                    page.number,
+                    page.kind,
+                    r.start,
+                    r.len,
+                    r.chained,
+                    page.sector7,
+                    page.q,
+                    page.r7,
+                    page.rows.len()
+                );
             }
         }
     }
@@ -95,7 +112,13 @@ fn traces_unbalanced_transactions() {
             if !interesting {
                 continue;
             }
-            let zone = if r.start as usize >= S7_START { "s7" } else if (r.start + r.len) as usize > S7_START { "crosses" } else { "s0-6" };
+            let zone = if r.start as usize >= S7_START {
+                "s7"
+            } else if (r.start + r.len) as usize > S7_START {
+                "crosses"
+            } else {
+                "s0-6"
+            };
             let acct = get("account_id").as_int();
             println!(
                 "{} {name:<34} page {:>5} k{} row {:>4}+{:<4} chained {:<5} {zone:<7} {:?} | txn {tid} target {:?} acct {:?} ({}) amt {:?} date {:?} | stop {stop}/{} after {:?}",
@@ -226,11 +249,8 @@ fn reads_the_ledger_of_a_real_file() {
 #[test]
 fn custom_field_values_take_the_label_defined_for_their_list() {
     // Position 1 is a name field on customers and vendors, 2 is customers only; items have their own 1.
-    let definitions = vec![
-        (1, "Region".to_string(), [true, true, false]),
-        (2, "Birthday".to_string(), [true, false, false]),
-        (1, "Color".to_string(), [false, false, true]),
-    ];
+    let definitions =
+        vec![(1, "Region".to_string(), [true, true, false]), (2, "Birthday".to_string(), [true, false, false]), (1, "Color".to_string(), [false, false, true])];
     let values = vec![
         ("C1".to_string(), 2, "May 4".to_string()),
         ("C1".to_string(), 1, " West ".to_string()),
@@ -315,10 +335,13 @@ fn inventory_cost_joins_the_form_it_was_sold_on() {
 
     let invoice = &txns[&1];
     assert_eq!(invoice.imbalance_cents(), 0);
-    assert_eq!(&invoice.lines[2..], [
-        SourceLine { account_id: 30, cents: -7_350, memo: None, class: Some("Remodel".into()) },
-        SourceLine { account_id: 6, cents: 7_350, memo: None, class: Some("Remodel".into()) },
-    ]);
+    assert_eq!(
+        &invoice.lines[2..],
+        [
+            SourceLine { account_id: 30, cents: -7_350, memo: None, class: Some("Remodel".into()) },
+            SourceLine { account_id: 6, cents: 7_350, memo: None, class: Some("Remodel".into()) },
+        ]
+    );
     assert_eq!(quality.rejected_lines, 4);
     assert_eq!(quality.rejected_by_reason["inventory cost is not pairs that net to zero"], 2);
     assert_eq!(quality.rejected_by_reason["inventory cost of a form line that was not read"], 2);
@@ -348,7 +371,8 @@ fn sold_stock_moves_with_its_cost_rows() {
         ..Default::default()
     };
     let known: HashSet<i64> = [4, 26, 30, 6].into_iter().collect();
-    let form_lines: FormLines = [(501, (1, None, Some(19))), (502, (1, None, Some(19))), (503, (9, None, Some(19))), (504, (1, None, Some(77)))].into_iter().collect();
+    let form_lines: FormLines =
+        [(501, (1, None, Some(19))), (502, (1, None, Some(19))), (503, (9, None, Some(19))), (504, (1, None, Some(77)))].into_iter().collect();
     let rows = [
         // 3 sold at 105.80: the inventory row carries the units out.
         with_qty(501, 30, -10_580, -3),
@@ -516,9 +540,9 @@ fn item_type_codes_map_to_kinds_and_the_rest_are_left_off() {
             None, // subtotal: a form line, not an item
             None, // group
             Some("Discount"),
-            None, // payment
-            None, // sales tax item
-            None, // sales tax group
+            None,         // payment
+            None,         // sales tax item
+            None,         // sales tax group
             Some("Item"), // a code this reader does not know
         ]
     );
@@ -547,7 +571,13 @@ fn item_groups_read_their_items_in_order() {
     let quantity = |q: u128| Value::Numeric(Numeric { coefficient: q, exponent: 0, negative: true });
     let row = |values: Vec<(&str, Value)>| Row { values: values.into_iter().map(|(k, v)| (k.to_string(), v)).collect() };
     let users = vec![
-        row(vec![("item_id", int(60)), ("item_type", int(7)), ("name", Value::Bytes(b"Door kit".to_vec())), ("print_grouped_bool", int(1)), ("is_hidden_bool", int(0))]),
+        row(vec![
+            ("item_id", int(60)),
+            ("item_type", int(7)),
+            ("name", Value::Bytes(b"Door kit".to_vec())),
+            ("print_grouped_bool", int(1)),
+            ("is_hidden_bool", int(0)),
+        ]),
         row(vec![("item_id", int(61)), ("item_type", int(2)), ("name", Value::Bytes(b"Framed door".to_vec()))]),
         row(vec![("item_id", int(20)), ("item_type", int(1)), ("name", Value::Bytes(b"Frame".to_vec()))]),
         row(vec![("item_id", int(21)), ("item_type", int(1)), ("name", Value::Bytes(b"Hinge".to_vec()))]),
@@ -571,9 +601,7 @@ fn item_groups_read_their_items_in_order() {
 /// its lines or on its header, it posts nothing and is not read as a transaction.
 #[test]
 fn memorized_transactions_are_templates() {
-    let row = |memorized: Option<i64>| Row {
-        values: memorized.map(|m| ("is_memorized_transaction_bool".to_string(), Value::Int(m))).into_iter().collect(),
-    };
+    let row = |memorized: Option<i64>| Row { values: memorized.map(|m| ("is_memorized_transaction_bool".to_string(), Value::Int(m))).into_iter().collect() };
     assert!(!memorized(&row(Some(0)), Some(&row(Some(0)))));
     assert!(!memorized(&row(None), None));
     assert!(memorized(&row(Some(1)), None), "marked on the line");
@@ -643,10 +671,16 @@ fn explores_inventory_tables() {
     let show = std::env::var("LOCALBOOKS_QBW_SHOW").unwrap_or_default();
     for table in show.split(',').filter(|t| !t.is_empty()) {
         let (table, filter) = table.split_once('=').map(|(t, f)| (t, Some(f))).unwrap_or((table, None));
-        for r in rows_of(&pages, &catalog, table).iter().filter(|r| filter.is_none_or(|f| {
-            let (c, v) = f.split_once(':').unwrap();
-            format!("{:?}", r.get(c)).contains(v)
-        })).take(std::env::var("LOCALBOOKS_QBW_SHOW_N").ok().and_then(|n| n.parse().ok()).unwrap_or(6)) {
+        for r in rows_of(&pages, &catalog, table)
+            .iter()
+            .filter(|r| {
+                filter.is_none_or(|f| {
+                    let (c, v) = f.split_once(':').unwrap();
+                    format!("{:?}", r.get(c)).contains(v)
+                })
+            })
+            .take(std::env::var("LOCALBOOKS_QBW_SHOW_N").ok().and_then(|n| n.parse().ok()).unwrap_or(6))
+        {
             let mut v: Vec<(&String, &crate::qbw_records::Value)> = r.values.iter().filter(|(_, v)| !matches!(v, crate::qbw_records::Value::Null)).collect();
             v.sort_by_key(|(k, _)| k.as_str());
             println!("--- {table}");

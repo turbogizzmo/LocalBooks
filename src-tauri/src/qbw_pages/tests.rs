@@ -104,7 +104,10 @@ fn probes_sector7_of_named_pages() {
     let mut dec = PageDecoder::open(std::path::Path::new(&path)).unwrap();
     let _ = dec.decode_all();
     for pn in wanted {
-        let Some(p) = dec.prepare(pn) else { println!("page {pn}: no anchor"); continue };
+        let Some(p) = dec.prepare(pn) else {
+            println!("page {pn}: no anchor");
+            continue;
+        };
         let starts = p.slot_starts();
         let s7_rows: Vec<usize> = starts.iter().copied().filter(|&s| s + 2 > S7_START).collect();
         println!("page {pn}: q {} r0 {} rots {:?} r7 {} steps {:?} base7 {} s7 row starts {:?}", p.q, p.r0, p.rots, p.r7(), p.steps, p.base7, s7_rows);

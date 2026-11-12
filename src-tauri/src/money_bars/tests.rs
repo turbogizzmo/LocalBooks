@@ -9,7 +9,8 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 #[tokio::test]
 async fn each_segment_ties_out_to_its_list_or_report() {
     let pool = test_pool().await;
-    let (checking, card, rent, services) = (account(&pool, "1010").await, account(&pool, "2100").await, account(&pool, "6300").await, account(&pool, "4100").await);
+    let (checking, card, rent, services) =
+        (account(&pool, "1010").await, account(&pool, "2100").await, account(&pool, "6300").await, account(&pool, "4100").await);
     let mut tx = pool.begin().await.unwrap();
     let acme = crate::sales::find_or_create_named(&mut tx, crate::sales::Party::Customer, "Acme").await.unwrap();
     tx.commit().await.unwrap();

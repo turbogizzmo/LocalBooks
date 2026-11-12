@@ -177,7 +177,16 @@ pub async fn detail(pool: &SqlitePool, id: i64) -> Result<SalesOrderDetail, Stri
     .fetch_all(&mut *conn)
     .await
     .map_err(db_err)?;
-    Ok(SalesOrderDetail { summary, tax_rate_id, sales_rep_id, ship_method_id, customer_message_id, header: SalesHeader { bill_to, ship_to, po_number, fob }, lines, invoices })
+    Ok(SalesOrderDetail {
+        summary,
+        tax_rate_id,
+        sales_rep_id,
+        ship_method_id,
+        customer_message_id,
+        header: SalesHeader { bill_to, ship_to, po_number, fob },
+        lines,
+        invoices,
+    })
 }
 
 /// The order's rep, ship via, message and addresses, as a form prints them.
@@ -286,7 +295,8 @@ async fn write_from_estimate(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64,
         "REJECTED" => return Err("EST_REJECTED: a rejected estimate can't become an order; mark it pending or accepted first".into()),
         _ => {}
     }
-    let ordered: Option<i64> = sqlx::query_scalar("SELECT order_number FROM sales_orders WHERE estimate_id = ?1").bind(estimate_id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let ordered: Option<i64> =
+        sqlx::query_scalar("SELECT order_number FROM sales_orders WHERE estimate_id = ?1").bind(estimate_id).fetch_optional(&mut **tx).await.map_err(db_err)?;
     if let Some(number) = ordered {
         return Err(format!("EST_ORDERED: this estimate is already sales order #{number}"));
     }
@@ -308,7 +318,16 @@ async fn write_from_estimate(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64,
         }
         lines.push(SalesOrderLineInput {
             id: None,
-            line: SalesLineInput { product_service_id, description, quantity_e4, rate_cents: Cents(rate_cents), income_account_id, class_id, is_taxable, service_date: None },
+            line: SalesLineInput {
+                product_service_id,
+                description,
+                quantity_e4,
+                rate_cents: Cents(rate_cents),
+                income_account_id,
+                class_id,
+                is_taxable,
+                service_date: None,
+            },
         });
     }
     let form = crate::item_types::form_lines_of(&mut **tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
@@ -355,7 +374,8 @@ async fn write_from_estimate(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64,
 /// closed by hand has to be reopened first.
 pub async fn update(pool: &SqlitePool, id: i64, input: &SalesOrderInput) -> Result<SalesOrderSummary, String> {
     run(pool, async |tx| {
-        let closed: Option<bool> = sqlx::query_scalar("SELECT is_closed = 1 FROM sales_orders WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+        let closed: Option<bool> =
+            sqlx::query_scalar("SELECT is_closed = 1 FROM sales_orders WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
         match closed {
             None => return Err("SO_NOT_FOUND: that sales order does not exist".into()),
             Some(true) => return Err("SO_CLOSED: reopen the sales order to change it".into()),
@@ -388,11 +408,12 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, id: i64, input: &SalesOrderInpu
         return Err("SO_EXPECTED_BEFORE_DATE: the expected date can't be before the order date".into());
     }
     let customer_id = find_or_create_named(tx, Party::Customer, &input.customer_name).await?;
-    let current: Vec<(i64, i64, i64, i64)> = sqlx::query_as("SELECT id, invoiced_qty_e4, closed_qty_e4, line_number FROM sales_order_lines WHERE sales_order_id = ?1")
-        .bind(id)
-        .fetch_all(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let current: Vec<(i64, i64, i64, i64)> =
+        sqlx::query_as("SELECT id, invoiced_qty_e4, closed_qty_e4, line_number FROM sales_order_lines WHERE sales_order_id = ?1")
+            .bind(id)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(db_err)?;
     let invoiced = current.iter().any(|(_, invoiced, _, _)| *invoiced > 0);
     let old_customer: i64 = sqlx::query_scalar("SELECT customer_id FROM sales_orders WHERE id = ?1").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
     if invoiced && old_customer != customer_id {
@@ -409,11 +430,12 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, id: i64, input: &SalesOrderInpu
             .filter(|t| *t <= MAX_LINE_CENTS)
             .ok_or_else(|| format!("SO_AMOUNT_TOO_LARGE: the order total exceeds {}", format_cents(MAX_LINE_CENTS)))?;
         amounts.push(amount);
-        let classification: Option<String> = sqlx::query_scalar("SELECT t.classification FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1")
-            .bind(line.income_account_id)
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(db_err)?;
+        let classification: Option<String> =
+            sqlx::query_scalar("SELECT t.classification FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1")
+                .bind(line.income_account_id)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(db_err)?;
         if classification.as_deref() != Some("INCOME") {
             return Err(format!("SO_NOT_INCOME_ACCOUNT: line {} must use an Income account", idx + 1));
         }
@@ -456,7 +478,11 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, id: i64, input: &SalesOrderInpu
             sqlx::query("DELETE FROM sales_order_lines WHERE id = ?1").bind(line_id).execute(&mut **tx).await.map_err(db_err)?;
         }
     }
-    sqlx::query("UPDATE sales_order_lines SET line_number = line_number + 1000000 WHERE sales_order_id = ?1").bind(id).execute(&mut **tx).await.map_err(db_err)?;
+    sqlx::query("UPDATE sales_order_lines SET line_number = line_number + 1000000 WHERE sales_order_id = ?1")
+        .bind(id)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
     for (idx, (l, amount)) in input.lines.iter().zip(amounts).enumerate() {
         let line = &l.line;
         let number = i64::try_from(idx + 1).map_err(|_| "SO_TOO_MANY_LINES: too many lines".to_string())?;
@@ -466,9 +492,17 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, id: i64, input: &SalesOrderInpu
                     return Err(format!("SO_LINE_NOT_FOUND: line {} is not on this order", idx + 1));
                 };
                 if line.quantity_e4 < invoiced + closed {
-                    return Err(format!("SO_BELOW_INVOICED: line {} can't be less than the {} already invoiced", idx + 1, crate::forms::format_quantity(*invoiced)));
+                    return Err(format!(
+                        "SO_BELOW_INVOICED: line {} can't be less than the {} already invoiced",
+                        idx + 1,
+                        crate::forms::format_quantity(*invoiced)
+                    ));
                 }
-                let product: Option<i64> = sqlx::query_scalar("SELECT product_service_id FROM sales_order_lines WHERE id = ?1").bind(line_id).fetch_one(&mut **tx).await.map_err(db_err)?;
+                let product: Option<i64> = sqlx::query_scalar("SELECT product_service_id FROM sales_order_lines WHERE id = ?1")
+                    .bind(line_id)
+                    .fetch_one(&mut **tx)
+                    .await
+                    .map_err(db_err)?;
                 if *invoiced > 0 && product != line.product_service_id {
                     return Err(format!("SO_INVOICED_ITEM: line {} has been invoiced, so its item can't change", idx + 1));
                 }
@@ -522,7 +556,11 @@ pub async fn close(pool: &SqlitePool, id: i64) -> Result<SalesOrderSummary, Stri
         if done.rows_affected() != 1 {
             return Err("SO_CLOSED: that sales order is already closed or does not exist".into());
         }
-        sqlx::query("UPDATE sales_order_lines SET closed_qty_e4 = quantity_e4 - invoiced_qty_e4 WHERE sales_order_id = ?1").bind(id).execute(&mut **tx).await.map_err(db_err)?;
+        sqlx::query("UPDATE sales_order_lines SET closed_qty_e4 = quantity_e4 - invoiced_qty_e4 WHERE sales_order_id = ?1")
+            .bind(id)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
         Ok(id)
     })
     .await
@@ -544,11 +582,13 @@ pub async fn reopen(pool: &SqlitePool, id: i64) -> Result<SalesOrderSummary, Str
 /// Deletes an order that nothing has been invoiced from (it never posted); others can only be closed.
 pub async fn delete(pool: &SqlitePool, id: i64) -> Result<(), String> {
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
-    let linked: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM sales_order_invoiced k JOIN sales_order_lines l ON l.id = k.sales_order_line_id WHERE l.sales_order_id = ?1)")
-        .bind(id)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let linked: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM sales_order_invoiced k JOIN sales_order_lines l ON l.id = k.sales_order_line_id WHERE l.sales_order_id = ?1)",
+    )
+    .bind(id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(db_err)?;
     if linked {
         return Err(rollback(tx, "SO_HAS_INVOICES: invoices were made from this order; close it instead".into()).await);
     }
@@ -588,7 +628,8 @@ async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, order_id: i64, input: &
     if input.currency.is_some() {
         return Err("SO_CURRENCY: a sales order is invoiced in the home currency".into());
     }
-    let order: Option<(i64, bool)> = sqlx::query_as("SELECT customer_id, is_closed = 1 FROM sales_orders WHERE id = ?1").bind(order_id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let order: Option<(i64, bool)> =
+        sqlx::query_as("SELECT customer_id, is_closed = 1 FROM sales_orders WHERE id = ?1").bind(order_id).fetch_optional(&mut **tx).await.map_err(db_err)?;
     let (order_customer, closed) = order.ok_or("SO_NOT_FOUND: that sales order does not exist")?;
     if closed {
         return Err("SO_CLOSED: that sales order is closed".into());
@@ -622,11 +663,12 @@ async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, order_id: i64, input: &
         *sum = sum.checked_add(line.quantity_e4).ok_or("SO_OVER_INVOICED: quantity out of range")?;
     }
     for (line_id, qty) in &taken {
-        let (number, left): (i64, i64) = sqlx::query_as("SELECT line_number, quantity_e4 - invoiced_qty_e4 - closed_qty_e4 FROM sales_order_lines WHERE id = ?1")
-            .bind(line_id)
-            .fetch_one(&mut **tx)
-            .await
-            .map_err(db_err)?;
+        let (number, left): (i64, i64) =
+            sqlx::query_as("SELECT line_number, quantity_e4 - invoiced_qty_e4 - closed_qty_e4 FROM sales_order_lines WHERE id = ?1")
+                .bind(line_id)
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(db_err)?;
         if *qty > left {
             return Err(format!(
                 "SO_OVER_INVOICED: order line {number} has {} left to invoice; change the order to ship more",
@@ -683,11 +725,12 @@ pub(crate) async fn follow_replaced_invoice(tx: &mut Transaction<'_, Sqlite>, ol
     }
     let customer: Option<i64> = sqlx::query_scalar("SELECT customer_id FROM invoices WHERE id = ?1").bind(new).fetch_one(&mut **tx).await.map_err(db_err)?;
     // What the edited invoice sells of each item, handed out to the links in order.
-    let sold: Vec<(Option<i64>, i64)> = sqlx::query_as("SELECT product_service_id, SUM(quantity_e4) FROM invoice_items WHERE invoice_id = ?1 GROUP BY product_service_id")
-        .bind(new)
-        .fetch_all(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let sold: Vec<(Option<i64>, i64)> =
+        sqlx::query_as("SELECT product_service_id, SUM(quantity_e4) FROM invoice_items WHERE invoice_id = ?1 GROUP BY product_service_id")
+            .bind(new)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(db_err)?;
     let mut left: HashMap<Option<i64>, i64> = sold.into_iter().collect();
     for (line_id, qty, product, order_customer) in links {
         let ours = match customer {
@@ -780,7 +823,24 @@ pub async fn open_lines(pool: &SqlitePool) -> Result<OpenSalesOrders, String> {
     let mut items: BTreeMap<i64, ItemStock> = BTreeMap::new();
     let mut lines = Vec::with_capacity(rows.len());
     let mut total_open_cents: i64 = 0;
-    for (order_id, order_number, order_date, expected_date, customer_id, customer_name, line_id, product, item_name, description, quantity_e4, invoiced, left, rate_cents, on_hand) in rows {
+    for (
+        order_id,
+        order_number,
+        order_date,
+        expected_date,
+        customer_id,
+        customer_name,
+        line_id,
+        product,
+        item_name,
+        description,
+        quantity_e4,
+        invoiced,
+        left,
+        rate_cents,
+        on_hand,
+    ) in rows
+    {
         let open_cents = crate::ledger::quantity_amount(left, rate_cents).ok_or_else(overflow)?;
         total_open_cents = total_open_cents.checked_add(open_cents).ok_or_else(overflow)?;
         let mut backordered = 0;

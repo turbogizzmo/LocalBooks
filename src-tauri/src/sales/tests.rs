@@ -4,19 +4,11 @@ use crate::invoices::{create_and_post_invoice, record_payment, InvoiceInput, Inv
 use crate::money::Cents;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
-    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
-        .bind(number)
-        .fetch_one(pool)
-        .await
-        .expect("seeded account exists")
+    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.expect("seeded account exists")
 }
 
 async fn balance(pool: &SqlitePool, account: i64) -> i64 {
-    sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1")
-        .bind(account)
-        .fetch_one(pool)
-        .await
-        .unwrap()
+    sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1").bind(account).fetch_one(pool).await.unwrap()
 }
 
 fn d(day: u32) -> NaiveDate {
@@ -24,7 +16,16 @@ fn d(day: u32) -> NaiveDate {
 }
 
 fn line(product: Option<i64>, qty: i64, rate: i64, account: i64) -> SalesLineInput {
-    SalesLineInput { product_service_id: product, description: "Item".into(), quantity_e4: qty * 10_000, rate_cents: Cents(rate), income_account_id: account, class_id: None, is_taxable: false, service_date: None }
+    SalesLineInput {
+        product_service_id: product,
+        description: "Item".into(),
+        quantity_e4: qty * 10_000,
+        rate_cents: Cents(rate),
+        income_account_id: account,
+        class_id: None,
+        is_taxable: false,
+        service_date: None,
+    }
 }
 
 #[tokio::test]
@@ -90,12 +91,11 @@ async fn sales_receipt_rejects_non_income_lines_and_rolls_back() {
     .await
     .expect_err("expense account rejected");
     assert!(err.starts_with("SR_NOT_INCOME_ACCOUNT"), "{err}");
-    let (receipts, entries, customers): (i64, i64, i64) = sqlx::query_as(
-        "SELECT (SELECT COUNT(*) FROM sales_receipts), (SELECT COUNT(*) FROM journal_entries), (SELECT COUNT(*) FROM customers)",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let (receipts, entries, customers): (i64, i64, i64) =
+        sqlx::query_as("SELECT (SELECT COUNT(*) FROM sales_receipts), (SELECT COUNT(*) FROM journal_entries), (SELECT COUNT(*) FROM customers)")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!((receipts, entries, customers), (0, 0, 0));
 
     let err = create_product(&pool, ProductInput { name: "Bad".into(), description: None, rate_cents: Cents(100), income_account_id: rent, is_taxable: true })
@@ -115,7 +115,16 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
             customer_name: "acme corp".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: Cents(40_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput {
+                description: "Work".into(),
+                quantity_e4: 10000,
+                rate_cents: Cents(40_000),
+                income_account_id: services,
+                product_service_id: None,
+                class_id: None,
+                is_taxable: false,
+                service_date: None,
+            }],
             currency: None,
             tax_rate_id: None,
             discount_cents: Cents::ZERO,
@@ -127,7 +136,17 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
     create_customer(&pool, "Acme Corp", None).await.expect_err("duplicate (case-insensitive) customer");
     record_payment(
         &pool,
-        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: checking, payment_date: d(5), amount_cents: Cents(15_000), payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
+        PaymentInput {
+            discount_cents: Cents::ZERO,
+            payment_method_id: None,
+            invoice_id: invoice.id,
+            deposit_account_id: checking,
+            payment_date: d(5),
+            amount_cents: Cents(15_000),
+            payment_method: "ACH".into(),
+            reference: None,
+            exchange_rate_e6: None,
+        },
     )
     .await
     .unwrap();
@@ -201,5 +220,9 @@ fn sales_receipt_and_estimate_amounts_arrive_as_bare_integers() {
     let estimate: crate::estimates::EstimateInput =
         serde_json::from_str(r#"{"customerName":"Acme","estimateDate":"2025-07-01","expirationDate":null,"memo":null,"lines":[]}"#).unwrap();
     assert_eq!(estimate.discount_cents, Cents::ZERO, "the discount is optional");
-    assert!(serde_json::from_str::<SalesLineInput>(r#"{"productServiceId":null,"description":"Work","quantityE4":10000,"rateCents":123.45,"incomeAccountId":4}"#).is_err(), "a fractional rate is refused");
+    assert!(
+        serde_json::from_str::<SalesLineInput>(r#"{"productServiceId":null,"description":"Work","quantityE4":10000,"rateCents":123.45,"incomeAccountId":4}"#)
+            .is_err(),
+        "a fractional rate is refused"
+    );
 }

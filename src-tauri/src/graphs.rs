@@ -118,7 +118,9 @@ fn section_accounts(lines: &[ReportLine], sections: &[&str]) -> Vec<GraphSlice> 
             continue;
         }
         match line.kind {
-            LineKind::Account => out.push(GraphSlice { label: line.label.clone(), account_id: line.account_id, amount_cents: line.amount_cents.unwrap_or(0), other: false }),
+            LineKind::Account => {
+                out.push(GraphSlice { label: line.label.clone(), account_id: line.account_id, amount_cents: line.amount_cents.unwrap_or(0), other: false })
+            }
             LineKind::Subtotal => {
                 if let Some(parent) = out.iter_mut().rev().find(|s| s.account_id == line.account_id) {
                     parent.amount_cents = line.amount_cents.unwrap_or(0);
@@ -136,7 +138,12 @@ pub async fn income_expense(pool: &SqlitePool, start: NaiveDate, end: NaiveDate,
     let mut points = Vec::with_capacity(spans.len());
     for month in spans {
         let pl = statements::profit_and_loss_basis(pool, month.start_date, month.end_date, None, basis).await?;
-        points.push(IncomeExpensePoint { month, income_cents: pl.total_revenue_cents, expense_cents: pl.total_expenses_cents, net_income_cents: pl.net_income_cents });
+        points.push(IncomeExpensePoint {
+            month,
+            income_cents: pl.total_revenue_cents,
+            expense_cents: pl.total_expenses_cents,
+            net_income_cents: pl.net_income_cents,
+        });
     }
     let whole = statements::profit_and_loss_basis(pool, start, end, None, basis).await?;
     Ok(IncomeExpenseGraph {

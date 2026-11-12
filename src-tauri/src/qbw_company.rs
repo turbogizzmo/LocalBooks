@@ -139,7 +139,9 @@ fn join_split_halves(transactions: &mut BTreeMap<i64, SourceTransaction>) -> usi
         .map(|t| (t.id, t.date, t.imbalance_cents()))
         .filter(|(_, _, d)| *d != 0 && *d != i64::MAX)
         .collect();
-    let partners = |id: i64, date: NaiveDate, d: i64| off.iter().filter(move |(o, od, odiff)| *o != id && *od == date && odiff.checked_neg() == Some(d)).map(|(o, _, _)| *o);
+    let partners = |id: i64, date: NaiveDate, d: i64| {
+        off.iter().filter(move |(o, od, odiff)| *o != id && *od == date && odiff.checked_neg() == Some(d)).map(|(o, _, _)| *o)
+    };
     let mut pairs = Vec::new();
     for &(id, date, d) in &off {
         let mine: Vec<i64> = partners(id, date, d).collect();
@@ -555,10 +557,7 @@ pub(crate) fn rows_of(pages: &[LogicalPage], catalog: &Catalog, table: &str) -> 
 
 /// Names by id from a list table such as `abmc_customer_user`.
 fn names(pages: &[LogicalPage], catalog: &Catalog, table: &str, id_column: &str) -> HashMap<i64, String> {
-    rows_of(pages, catalog, table)
-        .iter()
-        .filter_map(|r| Some((r.get(id_column).as_int()?, text(r, "name")?)))
-        .collect()
+    rows_of(pages, catalog, table).iter().filter_map(|r| Some((r.get(id_column).as_int()?, text(r, "name")?))).collect()
 }
 
 fn read_accounts(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceAccount> {
@@ -614,10 +613,7 @@ fn read_accounts(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceAccount>
 /// lines used, by transaction. A transaction takes one candidate whose amount is exactly what it
 /// lacks, or all its candidates when together they are; otherwise it is left as it is (and stays
 /// unbalanced).
-fn recover_damaged_lines(
-    transactions: &mut BTreeMap<i64, SourceTransaction>,
-    salvage: HashMap<i64, Vec<SourceLine>>,
-) -> Vec<(i64, SourceLine)> {
+fn recover_damaged_lines(transactions: &mut BTreeMap<i64, SourceTransaction>, salvage: HashMap<i64, Vec<SourceLine>>) -> Vec<(i64, SourceLine)> {
     let mut used = Vec::new();
     for (tid, candidates) in salvage {
         let Some(txn) = transactions.get_mut(&tid) else { continue };
@@ -764,7 +760,13 @@ pub(crate) fn read_sales_lists(pages: &[LogicalPage], catalog: &Catalog) -> (Nam
 /// percentage (−10 = 10% off), here in hundredths of a percent. A per-item level's items keep the
 /// price QuickBooks worked out for them (`computed_price_amt`) as a fixed price; items priced only as
 /// a percentage are left off (they sell at standard price).
-pub(crate) fn price_level_of(name: String, hidden: bool, level_type: Option<i64>, value_hundredths: Option<i64>, items: &[(i64, Option<i64>)]) -> SourcePriceLevel {
+pub(crate) fn price_level_of(
+    name: String,
+    hidden: bool,
+    level_type: Option<i64>,
+    value_hundredths: Option<i64>,
+    items: &[(i64, Option<i64>)],
+) -> SourcePriceLevel {
     use crate::price_levels::{ItemBasis, LevelItem, LevelKind};
     let per_item = level_type == Some(2) || (level_type != Some(1) && !items.is_empty());
     SourcePriceLevel {
@@ -775,7 +777,9 @@ pub(crate) fn price_level_of(name: String, hidden: bool, level_type: Option<i64>
         items: if per_item {
             items
                 .iter()
-                .filter_map(|(item, cents)| Some(LevelItem { product_id: *item, basis: ItemBasis::Fixed, price_cents: Some(cents.as_ref()?.abs()), percent_milli: None }))
+                .filter_map(|(item, cents)| {
+                    Some(LevelItem { product_id: *item, basis: ItemBasis::Fixed, price_cents: Some(cents.as_ref()?.abs()), percent_milli: None })
+                })
                 .collect()
         } else {
             Vec::new()
@@ -804,7 +808,13 @@ fn read_price_levels(pages: &[LogicalPage], catalog: &Catalog) -> (Vec<SourcePri
         }
         let hidden = r.get("is_hidden_bool").as_int() == Some(1);
         names.insert(id, name.clone());
-        levels.push(price_level_of(name, hidden, r.get("price_level_type").as_int(), r.get("value_pct").as_cents(), items.get(&id).map_or(&[][..], Vec::as_slice)));
+        levels.push(price_level_of(
+            name,
+            hidden,
+            r.get("price_level_type").as_int(),
+            r.get("value_pct").as_cents(),
+            items.get(&id).map_or(&[][..], Vec::as_slice),
+        ));
     }
     let customers = rows_of(pages, catalog, "abmc_customer_user")
         .iter()
@@ -822,15 +832,11 @@ fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<S
         .filter_map(|r| Some((r.get("terms_id").as_int()?, r.get("standard_due_days").as_int()?)))
         .filter(|(_, d)| (0..=365).contains(d))
         .collect();
-    let balances: HashMap<i64, i64> = rows_of(pages, catalog, internal)
-        .iter()
-        .filter_map(|r| Some((r.get(id_col).as_int()?, r.get("end_balance_amt").as_cents().unwrap_or(0))))
-        .collect();
+    let balances: HashMap<i64, i64> =
+        rows_of(pages, catalog, internal).iter().filter_map(|r| Some((r.get(id_col).as_int()?, r.get("end_balance_amt").as_cents().unwrap_or(0)))).collect();
     let users: Vec<Row> = rows_of(pages, catalog, user);
-    let names: BTreeMap<i64, (String, Option<i64>)> = users
-        .iter()
-        .filter_map(|r| Some((r.get(id_col).as_int()?, (text(r, "name")?, if vendor { None } else { r.get("parent_id").as_int() }))))
-        .collect();
+    let names: BTreeMap<i64, (String, Option<i64>)> =
+        users.iter().filter_map(|r| Some((r.get(id_col).as_int()?, (text(r, "name")?, if vendor { None } else { r.get("parent_id").as_int() })))).collect();
     let full = paths(&names);
     let reps = if vendor { HashMap::new() } else { read_sales_lists(pages, catalog).0 };
     let custom = custom_values_of(pages, catalog, if vendor { FieldOwner::Vendor } else { FieldOwner::Customer });
@@ -1033,10 +1039,8 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     let mut unreadable: Vec<UnreadableLine> = Vec::new();
     for (stem, kind) in TRANSACTION_TABLES {
         let Some(line_table) = catalog.table_id(&format!("{stem}_lineitem")) else { continue };
-        let headers: HashMap<i64, Row> = rows_of(&pages, &catalog, &format!("{stem}_header"))
-            .into_iter()
-            .filter_map(|r| Some((r.get("transaction_id").as_int()?, r)))
-            .collect();
+        let headers: HashMap<i64, Row> =
+            rows_of(&pages, &catalog, &format!("{stem}_header")).into_iter().filter_map(|r| Some((r.get("transaction_id").as_int()?, r))).collect();
         let lines = table_rows(&pages, &catalog, line_table);
         quality.unreadable_lines += lines.unchained + lines.unwalkable;
         let party = |row: &Row| {
@@ -1106,10 +1110,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
                     return Err("unknown account");
                 }
                 let header = headers.get(&tid);
-                let date = header
-                    .and_then(|h| h.get("transaction_date").as_date())
-                    .or_else(|| r.get("transaction_date").as_date())
-                    .ok_or("no date")?;
+                let date = header.and_then(|h| h.get("transaction_date").as_date()).or_else(|| r.get("transaction_date").as_date()).ok_or("no date")?;
                 if !(earliest..=latest).contains(&date) {
                     return Err("date out of range");
                 }
@@ -1195,12 +1196,10 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     // Stock moves only with transactions that were read; a memorized one, or one whose lines
     // were all rejected, moves nothing.
     stock.moves.retain(|m| transactions.get(&m.transaction_id).is_some_and(|t| !t.lines.is_empty()));
-    let (mut balanced, mut unbalanced): (Vec<_>, Vec<_>) =
-        transactions.into_values().filter(|t| !t.lines.is_empty()).partition(|t| t.imbalance_cents() == 0);
+    let (mut balanced, mut unbalanced): (Vec<_>, Vec<_>) = transactions.into_values().filter(|t| !t.lines.is_empty()).partition(|t| t.imbalance_cents() == 0);
     balanced.sort_by_key(|t| (t.date, t.id));
     unbalanced.sort_by_key(|t| (t.date, t.id));
-    let arap: HashSet<i64> =
-        accounts.iter().filter(|a| matches!(a.account_type, "ACCOUNTS_RECEIVABLE" | "ACCOUNTS_PAYABLE")).map(|a| a.id).collect();
+    let arap: HashSet<i64> = accounts.iter().filter(|a| matches!(a.account_type, "ACCOUNTS_RECEIVABLE" | "ACCOUNTS_PAYABLE")).map(|a| a.id).collect();
     let (mut documents, too_large) = crate::qbw_documents::read_documents(&pages, &catalog, &|a| arap.contains(&a), &class_paths);
     if too_large > 0 {
         quality.rejected_lines += too_large;
@@ -1241,7 +1240,8 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     sales_lists.ship_methods.sort();
     (sales_lists.price_levels, sales_lists.customer_price_levels) = read_price_levels(&pages, &catalog);
     sales_lists.item_groups = read_item_groups(&pages, &catalog);
-    let mut ledger = Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality, sales_lists, classes: Vec::new(), stock };
+    let mut ledger =
+        Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality, sales_lists, classes: Vec::new(), stock };
     for (name, active) in class_list {
         ledger.add_class(&name, active);
     }

@@ -21,7 +21,16 @@ fn invoice(customer: &str, account: i64, cents: i64, header: SalesHeader) -> Inv
         customer_name: customer.into(),
         issue_date: d(1),
         due_date: d(31),
-        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(cents), income_account_id: account, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![InvoiceLineInput {
+            description: "Work".into(),
+            quantity_e4: 10_000,
+            rate_cents: Cents(cents),
+            income_account_id: account,
+            product_service_id: None,
+            class_id: None,
+            is_taxable: false,
+            service_date: None,
+        }],
         currency: None,
         tax_rate_id: None,
         discount_cents: Cents::ZERO,
@@ -88,7 +97,13 @@ async fn a_job_inherits_the_addresses_it_does_not_set() {
     let parent = customer(
         &pool,
         "Acme",
-        PartyDetailsInput { company_name: Some("Acme Inc".into()), address: Some("1 Main St".into()), shipping_address: Some("Dock 4".into()), credit_limit_cents: Some(1_000), ..Default::default() },
+        PartyDetailsInput {
+            company_name: Some("Acme Inc".into()),
+            address: Some("1 Main St".into()),
+            shipping_address: Some("Dock 4".into()),
+            credit_limit_cents: Some(1_000),
+            ..Default::default()
+        },
     )
     .await;
     let job = customer(&pool, "Acme:Kitchen", PartyDetailsInput { shipping_address: Some("9 Site Rd".into()), ..Default::default() }).await;
@@ -109,27 +124,43 @@ async fn a_job_inherits_the_addresses_it_does_not_set() {
 async fn a_document_keeps_its_own_copy_of_the_header() {
     let pool = test_pool().await;
     let services = services(&pool).await;
-    let acme = customer(&pool, "Acme", PartyDetailsInput { address: Some("1 Main St".into()), shipping_address: Some("Dock 4".into()), ..Default::default() }).await;
+    let acme =
+        customer(&pool, "Acme", PartyDetailsInput { address: Some("1 Main St".into()), shipping_address: Some("Dock 4".into()), ..Default::default() }).await;
 
     // Left out: filled from the customer.
-    let filled = create_and_post_invoice(&pool, invoice("Acme", services, 10_000, SalesHeader { po_number: Some(" PO-9 ".into()), fob: Some("Origin".into()), ..Default::default() })).await.unwrap();
+    let filled = create_and_post_invoice(
+        &pool,
+        invoice("Acme", services, 10_000, SalesHeader { po_number: Some(" PO-9 ".into()), fob: Some("Origin".into()), ..Default::default() }),
+    )
+    .await
+    .unwrap();
     // Edited on the document, or cleared on purpose.
     let edited = create_and_post_invoice(
         &pool,
-        invoice("Acme", services, 10_000, SalesHeader { bill_to: Some("Attn: Payables\n1 Main St\n".into()), ship_to: Some(String::new()), ..Default::default() }),
+        invoice(
+            "Acme",
+            services,
+            10_000,
+            SalesHeader { bill_to: Some("Attn: Payables\n1 Main St\n".into()), ship_to: Some(String::new()), ..Default::default() },
+        ),
     )
     .await
     .unwrap();
 
     // Changing the customer afterwards changes neither document.
-    update_party(&pool, "customer", acme, PartyDetailsInput { name: "Acme".into(), address: Some("77 New Ave".into()), ..Default::default() }, Access::OPEN).await.unwrap();
+    update_party(&pool, "customer", acme, PartyDetailsInput { name: "Acme".into(), address: Some("77 New Ave".into()), ..Default::default() }, Access::OPEN)
+        .await
+        .unwrap();
     let pool = &pool;
     let header = |id| async move { invoice_detail(pool, id).await.unwrap().details.header };
     assert_eq!(
         header(filled.id).await,
         SalesHeader { bill_to: Some("1 Main St".into()), ship_to: Some("Dock 4".into()), po_number: Some("PO-9".into()), fob: Some("Origin".into()) }
     );
-    assert_eq!(header(edited.id).await, SalesHeader { bill_to: Some("Attn: Payables\n1 Main St".into()), ship_to: Some(String::new()), po_number: None, fob: None });
+    assert_eq!(
+        header(edited.id).await,
+        SalesHeader { bill_to: Some("Attn: Payables\n1 Main St".into()), ship_to: Some(String::new()), po_number: None, fob: None }
+    );
 
     // The printed invoice uses the document's copy.
     let doc = crate::forms::invoice_doc(pool, filled.id, "$").await.unwrap();
@@ -142,7 +173,8 @@ async fn a_document_keeps_its_own_copy_of_the_header() {
     assert_eq!(crate::forms::invoice_doc(pool, filled.id, "$").await.unwrap().customer_details, ["77 New Ave"]);
 
     // Too long a P.O. number is refused.
-    let err = create_and_post_invoice(pool, invoice("Acme", services, 100, SalesHeader { po_number: Some("x".repeat(26)), ..Default::default() })).await.unwrap_err();
+    let err =
+        create_and_post_invoice(pool, invoice("Acme", services, 100, SalesHeader { po_number: Some("x".repeat(26)), ..Default::default() })).await.unwrap_err();
     assert!(err.starts_with("SALES_PO_TOO_LONG"), "{err}");
 }
 
@@ -166,11 +198,15 @@ async fn an_edited_invoice_and_an_estimate_turned_invoice_keep_the_copy() {
                 rate_cents: Cents(5_000),
                 income_account_id: services,
                 class_id: None,
-                is_taxable: false, service_date: None,
+                is_taxable: false,
+                service_date: None,
             }],
             tax_rate_id: None,
             discount_cents: Cents::ZERO,
-            details: SalesDetails { header: SalesHeader { ship_to: Some("Site B".into()), po_number: Some("Q-1".into()), ..Default::default() }, ..Default::default() },
+            details: SalesDetails {
+                header: SalesHeader { ship_to: Some("Site B".into()), po_number: Some("Q-1".into()), ..Default::default() },
+                ..Default::default()
+            },
         },
     )
     .await
@@ -212,8 +248,14 @@ async fn a_paid_invoice_resaved_keeps_its_own_header() {
     let pool = test_pool().await;
     let services = services(&pool).await;
     let checking: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(&pool).await.unwrap();
-    let acme = customer(&pool, "Acme", PartyDetailsInput { address: Some("1 Main St".into()), shipping_address: Some("Dock 4".into()), ..Default::default() }).await;
-    let typed = SalesHeader { bill_to: Some("Attn: Payables\n1 Main St".into()), ship_to: Some("Site B".into()), po_number: Some("PO-9".into()), fob: Some("Origin".into()) };
+    let acme =
+        customer(&pool, "Acme", PartyDetailsInput { address: Some("1 Main St".into()), shipping_address: Some("Dock 4".into()), ..Default::default() }).await;
+    let typed = SalesHeader {
+        bill_to: Some("Attn: Payables\n1 Main St".into()),
+        ship_to: Some("Site B".into()),
+        po_number: Some("PO-9".into()),
+        fob: Some("Origin".into()),
+    };
     let original = create_and_post_invoice(&pool, invoice("Acme", services, 10_000, typed.clone())).await.unwrap().id;
     crate::invoices::record_payment(
         &pool,
@@ -232,7 +274,9 @@ async fn a_paid_invoice_resaved_keeps_its_own_header() {
     .await
     .unwrap();
     // The customer's record changes after the invoice was written.
-    update_party(&pool, "customer", acme, PartyDetailsInput { name: "Acme".into(), address: Some("77 New Ave".into()), ..Default::default() }, Access::OPEN).await.unwrap();
+    update_party(&pool, "customer", acme, PartyDetailsInput { name: "Acme".into(), address: Some("77 New Ave".into()), ..Default::default() }, Access::OPEN)
+        .await
+        .unwrap();
 
     // Re-saved from the form, which loads the invoice's own copy and sends it back.
     let loaded = invoice_detail(&pool, original).await.unwrap().details.header;
@@ -244,8 +288,12 @@ async fn a_paid_invoice_resaved_keeps_its_own_header() {
 
     // Re-saved by a caller that leaves the addresses out: the edited invoice still keeps the
     // original's copy, not the customer's new address. P.O. and FOB are sent as they are.
-    let again = crate::edits::replace_invoice(&pool, edited, invoice("Acme", services, 12_500, SalesHeader { po_number: Some("PO-9".into()), fob: Some("Origin".into()), ..Default::default() }))
-        .await
-        .unwrap();
+    let again = crate::edits::replace_invoice(
+        &pool,
+        edited,
+        invoice("Acme", services, 12_500, SalesHeader { po_number: Some("PO-9".into()), fob: Some("Origin".into()), ..Default::default() }),
+    )
+    .await
+    .unwrap();
     assert_eq!(invoice_detail(&pool, again).await.unwrap().details.header, typed);
 }

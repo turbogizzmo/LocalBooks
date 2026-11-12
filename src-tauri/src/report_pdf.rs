@@ -85,7 +85,16 @@ pub fn layout(sheet: &Sheet, symbol: &str) -> Vec<Page> {
         for (i, c) in sheet.columns.iter().enumerate() {
             let right = right_aligned(c.kind);
             let x = if right { col_x(i) + col_w(i) - 2.0 } else { col_x(i) + 2.0 };
-            ops.push(Op::Text { x, y: *y, text: fit(&c.label, true, col_w(i) - 4.0), family: FONT, bold: true, size: BODY, color: MUTED, align: if right { Align::Right } else { Align::Left } });
+            ops.push(Op::Text {
+                x,
+                y: *y,
+                text: fit(&c.label, true, col_w(i) - 4.0),
+                family: FONT,
+                bold: true,
+                size: BODY,
+                color: MUTED,
+                align: if right { Align::Right } else { Align::Left },
+            });
         }
         ops.push(Op::Line { x1: MARGIN, y1: *y + 4.0, x2: width - MARGIN, y2: *y + 4.0, color: RULE, width: 0.8 });
         *y += LEADING + 2.0;
@@ -129,7 +138,16 @@ pub fn layout(sheet: &Sheet, symbol: &str) -> Vec<Page> {
             let right = right_aligned(c.kind);
             let w = col_w(i) - 4.0 - indent;
             let x = if right { col_x(i) + col_w(i) - 2.0 } else { col_x(i) + 2.0 + indent };
-            ops.push(Op::Text { x, y, text: fit(&s, bold, w), family: FONT, bold, size: BODY, color: INK, align: if right { Align::Right } else { Align::Left } });
+            ops.push(Op::Text {
+                x,
+                y,
+                text: fit(&s, bold, w),
+                family: FONT,
+                bold,
+                size: BODY,
+                color: INK,
+                align: if right { Align::Right } else { Align::Left },
+            });
         }
         y += LEADING;
     }
@@ -140,7 +158,16 @@ pub fn layout(sheet: &Sheet, symbol: &str) -> Vec<Page> {
     pages.push(Page { width, height, ops });
     let count = pages.len();
     for (i, page) in pages.iter_mut().enumerate() {
-        page.ops.push(Op::Text { x: width / 2.0, y: height - MARGIN + 6.0, text: format!("Page {} of {count}", i + 1), family: FONT, bold: false, size: 7.5, color: MUTED, align: Align::Center });
+        page.ops.push(Op::Text {
+            x: width / 2.0,
+            y: height - MARGIN + 6.0,
+            text: format!("Page {} of {count}", i + 1),
+            family: FONT,
+            bold: false,
+            size: 7.5,
+            color: MUTED,
+            align: Align::Center,
+        });
     }
     pages
 }
@@ -177,8 +204,15 @@ mod tests {
             title: "Sales by Customer".into(),
             subtitle: "March 1 - March 31, 2026".into(),
             notes: vec!["Accrual basis".into()],
-            columns: vec![Column { label: "Customer".into(), kind: ColumnKind::Text }, Column { label: "Date".into(), kind: ColumnKind::Date }, Column { label: "Amount".into(), kind: ColumnKind::Money }],
-            rows: (0..rows).map(|i| Row { kind: RowKind::Detail, depth: 1, cells: vec![json!(format!("Customer {i}")), json!("2026-03-05"), json!(123_456)] }).chain(std::iter::once(Row { kind: RowKind::Total, depth: 0, cells: vec![json!("TOTAL"), Value::Null, json!(-99)] })).collect(),
+            columns: vec![
+                Column { label: "Customer".into(), kind: ColumnKind::Text },
+                Column { label: "Date".into(), kind: ColumnKind::Date },
+                Column { label: "Amount".into(), kind: ColumnKind::Money },
+            ],
+            rows: (0..rows)
+                .map(|i| Row { kind: RowKind::Detail, depth: 1, cells: vec![json!(format!("Customer {i}")), json!("2026-03-05"), json!(123_456)] })
+                .chain(std::iter::once(Row { kind: RowKind::Total, depth: 0, cells: vec![json!("TOTAL"), Value::Null, json!(-99)] }))
+                .collect(),
             indent_column: 0,
             footer: Some("Thank you".into()),
         }
@@ -201,7 +235,20 @@ mod tests {
         let pages = layout(&sheet(3), "$");
         assert_eq!(pages.len(), 1);
         let t = texts(&pages);
-        for expected in ["Maple Street Bakery", "Sales by Customer", "March 1 - March 31, 2026", "Accrual basis", "Customer", "Customer 2", "03/05/2026", "$1,234.56", "TOTAL", "-$0.99", "Thank you", "Page 1 of 1"] {
+        for expected in [
+            "Maple Street Bakery",
+            "Sales by Customer",
+            "March 1 - March 31, 2026",
+            "Accrual basis",
+            "Customer",
+            "Customer 2",
+            "03/05/2026",
+            "$1,234.56",
+            "TOTAL",
+            "-$0.99",
+            "Thank you",
+            "Page 1 of 1",
+        ] {
             assert!(t.iter().any(|s| s == expected), "missing {expected:?} in {t:?}");
         }
         assert!(to_pdf(&sheet(3), "$").starts_with(b"%PDF"));
@@ -226,7 +273,8 @@ mod tests {
     fn wide_sheets_go_landscape_and_long_cells_are_cut_to_fit() {
         let mut s = sheet(1);
         s.columns = (0..8).map(|i| Column { label: format!("Col {i}"), kind: ColumnKind::Text }).collect();
-        s.rows = vec![Row { kind: RowKind::Detail, depth: 0, cells: (0..8).map(|_| json!("a very long cell value that cannot fit in a narrow column")).collect() }];
+        s.rows =
+            vec![Row { kind: RowKind::Detail, depth: 0, cells: (0..8).map(|_| json!("a very long cell value that cannot fit in a narrow column")).collect() }];
         let pages = layout(&s, "$");
         assert!(pages[0].width > pages[0].height);
         assert!(texts(&pages).iter().any(|t| t.ends_with('…')));

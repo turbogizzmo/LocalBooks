@@ -315,7 +315,12 @@ async fn close_pool_closes_every_connection() {
     for round in 0..30 {
         let pool = open(&path).await.unwrap();
         let reads: Vec<_> = (0..4)
-            .map(|_| tokio::spawn({ let pool = pool.clone(); async move { sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM journal_entries").fetch_one(&pool).await.unwrap() } }))
+            .map(|_| {
+                tokio::spawn({
+                    let pool = pool.clone();
+                    async move { sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM journal_entries").fetch_one(&pool).await.unwrap() }
+                })
+            })
             .collect();
         for read in reads {
             read.await.unwrap();
@@ -382,4 +387,3 @@ fn an_empty_db_can_be_made_outside_a_runtime() {
     .join();
     assert!(made.is_ok(), "Db::closed panicked outside a Tokio runtime");
 }
-

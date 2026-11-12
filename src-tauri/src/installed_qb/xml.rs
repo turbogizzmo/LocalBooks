@@ -59,7 +59,10 @@ pub fn parse(text: &str) -> Result<Node, String> {
         }
     };
     loop {
-        match reader.read_event().map_err(|e| format!("QBXML_UNREADABLE: QuickBooks' reply is not XML Tillhouse can read (at byte {}: {e})", reader.buffer_position()))? {
+        match reader
+            .read_event()
+            .map_err(|e| format!("QBXML_UNREADABLE: QuickBooks' reply is not XML Tillhouse can read (at byte {}: {e})", reader.buffer_position()))?
+        {
             Event::Start(e) => stack.push(start(&e)?),
             Event::Empty(e) => {
                 let node = start(&e)?;

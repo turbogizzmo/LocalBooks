@@ -92,7 +92,9 @@ pub fn layout(doc: &VoucherDoc, company: &Company, lines: &[JournalLineView]) ->
     // Company on the left, the voucher's title on the right.
     pen.text(MARGIN, &company.name, true, 14.0, INK, Align::Left);
     pen.text(WIDTH - MARGIN, &doc.title.to_uppercase(), true, 16.0, INK, Align::Right);
-    for detail in [company.address.as_str(), company.phone.as_str(), company.email.as_str()].into_iter().flat_map(|d| d.lines()).filter(|d| !d.trim().is_empty()) {
+    for detail in
+        [company.address.as_str(), company.phone.as_str(), company.email.as_str()].into_iter().flat_map(|d| d.lines()).filter(|d| !d.trim().is_empty())
+    {
         pen.y += 12.0;
         pen.text(MARGIN, detail.trim(), false, 9.0, MUTED, Align::Left);
     }
@@ -175,7 +177,9 @@ pub fn layout(doc: &VoucherDoc, company: &Company, lines: &[JournalLineView]) ->
     pen.y -= 8.0;
     pen.rule(0.8);
     pen.y += 13.0;
-    let total = |side: fn(&JournalLineView) -> i64| lines.iter().try_fold(0i64, |sum, l| sum.checked_add(side(l))).ok_or("VOUCHER_TOO_LARGE: the voucher's lines add up to more than can be shown");
+    let total = |side: fn(&JournalLineView) -> i64| {
+        lines.iter().try_fold(0i64, |sum, l| sum.checked_add(side(l))).ok_or("VOUCHER_TOO_LARGE: the voucher's lines add up to more than can be shown")
+    };
     let (debits, credits) = (total(|l| l.debit_cents)?, total(|l| l.credit_cents)?);
     pen.text(account_x, "Total", true, 9.0, INK, Align::Left);
     pen.text(debit_x, &money(debits), true, 9.0, INK, Align::Right);

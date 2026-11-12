@@ -61,10 +61,7 @@ const VEHICLE_SELECT: &str = "SELECT v.id, v.name, v.description, v.is_active,
   FROM vehicles v";
 
 pub async fn list_vehicles(pool: &SqlitePool) -> Result<Vec<VehicleView>, String> {
-    sqlx::query_as::<_, VehicleView>(&format!("{VEHICLE_SELECT} ORDER BY v.is_active DESC, v.name COLLATE NOCASE"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as::<_, VehicleView>(&format!("{VEHICLE_SELECT} ORDER BY v.is_active DESC, v.name COLLATE NOCASE")).fetch_all(pool).await.map_err(db_err)
 }
 
 /// Adds a vehicle (`id` = None) or changes one: its name, description, or active status.
@@ -78,12 +75,14 @@ pub async fn save_vehicle(pool: &SqlitePool, id: Option<i64>, input: VehicleInpu
     }
     let description = input.description.as_deref().map(str::trim).filter(|d| !d.is_empty());
     let result = match id {
-        None => sqlx::query_scalar::<_, i64>("INSERT INTO vehicles (name, description, is_active) VALUES (?1, ?2, ?3) RETURNING id")
-            .bind(name)
-            .bind(description)
-            .bind(input.is_active)
-            .fetch_one(pool)
-            .await,
+        None => {
+            sqlx::query_scalar::<_, i64>("INSERT INTO vehicles (name, description, is_active) VALUES (?1, ?2, ?3) RETURNING id")
+                .bind(name)
+                .bind(description)
+                .bind(input.is_active)
+                .fetch_one(pool)
+                .await
+        }
         Some(id) => sqlx::query_scalar::<_, i64>("UPDATE vehicles SET name = ?1, description = ?2, is_active = ?3 WHERE id = ?4 RETURNING id")
             .bind(name)
             .bind(description)
@@ -137,14 +136,16 @@ pub async fn save_mileage_rate(pool: &SqlitePool, id: Option<i64>, input: Mileag
     }
     let note = input.note.as_deref().map(str::trim).filter(|n| !n.is_empty());
     let result = match id {
-        None => sqlx::query_as::<_, MileageRateView>(
-            "INSERT INTO mileage_rates (effective_date, rate_e4, note) VALUES (?1, ?2, ?3) RETURNING id, effective_date, rate_e4, note",
-        )
-        .bind(input.effective_date)
-        .bind(input.rate_e4)
-        .bind(note)
-        .fetch_one(pool)
-        .await,
+        None => {
+            sqlx::query_as::<_, MileageRateView>(
+                "INSERT INTO mileage_rates (effective_date, rate_e4, note) VALUES (?1, ?2, ?3) RETURNING id, effective_date, rate_e4, note",
+            )
+            .bind(input.effective_date)
+            .bind(input.rate_e4)
+            .bind(note)
+            .fetch_one(pool)
+            .await
+        }
         Some(id) => sqlx::query_as::<_, MileageRateView>(
             "UPDATE mileage_rates SET effective_date = ?1, rate_e4 = ?2, note = ?3 WHERE id = ?4 RETURNING id, effective_date, rate_e4, note",
         )
@@ -285,7 +286,8 @@ async fn check_trip(pool: &SqlitePool, input: &TripInput) -> Result<i64, String>
     if input.billable && input.customer_id.is_none() {
         return Err("MILE_BILLABLE_NO_CUSTOMER: a billable trip needs a customer or job".into());
     }
-    let vehicle: Option<bool> = sqlx::query_scalar("SELECT is_active FROM vehicles WHERE id = ?1").bind(input.vehicle_id).fetch_optional(pool).await.map_err(db_err)?;
+    let vehicle: Option<bool> =
+        sqlx::query_scalar("SELECT is_active FROM vehicles WHERE id = ?1").bind(input.vehicle_id).fetch_optional(pool).await.map_err(db_err)?;
     match vehicle {
         None => return Err("MILE_UNKNOWN_VEHICLE: that vehicle does not exist".into()),
         Some(false) => return Err("MILE_INACTIVE_VEHICLE: that vehicle is inactive; make it active to record trips".into()),
@@ -494,7 +496,8 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillTripsInput)
             income_account_id: income_account,
             product_service_id: Some(input.product_service_id),
             class_id: None,
-            is_taxable: item_taxable, service_date: None,
+            is_taxable: item_taxable,
+            service_date: None,
         });
     }
 
@@ -667,7 +670,8 @@ pub async fn mileage_report(pool: &SqlitePool, kind: MileageReportKind, params: 
     let (columns, rows) = match kind {
         MileageReportKind::VehicleSummary | MileageReportKind::JobSummary => {
             let job = kind == MileageReportKind::JobSummary;
-            let mut columns = vec![col(if job { "Customer:Job" } else { "Vehicle" }, ColumnKind::Text), col("Trips", ColumnKind::Number), col("Miles", ColumnKind::Quantity)];
+            let mut columns =
+                vec![col(if job { "Customer:Job" } else { "Vehicle" }, ColumnKind::Text), col("Trips", ColumnKind::Number), col("Miles", ColumnKind::Quantity)];
             if job {
                 columns.push(col("Billable miles", ColumnKind::Quantity));
             }

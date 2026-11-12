@@ -85,7 +85,13 @@ async fn accounts_on_one_line_are_added_together() {
     let (checking, fuel, rent) = (account(&pool, "1010").await, account(&pool, "6100").await, account(&pool, "6300").await);
     crate::ledger::post_journal_entry(
         &pool,
-        JournalEntry { id: None, date: d(2025, 5, 1), description: "Two".into(), lines: vec![JournalLine::debit(fuel, 1_000), JournalLine::debit(rent, 2_000), JournalLine::credit(checking, 3_000)], currency: None },
+        JournalEntry {
+            id: None,
+            date: d(2025, 5, 1),
+            description: "Two".into(),
+            lines: vec![JournalLine::debit(fuel, 1_000), JournalLine::debit(rent, 2_000), JournalLine::credit(checking, 3_000)],
+            currency: None,
+        },
     )
     .await
     .unwrap();

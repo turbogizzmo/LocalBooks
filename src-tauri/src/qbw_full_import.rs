@@ -260,9 +260,7 @@ fn form(lines: &[DocumentLine], map: &HashMap<i64, i64>, books: &Books, sign: i6
                     class_id: books.class(l.class.as_deref()),
                 });
             }
-            "INCOME" | "OTHER_INCOME"
-                if form_lines && l.item_id.and_then(|i| books.products.get(&i)).is_some_and(|p| books.discounts.contains(&p.0)) =>
-            {
+            "INCOME" | "OTHER_INCOME" if form_lines && l.item_id.and_then(|i| books.products.get(&i)).is_some_and(|p| books.discounts.contains(&p.0)) => {
                 let product = l.item_id.and_then(|i| books.products.get(&i));
                 out.form_lines.push(FormLineInput {
                     description: l.description.clone().or_else(|| product.map(|p| p.1.clone())).unwrap_or_default(),
@@ -306,7 +304,8 @@ async fn number(tx: &mut Transaction<'_, Sqlite>, table: &str, column: &str, bas
     // Credit memo numbers stay below the range unapplied payments kept as credit use.
     if table == "credit_memos" {
         if let Some(n) = doc_num.and_then(|d| d.trim().parse::<i64>().ok()).filter(|n| (1..crate::credits::PAYMENT_CREDIT_NUMBERS).contains(n)) {
-            let taken: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM credit_memos WHERE credit_number = ?1)").bind(n).fetch_one(&mut **tx).await.map_err(db_err)?;
+            let taken: bool =
+                sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM credit_memos WHERE credit_number = ?1)").bind(n).fetch_one(&mut **tx).await.map_err(db_err)?;
             if !taken {
                 return Ok(n);
             }
@@ -314,11 +313,8 @@ async fn number(tx: &mut Transaction<'_, Sqlite>, table: &str, column: &str, bas
         return crate::credits::next_credit_number(tx, false).await;
     }
     if let Some(n) = doc_num.and_then(|d| d.trim().parse::<i64>().ok()).filter(|n| (1..1_000_000_000_000).contains(n)) {
-        let taken: bool = sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM {table} WHERE {column} = ?1)"))
-            .bind(n)
-            .fetch_one(&mut **tx)
-            .await
-            .map_err(db_err)?;
+        let taken: bool =
+            sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM {table} WHERE {column} = ?1)")).bind(n).fetch_one(&mut **tx).await.map_err(db_err)?;
         if !taken {
             return Ok(n);
         }
@@ -512,11 +508,8 @@ async fn write_sales_receipt(
     // sold are debits too, and Inventory Asset is a current asset like Undeposited Funds, so look
     // for those two first; a receipt into another current asset account is still taken.
     let money = |l: &Line| books.kind(l.0) == "BANK" || books.is_undeposited(l.0);
-    let (into, total) = if t.lines.iter().any(|l| l.1 < 0 && money(l)) {
-        debit_into(t, money)?
-    } else {
-        debit_into(t, |l| books.kind(l.0) == "OTHER_CURRENT_ASSET")?
-    };
+    let (into, total) =
+        if t.lines.iter().any(|l| l.1 < 0 && money(l)) { debit_into(t, money)? } else { debit_into(t, |l| books.kind(l.0) == "OTHER_CURRENT_ASSET")? };
     if !matches!(books.kind(into), "BANK" | "OTHER_CURRENT_ASSET") {
         return Err("the money did not go into a bank or Undeposited Funds account".into());
     }
@@ -631,7 +624,13 @@ async fn write_payment(
 }
 
 /// A deposit sweeps the imported payments and receipts it was linked to out of Undeposited Funds.
-async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &SourceDocument, books: &Books, written: &Written) -> Result<(i64, usize, &'static str), String> {
+async fn write_deposit(
+    tx: &mut Transaction<'_, Sqlite>,
+    t: &Staged,
+    doc: &SourceDocument,
+    books: &Books,
+    written: &Written,
+) -> Result<(i64, usize, &'static str), String> {
     let SourceDocument::Deposit { payments } = doc else { unreachable!() };
     // Money moved out of Undeposited Funds into an account that isn't a bank (receipts written off
     // to an expense, say) has no LocalBooks deposit: it posts as a transfer that clears them.
@@ -832,30 +831,29 @@ async fn write_bill(
         return Err("its lines do not add up to its total".into());
     }
     if sign > 0 {
-        let id: i64 = sqlx::query_scalar(
-            "INSERT INTO vendor_credits (vendor_id, reference, credit_date, memo, total_cents) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id",
-        )
-        .bind(vendor)
-        .bind(doc_num)
-        .bind(t.date)
-        .bind(&t.memo)
-        .bind(total)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(db_err)?;
+        let id: i64 =
+            sqlx::query_scalar("INSERT INTO vendor_credits (vendor_id, reference, credit_date, memo, total_cents) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id")
+                .bind(vendor)
+                .bind(doc_num)
+                .bind(t.date)
+                .bind(&t.memo)
+                .bind(total)
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(db_err)?;
         for (n, (account, amount, memo, _, _, _, class)) in rows.iter().enumerate() {
             sqlx::query(
                 "INSERT INTO vendor_credit_lines (vendor_credit_id, line_number, account_id, amount_cents, memo, class_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             )
-                .bind(id)
-                .bind(n as i64 + 1)
-                .bind(account)
-                .bind(amount)
-                .bind(Some(memo.as_str()).filter(|m| !m.is_empty()))
-                .bind(class)
-                .execute(&mut **tx)
-                .await
-                .map_err(db_err)?;
+            .bind(id)
+            .bind(n as i64 + 1)
+            .bind(account)
+            .bind(amount)
+            .bind(Some(memo.as_str()).filter(|m| !m.is_empty()))
+            .bind(class)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
         }
         let entry = post(tx, t, format!("Vendor credit - {vendor_name}"), &t.lines, EntrySource::VendorCredit(id)).await?;
         sqlx::query("UPDATE vendor_credits SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut **tx).await.map_err(db_err)?;
@@ -1008,7 +1006,13 @@ async fn write_expense(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
     .bind(from)
     .bind(t.date)
     .bind(if is_check { number.as_deref() } else { None })
-    .bind(if is_check { "CHECK" } else if books.kind(from) == "CREDIT_CARD" { "CREDIT_CARD" } else { "OTHER" })
+    .bind(if is_check {
+        "CHECK"
+    } else if books.kind(from) == "CREDIT_CARD" {
+        "CREDIT_CARD"
+    } else {
+        "OTHER"
+    })
     .bind(&t.memo)
     .bind(total)
     .bind(is_credit)
@@ -1050,16 +1054,17 @@ async fn write_transfer(tx: &mut Transaction<'_, Sqlite>, t: &Staged, books: &Bo
             return Err(format!("Tillhouse transfers cannot use one of its accounts ({})", books.kind(account).to_lowercase().replace('_', " ")));
         }
     }
-    let id: i64 =
-        sqlx::query_scalar("INSERT INTO transfers (transfer_date, from_account_id, to_account_id, amount_cents, memo) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id")
-            .bind(t.date)
-            .bind(from)
-            .bind(to)
-            .bind(amount)
-            .bind(&t.memo)
-            .fetch_one(&mut **tx)
-            .await
-            .map_err(db_err)?;
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO transfers (transfer_date, from_account_id, to_account_id, amount_cents, memo) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id",
+    )
+    .bind(t.date)
+    .bind(from)
+    .bind(to)
+    .bind(amount)
+    .bind(&t.memo)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_err)?;
     let entry = post(tx, t, describe(t), &t.lines, EntrySource::Transfer(id)).await?;
     sqlx::query("UPDATE transfers SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut **tx).await.map_err(db_err)?;
     Ok(entry)
@@ -1219,7 +1224,13 @@ pub(crate) async fn post_all(
                         counts.payments += rows.len() as i64;
                         counts.journal_entries += entries.len() as i64 - rows.len() as i64;
                         written.deposited.insert(t.source_id, rows.into_iter().map(|(row, cents)| (row, cents, into, false)).collect());
-                        Outcome { source_id: t.source_id, entry_id: Some(entries[0]), posted_as: "PAYMENT", fallback_reason: note, entries: entries.len() as i64 }
+                        Outcome {
+                            source_id: t.source_id,
+                            entry_id: Some(entries[0]),
+                            posted_as: "PAYMENT",
+                            fallback_reason: note,
+                            entries: entries.len() as i64,
+                        }
                     }
                     Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                 },
@@ -1251,7 +1262,13 @@ pub(crate) async fn post_all(
                         Ok((entries, rows, note)) => {
                             counts.bill_payments += rows;
                             counts.journal_entries += entries.len() as i64 - rows;
-                            Outcome { source_id: t.source_id, entry_id: Some(entries[0]), posted_as: "BILL_PAYMENT", fallback_reason: note, entries: entries.len() as i64 }
+                            Outcome {
+                                source_id: t.source_id,
+                                entry_id: Some(entries[0]),
+                                posted_as: "BILL_PAYMENT",
+                                fallback_reason: note,
+                                entries: entries.len() as i64,
+                            }
                         }
                         Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                     }
@@ -1262,7 +1279,13 @@ pub(crate) async fn post_all(
                         Ok((entries, rows, note)) => {
                             counts.bill_payments += rows;
                             counts.journal_entries += entries.len() as i64 - rows;
-                            Outcome { source_id: t.source_id, entry_id: Some(entries[0]), posted_as: "BILL_PAYMENT", fallback_reason: note, entries: entries.len() as i64 }
+                            Outcome {
+                                source_id: t.source_id,
+                                entry_id: Some(entries[0]),
+                                posted_as: "BILL_PAYMENT",
+                                fallback_reason: note,
+                                entries: entries.len() as i64,
+                            }
                         }
                         Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                     }

@@ -40,7 +40,8 @@ fn presets_are_named_once_and_runnable_settings() {
 
 #[test]
 fn settings_default_what_the_screen_leaves_out() {
-    let s: ReportSettings = serde_json::from_value(json!({ "columns": ["date", "amount", "openBalance"], "filters": { "memo": "rent" }, "period": "thisMonth" })).unwrap();
+    let s: ReportSettings =
+        serde_json::from_value(json!({ "columns": ["date", "amount", "openBalance"], "filters": { "memo": "rent" }, "period": "thisMonth" })).unwrap();
     assert_eq!(s.source, Source::Ledger);
     assert_eq!(s.columns, vec![Column::Date, Column::Amount, Column::OpenBalance]);
     assert_eq!(s.filters.memo.as_deref(), Some("rent"));

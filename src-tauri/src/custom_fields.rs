@@ -283,11 +283,8 @@ pub(crate) async fn set_record_values(tx: &mut Transaction<'_, Sqlite>, list: Fi
 
 /// Sets one record's values from the fields' editor.
 pub async fn save_record_values(pool: &SqlitePool, list: FieldList, record_id: i64, values: &[FieldValue]) -> Result<Vec<RecordField>, String> {
-    let exists: bool = sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM {} WHERE id = ?1)", list.records()))
-        .bind(record_id)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let exists: bool =
+        sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM {} WHERE id = ?1)", list.records())).bind(record_id).fetch_one(pool).await.map_err(db_err)?;
     if !exists {
         return Err(format!("CF_NO_RECORD: that {} does not exist", list.noun()));
     }
@@ -301,7 +298,12 @@ pub async fn save_record_values(pool: &SqlitePool, list: FieldList, record_id: i
 
 /// Sets values by label, adding a field for a label the list does not have yet (while there is
 /// room). Used by the importers; returns how many values had no room.
-pub(crate) async fn set_values_by_label(tx: &mut Transaction<'_, Sqlite>, list: FieldList, record_id: i64, values: &[(String, String)]) -> Result<usize, String> {
+pub(crate) async fn set_values_by_label(
+    tx: &mut Transaction<'_, Sqlite>,
+    list: FieldList,
+    record_id: i64,
+    values: &[(String, String)],
+) -> Result<usize, String> {
     let mut dropped = 0;
     let mut resolved = Vec::new();
     for (label, value) in values {
@@ -340,10 +342,15 @@ pub(crate) async fn set_values_by_label(tx: &mut Transaction<'_, Sqlite>, list: 
 /// Stores the customer fields entered on a new sales document. Only customer fields marked for
 /// sales forms may be given, apart from `carried` ones the document takes over from another (they
 /// may have been taken off sales forms since); blanks are skipped.
-pub(crate) async fn write_document_fields(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, values: &[FieldValue], carried: &[i64]) -> Result<(), String> {
+pub(crate) async fn write_document_fields(
+    tx: &mut Transaction<'_, Sqlite>,
+    doc: SalesDoc,
+    id: i64,
+    values: &[FieldValue],
+    carried: &[i64],
+) -> Result<(), String> {
     for v in values {
-        let label: Option<String> =
-            sqlx::query_scalar("SELECT label FROM custom_fields WHERE id = ?1 AND list = 'CUSTOMER' AND (on_sales_forms = 1 OR ?2)")
+        let label: Option<String> = sqlx::query_scalar("SELECT label FROM custom_fields WHERE id = ?1 AND list = 'CUSTOMER' AND (on_sales_forms = 1 OR ?2)")
             .bind(v.field_id)
             .bind(carried.contains(&v.field_id))
             .fetch_optional(&mut **tx)

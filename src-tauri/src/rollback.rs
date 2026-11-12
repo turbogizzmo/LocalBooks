@@ -64,16 +64,13 @@ pub fn previous_release(releases: &[GithubRelease], current: &str) -> Option<Pre
 
 /// Migration versions from file names such as `0094_payment_reminders.sql`.
 pub fn migration_versions<'a>(names: impl IntoIterator<Item = &'a str>) -> BTreeSet<i64> {
-    names
-        .into_iter()
-        .filter(|n| n.ends_with(".sql"))
-        .filter_map(|n| n.split_once('_').and_then(|(num, _)| num.parse::<i64>().ok()))
-        .collect()
+    names.into_iter().filter(|n| n.ends_with(".sql")).filter_map(|n| n.split_once('_').and_then(|(num, _)| num.parse::<i64>().ok())).collect()
 }
 
 /// The migrations the open company file has that `known` (the older release's) doesn't.
 pub async fn unknown_migrations(pool: &SqlitePool, known: &BTreeSet<i64>) -> Result<Vec<i64>, String> {
-    let applied: Vec<i64> = sqlx::query_scalar("SELECT version FROM _sqlx_migrations WHERE success = 1 ORDER BY version").fetch_all(pool).await.map_err(db_err)?;
+    let applied: Vec<i64> =
+        sqlx::query_scalar("SELECT version FROM _sqlx_migrations WHERE success = 1 ORDER BY version").fetch_all(pool).await.map_err(db_err)?;
     Ok(applied.into_iter().filter(|v| !known.contains(v)).collect())
 }
 

@@ -10,7 +10,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::ledger::{db_err, post_entry_in_tx, DISPLAY_SOURCE_TYPE, rollback, EntrySource, JournalEntry, JournalLine};
+use crate::ledger::{db_err, post_entry_in_tx, rollback, EntrySource, JournalEntry, JournalLine, DISPLAY_SOURCE_TYPE};
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -35,9 +35,20 @@ pub struct ClassInput {
 
 /// Tables whose lines may carry a class.
 const CLASS_USERS: &[&str] = &[
-    "journal_lines", "invoice_items", "sales_receipt_lines", "estimate_lines", "bill_lines", "expense_lines",
-    "deposit_lines", "bank_transactions", "time_activities", "invoice_form_lines", "sales_receipt_form_lines", "estimate_form_lines",
-    "credit_memo_lines", "credit_memo_form_lines",
+    "journal_lines",
+    "invoice_items",
+    "sales_receipt_lines",
+    "estimate_lines",
+    "bill_lines",
+    "expense_lines",
+    "deposit_lines",
+    "bank_transactions",
+    "time_activities",
+    "invoice_form_lines",
+    "sales_receipt_form_lines",
+    "estimate_form_lines",
+    "credit_memo_lines",
+    "credit_memo_form_lines",
     "purchase_form_lines",
 ];
 
@@ -84,11 +95,8 @@ fn name_err(err: sqlx::Error, name: &str) -> String {
 
 async fn check_parent(tx: &mut Transaction<'_, Sqlite>, parent_id: Option<i64>) -> Result<(), String> {
     let Some(parent) = parent_id else { return Ok(()) };
-    let active: Option<bool> = sqlx::query_scalar("SELECT is_active FROM classes WHERE id = ?1")
-        .bind(parent)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let active: Option<bool> =
+        sqlx::query_scalar("SELECT is_active FROM classes WHERE id = ?1").bind(parent).fetch_optional(&mut **tx).await.map_err(db_err)?;
     match active {
         None => Err("CLASS_PARENT_NOT_FOUND: the parent class does not exist".into()),
         Some(false) => Err("CLASS_PARENT_INACTIVE: the parent class is inactive".into()),
@@ -122,16 +130,11 @@ pub async fn update_class(pool: &SqlitePool, id: i64, input: ClassInput) -> Resu
     if let Err(err) = check_parent(&mut tx, input.parent_id).await {
         return Err(rollback(tx, err).await);
     }
-    let updated = match sqlx::query("UPDATE classes SET name = ?1, parent_id = ?2 WHERE id = ?3")
-        .bind(name)
-        .bind(input.parent_id)
-        .bind(id)
-        .execute(&mut *tx)
-        .await
-    {
-        Ok(done) => done.rows_affected(),
-        Err(err) => return Err(rollback(tx, name_err(err, name)).await),
-    };
+    let updated =
+        match sqlx::query("UPDATE classes SET name = ?1, parent_id = ?2 WHERE id = ?3").bind(name).bind(input.parent_id).bind(id).execute(&mut *tx).await {
+            Ok(done) => done.rows_affected(),
+            Err(err) => return Err(rollback(tx, name_err(err, name)).await),
+        };
     if updated == 0 {
         return Err(rollback(tx, format!("CLASS_NOT_FOUND: class {id} does not exist")).await);
     }
@@ -173,8 +176,7 @@ pub async fn delete_class(pool: &SqlitePool, id: i64) -> Result<(), String> {
     if class.is_used {
         return Err(format!("CLASS_IN_USE: '{}' is used on transactions; make it inactive instead", class.full_name));
     }
-    let has_children: bool =
-        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM classes WHERE parent_id = ?1)").bind(id).fetch_one(pool).await.map_err(db_err)?;
+    let has_children: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM classes WHERE parent_id = ?1)").bind(id).fetch_one(pool).await.map_err(db_err)?;
     if has_children {
         return Err(format!("CLASS_HAS_SUBCLASSES: '{}' has subclasses; delete or move them first", class.full_name));
     }
@@ -185,11 +187,8 @@ pub async fn delete_class(pool: &SqlitePool, id: i64) -> Result<(), String> {
 /// code and names the line, e.g. "INV: line 2" gives "INV_UNKNOWN_CLASS: line 2 ...".
 pub(crate) async fn check_usable(tx: &mut Transaction<'_, Sqlite>, class_id: i64, context: &str) -> Result<(), String> {
     let (code, line) = context.split_once(": ").unwrap_or((context, "a line"));
-    let row: Option<(bool, String)> = sqlx::query_as("SELECT is_active, full_name FROM v_classes WHERE id = ?1")
-        .bind(class_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let row: Option<(bool, String)> =
+        sqlx::query_as("SELECT is_active, full_name FROM v_classes WHERE id = ?1").bind(class_id).fetch_optional(&mut **tx).await.map_err(db_err)?;
     match row {
         None => Err(format!("{code}_UNKNOWN_CLASS: {line} uses a class that does not exist")),
         Some((false, name)) => Err(format!("{code}_INACTIVE_CLASS: {line} uses inactive class '{name}'")),

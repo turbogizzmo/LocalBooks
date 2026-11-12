@@ -11,7 +11,11 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn balance(pool: &SqlitePool, account: i64) -> i64 {
-    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1").bind(account).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1")
+        .bind(account)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 fn d(day: u32) -> NaiveDate {
@@ -91,9 +95,12 @@ async fn an_overpayment_is_kept_as_credit_deposited_and_used_on_a_later_invoice(
     let kinds: Vec<(&str, i64)> = waiting.iter().map(|i| (i.kind.as_str(), i.amount_cents)).collect();
     assert_eq!(kinds, vec![("CREDIT", 10_000), ("PAYMENT", 50_000)]);
     let items = waiting.iter().map(|i| DepositItemRef { kind: i.kind.clone(), id: i.id }).collect();
-    post_bank_deposit(&pool, DepositInput { bank_account_id: checking, deposit_date: d(11), memo: None, items, other_lines: vec![], cash_back: None, deductions: vec![] })
-        .await
-        .unwrap();
+    post_bank_deposit(
+        &pool,
+        DepositInput { bank_account_id: checking, deposit_date: d(11), memo: None, items, other_lines: vec![], cash_back: None, deductions: vec![] },
+    )
+    .await
+    .unwrap();
     assert_eq!((balance(&pool, undeposited).await, balance(&pool, checking).await), (0, 60_000));
     assert!(list_undeposited(&pool).await.unwrap().is_empty());
 
@@ -125,9 +132,10 @@ async fn a_prepayment_can_be_refunded_or_written_off_and_bad_choices_post_nothin
     customer(&pool, "Newco").await;
 
     // A customer with no invoice at all pays 200.00, which goes straight back.
-    let refunded = receive_payment(&pool, ReceivePaymentInput { payments: vec![], unapplied: Some(extra("Newco", checking, 20_000, "REFUND", Some(checking))) })
-        .await
-        .unwrap();
+    let refunded =
+        receive_payment(&pool, ReceivePaymentInput { payments: vec![], unapplied: Some(extra("Newco", checking, 20_000, "REFUND", Some(checking))) })
+            .await
+            .unwrap();
     let credit = credit_memo(&pool, refunded.credit_id.unwrap()).await.unwrap();
     assert_eq!((credit.remaining_cents, balance(&pool, checking).await, balance(&pool, ar).await), (0, 0, 0));
 
@@ -169,9 +177,12 @@ async fn a_prepayment_can_be_refunded_or_written_off_and_bad_choices_post_nothin
         .unwrap()
         .credit_id
         .unwrap();
-    let after = write_off_customer_credit(&pool, RefundCreditInput { credit_id: kept, account_id: interest, refund_date: d(20), amount_cents: Cents(700), reference: None })
-        .await
-        .unwrap();
+    let after = write_off_customer_credit(
+        &pool,
+        RefundCreditInput { credit_id: kept, account_id: interest, refund_date: d(20), amount_cents: Cents(700), reference: None },
+    )
+    .await
+    .unwrap();
     assert_eq!(after.remaining_cents, 0);
     assert_eq!(balance(&pool, interest).await, -3_700);
     assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
@@ -184,10 +195,32 @@ async fn the_center_totals_unapplied_payments_and_credit_left_and_takes_only_und
     customer(&pool, "Lakeview").await;
     let id: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Lakeview'").fetch_one(&pool).await.unwrap();
     receive_payment(&pool, ReceivePaymentInput { payments: vec![], unapplied: Some(extra("Lakeview", undeposited, 4_000, "CREDIT", None)) }).await.unwrap();
-    let line = SalesLineInput { product_service_id: None, description: "Returned".into(), quantity_e4: 10_000, rate_cents: Cents(1_500), income_account_id: services, class_id: None, is_taxable: false, service_date: None };
-    create_credit_memo(&pool, CreditMemoInput { credit_number: None, customer_name: "Lakeview".into(), credit_date: d(11), memo: None, refund_account_id: None, lines: vec![line], tax_rate_id: None, header: Default::default(), form_lines: Vec::new() })
-        .await
-        .unwrap();
+    let line = SalesLineInput {
+        product_service_id: None,
+        description: "Returned".into(),
+        quantity_e4: 10_000,
+        rate_cents: Cents(1_500),
+        income_account_id: services,
+        class_id: None,
+        is_taxable: false,
+        service_date: None,
+    };
+    create_credit_memo(
+        &pool,
+        CreditMemoInput {
+            credit_number: None,
+            customer_name: "Lakeview".into(),
+            credit_date: d(11),
+            memo: None,
+            refund_account_id: None,
+            lines: vec![line],
+            tax_rate_id: None,
+            header: Default::default(),
+            form_lines: Vec::new(),
+        },
+    )
+    .await
+    .unwrap();
     let credit = customer_credit(&pool, id).await.unwrap();
     assert_eq!((credit.unapplied_cents, credit.remaining_cents), (4_000, 1_500));
 
@@ -196,7 +229,8 @@ async fn the_center_totals_unapplied_payments_and_credit_left_and_takes_only_und
         .fetch_one(&pool)
         .await
         .unwrap();
-    let err = receive_payment(&pool, ReceivePaymentInput { payments: vec![], unapplied: Some(extra("Lakeview", other, 100, "CREDIT", None)) }).await.unwrap_err();
+    let err =
+        receive_payment(&pool, ReceivePaymentInput { payments: vec![], unapplied: Some(extra("Lakeview", other, 100, "CREDIT", None)) }).await.unwrap_err();
     assert!(err.starts_with("INV_BAD_DEPOSIT_ACCOUNT"), "{err}");
     assert!(receive_payment(&pool, ReceivePaymentInput { payments: vec![], unapplied: Some(extra("Lakeview", checking, 100, "CREDIT", None)) }).await.is_ok());
 }

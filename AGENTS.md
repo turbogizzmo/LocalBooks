@@ -22,6 +22,7 @@ posted lives in Rust and in the schema; the screens only display and collect inp
 | JS unit tests (pure helpers in `src/**/*.test.js`) | `npm test` |
 | JS lint (a name or component used but never defined; accessibility: labels, ARIA, focusable menus) | `npm run lint` |
 | Lint gate (any warning fails) | `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings` |
+| Format gate | `cd src-tauri && cargo fmt` before pushing (CI runs `cargo fmt --check`; settings in `src-tauri/rustfmt.toml`) |
 | End-to-end tests | see `docs/testing/end-to-end.md` |
 | Run the app on test companies | the `run-localbooks` skill in `.claude/skills/` |
 | Release build (macOS) | `npm run build:mac` |

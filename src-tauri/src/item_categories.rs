@@ -78,7 +78,8 @@ fn unique(err: sqlx::Error, name: &str) -> String {
 
 async fn check_parent(pool: &SqlitePool, parent_id: Option<i64>) -> Result<(), String> {
     if let Some(parent) = parent_id {
-        let active: Option<bool> = sqlx::query_scalar("SELECT is_active FROM item_categories WHERE id = ?1").bind(parent).fetch_optional(pool).await.map_err(db_err)?;
+        let active: Option<bool> =
+            sqlx::query_scalar("SELECT is_active FROM item_categories WHERE id = ?1").bind(parent).fetch_optional(pool).await.map_err(db_err)?;
         match active {
             None => return Err("CATEGORY_NOT_FOUND: that parent category does not exist".into()),
             Some(false) => return Err("CATEGORY_INACTIVE: that parent category is inactive".into()),
@@ -103,7 +104,8 @@ pub async fn create_category(pool: &SqlitePool, input: CategoryInput) -> Result<
 /// Renames a category or moves it under another (or to the top, with no parent).
 pub async fn update_category(pool: &SqlitePool, id: i64, input: CategoryInput) -> Result<Category, String> {
     let name = clean_name(&input.name)?;
-    let current: Option<Option<i64>> = sqlx::query_scalar("SELECT parent_id FROM item_categories WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?;
+    let current: Option<Option<i64>> =
+        sqlx::query_scalar("SELECT parent_id FROM item_categories WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?;
     let current = current.ok_or("CATEGORY_NOT_FOUND: that category does not exist")?;
     if input.parent_id != current {
         check_parent(pool, input.parent_id).await?;
@@ -138,13 +140,12 @@ pub async fn set_category_active(pool: &SqlitePool, id: i64, active: bool) -> Re
 
 /// Deletes a category that no item and no sub-category uses.
 pub async fn delete_category(pool: &SqlitePool, id: i64) -> Result<(), String> {
-    let (items, children): (i64, i64) = sqlx::query_as(
-        "SELECT (SELECT COUNT(*) FROM products_services WHERE category_id = ?1), (SELECT COUNT(*) FROM item_categories WHERE parent_id = ?1)",
-    )
-    .bind(id)
-    .fetch_one(pool)
-    .await
-    .map_err(db_err)?;
+    let (items, children): (i64, i64) =
+        sqlx::query_as("SELECT (SELECT COUNT(*) FROM products_services WHERE category_id = ?1), (SELECT COUNT(*) FROM item_categories WHERE parent_id = ?1)")
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
     if items > 0 {
         return Err(format!("CATEGORY_IN_USE: {items} item{} use this category; move them to another first", if items == 1 { "" } else { "s" }));
     }

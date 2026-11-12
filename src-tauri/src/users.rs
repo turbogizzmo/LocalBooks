@@ -120,7 +120,8 @@ impl UserRow {
     }
 }
 
-const USER_COLUMNS: &str = "id, username, display_name, role, can_see_sensitive, is_active, must_change_password, last_signed_in_at, created_at, password_verifier,
+const USER_COLUMNS: &str =
+    "id, username, display_name, role, can_see_sensitive, is_active, must_change_password, last_signed_in_at, created_at, password_verifier,
      EXISTS (SELECT 1 FROM user_factors f WHERE f.user_id = users.id) AS has_two_step,
      (SELECT policy FROM two_step_policy WHERE id = 1) AS two_step_policy";
 
@@ -217,11 +218,7 @@ async fn row_by_id(conn: &mut sqlx::SqliteConnection, id: i64) -> Result<UserRow
 }
 
 async fn row_by_name(conn: &mut sqlx::SqliteConnection, username: &str) -> Result<Option<UserRow>, String> {
-    sqlx::query_as(&format!("SELECT {USER_COLUMNS} FROM users WHERE username = ?1"))
-        .bind(username.trim())
-        .fetch_optional(&mut *conn)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(&format!("SELECT {USER_COLUMNS} FROM users WHERE username = ?1")).bind(username.trim()).fetch_optional(&mut *conn).await.map_err(db_err)
 }
 
 async fn mark_signed_in(conn: &mut sqlx::SqliteConnection, id: i64) -> Result<(), String> {
@@ -288,10 +285,8 @@ pub async fn sign_in(pool: &SqlitePool, username: &str, password: &str) -> Resul
 }
 
 pub async fn list(pool: &SqlitePool) -> Result<Vec<UserView>, String> {
-    let rows: Vec<UserRow> = sqlx::query_as(&format!("SELECT {USER_COLUMNS} FROM users ORDER BY is_active DESC, username"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?;
+    let rows: Vec<UserRow> =
+        sqlx::query_as(&format!("SELECT {USER_COLUMNS} FROM users ORDER BY is_active DESC, username")).fetch_all(pool).await.map_err(db_err)?;
     rows.iter().map(UserRow::view).collect()
 }
 
@@ -377,7 +372,8 @@ pub async fn update(pool: &SqlitePool, admin: &Session, id: i64, input: UserUpda
         match &input.new_password {
             Some(password) => crypto::set_password(&mut tx, admin.admin_key()?, id, password).await?,
             None => {
-                let has_slot: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM key_slots WHERE user_id = ?1").bind(id).fetch_one(&mut *tx).await.map_err(db_err)?;
+                let has_slot: i64 =
+                    sqlx::query_scalar("SELECT COUNT(*) FROM key_slots WHERE user_id = ?1").bind(id).fetch_one(&mut *tx).await.map_err(db_err)?;
                 if has_slot == 0 {
                     return Err("SENSITIVE_NEEDS_PASSWORD: set a temporary password to give this user access to sensitive data".into());
                 }

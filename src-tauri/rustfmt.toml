@@ -1,0 +1,5 @@
+# Formatting for `cargo fmt` (gap A5). Wide lines match how this code was written before the
+# format gate; CI runs `cargo fmt --check` in lint.yml.
+edition = "2021"
+max_width = 160
+use_small_heuristics = "Max"

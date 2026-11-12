@@ -172,7 +172,16 @@ async fn open_live(path: &Path, backups: Option<&Path>) -> Result<Live, String> 
     } else {
         (open_for(path, &storage, backups, None).await?, None)
     };
-    Ok(Live { path: path.to_path_buf(), pool, storage, lock, opened_from_file: false, session: SessionSlot::default(), remembered_tried: Default::default(), cipher })
+    Ok(Live {
+        path: path.to_path_buf(),
+        pool,
+        storage,
+        lock,
+        opened_from_file: false,
+        session: SessionSlot::default(),
+        remembered_tried: Default::default(),
+        cipher,
+    })
 }
 
 impl Db {
@@ -182,9 +191,7 @@ impl Db {
         // there; anywhere already inside a runtime keeps its own.
         let runtime = tauri::async_runtime::handle();
         let _enter = tokio::runtime::Handle::try_current().is_err().then(|| runtime.inner().enter());
-        let closed = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect_lazy_with(SqliteConnectOptions::new().filename(":memory:").pragma("query_only", "ON"));
+        let closed = SqlitePoolOptions::new().max_connections(1).connect_lazy_with(SqliteConnectOptions::new().filename(":memory:").pragma("query_only", "ON"));
         Db {
             live: tokio::sync::RwLock::new(live),
             closed,
@@ -229,7 +236,10 @@ impl Db {
                 let dir = storage::resolve_network_path(&dir);
                 let target = dir.join(DB_FILE_NAME);
                 if !dir.is_dir() {
-                    Some(format!("The company file location {} is not available (is the drive connected?). Showing the local company file instead.", dir.display()))
+                    Some(format!(
+                        "The company file location {} is not available (is the drive connected?). Showing the local company file instead.",
+                        dir.display()
+                    ))
                 } else if !target.is_file() {
                     Some(format!("No company file was found in {}. Showing the local company file instead.", dir.display()))
                 } else {
@@ -317,7 +327,10 @@ impl Db {
         }
         let path = storage::resolve_network_path(path);
         if path.exists() {
-            return Err(format!("NEW_COMPANY_EXISTS: {} already exists; choose another name or folder (Tillhouse never replaces a company file)", path.display()));
+            return Err(format!(
+                "NEW_COMPANY_EXISTS: {} already exists; choose another name or folder (Tillhouse never replaces a company file)",
+                path.display()
+            ));
         }
         let mut next = open_live(&path, None).await?;
         let prepared = async {
@@ -397,7 +410,11 @@ impl Db {
                     let session = live.session.lock().await;
                     let user = session.as_ref().map(|s| &s.user);
                     (
-                        Gate::Users(user.map(|u| SignedIn { role: u.role, must_change_password: u.must_change_password, must_set_up_two_step: u.must_set_up_two_step })),
+                        Gate::Users(user.map(|u| SignedIn {
+                            role: u.role,
+                            must_change_password: u.must_change_password,
+                            must_set_up_two_step: u.must_set_up_two_step,
+                        })),
                         user.map(|u| (u.username.clone(), u.role)),
                     )
                 } else {
@@ -504,12 +521,20 @@ impl Db {
     /// A wrong password or unknown user name gives the same answer, after the same work, as
     /// [`crate::users::sign_in`]; the caller signs the user in on the opened file afterwards.
     pub async fn unlock_with_password(&self, username: &str, password: &str) -> Result<(), String> {
-        self.unlock(|header| async move { Ok(crate::file_cipher::keys::unlock_with_password(&header, username, password).await?.map(|(key, _)| key)) }, crate::users::SIGN_IN_FAILED).await
+        self.unlock(
+            |header| async move { Ok(crate::file_cipher::keys::unlock_with_password(&header, username, password).await?.map(|(key, _)| key)) },
+            crate::users::SIGN_IN_FAILED,
+        )
+        .await
     }
 
     /// Unlocks an encrypted company file with its recovery key (see [`Db::unlock_with_password`]).
     pub async fn unlock_with_recovery_key(&self, recovery_key: &str) -> Result<(), String> {
-        self.unlock(|header| async move { crate::file_cipher::keys::unlock_with_recovery_key(&header, recovery_key).await }, "KEY_WRONG_RECOVERY: that is not this company file's recovery key").await
+        self.unlock(
+            |header| async move { crate::file_cipher::keys::unlock_with_recovery_key(&header, recovery_key).await },
+            "KEY_WRONG_RECOVERY: that is not this company file's recovery key",
+        )
+        .await
     }
 
     async fn unlock<F, Fut>(&self, open_key: F, wrong: &str) -> Result<(), String>
@@ -680,7 +705,8 @@ impl Db {
             Ok(aside) => aside,
             Err(e) => {
                 // Nothing was moved: reopen the books as they were.
-                let (pool, cipher) = reopen(path.clone(), storage.clone()).await.map_err(|open| format!("RESTORE_FAILED: {e}; reopening your books failed: {open}"))?;
+                let (pool, cipher) =
+                    reopen(path.clone(), storage.clone()).await.map_err(|open| format!("RESTORE_FAILED: {e}; reopening your books failed: {open}"))?;
                 live.pool = pool;
                 live.cipher = cipher;
                 return Err(format!("RESTORE_SWAP: {e}; your current books were left in place"));
@@ -707,10 +733,13 @@ impl Db {
                 // Put the previous books back: the file moved aside, or else the snapshot.
                 remove_with_sidecars(&path);
                 if while_in_use(|| std::fs::rename(&aside, &path)).await.is_err() {
-                    while_in_use(|| std::fs::copy(fallback, &path).map(|_| ())).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; putting the previous books back also failed: {e}"))?;
+                    while_in_use(|| std::fs::copy(fallback, &path).map(|_| ()))
+                        .await
+                        .map_err(|e| format!("RESTORE_FAILED: {open_err}; putting the previous books back also failed: {e}"))?;
                 }
                 remove_sidecars(&path).await?;
-                let (pool, cipher) = reopen(path.clone(), storage.clone()).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}"))?;
+                let (pool, cipher) =
+                    reopen(path.clone(), storage.clone()).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}"))?;
                 live.pool = pool;
                 live.cipher = cipher;
                 Err(format!("RESTORE_FAILED: {open_err}; your previous books were put back"))
@@ -938,11 +967,7 @@ pub const PLACEHOLDER_COMPANY_NAME: &str = "LocalBooks Ledger";
 /// set; otherwise the file's own name ("Acme Ltd.localbooks" → "Acme Ltd", or the folder's name for
 /// a `localbooks.db` kept elsewhere). None for the usual company file that was never named.
 pub async fn company_display_name(pool: &SqlitePool, path: &Path, is_default: bool) -> Option<String> {
-    let named: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'company_name'")
-        .fetch_optional(pool)
-        .await
-        .ok()
-        .flatten();
+    let named: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'company_name'").fetch_optional(pool).await.ok().flatten();
     if let Some(name) = named.map(|n| n.trim().to_string()).filter(|n| !n.is_empty() && n != PLACEHOLDER_COMPANY_NAME) {
         return Some(name);
     }
@@ -999,7 +1024,12 @@ pub async fn open(path: &Path) -> Result<SqlitePool, String> {
 /// When an existing company file needs schema upgrades (a newer LocalBooks opening it for the first
 /// time) and `backups` is given, a verified copy is saved there first, so an upgrade can always be
 /// undone by restoring it.
-async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>, page_key: Option<&crate::file_cipher::keys::PageKey>) -> Result<SqlitePool, String> {
+async fn open_for(
+    path: &Path,
+    storage: &StorageInfo,
+    backups: Option<&Path>,
+    page_key: Option<&crate::file_cipher::keys::PageKey>,
+) -> Result<SqlitePool, String> {
     // Before SQLite reads it: a log that doesn't belong to the file is refused (RUSTSEC-2026-0459).
     crate::wal_guard::check(path)?;
     // The diagnostics log names the file, never its contents.
@@ -1073,9 +1103,9 @@ async fn prepare(pool: &SqlitePool, path: &Path, backups: Option<&Path>) -> Resu
     let pending = pending_upgrade_from(pool).await?;
     if let (Some(dir), Some(version)) = (backups, pending) {
         crate::opening::note(crate::opening::STEP_SAVING_COPY);
-        crate::backup::pre_upgrade_snapshot(pool, path, dir, version).await.map_err(|e| {
-            format!("{e} (Tillhouse did not upgrade {} because it could not save a copy first)", path.display())
-        })?;
+        crate::backup::pre_upgrade_snapshot(pool, path, dir, version)
+            .await
+            .map_err(|e| format!("{e} (Tillhouse did not upgrade {} because it could not save a copy first)", path.display()))?;
     }
     if pending.is_some() {
         crate::opening::note(crate::opening::STEP_UPDATING);
@@ -1150,10 +1180,7 @@ pub(crate) async fn migrate_with(pool: &SqlitePool, migrator: &sqlx::migrate::Mi
     // `run_direct` takes the connection itself rather than an `Acquire` impl, which keeps this
     // future provably `Send` when a restore runs it inside a Tauri command.
     let migrated = migrator.run_direct(&mut *conn).await.map_err(|e| e.to_string());
-    let violations = sqlx::query("SELECT 1 FROM pragma_foreign_key_check LIMIT 1")
-        .fetch_optional(&mut *conn)
-        .await
-        .map_err(|e| e.to_string());
+    let violations = sqlx::query("SELECT 1 FROM pragma_foreign_key_check LIMIT 1").fetch_optional(&mut *conn).await.map_err(|e| e.to_string());
     if let Err(e) = sqlx::query("PRAGMA foreign_keys = ON").execute(&mut *conn).await {
         // Never hand a connection without enforcement back to the pool.
         let _ = conn.detach().close().await;
@@ -1211,12 +1238,7 @@ pub(crate) async fn test_pool() -> SqlitePool {
         .await;
     let pool = empty_test_pool().await;
     let data = sqlx::sqlite::SqliteOwnedBuf::try_from(bytes.as_slice()).expect("copy migrated database");
-    pool.acquire()
-        .await
-        .expect("acquire")
-        .deserialize(None, data, false)
-        .await
-        .expect("load migrated database");
+    pool.acquire().await.expect("acquire").deserialize(None, data, false).await.expect("load migrated database");
     pool
 }
 
@@ -1225,31 +1247,18 @@ async fn empty_test_pool() -> SqlitePool {
     use std::str::FromStr;
 
     // One connection: every connection to `sqlite::memory:` would otherwise be its own database.
-    let options = SqliteConnectOptions::from_str("sqlite::memory:")
-        .expect("valid sqlite url")
-        .foreign_keys(true);
-    SqlitePoolOptions::new()
-        .max_connections(1)
-        .connect_with(options)
-        .await
-        .expect("open in-memory database")
+    let options = SqliteConnectOptions::from_str("sqlite::memory:").expect("valid sqlite url").foreign_keys(true);
+    SqlitePoolOptions::new().max_connections(1).connect_with(options).await.expect("open in-memory database")
 }
 
 #[cfg(test)]
 pub(crate) async fn open_read_only_for_test(path: &Path) -> SqlitePool {
-    SqlitePoolOptions::new()
-        .connect_with(SqliteConnectOptions::new().filename(path).read_only(true))
-        .await
-        .expect("open read-only")
+    SqlitePoolOptions::new().connect_with(SqliteConnectOptions::new().filename(path).read_only(true)).await.expect("open read-only")
 }
 
 #[cfg(test)]
 pub(crate) fn test_config(root: &Path) -> DbConfig {
-    DbConfig {
-        config_dir: root.join("config"),
-        default_path: root.join("default").join(DB_FILE_NAME),
-        backups_dir: root.join("backups"),
-    }
+    DbConfig { config_dir: root.join("config"), default_path: root.join("default").join(DB_FILE_NAME), backups_dir: root.join("backups") }
 }
 
 #[cfg(test)]

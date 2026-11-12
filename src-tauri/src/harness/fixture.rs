@@ -25,7 +25,11 @@ pub(crate) fn d(year: i32, month: u32, day: u32) -> NaiveDate {
 
 /// The last day of a 2025 month.
 fn month_end(month: u32) -> NaiveDate {
-    if month == 12 { d(2025, 12, 31) } else { d(2025, month + 1, 1).pred_opt().unwrap() }
+    if month == 12 {
+        d(2025, 12, 31)
+    } else {
+        d(2025, month + 1, 1).pred_opt().unwrap()
+    }
 }
 
 struct Chart {
@@ -69,13 +73,40 @@ async fn journal(pool: &SqlitePool, date: NaiveDate, description: &str, lines: V
 }
 
 fn line(description: &str, quantity_e4: i64, rate_cents: i64, income: i64, is_taxable: bool) -> InvoiceLineInput {
-    InvoiceLineInput { description: description.into(), quantity_e4, rate_cents: Cents(rate_cents), income_account_id: income, product_service_id: None, class_id: None, is_taxable, service_date: None }
+    InvoiceLineInput {
+        description: description.into(),
+        quantity_e4,
+        rate_cents: Cents(rate_cents),
+        income_account_id: income,
+        product_service_id: None,
+        class_id: None,
+        is_taxable,
+        service_date: None,
+    }
 }
 
-async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, terms: u64, lines: Vec<InvoiceLineInput>, tax_rate_id: Option<i64>, currency: Option<ForeignCurrency>) -> i64 {
+async fn invoice(
+    pool: &SqlitePool,
+    customer: &str,
+    issue: NaiveDate,
+    terms: u64,
+    lines: Vec<InvoiceLineInput>,
+    tax_rate_id: Option<i64>,
+    currency: Option<ForeignCurrency>,
+) -> i64 {
     crate::invoices::create_and_post_invoice(
         pool,
-        InvoiceInput { invoice_number: None, customer_name: customer.into(), issue_date: issue, due_date: issue + chrono::Days::new(terms), lines, currency, tax_rate_id, discount_cents: Cents::ZERO, details: Default::default() },
+        InvoiceInput {
+            invoice_number: None,
+            customer_name: customer.into(),
+            issue_date: issue,
+            due_date: issue + chrono::Days::new(terms),
+            lines,
+            currency,
+            tax_rate_id,
+            discount_cents: Cents::ZERO,
+            details: Default::default(),
+        },
     )
     .await
     .unwrap_or_else(|e| panic!("invoice for {customer} on {issue}: {e}"))
@@ -85,7 +116,17 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, terms: u64
 async fn receive(pool: &SqlitePool, invoice_id: i64, date: NaiveDate, amount_cents: i64, deposit_account_id: i64, exchange_rate_e6: Option<i64>) {
     crate::invoices::record_payment(
         pool,
-        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id, deposit_account_id, payment_date: date, amount_cents: Cents(amount_cents), payment_method: "CHECK".into(), reference: None, exchange_rate_e6 },
+        PaymentInput {
+            discount_cents: Cents::ZERO,
+            payment_method_id: None,
+            invoice_id,
+            deposit_account_id,
+            payment_date: date,
+            amount_cents: Cents(amount_cents),
+            payment_method: "CHECK".into(),
+            reference: None,
+            exchange_rate_e6,
+        },
     )
     .await
     .unwrap_or_else(|e| panic!("payment on invoice {invoice_id} on {date}: {e}"));
@@ -95,7 +136,8 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, te
     let total: i64 = lines.iter().map(|l| l.1).sum();
     let summary = crate::expenses::post_vendor_bill(
         pool,
-        BillInput { form_lines: Vec::new(),
+        BillInput {
+            form_lines: Vec::new(),
             terms_id: None,
             vendor_name: vendor.into(),
             bill_number: Some(number.into()),
@@ -125,15 +167,19 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, te
 }
 
 async fn pay_bill(pool: &SqlitePool, bill_id: i64, date: NaiveDate, amount_cents: i64, from: i64) {
-    crate::expenses::pay_vendor_bill(pool, BillPaymentInput { bill_id, payment_account_id: from, payment_date: date, amount_cents: Cents(amount_cents), reference: None, to_be_printed: false })
-        .await
-        .unwrap_or_else(|e| panic!("payment of bill {bill_id} on {date}: {e}"));
+    crate::expenses::pay_vendor_bill(
+        pool,
+        BillPaymentInput { bill_id, payment_account_id: from, payment_date: date, amount_cents: Cents(amount_cents), reference: None, to_be_printed: false },
+    )
+    .await
+    .unwrap_or_else(|e| panic!("payment of bill {bill_id} on {date}: {e}"));
 }
 
 async fn expense(pool: &SqlitePool, kind: &str, payee: &str, from: i64, date: NaiveDate, check_number: Option<&str>, lines: Vec<(i64, i64, &str)>) -> i64 {
     crate::expenses::post_expense(
         pool,
-        ExpenseInput { form_lines: Vec::new(),
+        ExpenseInput {
+            form_lines: Vec::new(),
             payment_method_id: None,
             kind: kind.into(),
             payee_name: Some(payee.into()),
@@ -144,7 +190,14 @@ async fn expense(pool: &SqlitePool, kind: &str, payee: &str, from: i64, date: Na
             memo: None,
             lines: lines
                 .into_iter()
-                .map(|(account_id, amount_cents, memo)| SplitLineInput { account_id, amount_cents: Cents(amount_cents), memo: Some(memo.into()), class_id: None, customer_id: None, billable: None })
+                .map(|(account_id, amount_cents, memo)| SplitLineInput {
+                    account_id,
+                    amount_cents: Cents(amount_cents),
+                    memo: Some(memo.into()),
+                    class_id: None,
+                    customer_id: None,
+                    billable: None,
+                })
                 .collect(),
             currency: None,
         },
@@ -190,7 +243,12 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
     };
     let tax = crate::sales_tax::create_tax_rate(
         p,
-        crate::sales_tax::TaxRateInput { name: "State Sales Tax".into(), rate_ppm: 72_500, agency_name: Some("State Department of Revenue".into()), liability_account_id: None },
+        crate::sales_tax::TaxRateInput {
+            name: "State Sales Tax".into(),
+            rate_ppm: 72_500,
+            agency_name: Some("State Department of Revenue".into()),
+            liability_account_id: None,
+        },
     )
     .await
     .expect("tax rate")
@@ -199,9 +257,18 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
     // Opening: the owner's capital and a bank loan; part of it parked in savings.
     journal(p, d(2025, 1, 2), "Owner investment", vec![JournalLine::debit(c.checking, 5_000_000), JournalLine::credit(c.owner_investment, 5_000_000)]).await;
     journal(p, d(2025, 1, 3), "Equipment loan proceeds", vec![JournalLine::debit(c.checking, 2_400_000), JournalLine::credit(c.loan, 2_400_000)]).await;
-    crate::banking::post_transfer(p, TransferInput { from_account_id: c.checking, to_account_id: c.savings, transfer_date: d(2025, 1, 6), amount_cents: Cents(1_500_000), memo: Some("Reserve".into()) })
-        .await
-        .expect("transfer to savings");
+    crate::banking::post_transfer(
+        p,
+        TransferInput {
+            from_account_id: c.checking,
+            to_account_id: c.savings,
+            transfer_date: d(2025, 1, 6),
+            amount_cents: Cents(1_500_000),
+            memo: Some("Reserve".into()),
+        },
+    )
+    .await
+    .expect("transfer to savings");
     expense(p, "CHECK", "Pacific Office Outfitters", c.checking, d(2025, 1, 8), Some("1001"), vec![(c.equipment, 1_875_000, "Workstations and plotter")]).await;
 
     let customers = ["Alder & Finch LLP", "Brightwater Cafe", "Cobalt Outfitters"];
@@ -252,7 +319,8 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
                         rate_cents: Cents(3_500),
                         income_account_id: c.sales,
                         class_id: None,
-                        is_taxable: true, service_date: None,
+                        is_taxable: true,
+                        service_date: None,
                     }],
                     tax_rate_id: Some(tax),
                     discount_cents: Cents::ZERO,
@@ -281,9 +349,20 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
         let waiting: Vec<DepositItemRef> =
             crate::banking::list_undeposited(p).await.unwrap().into_iter().map(|i| DepositItemRef { kind: i.kind, id: i.id }).collect();
         if !waiting.is_empty() && month < 12 {
-            crate::banking::post_bank_deposit(p, DepositInput { bank_account_id: c.checking, deposit_date: month_end(month), memo: None, items: waiting, other_lines: Vec::new(), cash_back: None, deductions: Vec::new() })
-                .await
-                .expect("deposit");
+            crate::banking::post_bank_deposit(
+                p,
+                DepositInput {
+                    bank_account_id: c.checking,
+                    deposit_date: month_end(month),
+                    memo: None,
+                    items: waiting,
+                    other_lines: Vec::new(),
+                    cash_back: None,
+                    deductions: Vec::new(),
+                },
+            )
+            .await
+            .expect("deposit");
         }
 
         // Payroll: gross wages and employer taxes, net pay from checking, withholding owed.
@@ -319,22 +398,37 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
             p,
             d(2025, month, 25),
             "Loan payment",
-            vec![JournalLine::debit(c.loan, principal), JournalLine::debit(c.interest_expense, interest), JournalLine::credit(c.checking, principal + interest)],
+            vec![
+                JournalLine::debit(c.loan, principal),
+                JournalLine::debit(c.interest_expense, interest),
+                JournalLine::credit(c.checking, principal + interest),
+            ],
         )
         .await;
         expense(p, "EXPENSE", "First Harbor Bank", c.checking, month_end(month), None, vec![(c.bank_fees, 1_500, "Monthly service fee")]).await;
 
         // Pay the card off from checking each month.
-        let card_balance: i64 = sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1").bind(c.card).fetch_one(p).await.unwrap();
+        let card_balance: i64 =
+            sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1").bind(c.card).fetch_one(p).await.unwrap();
         if card_balance > 0 {
-            crate::banking::post_transfer(p, TransferInput { from_account_id: c.checking, to_account_id: c.card, transfer_date: d(2025, month, 26), amount_cents: Cents(card_balance), memo: Some("Card payment".into()) })
-                .await
-                .expect("card payment");
+            crate::banking::post_transfer(
+                p,
+                TransferInput {
+                    from_account_id: c.checking,
+                    to_account_id: c.card,
+                    transfer_date: d(2025, month, 26),
+                    amount_cents: Cents(card_balance),
+                    memo: Some("Card payment".into()),
+                },
+            )
+            .await
+            .expect("card payment");
         }
 
         // The 1099 contractor, paid by check every other month.
         if month % 2 == 0 {
-            expense(p, "CHECK", "Jordan Reyes", c.checking, d(2025, month, 18), Some(&check_number.to_string()), vec![(c.contractors, 95_000, "Illustration")]).await;
+            expense(p, "CHECK", "Jordan Reyes", c.checking, d(2025, month, 18), Some(&check_number.to_string()), vec![(c.contractors, 95_000, "Illustration")])
+                .await;
             check_number += 1;
         }
 
@@ -351,7 +445,14 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
             .unwrap();
             crate::sales_tax::pay_sales_tax(
                 p,
-                crate::sales_tax::SalesTaxPaymentInput { tax_rate_id: Some(tax), liability_account_id: None, account_id: c.checking, payment_date: d(2025, month, 20), amount_cents: owed.into(), reference: None },
+                crate::sales_tax::SalesTaxPaymentInput {
+                    tax_rate_id: Some(tax),
+                    liability_account_id: None,
+                    account_id: c.checking,
+                    payment_date: d(2025, month, 20),
+                    amount_cents: owed.into(),
+                    reference: None,
+                },
             )
             .await
             .expect("sales tax payment");
@@ -359,7 +460,8 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
     }
 
     // Office supplies bills: one paid in part, two still open at year end at different ages.
-    let (supplies, _) = bill(p, "Pinecrest Office Supply", "PC-4410", d(2025, 9, 5), 30, vec![(c.office, 64_250, "Paper and toner"), (c.advertising, 30_000, "Flyers")]).await;
+    let (supplies, _) =
+        bill(p, "Pinecrest Office Supply", "PC-4410", d(2025, 9, 5), 30, vec![(c.office, 64_250, "Paper and toner"), (c.advertising, 30_000, "Flyers")]).await;
     pay_bill(p, supplies, d(2025, 10, 1), 40_000, c.checking).await;
     bill(p, "Pinecrest Office Supply", "PC-4521", d(2025, 11, 20), 30, vec![(c.office, 18_740, "Desk supplies")]).await;
     let (ads, ads_total) = bill(p, "Lumen Media", "LM-88", d(2025, 12, 1), 15, vec![(c.advertising, 150_000, "Spring campaign retainer")]).await;
@@ -387,12 +489,8 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
     journal(p, d(2025, 12, 30), "Owner draw", vec![JournalLine::debit(c.owner_draw, 1_000_000), JournalLine::credit(c.checking, 1_000_000)]).await;
 
     // Reconcile checking for the first quarter against the bank statement.
-    let lines: Vec<_> = crate::reconcile::unreconciled_lines(p, c.checking)
-        .await
-        .unwrap()
-        .into_iter()
-        .filter(|l| l.entry_date.as_str() <= "2025-03-31")
-        .collect();
+    let lines: Vec<_> =
+        crate::reconcile::unreconciled_lines(p, c.checking).await.unwrap().into_iter().filter(|l| l.entry_date.as_str() <= "2025-03-31").collect();
     let ending: i64 = lines.iter().map(|l| l.amount_cents).sum();
     let rec = crate::reconcile::start(p, c.checking, d(2025, 3, 31), ending).await.expect("start reconciliation");
     let ids: Vec<i64> = lines.iter().map(|l| l.line_id).collect();

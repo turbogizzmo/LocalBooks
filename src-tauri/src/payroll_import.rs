@@ -40,9 +40,39 @@ pub struct Field {
 }
 
 pub const FIELDS: &[Field] = &[
-    Field { id: "date", label: "Date", required: true, aliases: &["checkdate", "paydate", "paymentdate", "postingdate", "journaldate", "transactiondate", "entrydate", "period end"] },
-    Field { id: "entry", label: "Entry", required: false, aliases: &["entryid", "entrynumber", "journalid", "journalentry", "journal", "payrollid", "payroll", "payrun", "payrunid", "batch", "batchid", "reference", "ref", "referencenumber"] },
-    Field { id: "account", label: "Account", required: true, aliases: &["accountname", "glaccount", "glaccountname", "ledgeraccount", "accounttitle", "accountdescription", "glname"] },
+    Field {
+        id: "date",
+        label: "Date",
+        required: true,
+        aliases: &["checkdate", "paydate", "paymentdate", "postingdate", "journaldate", "transactiondate", "entrydate", "period end"],
+    },
+    Field {
+        id: "entry",
+        label: "Entry",
+        required: false,
+        aliases: &[
+            "entryid",
+            "entrynumber",
+            "journalid",
+            "journalentry",
+            "journal",
+            "payrollid",
+            "payroll",
+            "payrun",
+            "payrunid",
+            "batch",
+            "batchid",
+            "reference",
+            "ref",
+            "referencenumber",
+        ],
+    },
+    Field {
+        id: "account",
+        label: "Account",
+        required: true,
+        aliases: &["accountname", "glaccount", "glaccountname", "ledgeraccount", "accounttitle", "accountdescription", "glname"],
+    },
     Field { id: "debit", label: "Debit", required: false, aliases: &["debitamount", "debits", "dr"] },
     Field { id: "credit", label: "Credit", required: false, aliases: &["creditamount", "credits", "cr"] },
     Field { id: "amount", label: "Amount", required: false, aliases: &["netamount", "value", "total"] },
@@ -183,9 +213,7 @@ pub async fn preview(pool: &SqlitePool, file_name: &str, bytes: &[u8], choices: 
         problems.push(Problem { row: 0, message: "Match a column to Debit and Credit, or to Amount".into() });
     }
 
-    let order = choices.date_order.unwrap_or_else(|| {
-        detect_date_order(sheet.rows.iter().filter_map(|(_, r)| cell(&mapping, r, "date"))).0
-    });
+    let order = choices.date_order.unwrap_or_else(|| detect_date_order(sheet.rows.iter().filter_map(|(_, r)| cell(&mapping, r, "date"))).0);
     let mut rows = Vec::new();
     if problems.is_empty() {
         for (n, cells) in &sheet.rows {
@@ -210,7 +238,8 @@ pub async fn preview(pool: &SqlitePool, file_name: &str, bytes: &[u8], choices: 
             let net = if mapping.contains_key("amount") && !mapping.contains_key("debit") && !mapping.contains_key("credit") {
                 money(cell(&mapping, cells, "amount"))
             } else {
-                money(cell(&mapping, cells, "debit")).and_then(|d| money(cell(&mapping, cells, "credit")).and_then(|c| d.checked_sub(c).ok_or_else(|| "amount out of range".into())))
+                money(cell(&mapping, cells, "debit"))
+                    .and_then(|d| money(cell(&mapping, cells, "credit")).and_then(|c| d.checked_sub(c).ok_or_else(|| "amount out of range".into())))
             };
             let net = match net {
                 Ok(v) => v,
@@ -227,7 +256,14 @@ pub async fn preview(pool: &SqlitePool, file_name: &str, bytes: &[u8], choices: 
                 continue;
             };
             let group = cell(&mapping, cells, "entry").map_or_else(|| date.to_string(), str::to_string);
-            rows.push(Row { row: *n, group, date, account: account.chars().take(200).collect(), net_cents: net, memo: cell(&mapping, cells, "memo").map(|m| m.chars().take(500).collect()) });
+            rows.push(Row {
+                row: *n,
+                group,
+                date,
+                account: account.chars().take(200).collect(),
+                net_cents: net,
+                memo: cell(&mapping, cells, "memo").map(|m| m.chars().take(500).collect()),
+            });
         }
         if rows.is_empty() && problems.is_empty() {
             problems.push(Problem { row: 0, message: "The file has no rows with an amount".into() });
@@ -236,7 +272,12 @@ pub async fn preview(pool: &SqlitePool, file_name: &str, bytes: &[u8], choices: 
 
     // Accounts: chosen here, else saved from last time, else the same name or number.
     let accounts: Vec<Account> = sqlx::query_as("SELECT id, name, full_name, account_number FROM v_chart_of_accounts").fetch_all(pool).await.map_err(db_err)?;
-    let saved: HashMap<String, i64> = sqlx::query_as::<_, (String, i64)>("SELECT source_account, account_id FROM payroll_account_map").fetch_all(pool).await.map_err(db_err)?.into_iter().collect();
+    let saved: HashMap<String, i64> = sqlx::query_as::<_, (String, i64)>("SELECT source_account, account_id FROM payroll_account_map")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?
+        .into_iter()
+        .collect();
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for r in &rows {
         *counts.entry(r.account.clone()).or_default() += 1;
@@ -251,7 +292,11 @@ pub async fn preview(pool: &SqlitePool, file_name: &str, bytes: &[u8], choices: 
                 (Some(*id), "saved")
             } else {
                 let k = key(&name);
-                let found = accounts.iter().find(|a| key(&a.full_name) == k || key(&a.name) == k || a.account_number.as_deref().is_some_and(|n| key(n) == k || key(&format!("{n} {}", a.name)) == k));
+                let found = accounts.iter().find(|a| {
+                    key(&a.full_name) == k
+                        || key(&a.name) == k
+                        || a.account_number.as_deref().is_some_and(|n| key(n) == k || key(&format!("{n} {}", a.name)) == k)
+                });
                 found.map_or((None, "none"), |a| (Some(a.id), "matched"))
             };
             SourceAccount { name, account_id, how, rows }
@@ -287,13 +332,25 @@ pub async fn preview(pool: &SqlitePool, file_name: &str, bytes: &[u8], choices: 
             let (d, c) = if r.net_cents > 0 { (r.net_cents, 0) } else { (0, r.net_cents.checked_neg().ok_or_else(overflow)?) };
             debit = debit.checked_add(d).ok_or_else(overflow)?;
             credit = credit.checked_add(c).ok_or_else(overflow)?;
-            lines.push(PreviewLine { row: r.row, source_account: r.account.clone(), account_id: account_of(&r.account), debit_cents: d, credit_cents: c, memo: r.memo.clone() });
+            lines.push(PreviewLine {
+                row: r.row,
+                source_account: r.account.clone(),
+                account_id: account_of(&r.account),
+                debit_cents: d,
+                credit_cents: c,
+                memo: r.memo.clone(),
+            });
         }
         if debit != credit {
             let diff = debit.checked_sub(credit).ok_or_else(overflow)?;
             problems.push(Problem {
                 row: first.row,
-                message: format!("Entry {g} is out of balance: debits {} and credits {} differ by {}", crate::ledger::format_cents(debit), crate::ledger::format_cents(credit), crate::ledger::format_cents(diff.abs())),
+                message: format!(
+                    "Entry {g} is out of balance: debits {} and credits {} differ by {}",
+                    crate::ledger::format_cents(debit),
+                    crate::ledger::format_cents(credit),
+                    crate::ledger::format_cents(diff.abs())
+                ),
             });
         }
         if lines.len() < 2 {
@@ -309,9 +366,23 @@ pub async fn preview(pool: &SqlitePool, file_name: &str, bytes: &[u8], choices: 
         "SELECT p.imported_at FROM payroll_imports p WHERE p.file_sha256 = ?1
            AND EXISTS (SELECT 1 FROM payroll_import_entries x JOIN journal_entries e ON e.id = x.journal_entry_id WHERE x.import_id = p.id AND e.is_voided = 0)
          ORDER BY p.id DESC LIMIT 1",
-    ).bind(sha256_hex(bytes)).fetch_optional(pool).await.map_err(db_err)?;
+    )
+    .bind(sha256_hex(bytes))
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
     let file_name = std::path::Path::new(file_name).file_name().map_or_else(|| file_name.to_string(), |n| n.to_string_lossy().into_owned());
-    Ok(PayrollPreview { file_name, headers: sheet.headers, fields: FIELDS.to_vec(), mapping, source_accounts, entries, total_cents: total, problems, already_imported })
+    Ok(PayrollPreview {
+        file_name,
+        headers: sheet.headers,
+        fields: FIELDS.to_vec(),
+        mapping,
+        source_accounts,
+        entries,
+        total_cents: total,
+        problems,
+        already_imported,
+    })
 }
 
 #[derive(Debug, Clone, Serialize)]

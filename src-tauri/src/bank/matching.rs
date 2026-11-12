@@ -68,7 +68,12 @@ pub fn check_number(description: &str) -> Option<String> {
 /// Entered transactions in each line's account for its amount, dated `before`..`after` days around
 /// it, not matched to another line and not added from the feed: (line, candidate), nearest date
 /// first for each line. One query for any number of lines.
-async fn candidates_for_lines(conn: &mut sqlx::SqliteConnection, transaction_ids: &[i64], before: i64, after: i64) -> Result<Vec<(i64, MatchCandidate)>, String> {
+async fn candidates_for_lines(
+    conn: &mut sqlx::SqliteConnection,
+    transaction_ids: &[i64],
+    before: i64,
+    after: i64,
+) -> Result<Vec<(i64, MatchCandidate)>, String> {
     if transaction_ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -137,7 +142,11 @@ async fn write_match(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, jour
         .await
         .map_err(|e| {
             let msg = db_err(e);
-            if msg.contains("UNIQUE") { "BANK_MATCH_TAKEN: that transaction is already matched to another bank line".into() } else { msg }
+            if msg.contains("UNIQUE") {
+                "BANK_MATCH_TAKEN: that transaction is already matched to another bank line".into()
+            } else {
+                msg
+            }
         })?;
     Ok(())
 }

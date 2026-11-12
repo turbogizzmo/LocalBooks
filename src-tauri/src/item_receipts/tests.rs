@@ -9,7 +9,11 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn gl(pool: &SqlitePool, account: i64) -> i64 {
-    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1").bind(account).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1")
+        .bind(account)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 fn d(day: u32) -> NaiveDate {
@@ -31,12 +35,16 @@ struct Shop {
 async fn shop() -> Shop {
     let pool = test_pool().await;
     let sales = account(&pool, "4000").await;
-    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false })
-        .await
-        .unwrap()
-        .id;
+    let product = crate::sales::create_product(
+        &pool,
+        crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false },
+    )
+    .await
+    .unwrap()
+    .id;
     let tracked = track_product(&pool, &TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap();
-    let ap: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'ACCOUNTS_PAYABLE' AND is_system = 1").fetch_one(&pool).await.unwrap();
+    let ap: i64 =
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'ACCOUNTS_PAYABLE' AND is_system = 1").fetch_one(&pool).await.unwrap();
     let freight = account(&pool, "6000").await;
     let mut tx = pool.begin().await.unwrap();
     let vendor = crate::sales::find_or_create_named(&mut tx, crate::sales::Party::Vendor, "Supplier").await.unwrap();
@@ -92,18 +100,40 @@ async fn invoice(s: &Shop, qty: i64) {
 async fn bill_for(s: &Shop, receipt: &ReceiptView, amounts: &[i64]) -> Result<i64, String> {
     let lines = receipt_lines(&s.pool, receipt.id).await.unwrap();
     let lines = lines.iter().zip(amounts).map(|(l, a)| ReceiptBillLine { receipt_line_id: l.id, amount_cents: Cents(*a) }).collect();
-    bill_received_items(&s.pool, ReceiptBillInput { item_receipt_id: receipt.id, bill_number: Some("INV-9".into()), bill_date: d(20), due_date: d(30), terms_id: None, memo: None, lines }).await
+    bill_received_items(
+        &s.pool,
+        ReceiptBillInput {
+            item_receipt_id: receipt.id,
+            bill_number: Some("INV-9".into()),
+            bill_date: d(20),
+            due_date: d(30),
+            terms_id: None,
+            memo: None,
+            lines,
+        },
+    )
+    .await
 }
 
 #[tokio::test]
 async fn a_receipt_raises_stock_against_the_clearing_account_not_payables() {
     let s = shop().await;
     let (po, lines) = order(&s).await;
-    let freight = ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: Cents(2_000), class_id: None };
+    let freight = ReceiptLineInput {
+        purchase_order_line_id: Some(lines[1].id),
+        account_id: s.freight,
+        product_service_id: None,
+        description: Some("Freight".into()),
+        quantity_e4: None,
+        rate_cents: None,
+        amount_cents: Cents(2_000),
+        class_id: None,
+    };
     let r = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 4), freight])).await.unwrap();
     assert_eq!((r.receipt_number, r.total_cents, r.po_number.is_some(), r.bill_id, r.is_voided), (1, 6_000, true, None, false));
 
-    let clearing: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Items Received Not Billed' AND is_system = 1").fetch_one(&s.pool).await.unwrap();
+    let clearing: i64 =
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Items Received Not Billed' AND is_system = 1").fetch_one(&s.pool).await.unwrap();
     assert_eq!(gl(&s.pool, clearing).await, -6_000, "the receipt is owed in the clearing liability");
     assert_eq!(gl(&s.pool, s.ap).await, 0, "nothing reaches Accounts Payable");
     assert_eq!((gl(&s.pool, s.inventory).await, gl(&s.pool, s.freight).await), (4_000, 2_000));
@@ -121,7 +151,10 @@ async fn a_receipt_raises_stock_against_the_clearing_account_not_payables() {
     // The rest arrives: the order closes. Voiding that receipt reopens it and takes its stock back.
     let rest = receive_items(&s.pool, receive(&s, Some(po), d(8), vec![widgets(&s, Some(lines[0].id), 6)])).await.unwrap();
     assert_eq!(status().await.unwrap(), "CLOSED");
-    assert!(receive_items(&s.pool, receive(&s, Some(po), d(9), vec![widgets(&s, Some(lines[0].id), 1)])).await.unwrap_err().starts_with("RECEIPT_ORDER_NOT_OPEN"));
+    assert!(receive_items(&s.pool, receive(&s, Some(po), d(9), vec![widgets(&s, Some(lines[0].id), 1)]))
+        .await
+        .unwrap_err()
+        .starts_with("RECEIPT_ORDER_NOT_OPEN"));
     // Received in full, it can't be reopened to receive more than was ordered.
     let reopen = crate::workflows::set_purchase_order_closed(&s.pool, po, false).await.unwrap_err();
     assert!(reopen.starts_with("PO_RECEIVED_IN_FULL"), "{reopen}");
@@ -132,7 +165,13 @@ async fn a_receipt_raises_stock_against_the_clearing_account_not_payables() {
     assert_eq!(list_receipts(&s.pool, true).await.unwrap().iter().map(|r| r.id).collect::<Vec<_>>(), [r.id], "a voided receipt isn't waiting for a bill");
 
     // A receipt's entry isn't edited as a journal entry.
-    let entry = crate::ledger::JournalEntry { id: None, date: d(5), description: "x".into(), lines: vec![crate::ledger::JournalLine::debit(s.freight, 1), crate::ledger::JournalLine::credit(s.sales, 1)], currency: None };
+    let entry = crate::ledger::JournalEntry {
+        id: None,
+        date: d(5),
+        description: "x".into(),
+        lines: vec![crate::ledger::JournalLine::debit(s.freight, 1), crate::ledger::JournalLine::credit(s.sales, 1)],
+        currency: None,
+    };
     assert!(crate::edits::replace_journal_entry(&s.pool, r.journal_entry_id, entry).await.unwrap_err().starts_with("EDIT_NOT_MANUAL"));
 }
 
@@ -144,7 +183,16 @@ async fn the_bill_clears_the_receipt_and_posts_its_price_difference() {
         gl(&s.pool, id).await
     };
     // 10 widgets received at $10.00; 4 sold before the bill comes.
-    let freight = ReceiptLineInput { purchase_order_line_id: None, account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: Cents(2_000), class_id: None };
+    let freight = ReceiptLineInput {
+        purchase_order_line_id: None,
+        account_id: s.freight,
+        product_service_id: None,
+        description: Some("Freight".into()),
+        quantity_e4: None,
+        rate_cents: None,
+        amount_cents: Cents(2_000),
+        class_id: None,
+    };
     let r = receive_items(&s.pool, receive(&s, None, d(5), vec![widgets(&s, None, 10), freight])).await.unwrap();
     invoice(&s, 4).await;
     assert_eq!(stock(&s).await, (60_000, 6_000));
@@ -200,7 +248,8 @@ async fn receipts_and_their_bills_are_checked() {
     };
     let err = |r: Result<ReceiptView, String>| r.unwrap_err();
     assert!(err(receive_items(&s.pool, receive(&s, None, d(5), vec![])).await).starts_with("RECEIPT_NO_LINES"));
-    assert!(err(receive_items(&s.pool, ReceiptInput { vendor_id: other, ..receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 1)]) }).await).starts_with("RECEIPT_OTHER_VENDOR"));
+    assert!(err(receive_items(&s.pool, ReceiptInput { vendor_id: other, ..receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 1)]) }).await)
+        .starts_with("RECEIPT_OTHER_VENDOR"));
     assert!(err(receive_items(&s.pool, receive(&s, None, d(5), vec![widgets(&s, Some(lines[0].id), 1)])).await).starts_with("RECEIPT_BAD_ORDER_LINE"));
     let wrong_account = ReceiptLineInput { account_id: s.freight, ..widgets(&s, None, 1) };
     assert!(err(receive_items(&s.pool, receive(&s, None, d(5), vec![wrong_account])).await).starts_with("STOCK_PURCHASE_ACCOUNT"));
@@ -209,18 +258,57 @@ async fn receipts_and_their_bills_are_checked() {
     assert!(list_receipts(&s.pool, false).await.unwrap().is_empty(), "nothing saved");
 
     // Receiving more than ordered is allowed; the order closes.
-    let r = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 12), ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: None, quantity_e4: None, rate_cents: None, amount_cents: Cents(2_000), class_id: None }])).await.unwrap();
+    let r = receive_items(
+        &s.pool,
+        receive(
+            &s,
+            Some(po),
+            d(5),
+            vec![
+                widgets(&s, Some(lines[0].id), 12),
+                ReceiptLineInput {
+                    purchase_order_line_id: Some(lines[1].id),
+                    account_id: s.freight,
+                    product_service_id: None,
+                    description: None,
+                    quantity_e4: None,
+                    rate_cents: None,
+                    amount_cents: Cents(2_000),
+                    class_id: None,
+                },
+            ],
+        ),
+    )
+    .await
+    .unwrap();
     assert_eq!(r.total_cents, 14_000);
     let receipt_line = receipt_lines(&s.pool, r.id).await.unwrap();
     // The bill names every receipt line once, with an amount above zero, dated no later than due.
-    let bill = |lines: Vec<ReceiptBillLine>, due: NaiveDate| bill_received_items(&s.pool, ReceiptBillInput { item_receipt_id: r.id, bill_number: None, bill_date: d(20), due_date: due, terms_id: None, memo: None, lines });
-    assert!(bill(vec![ReceiptBillLine { receipt_line_id: receipt_line[0].id, amount_cents: Cents(12_000) }], d(30)).await.unwrap_err().starts_with("RECEIPT_BILL_LINES"));
-    let both = |a: i64| vec![ReceiptBillLine { receipt_line_id: receipt_line[0].id, amount_cents: Cents(a) }, ReceiptBillLine { receipt_line_id: receipt_line[1].id, amount_cents: Cents(2_000) }];
+    let bill = |lines: Vec<ReceiptBillLine>, due: NaiveDate| {
+        bill_received_items(
+            &s.pool,
+            ReceiptBillInput { item_receipt_id: r.id, bill_number: None, bill_date: d(20), due_date: due, terms_id: None, memo: None, lines },
+        )
+    };
+    assert!(bill(vec![ReceiptBillLine { receipt_line_id: receipt_line[0].id, amount_cents: Cents(12_000) }], d(30))
+        .await
+        .unwrap_err()
+        .starts_with("RECEIPT_BILL_LINES"));
+    let both = |a: i64| {
+        vec![
+            ReceiptBillLine { receipt_line_id: receipt_line[0].id, amount_cents: Cents(a) },
+            ReceiptBillLine { receipt_line_id: receipt_line[1].id, amount_cents: Cents(2_000) },
+        ]
+    };
     assert!(bill(both(0), d(30)).await.unwrap_err().starts_with("RECEIPT_BAD_AMOUNT"));
     assert!(bill(both(12_000), d(19)).await.unwrap_err().starts_with("BILL_DUE_BEFORE_DATE"));
     let id = bill(both(12_000), d(30)).await.unwrap();
     let lines: Vec<(i64, Option<i64>, Option<i64>)> =
-        sqlx::query_as("SELECT amount_cents, quantity_e4, rate_cents FROM bill_lines WHERE bill_id = ?1 ORDER BY line_number").bind(id).fetch_all(&s.pool).await.unwrap();
+        sqlx::query_as("SELECT amount_cents, quantity_e4, rate_cents FROM bill_lines WHERE bill_id = ?1 ORDER BY line_number")
+            .bind(id)
+            .fetch_all(&s.pool)
+            .await
+            .unwrap();
     assert_eq!(lines, [(12_000, Some(120_000), Some(1_000)), (2_000, None, None)]);
 }
 
@@ -229,7 +317,19 @@ async fn a_lower_price_takes_stock_value_down_to_zero_and_the_rest_to_cogs() {
     let s = shop().await;
     // 90 widgets already on hand at a penny each in all ($1.00), then 10 received at $10.00: the
     // average is $1.01. Selling 95 leaves 5 worth $5.05.
-    crate::inventory::adjust(&s.pool, &crate::inventory::AdjustInput { item_id: s.item, date: d(1), qty_change_e4: 900_000, total_cost_cents: Some(100), offset_account_id: s.freight, memo: None }).await.unwrap();
+    crate::inventory::adjust(
+        &s.pool,
+        &crate::inventory::AdjustInput {
+            item_id: s.item,
+            date: d(1),
+            qty_change_e4: 900_000,
+            total_cost_cents: Some(100),
+            offset_account_id: s.freight,
+            memo: None,
+        },
+    )
+    .await
+    .unwrap();
     let r = receive_items(&s.pool, receive(&s, None, d(5), vec![widgets(&s, None, 10)])).await.unwrap();
     invoice(&s, 95).await;
     assert_eq!(stock(&s).await, (50_000, 505));
@@ -249,7 +349,11 @@ async fn a_po_line_s_job_carries_through_the_receipt_to_the_bill() {
     let mut tx = s.pool.begin().await.unwrap();
     let job = crate::sales::find_or_create_named(&mut tx, crate::sales::Party::Customer, "Kitchen remodel").await.unwrap();
     tx.commit().await.unwrap();
-    sqlx::query("INSERT OR REPLACE INTO system_preferences (key, value) VALUES (?1, 'true')").bind(crate::preferences::tax_time::EXPENSES_BILLABLE).execute(&s.pool).await.unwrap();
+    sqlx::query("INSERT OR REPLACE INTO system_preferences (key, value) VALUES (?1, 'true')")
+        .bind(crate::preferences::tax_time::EXPENSES_BILLABLE)
+        .execute(&s.pool)
+        .await
+        .unwrap();
     // Widgets for the job; freight for no one.
     let input: crate::workflows::PurchaseOrderInput = serde_json::from_value(json!({
         "vendorName": "Supplier", "poDate": "2026-04-01", "memo": null,
@@ -263,13 +367,23 @@ async fn a_po_line_s_job_carries_through_the_receipt_to_the_bill() {
     let lines = order_receiving(&s.pool, po).await.unwrap();
     assert_eq!(lines.iter().map(|l| (l.customer_id, l.customer_name.as_deref())).collect::<Vec<_>>(), vec![(Some(job), Some("Kitchen remodel")), (None, None)]);
 
-    let freight = ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: Cents(2_000), class_id: None };
+    let freight = ReceiptLineInput {
+        purchase_order_line_id: Some(lines[1].id),
+        account_id: s.freight,
+        product_service_id: None,
+        description: Some("Freight".into()),
+        quantity_e4: None,
+        rate_cents: None,
+        amount_cents: Cents(2_000),
+        class_id: None,
+    };
     let receipt = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 10), freight])).await.unwrap();
     let received = receipt_lines(&s.pool, receipt.id).await.unwrap();
     assert_eq!(received.iter().map(|l| l.customer_id).collect::<Vec<_>>(), vec![Some(job), None]);
 
     let bill = bill_for(&s, &receipt, &[10_000, 2_000]).await.unwrap();
-    let billed: Vec<(Option<i64>, bool)> = sqlx::query_as("SELECT customer_id, is_billable FROM bill_lines WHERE bill_id = ?1 ORDER BY line_number").bind(bill).fetch_all(&s.pool).await.unwrap();
+    let billed: Vec<(Option<i64>, bool)> =
+        sqlx::query_as("SELECT customer_id, is_billable FROM bill_lines WHERE bill_id = ?1 ORDER BY line_number").bind(bill).fetch_all(&s.pool).await.unwrap();
     assert_eq!(billed, vec![(Some(job), true), (None, false)], "the job's line is billable by the company's preference; a line for no one never is");
 }
 
@@ -291,7 +405,16 @@ async fn a_receipts_bill_takes_the_orders_discounts_and_charges_once() {
     .unwrap();
     let po = crate::workflows::create_purchase_order(&s.pool, input).await.unwrap();
     let lines = order_receiving(&s.pool, po).await.unwrap();
-    let freight = |cents: i64| ReceiptLineInput { purchase_order_line_id: Some(lines[1].id), account_id: s.freight, product_service_id: None, description: Some("Freight".into()), quantity_e4: None, rate_cents: None, amount_cents: Cents(cents), class_id: None };
+    let freight = |cents: i64| ReceiptLineInput {
+        purchase_order_line_id: Some(lines[1].id),
+        account_id: s.freight,
+        product_service_id: None,
+        description: Some("Freight".into()),
+        quantity_e4: None,
+        rate_cents: None,
+        amount_cents: Cents(cents),
+        class_id: None,
+    };
 
     // First shipment: 4 widgets and half the freight. The bill takes 10% of $40.00 and the handling.
     let first = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 4), freight(1_000)])).await.unwrap();

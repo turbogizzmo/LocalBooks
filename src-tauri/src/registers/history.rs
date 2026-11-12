@@ -89,15 +89,13 @@ pub async fn transaction_history(pool: &SqlitePool, journal_entry_id: i64) -> Re
         .await
         .map_err(db_err)?
         .ok_or_else(|| format!("JE_NOT_FOUND: journal entry {journal_entry_id} does not exist"))?;
-    let stored: (String, Option<i64>) = sqlx::query_as("SELECT source_type, source_id FROM journal_entries WHERE id = ?1")
-        .bind(journal_entry_id)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let stored: (String, Option<i64>) =
+        sqlx::query_as("SELECT source_type, source_id FROM journal_entries WHERE id = ?1").bind(journal_entry_id).fetch_one(pool).await.map_err(db_err)?;
     let mut links = Vec::new();
     if let (Some(query), Some(source_id)) = (link_query(&stored.0), stored.1) {
         let found: Vec<(String, i64, String, i64, bool)> = sqlx::query_as(query).bind(source_id).fetch_all(pool).await.map_err(db_err)?;
-        let linked_entry = select_entry("e.source_type = ?1 AND e.source_id = ?2 AND e.reverses_entry_id IS NULL AND e.status = 'POSTED' ORDER BY e.id LIMIT 1");
+        let linked_entry =
+            select_entry("e.source_type = ?1 AND e.source_id = ?2 AND e.reverses_entry_id IS NULL AND e.status = 'POSTED' ORDER BY e.id LIMIT 1");
         for (source_type, id, relation, amount_cents, link_voided) in found {
             // A document saved but never posted has no entry to show.
             let linked: Option<HistoryEntry> = sqlx::query_as(&linked_entry).bind(&source_type).bind(id).fetch_optional(pool).await.map_err(db_err)?;

@@ -1,7 +1,7 @@
 use super::*;
 use crate::db::test_pool;
-use crate::invoices::InvoiceLineInput;
 use crate::inventory::{adjust, track_product, AdjustInput, TrackInput};
+use crate::invoices::InvoiceLineInput;
 use crate::money::Cents;
 
 fn d(day: u32) -> NaiveDate {
@@ -23,19 +23,31 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 async fn shop() -> Shop {
     let pool = test_pool().await;
     let sales = account(&pool, "4000").await;
-    let product = |name: &str, rate| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: rate, income_account_id: sales, is_taxable: false };
+    let product =
+        |name: &str, rate| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: rate, income_account_id: sales, is_taxable: false };
     let widget = crate::sales::create_product(&pool, product("Widget", Cents(2_500))).await.unwrap().id;
     let service = crate::sales::create_product(&pool, product("Setup", Cents(10_000))).await.unwrap().id;
     let item = track_product(&pool, &TrackInput { product_id: widget, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap().id;
     let obe: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Opening Balance Equity'").fetch_one(&pool).await.unwrap();
-    adjust(&pool, &AdjustInput { item_id: item, date: d(1), qty_change_e4: 70_000, total_cost_cents: Some(7_000), offset_account_id: obe, memo: None }).await.unwrap();
+    adjust(&pool, &AdjustInput { item_id: item, date: d(1), qty_change_e4: 70_000, total_cost_cents: Some(7_000), offset_account_id: obe, memo: None })
+        .await
+        .unwrap();
     Shop { pool, sales, widget, service }
 }
 
 fn line(s: &Shop, product: i64, qty: i64, rate: i64) -> SalesOrderLineInput {
     SalesOrderLineInput {
         id: None,
-        line: SalesLineInput { product_service_id: Some(product), description: "ordered".into(), quantity_e4: qty * 10_000, rate_cents: Cents(rate), income_account_id: s.sales, class_id: None, is_taxable: false, service_date: None },
+        line: SalesLineInput {
+            product_service_id: Some(product),
+            description: "ordered".into(),
+            quantity_e4: qty * 10_000,
+            rate_cents: Cents(rate),
+            income_account_id: s.sales,
+            class_id: None,
+            is_taxable: false,
+            service_date: None,
+        },
     }
 }
 
@@ -70,7 +82,17 @@ fn invoice(s: &Shop, customer: &str, takes: &[(i64, i64, i64)]) -> (InvoiceInput
             service_date: None,
         })
         .collect();
-    let input = InvoiceInput { invoice_number: None, customer_name: customer.into(), issue_date: d(10), due_date: d(30), lines, currency: None, tax_rate_id: None, discount_cents: Cents::ZERO, details: Default::default() };
+    let input = InvoiceInput {
+        invoice_number: None,
+        customer_name: customer.into(),
+        issue_date: d(10),
+        due_date: d(30),
+        lines,
+        currency: None,
+        tax_rate_id: None,
+        discount_cents: Cents::ZERO,
+        details: Default::default(),
+    };
     (input, takes.iter().enumerate().map(|(i, (order_line_id, ..))| Take { order_line_id: *order_line_id, invoice_line: i }).collect())
 }
 
@@ -188,8 +210,16 @@ async fn voiding_an_invoice_reopens_its_quantities_and_an_edit_keeps_them() {
 #[tokio::test]
 async fn orders_take_priced_lines_once_each_and_a_tax_rate() {
     let s = shop().await;
-    assert!(create(&s.pool, &order("Acme", d(2), vec![line(&s, s.widget, 1, 0)])).await.unwrap_err().starts_with("SO_BAD_RATE"), "a 0.00 line could never be invoiced");
-    let rate = crate::sales_tax::create_tax_rate(&s.pool, crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 50_000, agency_name: None, liability_account_id: None }).await.unwrap();
+    assert!(
+        create(&s.pool, &order("Acme", d(2), vec![line(&s, s.widget, 1, 0)])).await.unwrap_err().starts_with("SO_BAD_RATE"),
+        "a 0.00 line could never be invoiced"
+    );
+    let rate = crate::sales_tax::create_tax_rate(
+        &s.pool,
+        crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 50_000, agency_name: None, liability_account_id: None },
+    )
+    .await
+    .unwrap();
     let mut taxed = order("Acme", d(2), vec![SalesOrderLineInput { line: SalesLineInput { is_taxable: true, ..line(&s, s.widget, 2, 2_500).line }, id: None }]);
     taxed.tax_rate_id = Some(rate.id);
     let saved = create(&s.pool, &taxed).await.unwrap();
@@ -219,7 +249,10 @@ async fn editing_a_partly_invoiced_order_keeps_what_was_invoiced() {
     let changed = update(&s.pool, saved.id, &order("Acme", d(2), vec![line(&s, s.service, 2, 10_000), keep(lines[0].id, 4)])).await.unwrap();
     assert_eq!(changed.open_cents, 20_000 + 2_500);
     let now = detail(&s.pool, saved.id).await.unwrap().lines;
-    assert_eq!(now.iter().map(|l| (l.line_number, l.product_service_id, l.left_qty_e4)).collect::<Vec<_>>(), vec![(1, Some(s.service), 20_000), (2, Some(s.widget), 10_000)]);
+    assert_eq!(
+        now.iter().map(|l| (l.line_number, l.product_service_id, l.left_qty_e4)).collect::<Vec<_>>(),
+        vec![(1, Some(s.service), 20_000), (2, Some(s.widget), 10_000)]
+    );
 
     let pending = pending_sales(&s.pool).await.unwrap();
     assert_eq!((pending.rows.len(), pending.rows[0].orders, pending.total_cents), (1, 1, 22_500));
@@ -228,8 +261,17 @@ async fn editing_a_partly_invoiced_order_keeps_what_was_invoiced() {
 #[tokio::test]
 async fn an_order_prints_queues_for_email_and_has_its_reports() {
     let s = shop().await;
-    let rate = crate::sales_tax::create_tax_rate(&s.pool, crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 50_000, agency_name: None, liability_account_id: None }).await.unwrap();
-    let mut taxed = order("Acme", d(2), vec![SalesOrderLineInput { line: SalesLineInput { is_taxable: true, ..line(&s, s.widget, 10, 2_500).line }, id: None }, line(&s, s.service, 1, 10_000)]);
+    let rate = crate::sales_tax::create_tax_rate(
+        &s.pool,
+        crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 50_000, agency_name: None, liability_account_id: None },
+    )
+    .await
+    .unwrap();
+    let mut taxed = order(
+        "Acme",
+        d(2),
+        vec![SalesOrderLineInput { line: SalesLineInput { is_taxable: true, ..line(&s, s.widget, 10, 2_500).line }, id: None }, line(&s, s.service, 1, 10_000)],
+    );
     taxed.tax_rate_id = Some(rate.id);
     taxed.header.po_number = Some("PO-77".into());
     let saved = create(&s.pool, &taxed).await.unwrap();
@@ -241,7 +283,11 @@ async fn an_order_prints_queues_for_email_and_has_its_reports() {
     crate::forms::render(&s.pool, crate::forms::FormKind::SalesOrder, Some(saved.id), None, None, false).await.expect("renders a PDF");
     crate::email_log::set_queued(&s.pool, crate::forms::FormKind::SalesOrder, saved.id, true).await.unwrap();
     let queued = crate::email_log::queue(&s.pool).await.unwrap();
-    assert_eq!((queued.len(), queued[0].kind, queued[0].number, queued[0].total_cents), (1, crate::forms::FormKind::SalesOrder, 1, 36_250), "the total the form prints, tax included");
+    assert_eq!(
+        (queued.len(), queued[0].kind, queued[0].number, queued[0].total_cents),
+        (1, crate::forms::FormKind::SalesOrder, 1, 36_250),
+        "the total the form prints, tax included"
+    );
 
     // The Report Center's three reports add up to what is left to invoice.
     let today = d(20);
@@ -258,7 +304,16 @@ async fn an_order_prints_queues_for_email_and_has_its_reports() {
 #[tokio::test]
 async fn an_estimate_becomes_an_order_once_and_is_then_invoiced_through_it() {
     let s = shop().await;
-    let est_line = |product, qty: i64, rate| SalesLineInput { product_service_id: Some(product), description: "quoted".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: s.sales, class_id: None, is_taxable: false, service_date: None };
+    let est_line = |product, qty: i64, rate| SalesLineInput {
+        product_service_id: Some(product),
+        description: "quoted".into(),
+        quantity_e4: qty * 10_000,
+        rate_cents: rate,
+        income_account_id: s.sales,
+        class_id: None,
+        is_taxable: false,
+        service_date: None,
+    };
     let estimate = crate::estimates::create_estimate(
         &s.pool,
         crate::estimates::EstimateInput {

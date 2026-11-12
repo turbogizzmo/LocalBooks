@@ -345,7 +345,9 @@ impl Builder {
                     other
                 }
                 Target::Category(name) => self.category(&name, cents > 0),
-                Target::None => self.accounts.ensure(if cents > 0 { "Uncategorized Income" } else { "Uncategorized Expense" }, if cents > 0 { "INCOME" } else { "EXPENSE" }),
+                Target::None => {
+                    self.accounts.ensure(if cents > 0 { "Uncategorized Income" } else { "Uncategorized Expense" }, if cents > 0 { "INCOME" } else { "EXPENSE" })
+                }
             };
             lines.push(SourceLine { account_id: other, cents, memo, class: None });
         }

@@ -85,7 +85,25 @@ const TERMS: Field = field("terms", "Terms", false, &["paymentterms"]);
 const NOTES: Field = field("notes", "Notes", false, &["note", "comments", "memo"]);
 const ACTIVE: Field = field("active", "Active", false, &["status", "isactive"]);
 const DATE: Field = field("date", "Date", true, &["txndate", "transactiondate", "invoicedate", "issuedate", "billdate", "checkdate", "entrydate"]);
-const NUMBER_ALIASES: &[&str] = &["number", "num", "no", "docnum", "refno", "ref", "reference", "invoice", "invoiceno", "invoicenumber", "inv", "invno", "receiptno", "billno", "checkno", "checknumber", "creditno"];
+const NUMBER_ALIASES: &[&str] = &[
+    "number",
+    "num",
+    "no",
+    "docnum",
+    "refno",
+    "ref",
+    "reference",
+    "invoice",
+    "invoiceno",
+    "invoicenumber",
+    "inv",
+    "invno",
+    "receiptno",
+    "billno",
+    "checkno",
+    "checknumber",
+    "creditno",
+];
 
 /// Who a transaction is with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -175,7 +193,12 @@ fn doc(kind: SheetKind) -> Option<Doc> {
     let ar = Header::Fixed("Accounts Receivable", "ACCOUNTS_RECEIVABLE");
     let ap = Header::Fixed("Accounts Payable", "ACCOUNTS_PAYABLE");
     let bank = |label| Header::Column { label, account_type: "BANK", default: None, aliases: BANK_ALIASES };
-    let card = Header::Column { label: "Card account", account_type: "CREDIT_CARD", default: None, aliases: &["card", "creditcard", "account", "cardname", "paidwith"] };
+    let card = Header::Column {
+        label: "Card account",
+        account_type: "CREDIT_CARD",
+        default: None,
+        aliases: &["card", "creditcard", "account", "cardname", "paidwith"],
+    };
     Some(match kind {
         SheetKind::Customers | SheetKind::Vendors | SheetKind::JournalEntries | SheetKind::CustomerPayments | SheetKind::BillPayments => return None,
         SheetKind::Invoices => Doc { due: true, extras: true, ..sales("INVOICE", "invoice", "Invoice no.", true, Some((Party::Customer, true)), ar, 1) },
@@ -205,7 +228,9 @@ fn doc(kind: SheetKind) -> Option<Doc> {
 /// The fields a kind of sheet takes, in the order the template has them.
 pub fn fields(kind: SheetKind) -> Vec<Field> {
     match kind {
-        SheetKind::Customers => vec![NAME, COMPANY, EMAIL, PHONE, field("address", "Billing address", false, &["address", "billto", "billingaddress"]), TERMS, NOTES, ACTIVE],
+        SheetKind::Customers => {
+            vec![NAME, COMPANY, EMAIL, PHONE, field("address", "Billing address", false, &["address", "billto", "billingaddress"]), TERMS, NOTES, ACTIVE]
+        }
         SheetKind::Vendors => vec![
             NAME,
             COMPANY,
@@ -332,7 +357,8 @@ pub fn read(file: &str, bytes: &[u8]) -> Result<Sheet, String> {
             let line = reader.position().line();
             match reader.read_record(&mut record) {
                 Ok(false) => break,
-                Ok(true) => rows.push((usize::try_from(record.position().map_or(line, |p| p.line())).unwrap_or(0), record.iter().map(|f| f.trim().to_string()).collect())),
+                Ok(true) => rows
+                    .push((usize::try_from(record.position().map_or(line, |p| p.line())).unwrap_or(0), record.iter().map(|f| f.trim().to_string()).collect())),
                 Err(e) => return Err(format!("SHEET_UNREADABLE: {file}: {e}")),
             }
         }
@@ -572,7 +598,15 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                     None => entries.push((l, l.amount_cents.max(0), (-l.amount_cents).max(0))),
                     Some(e) => {
                         if e.0.date != l.date {
-                            problems.push(Problem { row: l.row, message: format!("Entry {} is dated {} on row {}", e.0.number.as_deref().unwrap_or_default(), e.0.date.format("%m/%d/%Y"), e.0.row) });
+                            problems.push(Problem {
+                                row: l.row,
+                                message: format!(
+                                    "Entry {} is dated {} on row {}",
+                                    e.0.number.as_deref().unwrap_or_default(),
+                                    e.0.date.format("%m/%d/%Y"),
+                                    e.0.row
+                                ),
+                            });
                         }
                         match (e.1.checked_add(l.amount_cents.max(0)), e.2.checked_add((-l.amount_cents).max(0))) {
                             (Some(dr), Some(cr)) => (e.1, e.2) = (dr, cr),
@@ -585,7 +619,12 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                 if debits != credits {
                     problems.push(Problem {
                         row: first.row,
-                        message: format!("Entry {} doesn't balance: debits {}, credits {}", first.number.as_deref().unwrap_or_default(), format_cents(*debits), format_cents(*credits)),
+                        message: format!(
+                            "Entry {} doesn't balance: debits {}, credits {}",
+                            first.number.as_deref().unwrap_or_default(),
+                            format_cents(*debits),
+                            format_cents(*credits)
+                        ),
                     });
                 }
                 match total.checked_add(*debits) {
@@ -643,7 +682,8 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                 let from_rate = q.zip(rate).and_then(|(q, p)| crate::ledger::mul_div_round(q, p, crate::ledger::QUANTITY_SCALE));
                 let amount_cents = match (amount, from_rate) {
                     (Some(a), Some(c)) if (a - c).abs() > 1 => {
-                        problems.push(Problem { row, message: format!("The amount {} isn't the quantity times the rate ({})", format_cents(a), format_cents(c)) });
+                        problems
+                            .push(Problem { row, message: format!("The amount {} isn't the quantity times the rate ({})", format_cents(a), format_cents(c)) });
                         None
                     }
                     (Some(a), _) => Some(a),
@@ -655,7 +695,10 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                     _ => None,
                 };
                 if amount_cents.is_some_and(|a| a <= 0) {
-                    problems.push(Problem { row, message: format!("{} line's amount must be more than zero", capitalized(&format!("a {}", d.noun)).replace("A i", "An i")) });
+                    problems.push(Problem {
+                        row,
+                        message: format!("{} line's amount must be more than zero", capitalized(&format!("a {}", d.noun)).replace("A i", "An i")),
+                    });
                 }
                 if let (Some(date), Some(account), Some(amount_cents)) = (date, account, amount_cents.filter(|a| *a > 0)) {
                     if d.number_required && number.is_none() || d.party.is_some_and(|(_, req)| req) && party.is_none() || header.is_none() {
@@ -694,24 +737,44 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                     }
                     Some(f) if !f.party.as_deref().unwrap_or_default().eq_ignore_ascii_case(l.party.as_deref().unwrap_or_default()) => problems.push(Problem {
                         row: l.row,
-                        message: format!("{noun} {number} is for {} on row {}, not {}", f.party.as_deref().unwrap_or("no one"), f.row, l.party.as_deref().unwrap_or("no one")),
+                        message: format!(
+                            "{noun} {number} is for {} on row {}, not {}",
+                            f.party.as_deref().unwrap_or("no one"),
+                            f.row,
+                            l.party.as_deref().unwrap_or("no one")
+                        ),
                     }),
-                    Some(f) if f.date != l.date => problems.push(Problem { row: l.row, message: format!("{noun} {number} is dated {} on row {}", f.date.format("%m/%d/%Y"), f.row) }),
-                    Some(f) if !f.header.as_deref().unwrap_or_default().eq_ignore_ascii_case(l.header.as_deref().unwrap_or_default()) => problems.push(Problem {
-                        row: l.row,
-                        message: format!("{noun} {number} uses {} on row {}, not {}", f.header.as_deref().unwrap_or_default(), f.row, l.header.as_deref().unwrap_or_default()),
-                    }),
+                    Some(f) if f.date != l.date => {
+                        problems.push(Problem { row: l.row, message: format!("{noun} {number} is dated {} on row {}", f.date.format("%m/%d/%Y"), f.row) })
+                    }
+                    Some(f) if !f.header.as_deref().unwrap_or_default().eq_ignore_ascii_case(l.header.as_deref().unwrap_or_default()) => {
+                        problems.push(Problem {
+                            row: l.row,
+                            message: format!(
+                                "{noun} {number} uses {} on row {}, not {}",
+                                f.header.as_deref().unwrap_or_default(),
+                                f.row,
+                                l.header.as_deref().unwrap_or_default()
+                            ),
+                        })
+                    }
                     Some(_) => {}
                 }
                 // The sales tax and the discount are the document's: any row may give them, and
                 // the rows that do must agree.
                 for (label, value) in [("sales tax", l.tax_cents), ("discount", l.discount_cents)] {
                     let Some(value) = value else { continue };
-                    let earlier = lines.iter().take_while(|x| !std::ptr::eq(*x, l)).find(|x| x.key == l.key && (if label == "sales tax" { x.tax_cents } else { x.discount_cents }).is_some());
+                    let earlier = lines
+                        .iter()
+                        .take_while(|x| !std::ptr::eq(*x, l))
+                        .find(|x| x.key == l.key && (if label == "sales tax" { x.tax_cents } else { x.discount_cents }).is_some());
                     if let Some(x) = earlier {
                         let theirs = if label == "sales tax" { x.tax_cents } else { x.discount_cents }.unwrap_or_default();
                         if theirs != value {
-                            problems.push(Problem { row: l.row, message: format!("{noun} {number}'s {label} is {} on row {}, not {}", format_cents(theirs), x.row, format_cents(value)) });
+                            problems.push(Problem {
+                                row: l.row,
+                                message: format!("{noun} {number}'s {label} is {} on row {}, not {}", format_cents(theirs), x.row, format_cents(value)),
+                            });
                         }
                     }
                 }
@@ -725,7 +788,15 @@ fn read_rows(kind: SheetKind, sheet: &Sheet, mapping: &Mapping, order: Option<Da
                 let (tax, discount) = extras_of(&ls);
                 let subtotal: i64 = ls.iter().map(|l| l.amount_cents).sum();
                 if discount > subtotal {
-                    problems.push(Problem { row: ls[0].row, message: format!("{noun} {}'s discount of {} is more than its lines, {}", ls[0].number.as_deref().unwrap_or_default(), format_cents(discount), format_cents(subtotal)) });
+                    problems.push(Problem {
+                        row: ls[0].row,
+                        message: format!(
+                            "{noun} {}'s discount of {} is more than its lines, {}",
+                            ls[0].number.as_deref().unwrap_or_default(),
+                            format_cents(discount),
+                            format_cents(subtotal)
+                        ),
+                    });
                 }
                 match total.checked_add(tax).and_then(|t| t.checked_sub(discount)) {
                     Some(t) => total = t,
@@ -925,27 +996,36 @@ fn example(kind: SheetKind) -> Vec<Vec<(&'static str, &'static str)>> {
         ("customer", "Rivera Landscaping"),
         ("vendor", "Paper Supply Co"),
         ("payee", "Paper Supply Co"),
-        ("bank", match kind {
-            SheetKind::CardCharges | SheetKind::CardCredits => "Visa",
-            SheetKind::SalesReceipts => "Undeposited Funds",
-            _ => "Checking",
-        }),
+        (
+            "bank",
+            match kind {
+                SheetKind::CardCharges | SheetKind::CardCredits => "Visa",
+                SheetKind::SalesReceipts => "Undeposited Funds",
+                _ => "Checking",
+            },
+        ),
         ("dueDate", "03/31/2026"),
         ("method", "Check"),
         ("item", if sales { "Lawn care" } else { "" }),
-        ("description", match kind {
-            SheetKind::Deposits => "Interest",
-            _ if sales => "March mowing",
-            _ => "Printer paper",
-        }),
+        (
+            "description",
+            match kind {
+                SheetKind::Deposits => "Interest",
+                _ if sales => "March mowing",
+                _ => "Printer paper",
+            },
+        ),
         ("quantity", "4"),
         ("rate", if sales { "60.00" } else { "12.50" }),
         ("amount", if sales { "240.00" } else { "50.00" }),
-        ("account", match kind {
-            SheetKind::Deposits => "Interest Income",
-            _ if sales => "Sales",
-            _ => "Office Supplies",
-        }),
+        (
+            "account",
+            match kind {
+                SheetKind::Deposits => "Interest Income",
+                _ if sales => "Sales",
+                _ => "Office Supplies",
+            },
+        ),
         ("memo", ""),
     ];
     match kind {
@@ -981,7 +1061,14 @@ fn example(kind: SheetKind) -> Vec<Vec<(&'static str, &'static str)>> {
             ("method", "Check"),
             ("reference", "5521"),
         ]],
-        SheetKind::BillPayments => vec![vec![("date", "03/25/2026"), ("party", "Paper Supply Co"), ("document", "101"), ("amount", "50.00"), ("account", "Checking"), ("reference", "1042")]],
+        SheetKind::BillPayments => vec![vec![
+            ("date", "03/25/2026"),
+            ("party", "Paper Supply Co"),
+            ("document", "101"),
+            ("amount", "50.00"),
+            ("account", "Checking"),
+            ("reference", "1042"),
+        ]],
         _ => vec![line],
     }
 }

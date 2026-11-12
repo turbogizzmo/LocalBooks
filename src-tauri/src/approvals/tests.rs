@@ -33,7 +33,10 @@ async fn rules_hold_matching_bills_until_approved() {
 
     // Submitted: nothing is posted, so A/P and Pay Bills don't see it.
     let request = submit(&pool, Kind::Bill, &bill(&pool, "Harborview Leasing", 250_000).await, "Sam").await.unwrap();
-    assert_eq!((request.status.as_str(), request.total_cents, request.reference.as_deref(), request.requested_by.as_str()), ("PENDING", 250_000, Some("B-7"), "Sam"));
+    assert_eq!(
+        (request.status.as_str(), request.total_cents, request.reference.as_deref(), request.requested_by.as_str()),
+        ("PENDING", 250_000, Some("B-7"), "Sam")
+    );
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM bills").await, 0);
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM journal_entries").await, 0);
     assert!(crate::expenses::list_bills(&pool).await.unwrap().is_empty());
@@ -88,7 +91,10 @@ async fn purchase_orders_wait_out_of_open_orders_until_approved() {
     let supplies = account(&pool, "6300").await;
     let po = json!({ "vendorName": "Ridgeline Lumber", "poDate": "2026-03-02", "memo": "Deck", "lines": [{ "accountId": supplies, "description": "Boards", "amountCents": 80_000 }] });
     let typed: PurchaseOrderInput = serde_json::from_value(po.clone()).unwrap();
-    assert!(check_not_held(&pool, Kind::PurchaseOrder, &typed.vendor_name, crate::workflows::validate_purchase_order(&typed).unwrap()).await.unwrap_err().starts_with("APPROVAL_REQUIRED"));
+    assert!(check_not_held(&pool, Kind::PurchaseOrder, &typed.vendor_name, crate::workflows::validate_purchase_order(&typed).unwrap())
+        .await
+        .unwrap_err()
+        .starts_with("APPROVAL_REQUIRED"));
 
     let request = submit(&pool, Kind::PurchaseOrder, &po, "Sam").await.unwrap();
     assert!(crate::workflows::list_purchase_orders(&pool).await.unwrap().is_empty(), "not an open order yet");
@@ -124,7 +130,10 @@ async fn approving_a_held_bill_from_a_purchase_order_posts_it_and_marks_the_orde
     assert!(check_not_held(&pool, Kind::Bill, &bill.vendor_name, bill.total_cents.get()).await.unwrap_err().starts_with("APPROVAL_REQUIRED"));
 
     let request = submit_purchase_order_bill(&pool, po, &bill, "Sam").await.unwrap();
-    assert_eq!((request.status.as_str(), request.total_cents, request.reference.as_deref(), request.from_purchase_order_id), ("PENDING", 80_000, Some("RL-41"), Some(po)));
+    assert_eq!(
+        (request.status.as_str(), request.total_cents, request.reference.as_deref(), request.from_purchase_order_id),
+        ("PENDING", 80_000, Some("RL-41"), Some(po))
+    );
     assert_eq!(request.from_po_number, Some(1));
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM bills").await, 0, "nothing posts while it waits");
     assert_eq!(order_state(&pool, po).await, ("OPEN".into(), None, true));

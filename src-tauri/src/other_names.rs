@@ -101,16 +101,18 @@ async fn write(pool: &SqlitePool, id: Option<i64>, input: &OtherNameInput) -> Re
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let fields = (clean(input.company_name.as_deref()), email, clean(input.phone.as_deref()), clean(input.address.as_deref()), clean(input.notes.as_deref()));
     let result = match id {
-        None => sqlx::query_scalar::<_, i64>("INSERT INTO other_names (name, company_name, email, phone, address, notes) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id")
-            .bind(&name)
-            .bind(&fields.0)
-            .bind(&fields.1)
-            .bind(&fields.2)
-            .bind(&fields.3)
-            .bind(&fields.4)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(db_err),
+        None => sqlx::query_scalar::<_, i64>(
+            "INSERT INTO other_names (name, company_name, email, phone, address, notes) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
+        )
+        .bind(&name)
+        .bind(&fields.0)
+        .bind(&fields.1)
+        .bind(&fields.2)
+        .bind(&fields.3)
+        .bind(&fields.4)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err),
         Some(id) => sqlx::query("UPDATE other_names SET name = ?2, company_name = ?3, email = ?4, phone = ?5, address = ?6, notes = ?7 WHERE id = ?1")
             .bind(id)
             .bind(&name)
@@ -156,7 +158,11 @@ pub async fn set_active(pool: &SqlitePool, id: i64, active: bool) -> Result<Othe
 /// The other name a check's payee names, when no vendor has that name: checks and expenses pay a
 /// vendor first, then an other name, and otherwise add the payee as a new vendor.
 pub(crate) async fn payee(conn: &mut sqlx::SqliteConnection, name: &str) -> Result<Option<i64>, String> {
-    let vendor: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM vendors WHERE name = ?1 COLLATE NOCASE)").bind(name.trim()).fetch_one(&mut *conn).await.map_err(db_err)?;
+    let vendor: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM vendors WHERE name = ?1 COLLATE NOCASE)")
+        .bind(name.trim())
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(db_err)?;
     if vendor {
         return Ok(None);
     }

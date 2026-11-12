@@ -217,8 +217,12 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
         | "four_digit_years"
         | "class_tracking"
         | "class_prompt"
-        | "sales_tax_enabled" | "finance_charge_on_finance_charges" | crate::fx_rates::PREF_KEY | crate::item_categories::PREF_KEY
-        | crate::print_queue::PREF_CHECKS | crate::print_queue::PREF_INVOICES => match v {
+        | "sales_tax_enabled"
+        | "finance_charge_on_finance_charges"
+        | crate::fx_rates::PREF_KEY
+        | crate::item_categories::PREF_KEY
+        | crate::print_queue::PREF_CHECKS
+        | crate::print_queue::PREF_INVOICES => match v {
             "true" | "false" => Ok(v.to_string()),
             _ => Err("PREF_BAD_FLAG: use true or false".into()),
         },
@@ -353,13 +357,12 @@ pub async fn set(pool: &SqlitePool, key: &str, value: &str) -> Result<String, St
         }
     }
     if key == "finance_charge_account_id" && !normalized.is_empty() {
-        let account: Option<(String, bool)> = sqlx::query_as(
-            "SELECT t.classification, a.is_active FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
-        )
-        .bind(normalized.parse::<i64>().unwrap_or_default())
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+        let account: Option<(String, bool)> =
+            sqlx::query_as("SELECT t.classification, a.is_active FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1")
+                .bind(normalized.parse::<i64>().unwrap_or_default())
+                .fetch_optional(pool)
+                .await
+                .map_err(db_err)?;
         if !matches!(account, Some((classification, true)) if classification == "INCOME") {
             return Err("PREF_BAD_FC_ACCOUNT: finance charges must be credited to an active Income account".into());
         }
@@ -375,7 +378,8 @@ pub async fn set(pool: &SqlitePool, key: &str, value: &str) -> Result<String, St
     }
     if key == crate::statements::CASH_FLOW_SECTIONS {
         for id in crate::statements::parse_cash_flow_sections(&normalized)?.keys() {
-            let account_type: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?;
+            let account_type: Option<String> =
+                sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?;
             if account_type.as_deref().and_then(crate::statements::default_cash_flow_section).is_none() {
                 return Err(format!("PREF_BAD_CASH_FLOW: account {id} is not a balance sheet account outside cash"));
             }
@@ -540,7 +544,11 @@ pub fn tax_calendar(tax_form: &str, start_month: u32, as_of: NaiveDate) -> Vec<T
     let (prior_start, prior_end) = fiscal_year_bounds(start - chrono::Duration::days(1), start_month);
     let after_end = |fy_end: NaiveDate| NaiveDate::from_ymd_opt(fy_end.year(), fy_end.month(), 1).expect("first of month");
     let fy_label = |s: NaiveDate, e: NaiveDate| {
-        if s.month() == 1 { format!("{}", s.year()) } else { format!("FY {}–{}", s.format("%b %Y"), e.format("%b %Y")) }
+        if s.month() == 1 {
+            format!("{}", s.year())
+        } else {
+            format!("FY {}–{}", s.format("%b %Y"), e.format("%b %Y"))
+        }
     };
 
     let mut items: Vec<(NaiveDate, String, &str)> = Vec::new();
@@ -563,11 +571,7 @@ pub fn tax_calendar(tax_form: &str, start_month: u32, as_of: NaiveDate) -> Vec<T
     };
 
     for (s, e) in [(prior_start, prior_end), (start, end)] {
-        items.push((
-            fifteenth_of_month_after(after_end(e), return_months(s, e)),
-            format!("{form_name} return due for {}", fy_label(s, e)),
-            form_name,
-        ));
+        items.push((fifteenth_of_month_after(after_end(e), return_months(s, e)), format!("{form_name} return due for {}", fy_label(s, e)), form_name));
     }
 
     match tax_form {

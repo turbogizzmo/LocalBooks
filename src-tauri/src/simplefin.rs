@@ -73,11 +73,11 @@ pub fn decode_setup_token(token: &str) -> Result<Url, String> {
     if compact.is_empty() {
         return Err("SFIN_TOKEN_EMPTY: paste the setup token from SimpleFIN Bridge".into());
     }
-    let invalid = || "SFIN_TOKEN_INVALID: that is not a SimpleFIN setup token. Copy the whole token from SimpleFIN Bridge (a long string of letters and numbers).".to_string();
-    let bytes = [STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD]
-        .iter()
-        .find_map(|engine| engine.decode(&compact).ok())
-        .ok_or_else(invalid)?;
+    let invalid = || {
+        "SFIN_TOKEN_INVALID: that is not a SimpleFIN setup token. Copy the whole token from SimpleFIN Bridge (a long string of letters and numbers)."
+            .to_string()
+    };
+    let bytes = [STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD].iter().find_map(|engine| engine.decode(&compact).ok()).ok_or_else(invalid)?;
     let text = String::from_utf8(bytes).map_err(|_| invalid())?;
     let url = Url::parse(text.trim()).map_err(|_| invalid())?;
     if url.host_str().is_none() {
@@ -250,12 +250,8 @@ impl AccountSet {
 
     fn institution(&self, account: &RemoteAccount) -> Option<String> {
         let from_org = account.org.as_ref().and_then(|o| o.name.clone().filter(|n| !n.is_empty()).or_else(|| o.domain.clone()));
-        let from_connection = account
-            .conn_id
-            .as_ref()
-            .and_then(|id| self.connections.iter().find(|c| &c.conn_id == id))
-            .map(|c| c.name.clone())
-            .filter(|n| !n.is_empty());
+        let from_connection =
+            account.conn_id.as_ref().and_then(|id| self.connections.iter().find(|c| &c.conn_id == id)).map(|c| c.name.clone()).filter(|n| !n.is_empty());
         from_org.or(from_connection)
     }
 }
@@ -382,12 +378,7 @@ async fn connection_row(pool: &SqlitePool, connection_id: i64) -> Result<Connect
 
 async fn save_messages(pool: &SqlitePool, connection_id: i64, messages: &[String]) -> Result<(), String> {
     let text = if messages.is_empty() { None } else { Some(serde_json::to_string(messages).map_err(|e| e.to_string())?) };
-    sqlx::query("UPDATE simplefin_connections SET last_messages = ?2 WHERE id = ?1")
-        .bind(connection_id)
-        .bind(text)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
+    sqlx::query("UPDATE simplefin_connections SET last_messages = ?2 WHERE id = ?1").bind(connection_id).bind(text).execute(pool).await.map_err(db_err)?;
     Ok(())
 }
 
@@ -415,13 +406,7 @@ impl SimpleFin {
     /// Claims a setup token, returning the Access URL. A token can be claimed only once.
     async fn claim(&self, token: &str) -> Result<String, String> {
         let claim_url = decode_setup_token(token)?;
-        let response = self
-            .client
-            .post(claim_url)
-            .header(reqwest::header::CONTENT_LENGTH, "0")
-            .send()
-            .await
-            .map_err(network_error)?;
+        let response = self.client.post(claim_url).header(reqwest::header::CONTENT_LENGTH, "0").send().await.map_err(network_error)?;
         match response.status() {
             s if s.is_success() => {
                 let text = response.text().await.map_err(network_error)?;
@@ -441,7 +426,11 @@ impl SimpleFin {
         let Ok(bytes) = response.bytes().await else { return 1 };
         let Ok(info) = serde_json::from_slice::<Value>(&bytes) else { return 1 };
         let reports_2 = info["versions"].as_array().is_some_and(|v| v.iter().any(|v| v.as_str().is_some_and(|s| s.starts_with("2."))));
-        if reports_2 { 2 } else { 1 }
+        if reports_2 {
+            2
+        } else {
+            1
+        }
     }
 
     async fn fetch(&self, access: &Access, protocol: i64, query: &[(&str, String)]) -> Result<AccountSet, String> {
@@ -455,22 +444,20 @@ impl SimpleFin {
                 pairs.append_pair(k, v);
             }
         }
-        let response = self
-            .client
-            .get(url)
-            .basic_auth(&access.username, Some(&access.password))
-            .send()
-            .await
-            .map_err(network_error)?;
+        let response = self.client.get(url).basic_auth(&access.username, Some(&access.password)).send().await.map_err(network_error)?;
         match response.status() {
             StatusCode::OK => {
                 let bytes = response.bytes().await.map_err(network_error)?;
                 serde_json::from_slice(&bytes).map_err(|e| format!("SFIN_BAD_RESPONSE: SimpleFIN sent data Tillhouse could not read ({e})"))
             }
-            StatusCode::PAYMENT_REQUIRED => Err("SFIN_PAYMENT: SimpleFIN says this connection's subscription needs payment. Renew it at SimpleFIN Bridge, then sync again.".into()),
-            StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => Err("SFIN_REVOKED: SimpleFIN no longer accepts this connection (its access was disabled or revoked). \
+            StatusCode::PAYMENT_REQUIRED => {
+                Err("SFIN_PAYMENT: SimpleFIN says this connection's subscription needs payment. Renew it at SimpleFIN Bridge, then sync again.".into())
+            }
+            StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => {
+                Err("SFIN_REVOKED: SimpleFIN no longer accepts this connection (its access was disabled or revoked). \
                  Create a new setup token in SimpleFIN Bridge and choose Reconnect."
-                .into()),
+                    .into())
+            }
             s => Err(format!("SFIN_SERVER: SimpleFIN answered {s}; try again later")),
         }
     }
@@ -767,12 +754,7 @@ async fn write_sync(
         }
     }
     for id in &synced {
-        sqlx::query("UPDATE simplefin_accounts SET last_synced_at = ?2 WHERE id = ?1")
-            .bind(id)
-            .bind(&stamp)
-            .execute(&mut **tx)
-            .await
-            .map_err(db_err)?;
+        sqlx::query("UPDATE simplefin_accounts SET last_synced_at = ?2 WHERE id = ?1").bind(id).bind(&stamp).execute(&mut **tx).await.map_err(db_err)?;
     }
     summary.accounts = synced.len();
     sqlx::query("UPDATE simplefin_connections SET last_synced_at = ?2 WHERE id = ?1")
@@ -790,16 +772,10 @@ async fn write_sync(
 
 /// Links a SimpleFIN account to a Bank or Credit Card account, importing from `sync_from` onward.
 pub async fn link_account(pool: &SqlitePool, account_id: i64, bank_account_id: i64, sync_from: NaiveDate, today: NaiveDate) -> Result<(), String> {
-    let currency: Option<String> = sqlx::query_scalar("SELECT currency FROM simplefin_accounts WHERE id = ?1")
-        .bind(account_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+    let currency: Option<String> =
+        sqlx::query_scalar("SELECT currency FROM simplefin_accounts WHERE id = ?1").bind(account_id).fetch_optional(pool).await.map_err(db_err)?;
     let currency = currency.ok_or("SFIN_NOT_FOUND: that SimpleFIN account no longer exists")?;
-    let home: String = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'home_currency_code'")
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let home: String = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'home_currency_code'").fetch_one(pool).await.map_err(db_err)?;
     if !currency.eq_ignore_ascii_case(&home) {
         return Err(format!(
             "SFIN_CURRENCY: this account is in {currency}, but Tillhouse bank accounts are kept in {home}. Import its statements as files instead."
@@ -863,4 +839,3 @@ pub async fn suggested_start(pool: &SqlitePool, bank_account_id: i64, today: Nai
 
 #[cfg(test)]
 mod tests;
-

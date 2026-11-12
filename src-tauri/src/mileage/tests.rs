@@ -99,7 +99,10 @@ async fn trips_check_odometer_miles_customer_and_vehicle() {
 
     save_vehicle(&pool, Some(car), VehicleInput { name: "Sedan".into(), description: Some("2019, plate 4XYZ".into()), is_active: false }).await.unwrap();
     assert!(create_trip(&pool, trip(car, d(3, 3), miles(5), None, false)).await.unwrap_err().starts_with("MILE_INACTIVE_VEHICLE"));
-    assert!(save_vehicle(&pool, None, VehicleInput { name: "sedan".into(), description: None, is_active: true }).await.unwrap_err().starts_with("MILE_DUPLICATE_VEHICLE"));
+    assert!(save_vehicle(&pool, None, VehicleInput { name: "sedan".into(), description: None, is_active: true })
+        .await
+        .unwrap_err()
+        .starts_with("MILE_DUPLICATE_VEHICLE"));
     let listed = list_vehicles(&pool).await.unwrap();
     assert_eq!((listed[0].is_active, listed[0].trip_count, listed[0].description.as_deref()), (false, 1, Some("2019, plate 4XYZ")));
 }
@@ -170,7 +173,8 @@ async fn billing_trips_posts_an_invoice_and_marks_them_billed() {
             income_account_id: i.income_account_id,
             product_service_id: i.product_service_id,
             class_id: None,
-            is_taxable: false, service_date: None,
+            is_taxable: false,
+            service_date: None,
         })
         .collect();
     let replacement = crate::edits::replace_invoice(&pool, invoice.id, edited).await.unwrap();
@@ -218,7 +222,8 @@ async fn reports_total_miles_and_deductible_by_vehicle_and_job() {
     assert_eq!(summary.trips_without_rate, 0);
 
     // Detail: one row per trip with the rate on its date, grouped and subtotaled by vehicle.
-    let detail = mileage_report(&pool, MileageReportKind::VehicleDetail, &MileageReportParams { vehicle_id: Some(truck), ..Default::default() }, today).await.unwrap();
+    let detail =
+        mileage_report(&pool, MileageReportKind::VehicleDetail, &MileageReportParams { vehicle_id: Some(truck), ..Default::default() }, today).await.unwrap();
     let rates: Vec<Value> = detail.rows.iter().filter(|r| r.kind == RowKind::Detail).map(|r| r.cells[7].clone()).collect();
     assert_eq!(rates, vec![json!(7_000), json!(7_250)]);
     let subtotal = detail.rows.iter().find(|r| r.kind == RowKind::Subtotal).unwrap();

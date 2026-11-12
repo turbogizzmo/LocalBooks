@@ -104,7 +104,9 @@ fn every_page_has_a_screen_for_its_window() {
     // Groups (Sales, Expenses, …) only fold their pages away; the pages are what open.
     let groups: Vec<&str> = pages.iter().copied().filter(|id| pages.iter().any(|p| p.starts_with(&format!("{id}/")))).collect();
     // A group's pages may share one screen (`view.startsWith('settings/')` shows each Settings tab).
-    let shown = |id: &str| screen.contains(&format!("view === '{id}'")) || id.split_once('/').is_some_and(|(group, _)| screen.contains(&format!("view.startsWith('{group}/')")));
+    let shown = |id: &str| {
+        screen.contains(&format!("view === '{id}'")) || id.split_once('/').is_some_and(|(group, _)| screen.contains(&format!("view.startsWith('{group}/')")))
+    };
     let missing: Vec<&str> = pages.into_iter().filter(|id| !groups.contains(id) && !shown(id)).collect();
     assert!(missing.is_empty(), "these pages have no screen in Screen.jsx: {}", missing.join(", "));
 }
@@ -128,10 +130,5 @@ fn screen_library_unit_tests_pass() {
         .current_dir(&root)
         .output()
         .expect("run Node (install Node.js 22 or later to build and test Tillhouse)");
-    assert!(
-        output.status.success(),
-        "src/lib unit tests failed:\n{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert!(output.status.success(), "src/lib unit tests failed:\n{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
 }

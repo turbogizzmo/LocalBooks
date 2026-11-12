@@ -117,7 +117,9 @@ pub async fn settings(pool: &SqlitePool) -> Result<Option<OffsiteSettings>, Stri
 async fn stored_key(store: &SecretStore, s: &OffsiteSettings) -> Result<Option<Zeroizing<[u8; 32]>>, String> {
     let Some(text) = store.get(&s.key_check).await? else { return Ok(None) };
     let text = Zeroizing::new(text);
-    let bytes = Zeroizing::new(base64::engine::general_purpose::STANDARD.decode(text.as_bytes()).map_err(|_| "OFFSITE_KEY: the stored backup key is damaged".to_string())?);
+    let bytes = Zeroizing::new(
+        base64::engine::general_purpose::STANDARD.decode(text.as_bytes()).map_err(|_| "OFFSITE_KEY: the stored backup key is damaged".to_string())?,
+    );
     let key: [u8; 32] = bytes.as_slice().try_into().map_err(|_| "OFFSITE_KEY: the stored backup key is damaged".to_string())?;
     let key = Zeroizing::new(key);
     Ok((key_check(&key) == s.key_check).then_some(key))
@@ -306,7 +308,9 @@ async fn decrypt_into(path: &Path, password: &str, out: &Path) -> Result<(), Str
     loop {
         let next_len = if len == buf.len() { fill(&mut reader, &mut next).map_err(io)? } else { 0 };
         let last = next_len == 0;
-        let plain = Zeroizing::new(cipher.decrypt(&Nonce::from(nonce(&prefix, index)), Payload { msg: &buf[..len], aad: &chunk_aad(&head, index, last) }).map_err(|_| wrong())?);
+        let plain = Zeroizing::new(
+            cipher.decrypt(&Nonce::from(nonce(&prefix, index)), Payload { msg: &buf[..len], aad: &chunk_aad(&head, index, last) }).map_err(|_| wrong())?,
+        );
         writer.write_all(&plain).map_err(io)?;
         if last {
             break;
@@ -323,7 +327,11 @@ async fn decrypt_into(path: &Path, password: &str, out: &Path) -> Result<(), Str
 fn safe_name(name: &str) -> String {
     let s: String = name.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
     let s = s.trim_matches('-').chars().take(40).collect::<String>();
-    if s.is_empty() { "company".into() } else { s }
+    if s.is_empty() {
+        "company".into()
+    } else {
+        s
+    }
 }
 
 /// Makes an encrypted copy in the folder now, and deletes the oldest past the number to keep.
@@ -354,14 +362,25 @@ pub async fn back_up_now(db: &Db, store: &SecretStore) -> Result<OffsiteCopy, St
 }
 
 async fn write_copy(db: &Db, pool: &SqlitePool, store: &SecretStore, s: &OffsiteSettings) -> Result<OffsiteCopy, String> {
-    let key = stored_key(store, s).await?.ok_or_else(|| "OFFSITE_KEY_MISSING: this computer does not have the backup key; enter the backup password again under Offsite".to_string())?;
+    let key = stored_key(store, s)
+        .await?
+        .ok_or_else(|| "OFFSITE_KEY_MISSING: this computer does not have the backup key; enter the backup password again under Offsite".to_string())?;
     let folder = PathBuf::from(&s.folder);
     if !folder.is_dir() {
         return Err(format!("OFFSITE_FOLDER: the folder {} is not there; is the drive or synced folder available?", folder.display()));
     }
-    let salt: [u8; SALT_LEN] = base64::engine::general_purpose::STANDARD.decode(&s.salt).ok().and_then(|b| b.try_into().ok()).ok_or_else(|| "OFFSITE_SETTINGS: damaged salt".to_string())?;
-    let cost = KdfCost { memory_kib: u32::try_from(s.kdf_memory_kib).unwrap_or(0), iterations: u32::try_from(s.kdf_iterations).unwrap_or(0), parallelism: u32::try_from(s.kdf_parallelism).unwrap_or(0) };
-    let company: String = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'company_name'").fetch_optional(pool).await.map_err(db_err)?.unwrap_or_default();
+    let salt: [u8; SALT_LEN] = base64::engine::general_purpose::STANDARD
+        .decode(&s.salt)
+        .ok()
+        .and_then(|b| b.try_into().ok())
+        .ok_or_else(|| "OFFSITE_SETTINGS: damaged salt".to_string())?;
+    let cost = KdfCost {
+        memory_kib: u32::try_from(s.kdf_memory_kib).unwrap_or(0),
+        iterations: u32::try_from(s.kdf_iterations).unwrap_or(0),
+        parallelism: u32::try_from(s.kdf_parallelism).unwrap_or(0),
+    };
+    let company: String =
+        sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'company_name'").fetch_optional(pool).await.map_err(db_err)?.unwrap_or_default();
     let stamp = Local::now().format("%Y%m%d-%H%M%S");
     let file_name = format!("{}-{stamp}.{EXTENSION}", safe_name(&company));
     let plain = db.backups_dir().join(format!(".offsite-{}.db", std::process::id()));
@@ -437,7 +456,9 @@ pub async fn test_restore(db: &Db, path: &Path, password: &str) -> Result<Compan
         // Backup safety (gap R8): a passing test of a copy of these books.
         // A passing test stays passed if noting it fails.
         if crate::backup_safety::is_these_books(&pool, &info).await {
-            if let Err(e) = crate::backup_safety::record(&pool, crate::backup_safety::Kind::TestRestore, crate::backup_safety::Source::Offsite, Some(path)).await {
+            if let Err(e) =
+                crate::backup_safety::record(&pool, crate::backup_safety::Kind::TestRestore, crate::backup_safety::Source::Offsite, Some(path)).await
+            {
                 crate::diagnostics::log(&format!("backup safety: could not note the test restore: {e}"));
             }
         }

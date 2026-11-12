@@ -58,7 +58,20 @@ impl Platform {
     fn queries(self) -> &'static [Query] {
         use Query::*;
         match self {
-            Platform::Mac => &[Company, Accounts, Customers, Vendors, ServiceItems, NonInventoryItems, InventoryItems, Classes, Invoices, Bills, BillPaymentChecks, BillPaymentCards],
+            Platform::Mac => &[
+                Company,
+                Accounts,
+                Customers,
+                Vendors,
+                ServiceItems,
+                NonInventoryItems,
+                InventoryItems,
+                Classes,
+                Invoices,
+                Bills,
+                BillPaymentChecks,
+                BillPaymentCards,
+            ],
             Platform::Windows => &[Company, Accounts, Customers, Vendors, Items, Terms, Classes, Invoices, Bills, BillPaymentChecks, BillPaymentCards, Journal],
         }
     }
@@ -241,11 +254,7 @@ pub fn parse_reply(reply: &str, query: Query) -> Result<Vec<Node>, String> {
     match found.attr("statusCode").unwrap_or("0") {
         "0" => Ok(found.children.clone()),
         "1" => Ok(Vec::new()),
-        code => Err(format!(
-            "QBXML_STATUS_{code}: QuickBooks could not send {} ({})",
-            query.label(),
-            found.attr("statusMessage").unwrap_or("no reason given")
-        )),
+        code => Err(format!("QBXML_STATUS_{code}: QuickBooks could not send {} ({})", query.label(), found.attr("statusMessage").unwrap_or("no reason given"))),
     }
 }
 
@@ -536,17 +545,22 @@ fn cross_check(replies: &HashMap<Query, Vec<Node>>, journal: &HashMap<String, us
     let checks: [(&[Query], &str, &[&str]); 3] = [
         (&[Query::Invoices], "invoices", &["invoice"]),
         (&[Query::Bills], "bills", &["bill"]),
-        (&[Query::BillPaymentChecks, Query::BillPaymentCards], "bill payments", &["billpmtcheck", "billpmtccard", "billpayment", "billpaymentcheck", "billpaymentcreditcard"]),
+        (
+            &[Query::BillPaymentChecks, Query::BillPaymentCards],
+            "bill payments",
+            &["billpmtcheck", "billpmtccard", "billpayment", "billpaymentcheck", "billpaymentcreditcard"],
+        ),
     ];
     let mut notes = Vec::new();
     for (queries, label, types) in checks {
         // Only when every query of the kind was answered.
-        let Some(listed) = queries.iter().map(|q| replies.get(q).map(|r| r.iter().filter(|n| n.name.ends_with("Ret")).count())).sum::<Option<usize>>() else { continue };
+        let Some(listed) = queries.iter().map(|q| replies.get(q).map(|r| r.iter().filter(|n| n.name.ends_with("Ret")).count())).sum::<Option<usize>>() else {
+            continue;
+        };
         let held: usize = types.iter().filter_map(|t| journal.get(*t)).sum();
         if listed != held {
-            notes.push(format!(
-                "QuickBooks lists {listed} {label} but the Journal holds {held}: check that the Journal report covers all dates before posting"
-            ));
+            notes
+                .push(format!("QuickBooks lists {listed} {label} but the Journal holds {held}: check that the Journal report covers all dates before posting"));
         }
     }
     notes
@@ -582,7 +596,8 @@ pub fn export(transport: &mut dyn Transport, platform: Platform, progress: &mut 
     let empty = Vec::new();
     let get = |q: Query| replies.get(&q).unwrap_or(&empty);
     let days = terms_days(get(Query::Terms));
-    let items: Vec<Node> = [Query::Items, Query::ServiceItems, Query::NonInventoryItems, Query::InventoryItems].into_iter().flat_map(|q| get(q).iter().cloned()).collect();
+    let items: Vec<Node> =
+        [Query::Items, Query::ServiceItems, Query::NonInventoryItems, Query::InventoryItems].into_iter().flat_map(|q| get(q).iter().cloned()).collect();
     let mut files = vec![("Accounts (from QuickBooks).csv".to_string(), accounts_table(get(Query::Accounts)))];
     if !get(Query::Customers).is_empty() {
         files.push(("Customers (from QuickBooks).csv".into(), customers_table(get(Query::Customers), &days)));

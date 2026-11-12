@@ -90,7 +90,8 @@ async fn setting_a_tax_line_checks_the_line_and_the_account() {
 #[tokio::test]
 async fn income_tax_sums_each_line_and_lists_what_is_unassigned() {
     let pool = test_pool().await;
-    let (checking, sales, advertising, rent) = (account(&pool, "1010").await, account(&pool, "4000").await, account(&pool, "6000").await, account(&pool, "6300").await);
+    let (checking, sales, advertising, rent) =
+        (account(&pool, "1010").await, account(&pool, "4000").await, account(&pool, "6000").await, account(&pool, "6300").await);
     let post = |date, memo: &str, lines| crate::ledger::post_journal_entry(&pool, entry(date, memo, lines));
     post(d(2025, 3, 1), "Sale", vec![JournalLine::debit(checking, 100_000), JournalLine::credit(sales, 100_000)]).await.unwrap();
     post(d(2025, 3, 2), "Refund", vec![JournalLine::debit(sales, 5_000), JournalLine::credit(checking, 5_000)]).await.unwrap();
@@ -123,7 +124,12 @@ async fn income_tax_sums_each_line_and_lists_what_is_unassigned() {
 
 /// Posts deposits and checks, and reconciles all but the last of them through `end`.
 async fn reconcile_all_but_last(pool: &SqlitePool, account_id: i64, end: NaiveDate) -> i64 {
-    let lines: Vec<_> = crate::reconcile::unreconciled_lines(pool, account_id).await.unwrap().into_iter().filter(|l| l.entry_date.as_str() <= end.to_string().as_str()).collect();
+    let lines: Vec<_> = crate::reconcile::unreconciled_lines(pool, account_id)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|l| l.entry_date.as_str() <= end.to_string().as_str())
+        .collect();
     let (clear, _) = lines.split_at(lines.len() - 1);
     let state = crate::reconcile::account_state(pool, account_id).await.unwrap();
     let ending = state.reconciled_balance_cents + clear.iter().map(|l| l.amount_cents).sum::<i64>();
@@ -156,12 +162,22 @@ async fn reconciliations_keep_a_snapshot_and_report_changes_made_afterwards() {
     assert!(err.contains("REC_SNAPSHOT_IMMUTABLE"), "{err}");
 
     // The January statement left the $80 deposit outstanding; February clears it.
-    crate::ledger::post_journal_entry(&pool, entry(d(2025, 2, 3), "Activity", vec![JournalLine::debit(office, 1_000), JournalLine::credit(checking, 1_000)])).await.unwrap();
-    crate::ledger::post_journal_entry(&pool, entry(d(2025, 2, 4), "Activity", vec![JournalLine::debit(office, 2_000), JournalLine::credit(checking, 2_000)])).await.unwrap();
+    crate::ledger::post_journal_entry(&pool, entry(d(2025, 2, 3), "Activity", vec![JournalLine::debit(office, 1_000), JournalLine::credit(checking, 1_000)]))
+        .await
+        .unwrap();
+    crate::ledger::post_journal_entry(&pool, entry(d(2025, 2, 4), "Activity", vec![JournalLine::debit(office, 2_000), JournalLine::credit(checking, 2_000)]))
+        .await
+        .unwrap();
     reconcile_all_but_last(&pool, checking, d(2025, 2, 28)).await;
 
     let detail = previous_reconciliation(&pool, january, true).await.unwrap();
-    let status: Vec<String> = detail.report.rows.iter().filter(|r| r.kind == RowKind::Detail && r.journal_entry_id.is_some()).map(|r| r.cells[5].as_str().unwrap().to_string()).collect();
+    let status: Vec<String> = detail
+        .report
+        .rows
+        .iter()
+        .filter(|r| r.kind == RowKind::Detail && r.journal_entry_id.is_some())
+        .map(|r| r.cells[5].as_str().unwrap().to_string())
+        .collect();
     assert_eq!(status, vec!["Cleared", "Cleared", "Cleared", "Cleared 2025-02-28"]);
     let last = detail.report.rows.last().unwrap();
     assert_eq!((last.cells[0].clone(), last.cells[7].clone()), (json!("Register Balance as of 2025-01-31"), json!(43_000)));
@@ -178,26 +194,25 @@ async fn reconciliations_keep_a_snapshot_and_report_changes_made_afterwards() {
     assert!(clean.notes[0].starts_with("2 completed reconciliations checked; 0 changes"), "{:?}", clean.notes);
 
     // Something outside LocalBooks edits the file: the schema's guards are gone for this.
-    let triggers: Vec<String> = sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name IN ('journal_lines', 'journal_entries')")
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+    let triggers: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name IN ('journal_lines', 'journal_entries')")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     for t in triggers {
         sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
     }
-    let cleared: Vec<(i64, i64)> = sqlx::query_as("SELECT id, journal_entry_id FROM journal_lines WHERE reconciliation_id = ?1 ORDER BY id").bind(january).fetch_all(&pool).await.unwrap();
+    let cleared: Vec<(i64, i64)> =
+        sqlx::query_as("SELECT id, journal_entry_id FROM journal_lines WHERE reconciliation_id = ?1 ORDER BY id").bind(january).fetch_all(&pool).await.unwrap();
     sqlx::query("UPDATE journal_lines SET credit_cents = 13000 WHERE id = ?1").bind(cleared[1].0).execute(&pool).await.unwrap();
     sqlx::query("DELETE FROM journal_lines WHERE id = ?1").bind(cleared[2].0).execute(&pool).await.unwrap();
     sqlx::query("UPDATE journal_entries SET entry_date = '2025-01-03' WHERE id = ?1").bind(cleared[0].1).execute(&pool).await.unwrap();
     let report = discrepancy(&pool, None, d(2025, 3, 1)).await.unwrap();
-    let changes: Vec<(String, Value)> = report.report.rows.iter().filter(|r| r.kind == RowKind::Detail).map(|r| (r.cells[4].as_str().unwrap().to_string(), r.cells[7].clone())).collect();
+    let changes: Vec<(String, Value)> =
+        report.report.rows.iter().filter(|r| r.kind == RowKind::Detail).map(|r| (r.cells[4].as_str().unwrap().to_string(), r.cells[7].clone())).collect();
     assert_eq!(
         changes,
-        vec![
-            ("Date changed to 2025-01-03".to_string(), json!(0)),
-            ("Amount changed".to_string(), json!(-1_000)),
-            ("Deleted".to_string(), json!(3_000)),
-        ],
+        vec![("Date changed to 2025-01-03".to_string(), json!(0)), ("Amount changed".to_string(), json!(-1_000)), ("Deleted".to_string(), json!(3_000)),],
         "{:#?}",
         report.report.rows
     );
@@ -207,8 +222,12 @@ async fn reconciliations_keep_a_snapshot_and_report_changes_made_afterwards() {
 async fn older_reconciliations_are_checked_by_their_totals() {
     let pool = test_pool().await;
     let (checking, sales) = (account(&pool, "1010").await, account(&pool, "4000").await);
-    crate::ledger::post_journal_entry(&pool, entry(d(2025, 1, 2), "Sale", vec![JournalLine::debit(checking, 10_000), JournalLine::credit(sales, 10_000)])).await.unwrap();
-    crate::ledger::post_journal_entry(&pool, entry(d(2025, 1, 3), "Sale", vec![JournalLine::debit(checking, 20_000), JournalLine::credit(sales, 20_000)])).await.unwrap();
+    crate::ledger::post_journal_entry(&pool, entry(d(2025, 1, 2), "Sale", vec![JournalLine::debit(checking, 10_000), JournalLine::credit(sales, 10_000)]))
+        .await
+        .unwrap();
+    crate::ledger::post_journal_entry(&pool, entry(d(2025, 1, 3), "Sale", vec![JournalLine::debit(checking, 20_000), JournalLine::credit(sales, 20_000)]))
+        .await
+        .unwrap();
     let rec = reconcile_all_but_last(&pool, checking, d(2025, 1, 31)).await;
     // As if completed before migration 0056: no snapshot.
     for t in ["trg_rec_snapshot_lines_no_delete", "trg_rec_snapshot_no_delete"] {
@@ -222,7 +241,8 @@ async fn older_reconciliations_are_checked_by_their_totals() {
     assert_eq!(report.report.line_count, 0);
     assert!(report.notes[1].contains("checked by its totals only"), "{:?}", report.notes);
 
-    let triggers: Vec<String> = sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'journal_lines'").fetch_all(&pool).await.unwrap();
+    let triggers: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'journal_lines'").fetch_all(&pool).await.unwrap();
     for t in triggers {
         sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
     }
@@ -230,15 +250,29 @@ async fn older_reconciliations_are_checked_by_their_totals() {
     let report = discrepancy(&pool, None, d(2025, 3, 1)).await.unwrap();
     assert_eq!(report.report.line_count, 1);
     let row = report.report.rows.iter().find(|r| r.kind == RowKind::Detail).unwrap();
-    assert_eq!((row.cells[0].clone(), row.cells[5].clone(), row.cells[6].clone(), row.cells[7].clone()), (json!("Cleared total"), json!(10_000), json!(12_000), json!(2_000)));
+    assert_eq!(
+        (row.cells[0].clone(), row.cells[5].clone(), row.cells[6].clone(), row.cells[7].clone()),
+        (json!("Cleared total"), json!(10_000), json!(12_000), json!(2_000))
+    );
 }
 
 #[tokio::test]
 async fn adjusting_entries_are_marked_and_reported() {
     let pool = test_pool().await;
     let (checking, office, equipment) = (account(&pool, "1010").await, account(&pool, "6250").await, account(&pool, "1500").await);
-    let plain = crate::ledger::post_journal_entry(&pool, entry(d(2025, 6, 1), "Supplies", vec![JournalLine::debit(office, 5_000), JournalLine::credit(checking, 5_000)])).await.unwrap();
-    let adjusting = crate::ledger::post_journal_entry_flagged(&pool, entry(d(2025, 12, 31), "Reclass printer", vec![JournalLine::debit(equipment, 40_000), JournalLine::credit(office, 40_000)]), true).await.unwrap();
+    let plain = crate::ledger::post_journal_entry(
+        &pool,
+        entry(d(2025, 6, 1), "Supplies", vec![JournalLine::debit(office, 5_000), JournalLine::credit(checking, 5_000)]),
+    )
+    .await
+    .unwrap();
+    let adjusting = crate::ledger::post_journal_entry_flagged(
+        &pool,
+        entry(d(2025, 12, 31), "Reclass printer", vec![JournalLine::debit(equipment, 40_000), JournalLine::credit(office, 40_000)]),
+        true,
+    )
+    .await
+    .unwrap();
     let flags: Vec<(i64, bool)> = crate::ledger::list_journal_entries(&pool, 10).await.unwrap().into_iter().map(|e| (e.id, e.is_adjusting)).collect();
     assert!(flags.contains(&(adjusting, true)) && flags.contains(&(plain, false)), "{flags:?}");
 
@@ -255,11 +289,24 @@ async fn adjusting_entries_are_marked_and_reported() {
     assert!(report.rows.iter().all(|r| r.journal_entry_id.is_none_or(|e| e == adjusting)));
 
     // Editing keeps the mark unless told otherwise; the voided original and its reversal stay in.
-    let replaced = crate::edits::replace_journal_entry(&pool, adjusting, entry(d(2025, 12, 31), "Reclass printer", vec![JournalLine::debit(equipment, 45_000), JournalLine::credit(office, 45_000)])).await.unwrap();
+    let replaced = crate::edits::replace_journal_entry(
+        &pool,
+        adjusting,
+        entry(d(2025, 12, 31), "Reclass printer", vec![JournalLine::debit(equipment, 45_000), JournalLine::credit(office, 45_000)]),
+    )
+    .await
+    .unwrap();
     let is_adjusting = |id: i64| sqlx::query_scalar::<_, bool>("SELECT is_adjusting FROM journal_entries WHERE id = ?1").bind(id).fetch_one(&pool);
     assert!(is_adjusting(replaced).await.unwrap());
     assert_eq!(run(pool.clone()).await.line_count, 6, "original, its reversal and the replacement");
-    let unmarked = crate::edits::replace_journal_entry_flagged(&pool, replaced, entry(d(2025, 12, 31), "Reclass printer", vec![JournalLine::debit(equipment, 45_000), JournalLine::credit(office, 45_000)]), Some(false)).await.unwrap();
+    let unmarked = crate::edits::replace_journal_entry_flagged(
+        &pool,
+        replaced,
+        entry(d(2025, 12, 31), "Reclass printer", vec![JournalLine::debit(equipment, 45_000), JournalLine::credit(office, 45_000)]),
+        Some(false),
+    )
+    .await
+    .unwrap();
     assert!(!is_adjusting(unmarked).await.unwrap());
 }
 
@@ -274,7 +321,8 @@ async fn collections_lists_overdue_invoices_with_contact_details() {
         income_account_id: sales,
         product_service_id: None,
         class_id: None,
-        is_taxable: false, service_date: None,
+        is_taxable: false,
+        service_date: None,
     };
     let invoice = |customer: &str, issue: NaiveDate, due: NaiveDate, amount: i64| crate::invoices::InvoiceInput {
         invoice_number: None,
@@ -290,7 +338,10 @@ async fn collections_lists_overdue_invoices_with_contact_details() {
     crate::invoices::create_and_post_invoice(&pool, invoice("Cobalt", d(2025, 1, 1), d(2025, 1, 31), 10_000)).await.unwrap();
     crate::invoices::create_and_post_invoice(&pool, invoice("Cobalt", d(2025, 2, 1), d(2025, 3, 3), 20_000)).await.unwrap();
     crate::invoices::create_and_post_invoice(&pool, invoice("Alder", d(2025, 2, 1), d(2025, 4, 30), 30_000)).await.unwrap();
-    sqlx::query("UPDATE customers SET phone = '555-0100', email = 'ap@cobalt.example', company_name = 'Dana Cobalt' WHERE name = 'Cobalt'").execute(&pool).await.unwrap();
+    sqlx::query("UPDATE customers SET phone = '555-0100', email = 'ap@cobalt.example', company_name = 'Dana Cobalt' WHERE name = 'Cobalt'")
+        .execute(&pool)
+        .await
+        .unwrap();
 
     let report = collections(&pool, d(2025, 3, 15)).await.unwrap();
     assert_eq!(report.report.line_count, 2, "only Cobalt's two invoices are past due");
@@ -304,12 +355,22 @@ async fn collections_lists_overdue_invoices_with_contact_details() {
 async fn open_purchase_orders_leave_out_closed_ones() {
     let pool = test_pool().await;
     let supplies = account(&pool, "6250").await;
-    let po = |vendor: &str, date: NaiveDate, amount: i64| crate::workflows::PurchaseOrderInput { form_lines: Vec::new(),
+    let po = |vendor: &str, date: NaiveDate, amount: i64| crate::workflows::PurchaseOrderInput {
+        form_lines: Vec::new(),
         vendor_name: vendor.into(),
         po_date: date,
         expected_date: Some(date + chrono::Days::new(14)),
         memo: Some("Paper".into()),
-        lines: vec![crate::workflows::PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: None, quantity_e4: None, rate_cents: None, amount_cents: Cents(amount), class_id: None, customer_id: None }],
+        lines: vec![crate::workflows::PurchaseOrderLineInput {
+            account_id: supplies,
+            product_service_id: None,
+            description: None,
+            quantity_e4: None,
+            rate_cents: None,
+            amount_cents: Cents(amount),
+            class_id: None,
+            customer_id: None,
+        }],
     };
     crate::workflows::create_purchase_order(&pool, po("Staples", d(2025, 5, 1), 12_000)).await.unwrap();
     let closed = crate::workflows::create_purchase_order(&pool, po("Staples", d(2025, 5, 2), 5_000)).await.unwrap();

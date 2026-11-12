@@ -31,7 +31,8 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, due: Naive
                 income_account_id: services,
                 product_service_id: None,
                 class_id: None,
-                is_taxable: false, service_date: None,
+                is_taxable: false,
+                service_date: None,
             }],
             currency: None,
             tax_rate_id: None,
@@ -52,7 +53,16 @@ async fn turn_on(pool: &SqlitePool) -> i64 {
 }
 
 fn overdue(balance_cents: i64, days: i64) -> OverdueInvoice {
-    OverdueInvoice { invoice_id: 1, invoice_number: 1001, due_date: d(1, 1), issue_date: d(1, 1), balance_cents, from_date: d(1, 1), days, is_finance_charge: false }
+    OverdueInvoice {
+        invoice_id: 1,
+        invoice_number: 1001,
+        due_date: d(1, 1),
+        issue_date: d(1, 1),
+        balance_cents,
+        from_date: d(1, 1),
+        days,
+        is_finance_charge: false,
+    }
 }
 
 #[test]
@@ -87,7 +97,14 @@ fn interest_is_summed_then_rounded_half_up_once_per_customer() {
     assert_eq!(interest_cents(&parts, 1_000).unwrap(), 1);
     assert_eq!(interest_cents(&parts[..1], 1_000).unwrap(), 0);
 
-    let settings = Settings { annual_rate_milli_percent: 18_000, minimum_cents: 2_500, grace_days: 0, income_account_id: None, charge_finance_charges: false, from_invoice_date: false };
+    let settings = Settings {
+        annual_rate_milli_percent: 18_000,
+        minimum_cents: 2_500,
+        grace_days: 0,
+        income_account_id: None,
+        charge_finance_charges: false,
+        from_invoice_date: false,
+    };
     assert_eq!(charge_cents(&[overdue(100_000, 30)], &settings).unwrap(), (1_479, 2_500));
     assert_eq!(charge_cents(&[overdue(1_000_000, 30)], &settings).unwrap(), (14_795, 14_795));
 }
@@ -103,7 +120,17 @@ fn the_rounding_rule_never_overflows() {
 async fn preferences_validate_and_normalize() {
     let pool = test_pool().await;
     let s = settings(&pool).await.unwrap();
-    assert_eq!(s, Settings { annual_rate_milli_percent: 0, minimum_cents: 0, grace_days: 0, income_account_id: None, charge_finance_charges: false, from_invoice_date: false });
+    assert_eq!(
+        s,
+        Settings {
+            annual_rate_milli_percent: 0,
+            minimum_cents: 0,
+            grace_days: 0,
+            income_account_id: None,
+            charge_finance_charges: false,
+            from_invoice_date: false
+        }
+    );
     use crate::preferences::set;
     assert_eq!(set(&pool, "finance_charge_annual_rate", "18.50%").await.unwrap(), "18.5");
     assert_eq!(set(&pool, "finance_charge_minimum", "$1,000").await.unwrap(), "1000.00");
@@ -116,7 +143,17 @@ async fn preferences_validate_and_normalize() {
     let interest = account_id(&pool, "7000").await;
     set(&pool, "finance_charge_account_id", &interest.to_string()).await.unwrap();
     let s = settings(&pool).await.unwrap();
-    assert_eq!(s, Settings { annual_rate_milli_percent: 18_500, minimum_cents: 100_000, grace_days: 10, income_account_id: Some(interest), charge_finance_charges: true, from_invoice_date: false });
+    assert_eq!(
+        s,
+        Settings {
+            annual_rate_milli_percent: 18_500,
+            minimum_cents: 100_000,
+            grace_days: 10,
+            income_account_id: Some(interest),
+            charge_finance_charges: true,
+            from_invoice_date: false
+        }
+    );
 }
 
 #[tokio::test]
@@ -134,16 +171,19 @@ async fn assessing_posts_an_invoice_to_ar_and_income_and_shows_in_aging_and_stat
     assert_eq!(preview.customers.len(), 1, "only Acme is overdue");
     let acme = &preview.customers[0];
     assert_eq!((acme.customer_name.as_str(), acme.overdue_balance_cents, acme.charge_cents), ("Acme", 100_000, 1_479));
-    assert_eq!(acme.invoices, vec![OverdueInvoice {
-        invoice_id: late.id,
-        invoice_number: late.invoice_number,
-        due_date: d(9, 1),
-        issue_date: d(8, 1),
-        balance_cents: 100_000,
-        from_date: d(9, 1),
-        days: 30,
-        is_finance_charge: false,
-    }]);
+    assert_eq!(
+        acme.invoices,
+        vec![OverdueInvoice {
+            invoice_id: late.id,
+            invoice_number: late.invoice_number,
+            due_date: d(9, 1),
+            issue_date: d(8, 1),
+            balance_cents: 100_000,
+            from_date: d(9, 1),
+            days: 30,
+            is_finance_charge: false,
+        }]
+    );
 
     let (ar_before, interest_before) = (balance(&pool, ar).await, balance(&pool, interest).await);
     // The charge can be changed before assessing; the calculated one is kept for the record.
@@ -154,7 +194,8 @@ async fn assessing_posts_an_invoice_to_ar_and_income_and_shows_in_aging_and_stat
     assert!(fc.is_finance_charge);
     assert_eq!(balance(&pool, ar).await - ar_before, 1_500);
     assert_eq!(balance(&pool, interest).await - interest_before, 1_500, "credit-normal income grows");
-    let computed: i64 = sqlx::query_scalar("SELECT computed_cents FROM finance_charge_invoices WHERE invoice_id = ?1").bind(fc.id).fetch_one(&pool).await.unwrap();
+    let computed: i64 =
+        sqlx::query_scalar("SELECT computed_cents FROM finance_charge_invoices WHERE invoice_id = ?1").bind(fc.id).fetch_one(&pool).await.unwrap();
     assert_eq!(computed, 1_479);
 
     // In A/R aging (current on its own due date) and on Acme's statement.
@@ -173,7 +214,8 @@ async fn charges_never_cover_the_same_days_twice_and_voiding_reopens_them() {
     invoice(&pool, "Acme", d(8, 1), d(9, 1), 100_000).await;
     let charge = |as_of| AssessInput { as_of, charges: vec![AssessCharge { customer_name: "Acme".into(), charge_cents: 1 }] };
 
-    let first = assess(&pool, AssessInput { as_of: d(10, 1), charges: vec![AssessCharge { customer_name: "Acme".into(), charge_cents: 1_479 }] }).await.unwrap();
+    let first =
+        assess(&pool, AssessInput { as_of: d(10, 1), charges: vec![AssessCharge { customer_name: "Acme".into(), charge_cents: 1_479 }] }).await.unwrap();
     assert!(preview(&pool, d(10, 1)).await.unwrap().customers.is_empty(), "nothing left to charge on the same day");
     let err = assess(&pool, charge(d(10, 1))).await.unwrap_err();
     assert!(err.starts_with("FC_NOT_OVERDUE"), "{err}");

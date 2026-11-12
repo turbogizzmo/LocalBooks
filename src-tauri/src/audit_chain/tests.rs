@@ -34,17 +34,14 @@ async fn every_write_seals_its_audit_rows_with_an_actor() {
     assert!(chain.records_sealed > 1);
 
     // The database refuses a forged seal or a second seal.
-    let err = sqlx::query("UPDATE ledger_audit_log SET row_hash = ?1 WHERE action_type = 'POST'")
-        .bind("a".repeat(64))
-        .execute(&pool)
-        .await
-        .unwrap_err();
+    let err = sqlx::query("UPDATE ledger_audit_log SET row_hash = ?1 WHERE action_type = 'POST'").bind("a".repeat(64)).execute(&pool).await.unwrap_err();
     assert!(db_err(err).starts_with("AUDIT_IMMUTABLE"));
-    let err = sqlx::query("INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot, prev_hash, row_hash) VALUES ('POST', 1, '{}', ?1, ?1)")
-        .bind("a".repeat(64))
-        .execute(&pool)
-        .await
-        .unwrap_err();
+    let err =
+        sqlx::query("INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot, prev_hash, row_hash) VALUES ('POST', 1, '{}', ?1, ?1)")
+            .bind("a".repeat(64))
+            .execute(&pool)
+            .await
+            .unwrap_err();
     assert!(db_err(err).starts_with("AUDIT_IMMUTABLE"));
 }
 
@@ -70,11 +67,13 @@ async fn rewriting_the_trail_inside_the_file_breaks_the_chain() {
     post(&pool, 2_000).await;
 
     sqlx::query("DROP TRIGGER trg_ledger_audit_no_update").execute(&pool).await.unwrap();
-    sqlx::query("UPDATE ledger_audit_log SET payload_snapshot = json_set(payload_snapshot, '$.memo', 'Edited') WHERE action_type = 'POST' AND target_entity_id = ?1")
-        .bind(first)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "UPDATE ledger_audit_log SET payload_snapshot = json_set(payload_snapshot, '$.memo', 'Edited') WHERE action_type = 'POST' AND target_entity_id = ?1",
+    )
+    .bind(first)
+    .execute(&pool)
+    .await
+    .unwrap();
     let chain = verify(&pool).await.unwrap();
     assert!(chain.problems.iter().any(|(_, p)| p == "Audit record was changed after it was sealed"), "{:?}", chain.problems);
 }

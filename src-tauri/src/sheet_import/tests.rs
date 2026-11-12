@@ -68,7 +68,10 @@ fn clean_customers_and_vendors_become_a_ledger() {
     let ledger = to_ledger(SheetKind::Customers, &s, &m, None).unwrap();
     assert_eq!(ledger.customers.len(), 2);
     let r = ledger.customers.iter().find(|c| c.name == "Rivera").unwrap();
-    assert_eq!((r.company_name.as_deref(), r.terms_days, r.active, r.address.as_deref()), (Some("Rivera LLC"), Some(15), true, Some("412 Orchard Lane\nSpringfield, OR 97477")));
+    assert_eq!(
+        (r.company_name.as_deref(), r.terms_days, r.active, r.address.as_deref()),
+        (Some("Rivera LLC"), Some(15), true, Some("412 Orchard Lane\nSpringfield, OR 97477"))
+    );
     assert!(!ledger.customers.iter().find(|c| c.name == "Old Client").unwrap().active);
 
     let v = sheet("Name,Tax ID,1099\nPaper Co,12-3456789,yes\n");
@@ -158,14 +161,56 @@ async fn an_invoice_sheet_stages_and_posts_as_invoices() {
 #[test]
 fn each_transaction_kind_builds_its_document() {
     let cases: [(SheetKind, &str, &str, &str, i64); 8] = [
-        (SheetKind::SalesReceipts, "Receipt no.,Date,Customer,Deposit to,Amount,Income account\n7,03/02/2026,Rivera,,40.00,Sales\n", "Sales receipt", "Undeposited Funds", -4_000),
-        (SheetKind::CreditMemos, "Credit no.,Date,Customer,Amount,Income account\nCM-1,03/02/2026,Rivera,40.00,Sales\n", "Credit memo", "Accounts Receivable", 4_000),
-        (SheetKind::Deposits, "Date,Bank account,Description,Amount,From account\n03/02/2026,Checking,Interest,1.25,Interest Income\n", "Deposit", "Checking", -125),
-        (SheetKind::Bills, "Bill no.,Date,Vendor,Due date,Amount,Expense account\nB-9,03/02/2026,Paper Co,04/01/2026,50.00,Office Supplies\n", "Bill", "Accounts Payable", 5_000),
-        (SheetKind::BillCredits, "Credit no.,Date,Vendor,Amount,Expense account\nVC-1,03/02/2026,Paper Co,5.00,Office Supplies\n", "Vendor credit", "Accounts Payable", -500),
-        (SheetKind::Checks, "Check no.,Date,Payee,Bank account,Amount,Expense account\n1201,03/02/2026,City Water,Checking,80.00,Utilities\n", "Check", "Checking", 8_000),
+        (
+            SheetKind::SalesReceipts,
+            "Receipt no.,Date,Customer,Deposit to,Amount,Income account\n7,03/02/2026,Rivera,,40.00,Sales\n",
+            "Sales receipt",
+            "Undeposited Funds",
+            -4_000,
+        ),
+        (
+            SheetKind::CreditMemos,
+            "Credit no.,Date,Customer,Amount,Income account\nCM-1,03/02/2026,Rivera,40.00,Sales\n",
+            "Credit memo",
+            "Accounts Receivable",
+            4_000,
+        ),
+        (
+            SheetKind::Deposits,
+            "Date,Bank account,Description,Amount,From account\n03/02/2026,Checking,Interest,1.25,Interest Income\n",
+            "Deposit",
+            "Checking",
+            -125,
+        ),
+        (
+            SheetKind::Bills,
+            "Bill no.,Date,Vendor,Due date,Amount,Expense account\nB-9,03/02/2026,Paper Co,04/01/2026,50.00,Office Supplies\n",
+            "Bill",
+            "Accounts Payable",
+            5_000,
+        ),
+        (
+            SheetKind::BillCredits,
+            "Credit no.,Date,Vendor,Amount,Expense account\nVC-1,03/02/2026,Paper Co,5.00,Office Supplies\n",
+            "Vendor credit",
+            "Accounts Payable",
+            -500,
+        ),
+        (
+            SheetKind::Checks,
+            "Check no.,Date,Payee,Bank account,Amount,Expense account\n1201,03/02/2026,City Water,Checking,80.00,Utilities\n",
+            "Check",
+            "Checking",
+            8_000,
+        ),
         (SheetKind::CardCharges, "Date,Payee,Card account,Amount,Expense account\n03/02/2026,Fuel Stop,Visa,30.00,Fuel\n", "Credit card charge", "Visa", 3_000),
-        (SheetKind::CardCredits, "Date,Payee,Card account,Amount,Expense account\n03/02/2026,Fuel Stop,Visa,30.00,Fuel\n", "Credit card credit", "Visa", -3_000),
+        (
+            SheetKind::CardCredits,
+            "Date,Payee,Card account,Amount,Expense account\n03/02/2026,Fuel Stop,Visa,30.00,Fuel\n",
+            "Credit card credit",
+            "Visa",
+            -3_000,
+        ),
     ];
     for (kind, csv, label, header, cents) in cases {
         let s = sheet(csv);
@@ -235,7 +280,8 @@ fn journal_entries_balance_or_are_listed() {
     assert_eq!((t.kind, t.doc_num.as_deref(), t.lines.len()), ("Journal entry", Some("JE-1"), 2));
     assert_eq!(t.lines.iter().map(|l| l.cents).sum::<i64>(), 0);
     // Without a debit or a credit column there is nothing to read.
-    let none = check(SheetKind::JournalEntries, &ok, &[("number".to_string(), 0), ("date".to_string(), 1), ("account".to_string(), 2)].into_iter().collect(), None);
+    let none =
+        check(SheetKind::JournalEntries, &ok, &[("number".to_string(), 0), ("date".to_string(), 1), ("account".to_string(), 2)].into_iter().collect(), None);
     assert!(none.problems.iter().any(|p| p.message.contains("Debit and Credit")));
 }
 
@@ -259,13 +305,19 @@ async fn purchase_and_journal_sheets_post() {
             post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap()
         }
     };
-    let bills = post(SheetKind::Bills, "Bill no.,Date,Vendor,Amount,Expense account\nB-1,03/02/2026,Paper Co,50.00,Office Supplies\nB-1,03/02/2026,Paper Co,20.00,Postage\n").await;
+    let bills = post(
+        SheetKind::Bills,
+        "Bill no.,Date,Vendor,Amount,Expense account\nB-1,03/02/2026,Paper Co,50.00,Office Supplies\nB-1,03/02/2026,Paper Co,20.00,Postage\n",
+    )
+    .await;
     assert_eq!(bills.full.unwrap().bills, 1);
-    let checks = post(SheetKind::Checks, "Check no.,Date,Payee,Bank account,Amount,Expense account\n1201,03/03/2026,City Water,Checking,80.00,Utilities\n").await;
+    let checks =
+        post(SheetKind::Checks, "Check no.,Date,Payee,Bank account,Amount,Expense account\n1201,03/03/2026,City Water,Checking,80.00,Utilities\n").await;
     assert_eq!(checks.full.unwrap().checks, 1);
     let card = post(SheetKind::CardCharges, "Date,Payee,Card account,Amount,Expense account\n03/04/2026,Fuel Stop,Visa,30.00,Fuel\n").await;
     assert_eq!(card.full.unwrap().expenses, 1);
-    let journal = post(SheetKind::JournalEntries, "Entry no.,Date,Account,Debit,Credit\nJE-1,03/31/2026,Rent Expense,500.00,\nJE-1,03/31/2026,Checking,,500.00\n").await;
+    let journal =
+        post(SheetKind::JournalEntries, "Entry no.,Date,Account,Debit,Credit\nJE-1,03/31/2026,Rent Expense,500.00,\nJE-1,03/31/2026,Checking,,500.00\n").await;
     assert_eq!(journal.entries_posted, 1);
 
     let (number, vendor, total): (Option<String>, String, i64) =
@@ -332,7 +384,8 @@ async fn payments_sheets_pay_what_is_in_the_books() {
     assert!(err.starts_with("SHEET_PROBLEMS"), "{err}");
 
     // Bill payments name the vendor's bill and the account they're paid from.
-    let expense: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'EXPENSE' ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
+    let expense: i64 =
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'EXPENSE' ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
     let bill: crate::expenses::BillInput = serde_json::from_value(serde_json::json!({
         "vendorName": "Paper Co", "billNumber": "B-7", "billDate": "2026-03-02", "dueDate": "2026-03-20", "memo": null, "totalCents": 7_000,
         "lines": [{ "accountId": expense, "amountCents": 7_000, "memo": null }]
@@ -373,7 +426,11 @@ async fn invoices_take_sales_tax_and_a_discount() {
     let messages: Vec<String> = check(SheetKind::Invoices, &bad, &m, None).problems.into_iter().map(|p| p.message).collect();
     assert_eq!(
         messages,
-        ["Invoice 1's sales tax is $1.00 on row 2, not $2.00", "Invoice 2's discount of $6.00 is more than its lines, $5.00", "Write the sales tax as zero or more"]
+        [
+            "Invoice 1's sales tax is $1.00 on row 2, not $2.00",
+            "Invoice 2's discount of $6.00 is more than its lines, $5.00",
+            "Write the sales tax as zero or more"
+        ]
     );
 
     let pool = crate::db::test_pool().await;

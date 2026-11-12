@@ -110,9 +110,8 @@ pub async fn find(pool: &SqlitePool, query: &FindQuery, today: NaiveDate) -> Res
         memo: f.memo.as_deref().map(str::trim).filter(|m| !m.is_empty()).map(str::to_lowercase),
     };
     let text = query.text.as_deref().map(str::trim).filter(|t| !t.is_empty()).map(str::to_lowercase);
-    let has_text = |l: &Line| {
-        text.as_ref().is_none_or(|t| [&l.name, &l.num, &l.memo].iter().any(|v| v.as_deref().is_some_and(|v| v.to_lowercase().contains(t.as_str()))))
-    };
+    let has_text =
+        |l: &Line| text.as_ref().is_none_or(|t| [&l.name, &l.num, &l.memo].iter().any(|v| v.as_deref().is_some_and(|v| v.to_lowercase().contains(t.as_str()))));
     let number = query.number.as_deref().map(normalize_number).filter(|n| !n.is_empty());
 
     let lines = ledger_lines(pool, query.start_date, end).await?;

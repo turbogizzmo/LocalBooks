@@ -61,7 +61,16 @@ fn transaction_kinds_give_movement_kinds() {
 }
 
 fn account(id: i64, name: &str, kind: &'static str) -> SourceAccount {
-    SourceAccount { id, name: name.into(), full_name: name.into(), account_type: kind, parent_id: None, active: true, stored_balance_cents: None, tax_line: None }
+    SourceAccount {
+        id,
+        name: name.into(),
+        full_name: name.into(),
+        account_type: kind,
+        parent_id: None,
+        active: true,
+        stored_balance_cents: None,
+        tax_line: None,
+    }
 }
 
 fn txn(id: i64, kind: &'static str, d: &str, lines: &[(i64, i64)]) -> SourceTransaction {
@@ -95,7 +104,14 @@ fn item(id: i64, name: &str, kind: &'static str) -> SourceItem {
 }
 
 fn stock_item(item_id: i64, qty_e4: i64, value_cents: i64) -> SourceStockItem {
-    SourceStockItem { item_id, asset_account_id: 31, cogs_account_id: Some(30), stored_qty_e4: Some(qty_e4), stored_value_cents: Some(value_cents), pending_builds_e4: 0 }
+    SourceStockItem {
+        item_id,
+        asset_account_id: 31,
+        cogs_account_id: Some(30),
+        stored_qty_e4: Some(qty_e4),
+        stored_value_cents: Some(value_cents),
+        pending_builds_e4: 0,
+    }
 }
 
 fn moved(transaction_id: i64, item_id: i64, qty_e4: i64, value_cents: i64) -> SourceStockMove {
@@ -188,10 +204,11 @@ async fn a_full_import_brings_in_quantities_on_hand() {
     assert_eq!(on_hand(&pool, "Gadget").await, (10_000, 1_000));
     assert_eq!(on_hand(&pool, "Kit").await, (20_000, 4_000));
     assert_eq!(on_hand(&pool, "Spare").await, (0, 0));
-    let untracked: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM inventory_items i JOIN products_services p ON p.id = i.product_id WHERE p.name = 'Installation'")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let untracked: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM inventory_items i JOIN products_services p ON p.id = i.product_id WHERE p.name = 'Installation'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(untracked, 0, "a service is not tracked");
 
     // Stock and the Inventory Asset account agree.
@@ -221,7 +238,8 @@ async fn a_full_import_brings_in_quantities_on_hand() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    let kinds: Vec<String> = sqlx::query_scalar("SELECT kind FROM stock_ledger_entries WHERE journal_entry_id = ?1 ORDER BY id").bind(build_entry).fetch_all(&pool).await.unwrap();
+    let kinds: Vec<String> =
+        sqlx::query_scalar("SELECT kind FROM stock_ledger_entries WHERE journal_entry_id = ?1 ORDER BY id").bind(build_entry).fetch_all(&pool).await.unwrap();
     assert_eq!(kinds, ["ADJUSTMENT", "ADJUSTMENT", "ADJUSTMENT"]);
 
     // Voiding the adjustment puts the lost gadget back.
@@ -249,11 +267,13 @@ async fn a_journal_import_leaves_stock_alone_and_discard_removes_the_staged_stoc
 
     let other = stage(&pool, Path::new("/books/Other.qbw"), 1, &books()).await.unwrap();
     discard_batch(&pool, other).await.unwrap();
-    let left: i64 = sqlx::query_scalar("SELECT (SELECT COUNT(*) FROM ledger_import_stock_items WHERE batch_id = ?1) + (SELECT COUNT(*) FROM ledger_import_stock_moves WHERE batch_id = ?1)")
-        .bind(other)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let left: i64 = sqlx::query_scalar(
+        "SELECT (SELECT COUNT(*) FROM ledger_import_stock_items WHERE batch_id = ?1) + (SELECT COUNT(*) FROM ledger_import_stock_moves WHERE batch_id = ?1)",
+    )
+    .bind(other)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!(left, 0);
 
     // An item whose own row in the file can't be read is listed, not compared with zero.
@@ -282,7 +302,9 @@ async fn an_item_already_tracked_keeps_its_stock_and_is_listed() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap();
+    crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None })
+        .await
+        .unwrap();
     let batch = stage(&pool, Path::new("/books/Stock.qbw"), 1, &books()).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
     let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().stock.unwrap();

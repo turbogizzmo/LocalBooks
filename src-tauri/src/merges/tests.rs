@@ -53,17 +53,24 @@ async fn merging_customers_moves_their_documents_and_leaves_the_journal_alone() 
     assert_eq!((result.from_name.as_str(), result.to_name.as_str()), ("ACME Company", "Acme Co"));
     assert_eq!(journal(&pool).await, before, "posted journal rows never change");
     assert_eq!(ar_total(&pool).await, aging, "A/R ties out");
-    let moved: Vec<(i64, String)> = sqlx::query_as("SELECT customer_id, customer_name FROM invoices WHERE id IN (?1, ?2) ORDER BY id").bind(first).bind(second).fetch_all(&pool).await.unwrap();
+    let moved: Vec<(i64, String)> = sqlx::query_as("SELECT customer_id, customer_name FROM invoices WHERE id IN (?1, ?2) ORDER BY id")
+        .bind(first)
+        .bind(second)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
     assert_eq!(moved, vec![(to, "Acme Co".to_string()), (to, "Acme Co".to_string())]);
     let statement = crate::workflows::customer_statement(&pool, to, "2026-01-01".parse().unwrap(), day()).await.unwrap();
     assert_eq!(statement.closing_balance_cents, 65_000, "the kept customer's statement has both");
-    let (active, merged_into): (bool, Option<i64>) = sqlx::query_as("SELECT is_active, merged_into_id FROM customers WHERE id = ?1").bind(from).fetch_one(&pool).await.unwrap();
+    let (active, merged_into): (bool, Option<i64>) =
+        sqlx::query_as("SELECT is_active, merged_into_id FROM customers WHERE id = ?1").bind(from).fetch_one(&pool).await.unwrap();
     assert_eq!((active, merged_into), (false, Some(to)));
-    let audited: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'LIST_CHANGE' AND json_extract(payload_snapshot, '$.merge.fromId') = ?1")
-        .bind(from)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let audited: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'LIST_CHANGE' AND json_extract(payload_snapshot, '$.merge.fromId') = ?1")
+            .bind(from)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(audited, 1);
     assert!(merge(&pool, MergeKind::Customer, from, to, day()).await.unwrap_err().starts_with("MERGE_ALREADY"));
 }
@@ -90,7 +97,10 @@ async fn the_document_exception_is_only_for_a_merge_being_applied_and_only_the_n
     assert!(sqlx::query("UPDATE invoices SET customer_name = 'Globex', due_date = '2027-01-01' WHERE id = ?1").bind(inv).execute(&pool).await.is_err());
     assert!(sqlx::query("UPDATE invoices SET customer_name = 'Acme Co' WHERE id = ?1").bind(other).execute(&pool).await.is_err(), "only from the merged name");
     sqlx::query("UPDATE invoices SET customer_id = ?2, customer_name = 'Globex' WHERE id = ?1").bind(inv).bind(globex).execute(&pool).await.unwrap();
-    assert!(sqlx::query("INSERT INTO name_merges (kind, from_id, to_id, from_name, to_name) VALUES ('VENDOR', 1, 2, 'a', 'b')").execute(&pool).await.is_err(), "one at a time");
+    assert!(
+        sqlx::query("INSERT INTO name_merges (kind, from_id, to_id, from_name, to_name) VALUES ('VENDOR', 1, 2, 'a', 'b')").execute(&pool).await.is_err(),
+        "one at a time"
+    );
     sqlx::query("UPDATE name_merges SET applying = 0").execute(&pool).await.unwrap();
     assert!(sqlx::query("UPDATE invoices SET customer_name = 'Acme Co' WHERE id = ?1").bind(inv).execute(&pool).await.is_err(), "fixed again once applied");
     assert!(sqlx::query("UPDATE name_merges SET applying = 1").execute(&pool).await.is_err(), "a merge can't be reopened");
@@ -100,7 +110,13 @@ async fn the_document_exception_is_only_for_a_merge_being_applied_and_only_the_n
 #[tokio::test]
 async fn merge_exceptions_cover_every_trigger_on_the_documents_a_merge_moves() {
     let pool = test_pool().await;
-    let moved: Vec<(&str, &str)> = CUSTOMER_COLUMNS.iter().chain(VENDOR_COLUMNS).chain(ITEM_COLUMNS).copied().chain([("invoices", "customer_id"), ("invoices", "customer_name")]).collect();
+    let moved: Vec<(&str, &str)> = CUSTOMER_COLUMNS
+        .iter()
+        .chain(VENDOR_COLUMNS)
+        .chain(ITEM_COLUMNS)
+        .copied()
+        .chain([("invoices", "customer_id"), ("invoices", "customer_name")])
+        .collect();
     let tables: Vec<&str> = moved.iter().map(|(t, _)| *t).collect();
     // A trigger limited to other columns (`BEFORE UPDATE OF a, b ON t`) never sees a repoint.
     let watches_a_moved_column = |table: &str, sql: &str| {
@@ -110,7 +126,8 @@ async fn merge_exceptions_cover_every_trigger_on_the_documents_a_merge_moves() {
         let columns = &rest[..rest.to_uppercase().find(" ON ").unwrap_or(rest.len())];
         columns.split(',').map(str::trim).any(|c| moved.iter().any(|(t, m)| *t == table && c.eq_ignore_ascii_case(m)))
     };
-    let triggers: Vec<(String, String, String)> = sqlx::query_as("SELECT name, tbl_name, sql FROM sqlite_master WHERE type = 'trigger'").fetch_all(&pool).await.unwrap();
+    let triggers: Vec<(String, String, String)> =
+        sqlx::query_as("SELECT name, tbl_name, sql FROM sqlite_master WHERE type = 'trigger'").fetch_all(&pool).await.unwrap();
     let blocking: Vec<&str> = triggers
         .iter()
         .filter(|(_, table, sql)| tables.contains(&table.as_str()) && sql.to_uppercase().contains("BEFORE UPDATE") && sql.contains("RAISE"))
@@ -127,13 +144,15 @@ async fn merge_exceptions_cover_every_trigger_on_the_documents_a_merge_moves() {
 async fn merging_vendors_and_items_moves_bills_checks_and_lines() {
     let pool = test_pool().await;
     let (rent, checking) = (account(&pool, "6300").await, account(&pool, "1010").await);
-    let bill: crate::expenses::BillInput = serde_json::from_value(serde_json::json!({ "vendorName": "Landlord LLC", "billNumber": "1", "billDate": "2026-10-01", "dueDate": "2026-10-31",
+    let bill: crate::expenses::BillInput =
+        serde_json::from_value(serde_json::json!({ "vendorName": "Landlord LLC", "billNumber": "1", "billDate": "2026-10-01", "dueDate": "2026-10-31",
         "totalCents": 5_000, "lines": [{ "accountId": rent, "amountCents": 5_000 }] }))
-    .unwrap();
+        .unwrap();
     crate::expenses::post_vendor_bill(&pool, bill).await.unwrap();
-    let check: crate::expenses::ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-10-02",
+    let check: crate::expenses::ExpenseInput =
+        serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-10-02",
         "lines": [{ "accountId": rent, "amountCents": 1_000 }] }))
-    .unwrap();
+        .unwrap();
     crate::expenses::post_expense(&pool, check).await.unwrap();
     let (from, to) = (id_of(&pool, "vendors", "Landlord").await, id_of(&pool, "vendors", "Landlord LLC").await);
     // A file kept with the merged vendor (the attachments library), and an item it supplies.
@@ -142,24 +161,33 @@ async fn merging_vendors_and_items_moves_bills_checks_and_lines() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    let supplied: i64 = sqlx::query_scalar("INSERT INTO products_services (name, rate_cents, income_account_id, preferred_vendor_id) VALUES ('Lease', 100, ?1, ?2) RETURNING id")
-        .bind(account(&pool, "4100").await)
-        .bind(from)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let supplied: i64 = sqlx::query_scalar(
+        "INSERT INTO products_services (name, rate_cents, income_account_id, preferred_vendor_id) VALUES ('Lease', 100, ?1, ?2) RETURNING id",
+    )
+    .bind(account(&pool, "4100").await)
+    .bind(from)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     let before = journal(&pool).await;
     merge(&pool, MergeKind::Vendor, from, to, day()).await.unwrap();
     let owner: i64 = sqlx::query_scalar("SELECT record_id FROM record_attachments WHERE id = ?1").bind(file).fetch_one(&pool).await.unwrap();
     assert_eq!(owner, to, "the merged vendor's files move to the one kept");
-    let preferred: Option<i64> = sqlx::query_scalar("SELECT preferred_vendor_id FROM products_services WHERE id = ?1").bind(supplied).fetch_one(&pool).await.unwrap();
+    let preferred: Option<i64> =
+        sqlx::query_scalar("SELECT preferred_vendor_id FROM products_services WHERE id = ?1").bind(supplied).fetch_one(&pool).await.unwrap();
     assert_eq!(preferred, Some(to), "items it supplies name the kept vendor");
     assert_eq!(journal(&pool).await, before);
     let theirs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM expenses WHERE vendor_id = ?1").bind(to).fetch_one(&pool).await.unwrap();
     assert_eq!(theirs, 1);
 
     let income = account(&pool, "4100").await;
-    let item = |name: &str| crate::sales::ProductInput { name: name.into(), description: None, rate_cents: Cents(1_000), income_account_id: income, is_taxable: false };
+    let item = |name: &str| crate::sales::ProductInput {
+        name: name.into(),
+        description: None,
+        rate_cents: Cents(1_000),
+        income_account_id: income,
+        is_taxable: false,
+    };
     let a = crate::sales::create_product(&pool, item("Consulting")).await.unwrap().id;
     let b = crate::sales::create_product(&pool, item("Consulting hours")).await.unwrap().id;
     let inv = invoice(&pool, "Acme", 2_000, Some(b)).await;
@@ -172,14 +200,20 @@ async fn merging_vendors_and_items_moves_bills_checks_and_lines() {
 async fn merging_accounts_moves_the_balance_with_one_entry_and_points_lists_at_the_kept_one() {
     let pool = test_pool().await;
     let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
-    let office: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Office Rent', 'EXPENSE') RETURNING id").fetch_one(&pool).await.unwrap();
+    let office: i64 =
+        sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Office Rent', 'EXPENSE') RETURNING id").fetch_one(&pool).await.unwrap();
     for (to, cents) in [(rent, 50_000), (office, 20_000)] {
-        let check: crate::expenses::ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-10-02",
+        let check: crate::expenses::ExpenseInput =
+            serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-10-02",
             "lines": [{ "accountId": to, "amountCents": cents }] }))
-        .unwrap();
+            .unwrap();
         crate::expenses::post_expense(&pool, check).await.unwrap();
     }
-    sqlx::query("INSERT INTO bank_rules (pattern, direction, account_id, origin) VALUES ('RENT', 'OUTFLOW', ?1, 'LEARNED')").bind(office).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO bank_rules (pattern, direction, account_id, origin) VALUES ('RENT', 'OUTFLOW', ?1, 'LEARNED')")
+        .bind(office)
+        .execute(&pool)
+        .await
+        .unwrap();
     let before = journal(&pool).await;
     let result = merge(&pool, MergeKind::Account, office, rent, day()).await.unwrap();
     assert_eq!(result.balance_cents, 20_000);
@@ -194,6 +228,9 @@ async fn merging_accounts_moves_the_balance_with_one_entry_and_points_lists_at_t
     assert_eq!(rule, rent);
 
     assert!(merge(&pool, MergeKind::Account, checking, account(&pool, "6100").await, day()).await.unwrap_err().starts_with("MERGE_ACCOUNT_TYPES"));
-    let savings: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Reserve Savings', 'BANK') RETURNING id").fetch_one(&pool).await.unwrap();
+    let savings: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Reserve Savings', 'BANK') RETURNING id")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert!(merge(&pool, MergeKind::Account, savings, checking, day()).await.unwrap_err().starts_with("MERGE_BANK_ACCOUNT"));
 }

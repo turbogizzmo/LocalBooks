@@ -48,7 +48,15 @@ async fn an_export_posts_balanced_entries_once_its_accounts_are_matched() {
     assert_eq!(first.entries.len(), 2, "the totals row is skipped");
     assert_eq!(first.total_cents, 861_200);
     let how: Vec<(&str, Option<i64>, &str)> = first.source_accounts.iter().map(|s| (s.name.as_str(), s.account_id, s.how)).collect();
-    assert_eq!(how, vec![("Checking", Some(checking), "matched"), ("Payroll Liabilities", Some(liabilities), "matched"), ("Payroll Tax Expense", None, "none"), ("Wages Expense", Some(wages), "matched")]);
+    assert_eq!(
+        how,
+        vec![
+            ("Checking", Some(checking), "matched"),
+            ("Payroll Liabilities", Some(liabilities), "matched"),
+            ("Payroll Tax Expense", None, "none"),
+            ("Wages Expense", Some(wages), "matched")
+        ]
+    );
     assert_eq!(first.problems.len(), 1, "{:?}", first.problems);
     assert!(post(&pool, "january.csv", EXPORT.as_bytes(), &PayrollChoices::default()).await.unwrap_err().starts_with("PAYROLL_PROBLEMS"));
 
@@ -56,14 +64,21 @@ async fn an_export_posts_balanced_entries_once_its_accounts_are_matched() {
     let ready = preview(&pool, "january.csv", EXPORT.as_bytes(), &choices).await.unwrap();
     assert!(ready.problems.is_empty(), "{:?}", ready.problems);
     let e = &ready.entries[0];
-    assert_eq!((e.key.as_str(), e.date, e.description.as_str(), e.debit_cents, e.credit_cents), ("PR-101", NaiveDate::from_ymd_opt(2026, 1, 15).unwrap(), "Payroll PR-101 (2026-01-15)", 430_600, 430_600));
+    assert_eq!(
+        (e.key.as_str(), e.date, e.description.as_str(), e.debit_cents, e.credit_cents),
+        ("PR-101", NaiveDate::from_ymd_opt(2026, 1, 15).unwrap(), "Payroll PR-101 (2026-01-15)", 430_600, 430_600)
+    );
 
     let posted = post(&pool, "january.csv", EXPORT.as_bytes(), &choices).await.unwrap();
     assert_eq!(posted.journal_entry_ids.len(), 2);
     let balance = |id: i64| {
         let pool = pool.clone();
         async move {
-            sqlx::query_scalar::<_, i64>("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM journal_lines WHERE account_id = ?1").bind(id).fetch_one(&pool).await.unwrap()
+            sqlx::query_scalar::<_, i64>("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM journal_lines WHERE account_id = ?1")
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
         }
     };
     assert_eq!(balance(wages).await, 800_000);

@@ -23,8 +23,10 @@ fn rates(pairs: &[(&str, i64)]) -> BTreeMap<String, i64> {
 async fn revalues_open_receivables_at_period_end_and_reverses_the_next_day() {
     let pool = test_pool().await;
     let (services, checking) = (account(&pool, "4100").await, account(&pool, "1010").await);
-    let ar: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'ACCOUNTS_RECEIVABLE' AND is_system = 1").fetch_one(&pool).await.unwrap();
-    let unrealized: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Unrealized Exchange Gain or Loss'").fetch_one(&pool).await.unwrap();
+    let ar: i64 =
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'ACCOUNTS_RECEIVABLE' AND is_system = 1").fetch_one(&pool).await.unwrap();
+    let unrealized: i64 =
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Unrealized Exchange Gain or Loss'").fetch_one(&pool).await.unwrap();
     let realized: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Exchange Gain or Loss'").fetch_one(&pool).await.unwrap();
     let invoice = |code: &str, rate: i64, cents: i64| {
         let pool = pool.clone();
@@ -38,7 +40,7 @@ async fn revalues_open_receivables_at_period_end_and_reverses_the_next_day() {
     };
     let eur = invoice("EUR", 1_080_000, 100_000).await; // EUR 1,000 booked at 1.08 = $1,080
     invoice("GBP", 1_270_000, 50_000).await; // GBP 500 booked at 1.27 = $635
-    // EUR 400 paid on 3/20 at 1.10, relieving $432 of A/R.
+                                             // EUR 400 paid on 3/20 at 1.10, relieving $432 of A/R.
     crate::invoices::record_payment(
         &pool,
         serde_json::from_value(json!({ "invoiceId": eur.id, "paymentDate": "2026-03-20", "amountCents": 40_000, "paymentMethod": "ACH", "depositAccountId": checking, "exchangeRateE6": 1_100_000 })).unwrap(),
@@ -54,7 +56,8 @@ async fn revalues_open_receivables_at_period_end_and_reverses_the_next_day() {
 
     // EUR 600 open: carried at $648, worth $672 at 1.12 (+$24). GBP 500: $635 → $625 at 1.25 (−$10).
     let p = preview(&pool, quarter_end, &at(&[("EUR", 1_120_000), ("GBP", 1_250_000)])).await.unwrap();
-    let summary: Vec<(String, i64, i64, Option<i64>)> = p.lines.iter().map(|l| (l.currency_code.clone(), l.foreign_open_cents, l.carrying_cents, l.change_cents)).collect();
+    let summary: Vec<(String, i64, i64, Option<i64>)> =
+        p.lines.iter().map(|l| (l.currency_code.clone(), l.foreign_open_cents, l.carrying_cents, l.change_cents)).collect();
     assert_eq!(summary, [("EUR".into(), 60_000, 64_800, Some(2_400)), ("GBP".into(), 50_000, 63_500, Some(-1_000))]);
     assert_eq!(p.net_change_cents, 1_400);
 

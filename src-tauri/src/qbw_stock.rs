@@ -168,7 +168,8 @@ pub fn read_builds(
         {
             continue;
         }
-        let (Some(tid), Some(account_id), Some(cents)) = (r.get("transaction_id").as_int(), r.get("account_id").as_int(), r.get("amount_amt").as_cents()) else {
+        let (Some(tid), Some(account_id), Some(cents)) = (r.get("transaction_id").as_int(), r.get("account_id").as_int(), r.get("amount_amt").as_cents())
+        else {
             continue;
         };
         let Some(date) = header.and_then(|h| h.get("transaction_date").as_date()).or_else(|| r.get("transaction_date").as_date()) else { continue };

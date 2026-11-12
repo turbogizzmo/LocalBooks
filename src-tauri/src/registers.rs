@@ -80,20 +80,15 @@ pub async fn account_register(
     end_date: Option<NaiveDate>,
     include_subaccounts: bool,
 ) -> Result<Register, String> {
-    let head: Option<(String, String, String)> =
-        sqlx::query_as("SELECT full_name, account_type_name, normal_balance FROM v_chart_of_accounts WHERE id = ?1")
-            .bind(account_id)
-            .fetch_optional(pool)
-            .await
-            .map_err(db_err)?;
+    let head: Option<(String, String, String)> = sqlx::query_as("SELECT full_name, account_type_name, normal_balance FROM v_chart_of_accounts WHERE id = ?1")
+        .bind(account_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
     let (account_name, account_type_name, normal) = head.ok_or_else(|| format!("REG_NOT_FOUND: account {account_id} does not exist"))?;
     let debit_normal = normal == "DEBIT";
     // The register's account ids: the account itself, or it and every subaccount below it.
-    let scope = if include_subaccounts {
-        "SELECT account_id FROM v_account_ancestry WHERE ancestor_id = ?1"
-    } else {
-        "SELECT ?1"
-    };
+    let scope = if include_subaccounts { "SELECT account_id FROM v_account_ancestry WHERE ancestor_id = ?1" } else { "SELECT ?1" };
 
     let opening: i64 = match start_date {
         Some(start) => sqlx::query_scalar(&format!(

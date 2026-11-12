@@ -43,7 +43,11 @@ fn iif_account_type(account_type: &str) -> &'static str {
 fn field(text: &str) -> String {
     let flat: String = text.chars().map(|c| if matches!(c, '\t' | '\n' | '\r') { ' ' } else { c }).collect();
     let flat = flat.trim().to_string();
-    if flat.contains('"') { format!("\"{}\"", flat.replace('"', "\"\"")) } else { flat }
+    if flat.contains('"') {
+        format!("\"{}\"", flat.replace('"', "\"\""))
+    } else {
+        flat
+    }
 }
 
 fn yes(on: bool) -> &'static str {
@@ -97,10 +101,21 @@ pub async fn lists_iif(pool: &SqlitePool) -> Result<String, String> {
     .map_err(db_err)?;
     header(&mut out, &["!ACCNT", "NAME", "ACCNTTYPE", "DESC", "ACCNUM", "HIDDEN"]);
     for (name, kind, description, number, active) in &accounts {
-        row(&mut out, &["ACCNT".into(), field(name), iif_account_type(kind).into(), field(description.as_deref().unwrap_or("")), field(number.as_deref().unwrap_or("")), yes(!active).into()]);
+        row(
+            &mut out,
+            &[
+                "ACCNT".into(),
+                field(name),
+                iif_account_type(kind).into(),
+                field(description.as_deref().unwrap_or("")),
+                field(number.as_deref().unwrap_or("")),
+                yes(!active).into(),
+            ],
+        );
     }
 
-    type PartyRow = (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, bool, Option<String>, bool);
+    type PartyRow =
+        (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, bool, Option<String>, bool);
     let customers: Vec<PartyRow> = sqlx::query_as(
         "WITH RECURSIVE path (id, full_name) AS (
              SELECT id, name FROM customers WHERE parent_id IS NULL
@@ -118,7 +133,13 @@ pub async fn lists_iif(pool: &SqlitePool) -> Result<String, String> {
     for (name, company, address, phone, email, terms_name, terms_days, notes, active, _, _) in &customers {
         let mut cells = vec!["CUST".into(), field(name), field(company.as_deref().unwrap_or(""))];
         cells.extend(address_lines(address.as_deref()));
-        cells.extend([field(phone.as_deref().unwrap_or("")), field(email.as_deref().unwrap_or("")), terms(terms_name.clone(), *terms_days), field(notes.as_deref().unwrap_or("")), yes(!active).into()]);
+        cells.extend([
+            field(phone.as_deref().unwrap_or("")),
+            field(email.as_deref().unwrap_or("")),
+            terms(terms_name.clone(), *terms_days),
+            field(notes.as_deref().unwrap_or("")),
+            yes(!active).into(),
+        ]);
         row(&mut out, &cells);
     }
 
@@ -130,7 +151,10 @@ pub async fn lists_iif(pool: &SqlitePool) -> Result<String, String> {
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    header(&mut out, &["!VEND", "NAME", "COMPANYNAME", "ADDR1", "ADDR2", "ADDR3", "ADDR4", "ADDR5", "PHONE1", "EMAIL", "TERMS", "NOTEPAD", "HIDDEN", "TAXID", "1099"]);
+    header(
+        &mut out,
+        &["!VEND", "NAME", "COMPANYNAME", "ADDR1", "ADDR2", "ADDR3", "ADDR4", "ADDR5", "PHONE1", "EMAIL", "TERMS", "NOTEPAD", "HIDDEN", "TAXID", "1099"],
+    );
     for (name, company, address, phone, email, terms_name, terms_days, notes, active, tax_id, is_1099) in &vendors {
         let mut cells = vec!["VEND".into(), field(name), field(company.as_deref().unwrap_or(""))];
         cells.extend(address_lines(address.as_deref()));
@@ -169,7 +193,19 @@ pub async fn lists_iif(pool: &SqlitePool) -> Result<String, String> {
             Some(ppm) => format!("{}{}.{}%", if *ppm < 0 { "-" } else { "" }, ppm.unsigned_abs() / 10_000, ppm.unsigned_abs() % 10_000 / 1_000),
             None => amount(*rate),
         };
-        row(&mut out, &["INVITEM".into(), field(name), kind.into(), field(description.as_deref().unwrap_or("")), field(account.as_deref().unwrap_or("")), price, yes(*taxable).into(), yes(!active).into()]);
+        row(
+            &mut out,
+            &[
+                "INVITEM".into(),
+                field(name),
+                kind.into(),
+                field(description.as_deref().unwrap_or("")),
+                field(account.as_deref().unwrap_or("")),
+                price,
+                yes(*taxable).into(),
+                yes(!active).into(),
+            ],
+        );
     }
 
     let classes: Vec<(String, bool)> = sqlx::query_as(

@@ -33,10 +33,7 @@ pub struct AccountInput {
 }
 
 pub async fn list_account_types(pool: &SqlitePool) -> Result<Vec<AccountTypeView>, String> {
-    sqlx::query_as("SELECT code, display_name, classification FROM account_types ORDER BY sort_order")
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as("SELECT code, display_name, classification FROM account_types ORDER BY sort_order").fetch_all(pool).await.map_err(db_err)
 }
 
 fn clean(text: Option<&str>) -> Option<&str> {

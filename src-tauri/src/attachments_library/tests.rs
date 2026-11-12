@@ -11,10 +11,13 @@ async fn files_attach_to_every_kind_of_record_and_show_in_the_library() {
     let customer = first(&pool, "SELECT id FROM customers ORDER BY id LIMIT 1").await;
     let vendor = first(&pool, "SELECT id FROM vendors ORDER BY id LIMIT 1").await;
     let income = first(&pool, "SELECT id FROM chart_of_accounts WHERE account_type = 'INCOME' ORDER BY id LIMIT 1").await;
-    let item = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Logo design".into(), description: None, rate_cents: Cents(50_000), income_account_id: income, is_taxable: false })
-        .await
-        .unwrap()
-        .id;
+    let item = crate::sales::create_product(
+        &pool,
+        crate::sales::ProductInput { name: "Logo design".into(), description: None, rate_cents: Cents(50_000), income_account_id: income, is_taxable: false },
+    )
+    .await
+    .unwrap()
+    .id;
     let account = first(&pool, "SELECT id FROM chart_of_accounts WHERE account_number = '1010'").await;
     let reconciliation = first(&pool, "SELECT id FROM reconciliations ORDER BY id LIMIT 1").await;
     for (kind, id) in [("CUSTOMER", customer), ("VENDOR", vendor), ("ITEM", item), ("ACCOUNT", account), ("RECONCILIATION", reconciliation)] {
@@ -27,7 +30,11 @@ async fn files_attach_to_every_kind_of_record_and_show_in_the_library() {
     assert!(add_record_file(&pool, "CUSTOMER", customer, "x.pdf", b"").await.unwrap_err().starts_with("ATTACH_EMPTY"));
 
     // A file on a posted transaction is in the library too, labelled by what it's attached to.
-    let (entry, number): (i64, i64) = sqlx::query_as("SELECT journal_entry_id, invoice_number FROM invoices WHERE journal_entry_id IS NOT NULL ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
+    let (entry, number): (i64, i64) =
+        sqlx::query_as("SELECT journal_entry_id, invoice_number FROM invoices WHERE journal_entry_id IS NOT NULL ORDER BY id LIMIT 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     crate::workflows::add_attachment(&pool, entry, "signed.png", b"png").await.unwrap();
     let all = library(&pool, None, false).await.unwrap();
     assert_eq!(all.len(), 6);
@@ -83,7 +90,8 @@ async fn deleting_is_reversible_and_only_a_deleted_file_is_removed_for_good() {
 async fn files_marked_to_send_go_with_their_form() {
     use crate::forms::FormKind;
     let pool = crate::harness::fixture::harbor_lane().await;
-    let (invoice, entry): (i64, i64) = sqlx::query_as("SELECT id, journal_entry_id FROM invoices WHERE journal_entry_id IS NOT NULL ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
+    let (invoice, entry): (i64, i64) =
+        sqlx::query_as("SELECT id, journal_entry_id FROM invoices WHERE journal_entry_id IS NOT NULL ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
     let customer: i64 = sqlx::query_scalar("SELECT customer_id FROM invoices WHERE id = ?1").bind(invoice).fetch_one(&pool).await.unwrap();
     let signed = crate::workflows::add_attachment(&pool, entry, "signed.png", b"png").await.unwrap();
     crate::workflows::add_attachment(&pool, entry, "internal note.txt", b"not for the customer").await.unwrap();
@@ -135,7 +143,10 @@ async fn migration_0096_moves_statement_files_into_the_library() {
     crate::db::migrate(&pool).await.unwrap();
     let files = record_files(&pool, "RECONCILIATION", rec).await.unwrap();
     assert_eq!(files.len(), 1);
-    assert_eq!((files[0].file_name.as_str(), files[0].media_type.as_str(), files[0].created_at.as_str()), ("August.pdf", "application/pdf", "2026-09-02T10:00:00.000Z"));
+    assert_eq!(
+        (files[0].file_name.as_str(), files[0].media_type.as_str(), files[0].created_at.as_str()),
+        ("August.pdf", "application/pdf", "2026-09-02T10:00:00.000Z")
+    );
     assert_eq!(content(&pool, FileRef { source: Source::Record, id: files[0].id }).await.unwrap().2, b"%PDF".to_vec());
     let old: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_schema WHERE name = 'reconciliation_statements'").fetch_one(&pool).await.unwrap();
     assert_eq!(old, 0, "the old table is gone");
@@ -153,7 +164,11 @@ async fn a_preview_reads_only_what_it_shows() {
     assert_eq!(shown(text.id).await.unwrap().2, Some(b"0123".to_vec()), "a text file is cut in SQL");
     assert_eq!(shown(picture.id).await.unwrap().2, Some(b"png bytes".to_vec()), "a picture is whole");
     let (name, media, bytes) = shown(pdf.id).await.unwrap();
-    assert_eq!((name.as_str(), media.as_str(), bytes.as_deref()), ("scan.pdf", "application/pdf", Some(&b"%PDF synthetic"[..])), "a PDF is whole: the screen draws its pages");
+    assert_eq!(
+        (name.as_str(), media.as_str(), bytes.as_deref()),
+        ("scan.pdf", "application/pdf", Some(&b"%PDF synthetic"[..])),
+        "a PDF is whole: the screen draws its pages"
+    );
     assert_eq!(shown(sheet.id).await.unwrap().2, None, "other kinds aren't read");
     assert!(shown(99_999).await.unwrap_err().starts_with("ATTACH_NOT_FOUND"));
 }
