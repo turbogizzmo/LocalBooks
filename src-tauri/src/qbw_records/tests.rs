@@ -219,3 +219,197 @@ fn a_table_that_lost_many_columns_learns_its_layout_once() {
     fill_missing_columns(&mut damaged);
     assert_eq!(damaged.len(), 2);
 }
+
+/// A column the catalog lost after its last defined column leaves no gap in the column ids, but a
+/// row that stores it sets its bit in the null bitmap past the defined columns' bits. The walk adds
+/// that many columns and tries each as an id, a code or an amount (gap R3d: a textbook file's bill
+/// lines lost their last column, so none of them read).
+#[test]
+fn a_trailing_column_the_catalog_lost_is_found_by_its_bitmap_bit() {
+    let cols = vec![column(1, "target_id", 2, false, 4), column(2, "account_id", 2, true, 4), column(3, "amount_amt", 3, true, 20)];
+    let amount: &[u8] = &[2, 0x40, 20, 7];
+    // $7.00 in the lost column.
+    let seven: &[u8] = &[1, 0x40, 7];
+    // Two nullable columns are defined; the third bit is the lost column 4, stored as an amount.
+    let stored = synthetic_row(0b1110_0000, &[&41_997u32.to_le_bytes(), &30u32.to_le_bytes(), amount, seven]);
+    assert_eq!(trailing_bits(&stored, &cols), 1);
+    let row = Row { values: walk_row(&stored, &cols).expect("reads with the trailing column added") };
+    assert_eq!((row.get("target_id"), row.get("account_id")), (&Value::Int(41_997), &Value::Int(30)));
+    assert_eq!(row.get("amount_amt").as_cents(), Some(72_000));
+    assert_eq!(row.get("column_4").as_cents(), Some(700));
+    // The same bytes with no bit past the defined columns are a damaged row, not a lost column.
+    let damaged = synthetic_row(0b1100_0000, &[&41_997u32.to_le_bytes(), &30u32.to_le_bytes(), amount, seven]);
+    assert_eq!(trailing_bits(&damaged, &cols), 0);
+    assert!(walk_row(&damaged, &cols).is_none());
+    // A row that leaves the lost column null reads as it always did.
+    let null = synthetic_row(0b1100_0000, &[&41_997u32.to_le_bytes(), &30u32.to_le_bytes(), amount]);
+    assert_eq!(Row { values: walk_row(&null, &cols).expect("reads") }.get("amount_amt").as_cents(), Some(72_000));
+}
+
+/// A column definition whose type byte is one no column has (a damaged byte) keeps its name and
+/// takes its type from its width, rather than leaving every row of its table unreadable (gap R3d:
+/// a textbook file's check lines).
+#[test]
+fn a_column_with_a_damaged_type_reads_by_its_width() {
+    assert!(!known_domain(122));
+    assert_eq!(domain_from_width("company_id", 4), 2);
+    assert_eq!(domain_from_width("reconcile_date", 4), 6);
+    assert_eq!(domain_from_width("cleared_type", 2), 1);
+    assert_eq!(domain_from_width("is_paid_bool", 1), 24);
+    assert_eq!(domain_from_width("memo", 4096), MISSING_DOMAIN);
+    let cols = vec![column(1, "target_id", 2, false, 4), column(2, "company_id", domain_from_width("company_id", 4), true, 4)];
+    let stored = synthetic_row(0b1000_0000, &[&7u32.to_le_bytes(), &0u32.to_le_bytes()]);
+    assert_eq!(Row { values: walk_row(&stored, &cols).expect("reads") }.get("company_id"), &Value::Int(0));
+}
+
+/// Tables of one kind share their layout, so a column one table lost is defined by the others
+/// that agree with it on the columns either side (gap R3d: a textbook file's invoice lines lost
+/// `transaction_id` and `account_id`, so every invoice line read but none could be placed).
+#[test]
+fn a_lost_column_borrows_its_definition_from_tables_that_agree_around_it() {
+    let lost = |id: u32| column(id, &format!("column_{id}"), MISSING_DOMAIN, false, 0);
+    let target = column(1, "target_id", 2, false, 4);
+    let date = column(4, "transaction_date", 6, true, 4);
+    let mut columns: HashMap<u32, Vec<Column>> = HashMap::from([
+        // Invoice lines: lost 2 and 3.
+        (10, vec![target.clone(), lost(2), lost(3), date.clone()]),
+        // Bill and check lines define them.
+        (11, vec![target.clone(), column(2, "transaction_id", 2, false, 4), column(3, "account_id", 2, true, 4), date.clone()]),
+        (12, vec![target.clone(), column(2, "transaction_id", 2, false, 4), column(3, "account_id", 2, true, 4), date.clone()]),
+        // A table of another kind has other columns there and a different neighbour: no say.
+        (13, vec![target.clone(), column(2, "name", 9, true, 41), column(3, "parent_id", 2, true, 4), column(4, "is_hidden_bool", 24, false, 1)]),
+        // A list table lost a column nothing else agrees around: it stays lost.
+        (14, vec![column(1, "sales_rep_id", 2, false, 4), lost(2), column(3, "initials", 9, true, 5)]),
+    ]);
+    borrow_lost_columns(&mut columns);
+    let invoice: Vec<(&str, u16)> = columns[&10].iter().map(|c| (c.name.as_str(), c.domain)).collect();
+    assert_eq!(invoice, [("target_id", 2), ("transaction_id", 2), ("account_id", 2), ("transaction_date", 6)]);
+    assert_eq!(columns[&14][1].domain, MISSING_DOMAIN);
+    assert_eq!(columns[&13][1].name, "name");
+}
+
+/// The same run of columns can start at another id in another table (check lines number theirs one
+/// lower than bill lines). A bill line table that lost `open_qnty` and defined it again under a
+/// damaged id past its last column gets it back at its place from the check line table; the copy
+/// at the wild id and the placeholders before it go (gap R3d: a textbook file's bill lines). A
+/// table whose columns are in name order, with two of the same names the same distance apart, is
+/// not taken for the same layout.
+#[test]
+fn a_lost_column_is_found_where_another_table_numbers_the_run_differently() {
+    let lost = |id: u32| column(id, &format!("column_{id}"), MISSING_DOMAIN, false, 0);
+    let amt = |id: u32, name: &str| column(id, name, 3, true, 20);
+    let mut columns: HashMap<u32, Vec<Column>> = HashMap::from([
+        // Bill lines: 3 lost; open_qnty defined again as column 9, leaving 7 and 8 as gaps.
+        (
+            20,
+            vec![
+                column(1, "is_paid_bool", 24, false, 1),
+                amt(2, "cogs_amt"),
+                lost(3),
+                amt(4, "open_balance_amt"),
+                amt(5, "unit_price_amt"),
+                column(6, "memo", 9, true, 4096),
+                lost(7),
+                lost(8),
+                amt(9, "open_qnty"),
+            ],
+        ),
+        // Check lines: the same run, numbered from 11.
+        (
+            21,
+            vec![
+                column(11, "is_paid_bool", 24, false, 1),
+                amt(12, "cogs_amt"),
+                amt(13, "open_qnty"),
+                amt(14, "open_balance_amt"),
+                amt(15, "unit_price_amt"),
+                column(16, "memo", 9, true, 4096),
+            ],
+        ),
+        // Columns in name order: cogs_amt and open_balance_amt two apart, but nothing else agrees.
+        (22, vec![amt(1, "cogs_amt"), column(2, "is_hidden_bool", 24, false, 1), amt(3, "open_balance_amt"), amt(4, "rate_amt")]),
+    ]);
+    borrow_lost_columns(&mut columns);
+    let bill: Vec<(u32, &str)> = columns[&20].iter().map(|c| (c.id, c.name.as_str())).collect();
+    assert_eq!(bill, [(1, "is_paid_bool"), (2, "cogs_amt"), (3, "open_qnty"), (4, "open_balance_amt"), (5, "unit_price_amt"), (6, "memo")]);
+
+    // With only the name-ordered table to go by, the lost column stays lost.
+    let mut alone: HashMap<u32, Vec<Column>> = HashMap::from([
+        (20, vec![column(1, "is_paid_bool", 24, false, 1), amt(2, "cogs_amt"), lost(3), amt(4, "open_balance_amt"), amt(5, "unit_price_amt")]),
+        (22, vec![amt(1, "cogs_amt"), column(2, "is_hidden_bool", 24, false, 1), amt(3, "open_balance_amt"), amt(4, "rate_amt")]),
+    ]);
+    borrow_lost_columns(&mut alone);
+    assert_eq!(alone[&20][2].domain, MISSING_DOMAIN);
+}
+
+/// Dumps one table of a real file: its catalog columns and the first rows as bytes, with how each
+/// reads. Set LOCALBOOKS_QBW_CHECK and LOCALBOOKS_QBW_TABLE; LOCALBOOKS_QBW_ROWS limits the rows.
+#[test]
+#[ignore]
+fn dumps_a_table_of_a_real_file() {
+    let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
+    let table = std::env::var("LOCALBOOKS_QBW_TABLE").expect("set LOCALBOOKS_QBW_TABLE");
+    let limit: usize = std::env::var("LOCALBOOKS_QBW_ROWS").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
+    let (pages, catalog, _, _) = crate::qbw_company::read_pages(std::path::Path::new(&path)).unwrap();
+    if let Some(suffix) = table.strip_prefix('*') {
+        let mut names: Vec<(&u32, &String)> = catalog.names.iter().filter(|(_, n)| n.ends_with(suffix)).collect();
+        names.sort_by_key(|(_, n)| n.as_str());
+        for (id, name) in names {
+            let t = table_rows(&pages, &catalog, *id);
+            let no_txn = t.rows.iter().filter(|r| r.get("transaction_id").as_int().is_none()).count();
+            let lost = catalog.columns.get(id).map_or(0, |c| c.iter().filter(|c| c.domain == MISSING_DOMAIN).count());
+            if t.unwalkable + t.unchained + no_txn + lost > 0 {
+                println!(
+                    "{name:<44} walked {:>5} unchained {:>3} unwalkable {:>3} no txn {no_txn:>3} lost columns {lost}",
+                    t.rows.len(),
+                    t.unchained,
+                    t.unwalkable
+                );
+            }
+        }
+        return;
+    }
+    let id = catalog.table_id(&table).expect("table");
+    let cols = &catalog.columns[&id];
+    for c in cols {
+        println!("col {:>3} {:<40} domain {:>2} nullable {} width {}", c.id, c.name, c.domain, c.nullable, c.width);
+    }
+    let t = table_rows(&pages, &catalog, id);
+    println!("walked {} unchained {} unwalkable {}", t.rows.len(), t.unchained, t.unwalkable);
+    for r in t.rows.iter().take(limit) {
+        let mut v: Vec<(&String, &Value)> = r
+            .values
+            .iter()
+            .filter(|(k, v)| {
+                **v != Value::Null && (k.ends_with("_id") || k.ends_with("_amt") || k.ends_with("_qnty") || k.starts_with("column_") || k.ends_with("_date"))
+            })
+            .collect();
+        v.sort_by_key(|(k, _)| k.as_str());
+        println!("read {v:?}");
+    }
+    let mut shown = 0;
+    for page in pages.iter().filter(|p| p.owner == id && !CHUNK_KINDS.contains(&p.kind)) {
+        for span in &page.rows {
+            if shown >= limit {
+                return;
+            }
+            shown += 1;
+            let bytes = strip_extra(page.row(span)).into_owned();
+            let walks = span.chained && walk_row(page.row(span), cols).is_some();
+            let (prefix, stop) = walk_prefix(page.row(span), cols);
+            println!(
+                "page {} row {}+{} chained {} walks {walks} stop {stop}/{} s7 {:?} r7 {} q {}",
+                page.number,
+                span.start,
+                span.len,
+                span.chained,
+                bytes.len(),
+                page.sector7,
+                page.r7,
+                page.q
+            );
+            println!("  {}", bytes.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" "));
+            println!("  {:?}", prefix.iter().filter(|(_, v)| *v != Value::Null).collect::<Vec<_>>());
+        }
+    }
+}

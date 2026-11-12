@@ -156,28 +156,41 @@ fn inverse_mod_256(d: u8) -> u8 {
 }
 
 /// Stored sector-7 byte that logical sector-7 offset `x` (0..496) comes from. The 496 data bytes
-/// and a 16-byte trailer slot form a 512-byte unit that is rotated by `r7`, but the stored
-/// trailer always occupies bytes 496..512. Data bytes the rotation would put there move, in
-/// order, to the stored bytes below 496 that the rotated trailer slot lands on. Usually that
-/// is the 16 bytes just below `r7`; when `r7` is within 16 of a sector boundary the slot wraps
-/// and only part of it is below 496, matched by as many displaced data bytes.
+/// and a 16-byte trailer slot form a 512-byte unit that is rotated by `r7`, so logical byte `x`
+/// would sit at `(x + r7) % 512`; but the stored trailer always occupies bytes 496..512. A data
+/// byte the rotation puts there is moved to where the rotation puts the trailer byte it displaced,
+/// which is `r7` further on, and so on until it lands below 496. Usually one step does it (the 16
+/// bytes just below `r7`); when `r7` is within 16 of a sector boundary the trailer slot overlaps
+/// the stored trailer and some bytes take several steps.
 fn s7_source(x: usize, r7: usize) -> usize {
-    let natural = (x + r7) % SECTOR;
-    if natural < S7_LEN {
-        return natural;
+    let mut at = (x + r7) % SECTOR;
+    // Each step moves to another trailer byte; there are only 16, so the walk is short.
+    for _ in 0..=SECTOR - S7_LEN {
+        if at < S7_LEN {
+            return at;
+        }
+        at = (at + r7) % SECTOR;
     }
-    // How many displaced data bytes come before this one in stored order; it takes the free
-    // position of the same rank. Both sets have at most 16 members, so no allocation.
-    let displaced = (S7_LEN..natural).filter(|&n| (n + SECTOR - r7) % SECTOR < S7_LEN).count();
-    let mut free = [usize::MAX; SECTOR - S7_LEN];
-    for (k, f) in free.iter_mut().enumerate() {
-        let n = (S7_LEN + k + r7) % SECTOR;
-        if n < S7_LEN {
-            *f = n;
+    at % S7_LEN
+}
+
+/// Correction rows for rotations below half a sector repeat with the rotation as their period
+/// (after the first byte, which is always 16): every exact row learned from the sample files does.
+/// So the votes for the positions one period apart are added together before the most voted
+/// value is taken, which gives each value several times the evidence; the first position keeps
+/// its own votes. Rotations from half a sector up show no such period and keep their votes as
+/// they are.
+fn pool_periodic_votes(votes: Vec<[u16; (C_MAX + 1) as usize]>, r7: usize) -> Vec<[u16; (C_MAX + 1) as usize]> {
+    if r7 == 0 || r7 >= SECTOR / 2 {
+        return votes;
+    }
+    let mut pooled = vec![[0u16; (C_MAX + 1) as usize]; r7];
+    for (i, v) in votes.iter().enumerate().skip(1) {
+        for (c, n) in v.iter().enumerate() {
+            pooled[i % r7][c] = pooled[i % r7][c].saturating_add(*n);
         }
     }
-    free.sort_unstable();
-    free[displaced]
+    votes.iter().enumerate().map(|(i, v)| if i == 0 { *v } else { pooled[i % r7] }).collect()
 }
 
 /// Builds the logical sector 7 from a decoded (cipher-free) stored sector.
@@ -299,6 +312,7 @@ impl PageDecoder {
                         }
                     }
                 }
+                let votes = pool_periodic_votes(votes, r7);
                 for (i, v) in votes.iter().enumerate() {
                     if let Some((c, n)) = v.iter().enumerate().max_by_key(|(_, n)| **n) {
                         if *n > 0 {
