@@ -38,10 +38,11 @@ export default function MoneyBar({ items, side }) {
               type="button"
               className={`px-2 py-1 text-left hover:bg-qb-row-hover ${shown === item.label ? 'bg-qb-row-selected' : 'bg-white'}`}
               aria-expanded={shown === item.label}
-              aria-label={`${item.label}: ${formatCents(item.cents)}, ${item.count}. Show the transactions`}
               onClick={() => setShown(shown === item.label ? null : item.label)}
             >
+              {/* Its name is the text on it (label, count, amount), so speech and the screen agree. */}
               {body}
+              <span className="sr-only">Show the transactions</span>
             </button>
           ) : (
             <div key={item.label} className="bg-white px-2 py-1">
