@@ -409,7 +409,7 @@ async fn reports_add_up_to_the_profit_and_loss() {
     for (start, end) in [(d(2025, 1, 1), d(2025, 12, 31)), (d(2025, 11, 1), d(2025, 11, 30)), (d(2025, 10, 1), d(2025, 10, 31))] {
         let params = JobReportParams { start_date: Some(start), end_date: Some(end), ..Default::default() };
         let pl = crate::statements::profit_and_loss(&pool, start, end).await.unwrap();
-        let expected = (pl.total_expenses_cents, pl.total_revenue_cents, pl.net_income_cents);
+        let expected = (pl.total_expenses_cents.get(), pl.total_revenue_cents.get(), pl.net_income_cents.get());
         let sums = |cells: &[Value]| {
             let n = cells.len();
             (cents(&cells[n - 3]), cents(&cells[n - 2]), cents(&cells[n - 1]))
@@ -439,7 +439,7 @@ async fn reports_add_up_to_the_profit_and_loss() {
         // Profit and Loss by Job: the Total column is the Profit & Loss, and each row adds across.
         let by_job = job_reports::profit_and_loss_by_job(&pool, start, end).await.unwrap();
         let totals: Vec<Option<i64>> = by_job.lines.iter().map(|l| *l.amounts_cents.last().unwrap()).collect();
-        let plain: Vec<Option<i64>> = pl.lines.iter().map(|l| l.amount_cents).collect();
+        let plain: Vec<Option<i64>> = pl.lines.iter().map(|l| l.amount_cents.map(crate::money::Cents::get)).collect();
         assert_eq!(totals, plain, "P&L by Job total column {start} to {end}");
         let leaves: Vec<usize> =
             by_job.columns.iter().enumerate().filter(|(_, c)| matches!(c.kind, "class" | "other" | "unclassified")).map(|(i, _)| i).collect();

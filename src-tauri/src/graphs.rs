@@ -118,12 +118,15 @@ fn section_accounts(lines: &[ReportLine], sections: &[&str]) -> Vec<GraphSlice> 
             continue;
         }
         match line.kind {
-            LineKind::Account => {
-                out.push(GraphSlice { label: line.label.clone(), account_id: line.account_id, amount_cents: line.amount_cents.unwrap_or(0), other: false })
-            }
+            LineKind::Account => out.push(GraphSlice {
+                label: line.label.clone(),
+                account_id: line.account_id,
+                amount_cents: line.amount_cents.map_or(0, crate::money::Cents::get),
+                other: false,
+            }),
             LineKind::Subtotal => {
                 if let Some(parent) = out.iter_mut().rev().find(|s| s.account_id == line.account_id) {
-                    parent.amount_cents = line.amount_cents.unwrap_or(0);
+                    parent.amount_cents = line.amount_cents.map_or(0, crate::money::Cents::get);
                 }
             }
             _ => {}
@@ -140,9 +143,9 @@ pub async fn income_expense(pool: &SqlitePool, start: NaiveDate, end: NaiveDate,
         let pl = statements::profit_and_loss_basis(pool, month.start_date, month.end_date, None, basis).await?;
         points.push(IncomeExpensePoint {
             month,
-            income_cents: pl.total_revenue_cents,
-            expense_cents: pl.total_expenses_cents,
-            net_income_cents: pl.net_income_cents,
+            income_cents: pl.total_revenue_cents.get(),
+            expense_cents: pl.total_expenses_cents.get(),
+            net_income_cents: pl.net_income_cents.get(),
         });
     }
     let whole = statements::profit_and_loss_basis(pool, start, end, None, basis).await?;
@@ -151,9 +154,9 @@ pub async fn income_expense(pool: &SqlitePool, start: NaiveDate, end: NaiveDate,
         end_date: end,
         basis,
         months: points,
-        total_income_cents: whole.total_revenue_cents,
-        total_expense_cents: whole.total_expenses_cents,
-        net_income_cents: whole.net_income_cents,
+        total_income_cents: whole.total_revenue_cents.get(),
+        total_expense_cents: whole.total_expenses_cents.get(),
+        net_income_cents: whole.net_income_cents.get(),
         income_slices: top(section_accounts(&whole.lines, INCOME_SECTIONS)),
         expense_slices: top(section_accounts(&whole.lines, EXPENSE_SECTIONS)),
     })
@@ -190,9 +193,9 @@ pub async fn net_worth(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> R
         points.push(NetWorthPoint {
             month: month.month,
             as_of: month.end_date,
-            assets_cents: bs.total_assets_cents,
-            liabilities_cents: bs.total_liabilities_cents,
-            net_worth_cents: bs.total_assets_cents - bs.total_liabilities_cents,
+            assets_cents: bs.total_assets_cents.get(),
+            liabilities_cents: bs.total_liabilities_cents.get(),
+            net_worth_cents: bs.total_assets_cents.get() - bs.total_liabilities_cents.get(),
         });
     }
     Ok(NetWorthGraph { start_date: start, end_date: end, months: points })

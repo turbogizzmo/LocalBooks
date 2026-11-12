@@ -85,9 +85,9 @@ async fn aging_is_as_of_a_date_and_summaries_and_ledger_add_up() {
     let tb = crate::statements::trial_balance_as_of(&pool, d(4, 30)).await.unwrap();
     assert_eq!(tb.total_debit_cents, tb.total_credit_cents);
     let cash = crate::statements::cash_flow(&pool, d(1, 1), d(12, 31)).await.unwrap();
-    assert_eq!((cash.net_change_cents, cash.cash_end_cents), (10_000, 10_000));
+    assert_eq!((cash.net_change_cents, cash.cash_end_cents), (Cents(10_000), Cents(10_000)));
     let net = cash.lines.iter().find(|l| l.label == "Net Income").unwrap().amount_cents;
-    assert_eq!(net, Some(28_000), "35,000 invoiced less 7,000 of supplies");
+    assert_eq!(net, Some(Cents(28_000)), "35,000 invoiced less 7,000 of supplies");
 }
 
 async fn check(pool: &SqlitePool, from: i64, date: NaiveDate, number: Option<&str>, cents: i64) -> crate::expenses::ExpenseView {

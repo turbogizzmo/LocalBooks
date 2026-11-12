@@ -213,10 +213,10 @@ async fn profit_and_loss(pool: &SqlitePool, args: &Value) -> Result<(Value, Stri
         .collect();
     let text = format!(
         "Profit and loss {start} to {end}: revenue {}, gross profit {}, expenses {}, net income {}",
-        plain_amount(pl.total_revenue_cents),
-        plain_amount(pl.gross_profit_cents),
-        plain_amount(pl.total_expenses_cents),
-        plain_amount(pl.net_income_cents)
+        plain_amount(pl.total_revenue_cents.get()),
+        plain_amount(pl.gross_profit_cents.get()),
+        plain_amount(pl.total_expenses_cents.get()),
+        plain_amount(pl.net_income_cents.get())
     );
     let data = json!({
         "startDate": start,

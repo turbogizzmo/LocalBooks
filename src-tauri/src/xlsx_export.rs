@@ -374,7 +374,7 @@ pub fn statement_sheet(company: &str, title: &str, period: &str, notes: Vec<Stri
             .map(|l| Row {
                 kind: l.kind.into(),
                 depth: l.depth.min(15) as u8,
-                cells: vec![Value::from(l.label.clone()), l.amount_cents.map(Value::from).unwrap_or(Value::Null)],
+                cells: vec![Value::from(l.label.clone()), l.amount_cents.map(|c| Value::from(c.get())).unwrap_or(Value::Null)],
             })
             .collect(),
         indent_column: 0,

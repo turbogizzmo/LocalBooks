@@ -1041,8 +1041,8 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
     let as_of_dates = dates.iter().map(|d| d.parse::<NaiveDate>().unwrap()).chain([far_end()]);
     for as_of in as_of_dates {
         let bs = crate::statements::balance_sheet(pool, as_of).await?;
-        ensure!(bs.is_balanced && bs.difference_cents == 0, "balance sheet {as_of} out of balance by {}", bs.difference_cents);
-        ensure_eq!(bs.total_assets_cents, bs.total_liabilities_cents + bs.total_equity_cents, "assets = liabilities + equity at {as_of}");
+        ensure!(bs.is_balanced && bs.difference_cents == Cents(0), "balance sheet {as_of} out of balance by {}", bs.difference_cents);
+        ensure_eq!(bs.total_assets_cents.get(), bs.total_liabilities_cents.get() + bs.total_equity_cents.get(), "assets = liabilities + equity at {as_of}");
         let year = crate::statements::profit_and_loss(pool, bs.fiscal_year_start, as_of).await?;
         ensure_eq!(year.net_income_cents, bs.net_income_cents, "P&L for the fiscal year vs balance sheet net income at {as_of}");
         let to_date = crate::statements::profit_and_loss(pool, epoch(), as_of).await?;
@@ -1056,17 +1056,17 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
         .fetch_one(pool)
         .await
         .map_err(|e| e.to_string())?;
-        ensure_eq!(bs.total_equity_cents, equity_accounts + to_date.net_income_cents, "equity = equity accounts + profit to date at {as_of}");
+        ensure_eq!(bs.total_equity_cents.get(), equity_accounts + to_date.net_income_cents.get(), "equity = equity accounts + profit to date at {as_of}");
         let tb = crate::statements::trial_balance_as_of(pool, as_of).await?;
         ensure_eq!(tb.total_debit_cents, tb.total_credit_cents, "trial balance as of {as_of}");
         if as_of == far_end() {
-            ensure_eq!(bs.total_assets_cents, sum_of("ASSET"), "total assets vs the model");
-            ensure_eq!(bs.total_liabilities_cents, -sum_of("LIABILITY"), "total liabilities vs the model");
+            ensure_eq!(bs.total_assets_cents.get(), sum_of("ASSET"), "total assets vs the model");
+            ensure_eq!(bs.total_liabilities_cents.get(), -sum_of("LIABILITY"), "total liabilities vs the model");
         }
     }
     let cash: i64 = expected.iter().filter(|(id, _)| a.of(**id).1 == "BANK").map(|(_, b)| *b).sum();
     let flow = crate::statements::cash_flow(pool, epoch(), far_end()).await?;
-    ensure_eq!((flow.cash_start_cents, flow.net_change_cents, flow.cash_end_cents), (0, cash, cash), "cash flow vs the bank balances");
+    ensure_eq!((flow.cash_start_cents.get(), flow.net_change_cents.get(), flow.cash_end_cents.get()), (0, cash, cash), "cash flow vs the bank balances");
 
     // A/R: the ledger, the invoices and the aging report agree on what is still owed.
     let open_ar: i64 = m.invoices.values().filter(|i| !i.voided).map(|i| i.home_total - i.relieved).sum();
