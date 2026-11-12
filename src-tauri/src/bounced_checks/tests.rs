@@ -150,7 +150,7 @@ async fn a_bounced_payment_reopens_the_invoice_takes_the_bank_down_and_charges_f
     let before = crate::report_center::aging(&pool, false, d(9)).await.unwrap();
     assert!(before.items.iter().all(|i| i.number.as_deref() != Some(&reopened.invoice_number.to_string())));
     let after = crate::report_center::aging(&pool, false, d(10)).await.unwrap();
-    assert!(after.items.iter().any(|i| i.number.as_deref() == Some(&reopened.invoice_number.to_string()) && i.open_cents == 50_000));
+    assert!(after.items.iter().any(|i| i.number.as_deref() == Some(&reopened.invoice_number.to_string()) && i.open_cents == Cents(50_000)));
 
     // It can't bounce twice, and its payment, the invoice and the entry are protected while it stands.
     assert!(candidates(&pool).await.unwrap().is_empty());
@@ -466,7 +466,7 @@ async fn a_foreign_currency_payment_bounces_at_its_booked_rates() {
     assert_eq!(open_invoices(&pool).await, [(invoice_id, 108_000)], "the invoice is open again for its home A/R");
     assert_eq!(get_summary(&pool, invoice_id).await.unwrap().status, "UNPAID");
     let aging = crate::report_center::aging(&pool, false, d(20)).await.unwrap();
-    assert_eq!(aging.rows.iter().map(|r| r.total_cents).sum::<i64>(), 108_000, "aging agrees with A/R");
+    assert_eq!(aging.rows.iter().map(|r| r.total_cents.get()).sum::<i64>(), 108_000, "aging agrees with A/R");
     books_balance(&pool).await;
 }
 

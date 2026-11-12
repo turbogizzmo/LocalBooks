@@ -378,7 +378,7 @@ async fn an_invoice_with_discounts_and_tax_posts_balanced_and_taxes_the_discount
     // The discount item is its own row in Sales by Product/Service.
     let report = crate::report_center::sales_by_product(&pool, d(1), d(31)).await.unwrap();
     let row = report.rows.iter().find(|r| r.label == "Loyalty 10%").expect("discount row");
-    assert_eq!(row.amount_cents, -1_000);
+    assert_eq!(row.amount_cents, Cents(-1_000));
 }
 
 #[tokio::test]

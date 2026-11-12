@@ -1072,7 +1072,7 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
     let open_ar: i64 = m.invoices.values().filter(|i| !i.voided).map(|i| i.home_total - i.relieved).sum();
     ensure_eq!(m.balances.get(&a.ar).copied().unwrap_or(0), open_ar, "A/R in the model vs its open invoices");
     let ar_aging = crate::report_center::aging(pool, false, far_end()).await?;
-    ensure_eq!(ar_aging.total_cents, open_ar, "A/R aging total");
+    ensure_eq!(ar_aging.total_cents.get(), open_ar, "A/R aging total");
     let view_ar: i64 =
         sqlx::query_scalar("SELECT COALESCE(SUM(b.home_open_cents), 0) FROM v_invoice_balances b JOIN invoices i ON i.id = b.invoice_id WHERE i.is_voided = 0")
             .fetch_one(pool)
@@ -1103,7 +1103,7 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
     let open_ap: i64 = m.bills.values().filter(|b| !b.voided).map(|b| b.total - b.paid).sum();
     ensure_eq!(-m.balances.get(&a.ap).copied().unwrap_or(0), open_ap, "A/P in the model vs its open bills");
     let ap_aging = crate::report_center::aging(pool, true, far_end()).await?;
-    ensure_eq!(ap_aging.total_cents, open_ap, "A/P aging total");
+    ensure_eq!(ap_aging.total_cents.get(), open_ap, "A/P aging total");
     ensure_eq!(scalar(pool, "SELECT COUNT(*) FROM bills WHERE ?1 = ?1", 0).await?, m.bills.len() as i64, "bill rows");
     for (id, bill) in &m.bills {
         let (paid, status, voided): (i64, String, bool) =

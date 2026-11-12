@@ -224,14 +224,15 @@ pub struct AgingGraph {
 
 pub async fn aging(pool: &SqlitePool, payable: bool, as_of: NaiveDate) -> Result<AgingGraph, String> {
     let report = report_center::aging(pool, payable, as_of).await?;
-    let buckets = report.bucket_labels.iter().zip(report.totals_cents).map(|(label, amount_cents)| AgingBucket { label, amount_cents }).collect();
+    let buckets =
+        report.bucket_labels.iter().zip(report.totals_cents).map(|(label, amount_cents)| AgingBucket { label, amount_cents: amount_cents.get() }).collect();
     let parties = report
         .rows
         .iter()
-        .filter(|r| r.total_cents > 0)
-        .map(|r| GraphSlice { label: r.party_name.clone(), account_id: None, amount_cents: r.total_cents, other: false })
+        .filter(|r| r.total_cents.is_positive())
+        .map(|r| GraphSlice { label: r.party_name.clone(), account_id: None, amount_cents: r.total_cents.get(), other: false })
         .collect();
-    Ok(AgingGraph { kind: report.kind, as_of, buckets, total_cents: report.total_cents, parties: top(parties) })
+    Ok(AgingGraph { kind: report.kind, as_of, buckets, total_cents: report.total_cents.get(), parties: top(parties) })
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -280,17 +281,17 @@ async fn sales_summary(pool: &SqlitePool, by: SalesBy, start: NaiveDate, end: Na
 pub async fn sales(pool: &SqlitePool, by: SalesBy, start: NaiveDate, end: NaiveDate) -> Result<SalesGraph, String> {
     let mut points = Vec::new();
     for month in months(start, end)? {
-        let amount_cents = sales_summary(pool, by, month.start_date, month.end_date).await?.total_cents;
+        let amount_cents = sales_summary(pool, by, month.start_date, month.end_date).await?.total_cents.get();
         points.push(SalesPoint { month, amount_cents });
     }
     let whole = sales_summary(pool, by, start, end).await?;
     let ranked = whole
         .rows
         .into_iter()
-        .filter(|r| r.amount_cents > 0)
-        .map(|r| GraphSlice { label: r.label, account_id: None, amount_cents: r.amount_cents, other: false })
+        .filter(|r| r.amount_cents.is_positive())
+        .map(|r| GraphSlice { label: r.label, account_id: None, amount_cents: r.amount_cents.get(), other: false })
         .collect();
-    Ok(SalesGraph { start_date: start, end_date: end, by, months: points, total_cents: whole.total_cents, top: top(ranked) })
+    Ok(SalesGraph { start_date: start, end_date: end, by, months: points, total_cents: whole.total_cents.get(), top: top(ranked) })
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -82,11 +82,11 @@ async fn every_widget_ties_out_to_its_report() {
     // Who owes: the A/R aging total, top five, the rest folded.
     let ar = crate::report_center::aging(&pool, false, today).await.unwrap();
     let owes = widget(WidgetKind::WhoOwes);
-    assert_eq!((owes.total_cents, owes.lines.len()), (ar.total_cents, 5));
+    assert_eq!((owes.total_cents, owes.lines.len()), (ar.total_cents.get(), 5));
     assert_eq!(owes.lines[0].label, "Gum");
-    assert_eq!(owes.lines.iter().map(|l| l.amount_cents).sum::<i64>() + owes.others_cents, ar.total_cents);
+    assert_eq!(owes.lines.iter().map(|l| l.amount_cents).sum::<i64>() + owes.others_cents, ar.total_cents.get());
     assert_eq!(owes.lines[0].overdue_cents, Some(70_000), "due in March, so all overdue by May");
-    assert_eq!(widget(WidgetKind::VendorsToPay).total_cents, crate::report_center::aging(&pool, true, today).await.unwrap().total_cents);
+    assert_eq!(widget(WidgetKind::VendorsToPay).total_cents, crate::report_center::aging(&pool, true, today).await.unwrap().total_cents.get());
 
     // Trend: the Profit and Loss by month for the last 12 months.
     let trend = widget(WidgetKind::IncomeExpenseTrend);
@@ -100,11 +100,11 @@ async fn every_widget_ties_out_to_its_report() {
     let (start, end) = (d(2026, 1, 1), d(2026, 12, 31));
     let customers = widget(WidgetKind::TopCustomers);
     assert_eq!((customers.start_date, customers.end_date), (start, end));
-    assert_eq!(customers.total_cents, crate::report_center::by_party(&pool, false, start, end).await.unwrap().total_cents);
+    assert_eq!(customers.total_cents, crate::report_center::by_party(&pool, false, start, end).await.unwrap().total_cents.get());
     assert_eq!(customers.others_cents, 10_000 + 20_000, "Alder and Birch fold into Others");
-    assert_eq!(widget(WidgetKind::TopVendors).total_cents, crate::report_center::by_party(&pool, true, start, end).await.unwrap().total_cents);
+    assert_eq!(widget(WidgetKind::TopVendors).total_cents, crate::report_center::by_party(&pool, true, start, end).await.unwrap().total_cents.get());
     assert_eq!(widget(WidgetKind::TopVendors).lines[0].label, "Harbor Leasing");
-    assert_eq!(widget(WidgetKind::TopItems).total_cents, crate::report_center::sales_by_product(&pool, start, end).await.unwrap().total_cents);
+    assert_eq!(widget(WidgetKind::TopItems).total_cents, crate::report_center::sales_by_product(&pool, start, end).await.unwrap().total_cents.get());
 }
 
 #[tokio::test]

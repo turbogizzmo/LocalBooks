@@ -344,7 +344,7 @@ async fn customer_and_vendor_reports_tie_out() {
     // by its lines ($108.00, $30.00 and $20.00 of $158.00), the last job taking the rounding.
     let by_job = run(&pool, "unpaid-bills-job").await;
     let aging = crate::report_center::aging(&pool, true, today()).await.unwrap();
-    let bills: i64 = aging.items.iter().filter(|i| i.kind == "Bill").map(|i| i.open_cents).sum();
+    let bills: i64 = aging.items.iter().filter(|i| i.kind == "Bill").map(|i| i.open_cents.get()).sum();
     assert_eq!(last(total(&by_job)), bills);
     let shares: Vec<i64> = details(&by_job).filter(|r| text(&r.cells[3]) == "LC-310").map(last).collect();
     assert_eq!(shares, vec![2_051, 1_367, 7_382], "cafe, patio menu, then no job");

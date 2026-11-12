@@ -109,6 +109,10 @@ Step 3, the reports, goes in stages "A7 step 3a" onward. Step 3a: the chart of a
 balance and dashboard (`reports`), and the A/R aging buckets (`invoices::ar_aging`). The trial
 balance and the dashboard's month-end series were unchecked `+=`; they are now checked, with a
 `REPORT_OVERFLOW` error.
+Step 3b: the General Ledger, A/R and A/P aging, sales and expense summaries (`report_center`)
+and the cash flow forecast (`cash_forecast`). Their totals were unchecked `+=` and `.sum()`; they
+are now checked, with an `RPT_OVERFLOW` error. Readers in `graphs`, `company_snapshot` and the
+customer statement take `.get()` until their own stages.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:
