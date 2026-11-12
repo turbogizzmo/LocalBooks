@@ -6,6 +6,10 @@ becomes its release notes on GitHub and in the app's update window (see
 
 ## [Unreleased]
 
+- **Mac: the app is called Tillhouse in your Applications folder too.** A copy updated from
+  LocalBooks kept the name LocalBooks.app. It now renames itself to Tillhouse.app the next time it
+  starts, so Finder, Spotlight and Launchpad show the new name. If you keep it in the Dock, the Dock
+  follows the rename. Nothing else changes: your company files and settings stay where they are.
 - **Dashboard Insights fits the window again.** The income and expense chart keeps a fixed height
   with normal-size month labels instead of stretching to fill most of the page, so the assets and
   liabilities chart, the trial balance and reminders stay in view. When there was no income or
