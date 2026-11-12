@@ -100,9 +100,9 @@ async fn aging(payable: bool) -> String {
         writeln!(out).unwrap();
     };
     for r in &report.rows {
-        row(&r.party_name, &r.buckets_cents, r.total_cents);
+        row(&r.party_name, &r.buckets_cents.map(Cents::get), r.total_cents.get());
     }
-    row("TOTAL", &report.totals_cents, report.total_cents);
+    row("TOTAL", &report.totals_cents.map(Cents::get), report.total_cents.get());
     writeln!(out, "\nOpen items").unwrap();
     for item in &report.items {
         writeln!(
@@ -114,7 +114,7 @@ async fn aging(payable: bool) -> String {
             item.date,
             item.due_date,
             item.days_past_due,
-            money(item.open_cents)
+            money(item.open_cents.get())
         )
         .unwrap();
     }

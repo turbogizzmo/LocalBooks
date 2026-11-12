@@ -137,7 +137,7 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
     let mut buckets = [0i64; 5];
     for row in aging.rows.iter().filter(|r| r.party_name == name || r.party_name.starts_with(&format!("{name}:"))) {
         for (b, cents) in buckets.iter_mut().zip(row.buckets_cents) {
-            *b += cents;
+            *b += cents.get();
         }
     }
     Ok(CustomerStatement {
