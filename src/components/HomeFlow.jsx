@@ -13,12 +13,12 @@ const BADGE_TEXT = {
 
 /** One step: an icon tile with its name under it, and a count when work is waiting. */
 function Step({ step, count, onOpen, style, wide }) {
-  const name = count ? `${step.label}, ${BADGE_TEXT[step.badge](count)}` : step.label;
+  const waiting = count ? BADGE_TEXT[step.badge](count) : '';
+  const name = waiting ? `${step.label}, ${waiting}` : step.label;
   return (
     <button
       type="button"
       onClick={onOpen}
-      aria-label={name}
       title={name}
       style={style}
       className={`group flex items-center rounded-sm text-qb-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-qb-green ${
@@ -36,7 +36,11 @@ function Step({ step, count, onOpen, style, wide }) {
           </span>
         )}
       </span>
-      <span className={`text-xs leading-tight group-hover:underline ${wide ? '' : 'text-center'}`}>{step.label}</span>
+      {/* The name read out is the visible name, then what is waiting ("Invoices, 5 overdue"). */}
+      <span className={`text-xs leading-tight group-hover:underline ${wide ? '' : 'text-center'}`}>
+        {step.label}
+        {waiting && <span className="sr-only">, {waiting}</span>}
+      </span>
     </button>
   );
 }
