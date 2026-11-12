@@ -511,7 +511,7 @@ export default function BankFeed({ accounts }) {
                 <dt className="text-qb-ink-muted">Description</dt>
                 <dd className="break-words font-semibold">{selected.description}</dd>
                 <dt className="text-qb-ink-muted">{selected.amountCents < 0 ? 'Spent' : 'Received'}</dt>
-                <dd className="num text-left text-xl font-semibold">{formatCents(Math.abs(selected.amountCents))}</dd>
+                <dd className="num text-xl font-semibold">{formatCents(Math.abs(selected.amountCents))}</dd>
                 <dt className="text-qb-ink-muted">Account</dt>
                 <dd>{accountLabel(accounts, selected.bankAccountId)}</dd>
               </dl>

@@ -191,7 +191,7 @@ function HeaderFigure({ label, cents, sub, tone }) {
   return (
     <div className="flex-1 px-3 py-1">
       <div className="text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">{label}</div>
-      <div className={`num text-left text-2xl font-semibold ${toneClass}`}>{formatCents(cents)}</div>
+      <div className={`num text-2xl font-semibold ${toneClass}`}>{formatCents(cents)}</div>
       {sub && <div className="text-xs text-qb-ink-muted">{sub}</div>}
     </div>
   );
@@ -421,7 +421,7 @@ export default function Reconcile({ accounts }) {
             <div className="flex items-center px-2 text-2xl text-qb-ink-faint" aria-hidden="true">=</div>
             <div className={`flex-1 px-3 py-1 ${difference === 0 ? 'bg-qb-green-tint' : ''}`}>
               <div className="text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Difference</div>
-              <div className={`num text-left text-2xl font-semibold ${difference === 0 ? 'text-qb-green-active' : 'text-qb-negative'}`}>{formatCents(difference)}</div>
+              <div className={`num text-2xl font-semibold ${difference === 0 ? 'text-qb-green-active' : 'text-qb-negative'}`}>{formatCents(difference)}</div>
               <div className={`text-xs ${difference === 0 ? 'font-semibold text-qb-green-active' : 'text-qb-ink-muted'}`}>
                 {difference === 0 ? '✓ Balanced. You can finish now.' : 'Tick cleared transactions until this is $0.00'}
               </div>

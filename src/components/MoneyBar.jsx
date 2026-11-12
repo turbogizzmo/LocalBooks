@@ -28,7 +28,7 @@ export default function MoneyBar({ items, side }) {
                 <span className="font-semibold uppercase tracking-wide">{item.label}</span>
                 {item.count !== undefined && <span>· {item.count}</span>}
               </div>
-              <div className="num text-left text-xl font-semibold">{formatCents(item.cents)}</div>
+              <div className="num text-xl font-semibold">{formatCents(item.cents)}</div>
               <div className="mt-0.5 h-1 rounded-full" style={{ backgroundColor: item.color }} />
             </>
           );
