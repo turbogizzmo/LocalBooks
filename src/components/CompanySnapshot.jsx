@@ -34,29 +34,42 @@ const PERIODS = [
 const GREEN = '#0b5d57';
 const BLUE = '#22609e';
 
-/** Income and expense columns by month, with the month's net under each pair in the tooltip. */
-export function Trend({ points }) {
-  const w = 360;
-  const h = 120;
+/**
+ * Income and expense columns by month, with the month's net in each column's tooltip. Built from
+ * boxes rather than a scaled drawing, so it keeps its height and text size at any width: it sits in
+ * a narrow Company Snapshot card and across the whole Insights tab.
+ */
+export function Trend({ points, height = 96 }) {
   const max = Math.max(1, ...points.flatMap((p) => [p.incomeCents, p.expenseCents]));
-  const slot = w / Math.max(points.length, 1);
-  const bar = Math.max(2, Math.min(12, slot / 2 - 2));
+  const pct = (cents) => `${(Math.max(0, cents) * 100) / max}%`;
+  const empty = points.every((p) => p.incomeCents <= 0 && p.expenseCents <= 0);
   return (
-    <svg width="100%" viewBox={`0 0 ${w} ${h + 14}`} role="img" aria-label="Income and expense by month">
-      {points.map((p, i) => {
-        const x = i * slot + slot / 2;
-        const ih = (Math.max(0, p.incomeCents) / max) * h;
-        const eh = (Math.max(0, p.expenseCents) / max) * h;
-        return (
-          <g key={p.month}>
-            <title>{`${p.month}: income ${formatCents(p.incomeCents)}, expense ${formatCents(p.expenseCents)}, net ${formatCents(p.netCents)}`}</title>
-            <rect x={x - bar - 1} y={h - ih} width={bar} height={ih} fill={GREEN} />
-            <rect x={x + 1} y={h - eh} width={bar} height={eh} fill={BLUE} />
-            <text x={x} y={h + 11} fontSize="9" textAnchor="middle" fill="#56615f">{p.month.slice(5)}</text>
-          </g>
-        );
-      })}
-    </svg>
+    <div role="img" aria-label="Income and expense by month">
+      <div className="relative flex items-stretch gap-px border-b border-qb-border" style={{ height }}>
+        {empty && (
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-qb-ink-muted">
+            No income or expenses in these months.
+          </div>
+        )}
+        {points.map((p) => (
+          <div
+            key={p.month}
+            className="flex min-w-0 flex-1 items-end justify-center gap-px"
+            title={`${p.month}: income ${formatCents(p.incomeCents)}, expense ${formatCents(p.expenseCents)}, net ${formatCents(p.netCents)}`}
+          >
+            <div className="w-full max-w-[14px]" style={{ height: pct(p.incomeCents), backgroundColor: GREEN }} />
+            <div className="w-full max-w-[14px]" style={{ height: pct(p.expenseCents), backgroundColor: BLUE }} />
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-px text-2xs text-qb-ink-muted">
+        {points.map((p) => (
+          <div key={p.month} className="min-w-0 flex-1 text-center">
+            {p.month.slice(5)}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

@@ -11,11 +11,14 @@
 
 use std::path::{Path, PathBuf};
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code, reason = "used on macOS and in tests only"))]
 const OLD: &str = "LocalBooks.app";
+#[cfg_attr(not(target_os = "macos"), allow(dead_code, reason = "used on macOS and in tests only"))]
 const NEW: &str = "Tillhouse.app";
 
 /// For an executable inside `…/LocalBooks.app/Contents/MacOS/`, the bundle and the renamed
 /// bundle beside it, and the executable's path inside the renamed bundle. Otherwise `None`.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code, reason = "used on macOS and in tests only"))]
 pub fn plan(exe: &Path) -> Option<(PathBuf, PathBuf, PathBuf)> {
     let macos = exe.parent()?;
     let contents = macos.parent()?;

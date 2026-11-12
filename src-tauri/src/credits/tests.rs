@@ -36,6 +36,25 @@ async fn invoice_state(pool: &SqlitePool, id: i64) -> (i64, String, i64) {
 }
 
 #[tokio::test]
+async fn aging_nets_unused_credit_but_counts_only_invoices() {
+    let pool = test_pool().await;
+    let services = account(&pool, "4100").await;
+    invoice(&pool, "Acme", services, 50_000).await;
+    invoice(&pool, "Other Co", services, 10_000).await;
+    create_credit_memo(&pool, CreditMemoInput { credit_number: None, form_lines: Vec::new(), customer_name: "acme".into(), credit_date: d(5), memo: None, refund_account_id: None, lines: vec![line(services, 20_000)], tax_rate_id: None, header: Default::default() })
+        .await
+        .unwrap();
+
+    // Both invoices fell due on July 1 and the credit is dated June 5: all three are 61+ days old
+    // on September 30, but the bucket holds two invoices, not three.
+    let aging = crate::invoices::ar_aging(&pool, NaiveDate::from_ymd_opt(2026, 9, 30).unwrap()).await.unwrap();
+    let late = aging.buckets.iter().find(|b| b.key == "days61Plus").unwrap();
+    assert_eq!((late.invoice_count, late.amount_cents), (2, 40_000));
+    assert_eq!((aging.total_cents, aging.unused_credit_cents), (40_000, 20_000));
+    assert_eq!(aging.buckets.iter().map(|b| b.invoice_count).sum::<i64>(), 2);
+}
+
+#[tokio::test]
 async fn credit_memos_reduce_receivables_apply_to_invoices_and_refund() {
     let pool = test_pool().await;
     let (checking, ar, services) = (account(&pool, "1010").await, account(&pool, "1200").await, account(&pool, "4100").await);

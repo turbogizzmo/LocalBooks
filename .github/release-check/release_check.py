@@ -755,7 +755,10 @@ def upgrade_macos(args, old, new):
         checked = run_new_app(args, exe, "macos")
         checked.work = str(Path(args.work) / "macos-launch")
         cmd_launch(checked, done=False, heading="Upgraded install (macOS): launch")
-        check_old_name_renames(applications, bundle)
+        # On a pull request the bundle is the newest published release, which may predate the
+        # rename; the release runs the step on the build that ships it.
+        if os.environ.get("GITHUB_EVENT_NAME") != "pull_request":
+            check_old_name_renames(applications, bundle)
 
 
 def check_old_name_renames(applications, bundle):
