@@ -21,14 +21,14 @@ describe('Dashboard Insights', () => {
     await goTo('Dashboard');
     await click($('//*[@role="tablist"][@aria-label="Dashboard"]//button[normalize-space()="Insights"]'));
 
-    const chart = '//section[@aria-label="Income and expense trend"]';
+    const chart = '(//section[@aria-label="Income and expense trend"])[1]';
     await $(chart).waitForDisplayed();
     const trend = await rect(chart);
     expect(trend.width).toBeGreaterThan(800);
     // Title, 120 px of bars, month labels and the link: well under 250 px at any width.
     expect(trend.height).toBeLessThan(250);
 
-    const balance = '//section[.//h2[normalize-space()="Trial Balance"]]';
+    const balance = '//h2[normalize-space()="Trial Balance"]/ancestor::section[1]';
     await $(balance).waitForDisplayed();
     const tb = await rect(balance);
     expect(tb.bottom).toBeLessThanOrEqual(tb.viewport + 1);
