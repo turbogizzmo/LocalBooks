@@ -448,3 +448,103 @@ async fn a_billable_card_charge_is_invoiced_from_the_invoice_form() {
     let foreign = crate::print_queue::create_invoice(&pool, euro, &chosen, false, None).await.unwrap_err();
     assert!(foreign.starts_with("COST_FOREIGN_INVOICE"), "{foreign}");
 }
+
+/// Gap T84: freight added on a bill as a charge line can name the job and be billed on to it,
+/// like a split line; a check's charge too. A discount line can name a job but is never billed.
+#[tokio::test]
+async fn a_charge_line_on_a_bill_or_check_is_billed_on_to_its_job() {
+    let pool = test_pool().await;
+    let (checking, supplies, rent, freight) =
+        (account(&pool, "1010").await, account(&pool, "6250").await, account(&pool, "6300").await, account(&pool, "6400").await);
+    let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
+    let other = crate::sales::create_customer(&pool, "Other", None).await.unwrap().id;
+    let bill = |billable: serde_json::Value, discount_billable: serde_json::Value| -> crate::expenses::BillInput {
+        serde_json::from_value(serde_json::json!({
+            "vendorName": "Harbor Hardware", "billNumber": "B-84", "billDate": "2026-05-03", "dueDate": "2026-05-31", "memo": null, "totalCents": 22_000,
+            "lines": [{ "accountId": supplies, "amountCents": 20_000, "memo": "Lumber" }, { "accountId": rent, "amountCents": 1_000, "memo": "Pallet" }],
+            "formLines": [
+                { "afterLine": 1, "kind": "CHARGE", "amountCents": 1_500, "accountId": freight, "description": "Freight", "customerId": acme, "billable": billable },
+                { "afterLine": 2, "kind": "DISCOUNT", "amountCents": 500, "accountId": rent, "customerId": other, "billable": discount_billable }
+            ]
+        }))
+        .unwrap()
+    };
+    // A discount is never billable.
+    let err = crate::expenses::post_vendor_bill(&pool, bill(json_true(), json_true())).await.unwrap_err();
+    assert!(err.starts_with("BILL_FORM_LINE_BILLABLE"), "{err}");
+
+    let posted = crate::expenses::post_vendor_bill(&pool, bill(json_true(), serde_json::Value::Null)).await.unwrap();
+    let stored = crate::purchase_lines::lines_of(&pool, crate::purchase_lines::PurchaseDoc::Bill, posted.id).await.unwrap();
+    assert_eq!(
+        stored.iter().map(|l| (l.kind.as_str(), l.customer_id, l.billable)).collect::<Vec<_>>(),
+        [("CHARGE", Some(acme), true), ("DISCOUNT", Some(other), false)]
+    );
+    assert!(list_unbilled(&pool, Some(other)).await.unwrap().is_empty(), "the discount isn't a cost to bill");
+    let unbilled = list_unbilled(&pool, Some(acme)).await.unwrap();
+    assert_eq!(
+        unbilled.iter().map(|c| (c.source.as_str(), c.amount_cents, c.memo.as_deref(), c.account_id, c.vendor_name.as_deref())).collect::<Vec<_>>(),
+        [("CHARGE", 1_500, Some("Freight"), freight, Some("Harbor Hardware"))]
+    );
+
+    // Billed on an invoice like an expense line: the reimbursement takes it off the freight account.
+    let freight_before = balance(&pool, freight).await;
+    let billing = BillCostsInput {
+        customer_id: acme,
+        costs: vec![CostRef { source: "CHARGE".into(), line_id: unbilled[0].line_id }],
+        time: Vec::new(),
+        issue_date: d(10),
+        due_date: d(31),
+        markup_percent: Some("0".into()),
+        tax_rate_id: None,
+    };
+    let invoice = bill_costs(&pool, billing.clone()).await.unwrap();
+    assert_eq!(invoice.total_cents, 1_500);
+    assert_eq!(balance(&pool, freight).await, freight_before - 1_500);
+    assert!(list_unbilled(&pool, Some(acme)).await.unwrap().is_empty());
+    assert!(bill_costs(&pool, billing.clone()).await.unwrap_err().starts_with("COST_NOT_BILLABLE"), "never billed twice");
+
+    // An edited bill keeps the charge billed; voiding the invoice frees the replacement's charge.
+    let edited = crate::edits::replace_bill(&pool, posted.id, bill(json_true(), serde_json::Value::Null)).await.unwrap();
+    assert!(list_unbilled(&pool, Some(acme)).await.unwrap().is_empty(), "the replacement's charge is still billed");
+    let entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM invoices WHERE id = ?1").bind(invoice.id).fetch_one(&pool).await.unwrap();
+    crate::ledger::void_transaction(&pool, entry).await.unwrap();
+    let freed = list_unbilled(&pool, Some(acme)).await.unwrap();
+    let edited_charge = crate::purchase_lines::lines_of(&pool, crate::purchase_lines::PurchaseDoc::Bill, edited).await.unwrap();
+    assert_eq!(freed.len(), 1);
+    let charge_id: i64 =
+        sqlx::query_scalar("SELECT id FROM purchase_form_lines WHERE bill_id = ?1 AND kind = 'CHARGE'").bind(edited).fetch_one(&pool).await.unwrap();
+    assert_eq!((freed[0].line_id, edited_charge[0].billable), (charge_id, true));
+
+    // Not marked billable: not on the list.
+    let unmarked: crate::expenses::BillInput = serde_json::from_value(serde_json::json!({
+        "vendorName": "Harbor Hardware", "billNumber": "B-85", "billDate": "2026-05-04", "dueDate": "2026-05-31", "memo": null, "totalCents": 20_500,
+        "lines": [{ "accountId": supplies, "amountCents": 20_000, "memo": null }],
+        "formLines": [{ "afterLine": 1, "kind": "CHARGE", "amountCents": 500, "accountId": freight, "customerId": acme, "billable": false }]
+    }))
+    .unwrap();
+    crate::expenses::post_vendor_bill(&pool, unmarked).await.unwrap();
+    assert_eq!(list_unbilled(&pool, Some(acme)).await.unwrap().len(), 1);
+
+    // A check's charge line, with the company default marking it billable.
+    crate::preferences::set(&pool, "expenses_billable_default", "true").await.unwrap();
+    let check: ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": "Harbor Hardware", "paymentAccountId": checking,
+        "expenseDate": "2026-05-05", "checkNumber": null, "paymentMethod": null, "memo": null,
+        "lines": [{ "accountId": rent, "amountCents": 5_000, "memo": null }],
+        "formLines": [{ "afterLine": 1, "kind": "CHARGE", "percentPpm": 100_000, "accountId": freight, "description": "Delivery", "customerId": acme }] }))
+    .unwrap();
+    crate::expenses::post_expense(&pool, check).await.unwrap();
+    let unbilled = list_unbilled(&pool, Some(acme)).await.unwrap();
+    assert_eq!(
+        unbilled.iter().map(|c| (c.source.as_str(), c.amount_cents, c.memo.as_deref())).collect::<Vec<_>>(),
+        [("CHARGE", 1_500, Some("Freight")), ("CHARGE", 500, Some("Delivery"))]
+    );
+    let costs = unbilled.iter().map(|c| CostRef { source: c.source.clone(), line_id: c.line_id }).collect();
+    let invoice = bill_costs(&pool, BillCostsInput { costs, ..billing }).await.unwrap();
+    assert_eq!(invoice.total_cents, 2_000);
+    assert!(list_unbilled(&pool, None).await.unwrap().is_empty());
+    assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
+}
+
+fn json_true() -> serde_json::Value {
+    serde_json::Value::Bool(true)
+}

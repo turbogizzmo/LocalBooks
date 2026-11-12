@@ -9,10 +9,22 @@ test('lines lay out as the ledger lays them out', () => {
   const laid = layOutPurchase([10_000, 3_333, 2_000], [row(1, 'DISCOUNT', '10%'), row(2, 'CHARGE', '2.5%'), row(3, 'DISCOUNT', '5.00')]);
   assert.deepEqual(laid.amounts, [1_000, 83, 500]);
   assert.equal(laid.total, 10_000 + 3_333 + 2_000 - 1_000 + 83 - 500);
-  assert.deepEqual(laid.formLines[0], { afterLine: 1, kind: 'DISCOUNT', description: '', productServiceId: null, percentPpm: 100_000, amountCents: null, accountId: 9, classId: null });
+  assert.deepEqual(laid.formLines[0], { afterLine: 1, kind: 'DISCOUNT', description: '', productServiceId: null, percentPpm: 100_000, amountCents: null, accountId: 9, classId: null, customerId: null, billable: null });
   assert.equal(laid.formLines[2].amountCents, 500);
   assert.deepEqual(layOutPurchase([100], [row(1, 'CHARGE', '0.5%')]).amounts, [1]);
   assert.equal(layOutPurchase([5_000], []).total, 5_000);
+});
+
+test('a charge for a customer sends its Bill? box; a discount is never billable', () => {
+  const charge = (billable) => ({ ...row(1, 'CHARGE', '5.00'), customerId: 4, billable });
+  const sent = (r) => layOutPurchase([1_000], [r]).formLines[0];
+  assert.deepEqual([sent(charge(null)).customerId, sent(charge(null)).billable], [4, null], 'untouched: the company default decides');
+  assert.equal(sent(charge(true)).billable, true);
+  assert.equal(sent(charge(false)).billable, false);
+  assert.equal(sent({ ...row(1, 'DISCOUNT', '5.00'), customerId: 4, billable: true }).billable, false);
+  assert.equal(sent({ ...row(1, 'CHARGE', '5.00'), billable: true }).billable, null, 'no customer, nothing to bill');
+  const [back] = rowsFromStored([{ afterLine: 1, kind: 'CHARGE', accountId: 9, description: 'Freight', amountCents: 500, customerId: 4, billable: true }]);
+  assert.deepEqual([back.customerId, back.billable], [4, true]);
 });
 
 test('lines the ledger refuses are refused here first', () => {

@@ -673,14 +673,7 @@ async fn carried_form_lines(
     po_lines: &[Option<i64>],
 ) -> Result<Vec<crate::purchase_lines::CarriedLine>, String> {
     let Some(order) = order else { return Ok(Vec::new()) };
-    let views: Vec<crate::purchase_lines::PurchaseFormLineView> = sqlx::query_as(
-        "SELECT after_line, kind, description, product_service_id, percent_ppm, amount_cents, account_id, class_id
-         FROM purchase_form_lines WHERE purchase_order_id = ?1 ORDER BY after_line",
-    )
-    .bind(order)
-    .fetch_all(&mut **tx)
-    .await
-    .map_err(db_err)?;
+    let views = crate::purchase_lines::lines_of(&mut **tx, crate::purchase_lines::PurchaseDoc::PurchaseOrder, order).await?;
     if views.is_empty() {
         return Ok(Vec::new());
     }
@@ -689,7 +682,10 @@ async fn carried_form_lines(
         .fetch_all(&mut **tx)
         .await
         .map_err(db_err)?;
-    let inputs = crate::purchase_lines::inputs_of(&views);
+    // The order's customer carries over; whether it is billable on the bill follows Preferences, as
+    // the receipt's split lines do.
+    let inputs: Vec<_> =
+        crate::purchase_lines::inputs_of(&views).into_iter().map(|i| crate::purchase_lines::PurchaseFormLineInput { billable: None, ..i }).collect();
     let mut out = Vec::new();
     for (i, po_line) in po_lines.iter().enumerate() {
         let Some(po_line) = *po_line else { continue };
