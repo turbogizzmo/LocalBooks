@@ -121,7 +121,7 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
     assert_eq!(get_estimate(&pool, estimate.id).await.unwrap().status, "PENDING");
 
     let invoice = invoice_from_estimate(&pool, estimate.id, form(services)).await.unwrap();
-    assert_eq!(invoice.total_cents, 100_000, "the edited quantity was posted");
+    assert_eq!(invoice.total_cents, Cents(100_000), "the edited quantity was posted");
     let closed = get_estimate(&pool, estimate.id).await.unwrap();
     assert_eq!((closed.status.as_str(), closed.invoice_number), ("CONVERTED", Some(invoice.invoice_number)));
     assert!(invoice_from_estimate(&pool, estimate.id, form(services)).await.unwrap_err().starts_with("EST_CONVERTED"));

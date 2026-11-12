@@ -139,7 +139,7 @@ async fn billing_trips_posts_an_invoice_and_marks_them_billed() {
 
     let invoice = bill_trips(&pool, bill(vec![first.id, second.id])).await.unwrap();
     // 12.5 × $0.75 = $9.38 (rounded half up) + 30 × $0.75 = $22.50
-    assert_eq!((invoice.customer_name.as_str(), invoice.total_cents, invoice.item_count), ("Acme:Kitchen", 938 + 2_250, 2));
+    assert_eq!((invoice.customer_name.as_str(), invoice.total_cents, invoice.item_count), ("Acme:Kitchen", Cents(938 + 2_250), 2));
     let detail = crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap();
     assert_eq!(detail.items[0].quantity_e4, 125_000);
     assert!(detail.items[0].description.starts_with("Mileage: 12.5 mi, 2026-03-02, Truck"), "{}", detail.items[0].description);
@@ -169,7 +169,7 @@ async fn billing_trips_posts_an_invoice_and_marks_them_billed() {
         .map(|i| InvoiceLineInput {
             description: i.description.clone(),
             quantity_e4: i.quantity_e4,
-            rate_cents: Cents(i.rate_cents),
+            rate_cents: i.rate_cents,
             income_account_id: i.income_account_id,
             product_service_id: i.product_service_id,
             class_id: None,
@@ -187,7 +187,7 @@ async fn billing_trips_posts_an_invoice_and_marks_them_billed() {
     assert_eq!(list_unbilled_trips(&pool, Some(kitchen)).await.unwrap().len(), 2);
     assert_eq!(get_trip(&pool, first.id).await.unwrap().invoice_id, None);
     let again = bill_trips(&pool, bill(vec![first.id])).await.unwrap();
-    assert_eq!(again.total_cents, 938);
+    assert_eq!(again.total_cents, Cents(938));
     assert_eq!(list_unbilled_trips(&pool, None).await.unwrap().iter().map(|t| t.id).collect::<Vec<_>>(), vec![other_job.id, second.id]);
 }
 

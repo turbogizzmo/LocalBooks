@@ -118,7 +118,7 @@ async fn an_invoice_with_subtotals_posts_balanced_and_reads_back_in_order() {
         1_000,
     );
     let inv = create_and_post_invoice(&pool, input).await.unwrap();
-    assert_eq!(inv.total_cents, 16_500);
+    assert_eq!(inv.total_cents, Cents(16_500));
     assert_posts(&pool, inv.journal_entry_id.unwrap(), ar, 16_500).await;
 
     let detail = invoice_detail(&pool, inv.id).await.unwrap();
@@ -360,8 +360,8 @@ async fn an_invoice_with_discounts_and_tax_posts_balanced_and_taxes_the_discount
     let inv = create_and_post_invoice(&pool, input).await.unwrap();
     // Lines 150.00 − 10.00 − 5.00 = 135.00; taxable 90.00 less its share of the 2.00 discount
     // (90/135 × 2.00 = 1.33) = 88.67; tax 8% = 7.09; total 135.00 − 2.00 + 7.09 = 140.09.
-    assert_eq!(inv.tax_cents, 709);
-    assert_eq!(inv.total_cents, 14_009);
+    assert_eq!(inv.tax_cents, Cents(709));
+    assert_eq!(inv.total_cents, Cents(14_009));
     assert_posts(&pool, inv.journal_entry_id.unwrap(), ar, 14_009).await;
     let to_discounts: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = ?1 AND account_id = ?2")
         .bind(inv.journal_entry_id)
@@ -546,7 +546,7 @@ async fn fixed_and_percent_charges_post_balanced_and_carry_from_an_estimate() {
 
     let converted = crate::estimates::convert_to_invoice(&pool, estimate.id, d(5), d(30)).await.unwrap();
     let inv = invoice_detail(&pool, converted.converted_to_invoice_id.unwrap()).await.unwrap();
-    assert_eq!(inv.invoice.total_cents, 14_215);
+    assert_eq!(inv.invoice.total_cents, Cents(14_215));
     assert_eq!(inv.items.iter().map(|i| (i.line_number, i.percent_ppm)).collect::<Vec<_>>(), vec![(1, None), (2, Some(30_000)), (3, None)]);
     assert_eq!(inv.form_lines.iter().map(|f| (f.line_number, f.amount_cents)).collect::<Vec<_>>(), vec![(4, 14_215)]);
     assert_posts(&pool, inv.invoice.journal_entry_id.unwrap(), ar, 14_215).await;
@@ -642,7 +642,7 @@ async fn a_group_posts_its_items_and_can_print_as_one_line() {
     .await
     .unwrap();
     // 80.00 + 4 × 12.50 = 130.00, 5% off the group = 6.50, then 20.00.
-    assert_eq!(inv.total_cents, 13_000 - 650 + 2_000);
+    assert_eq!(inv.total_cents, Cents(13_000 - 650 + 2_000));
     assert_posts(&pool, inv.journal_entry_id.unwrap(), ar, 14_350).await;
 
     let doc = crate::forms::invoice_doc(&pool, inv.id, "$").await.unwrap();
@@ -708,7 +708,7 @@ async fn editing_a_part_paid_invoice_with_a_group_discount_and_subtotal_keeps_it
         )
     };
     let original = create_and_post_invoice(&pool, input(1_000)).await.unwrap();
-    assert_eq!(original.total_cents, 10_000 - 1_000 + 1_000);
+    assert_eq!(original.total_cents, Cents(10_000 - 1_000 + 1_000));
     crate::invoices::record_payment(
         &pool,
         crate::invoices::PaymentInput {
@@ -728,9 +728,9 @@ async fn editing_a_part_paid_invoice_with_a_group_discount_and_subtotal_keeps_it
 
     let edited = crate::edits::replace_invoice(&pool, original.id, input(3_000)).await.unwrap();
     let detail = invoice_detail(&pool, edited).await.unwrap();
-    assert_eq!(detail.invoice.total_cents, 12_000);
-    assert_eq!(detail.invoice.amount_paid_cents, 4_000, "the payment stays applied to the edited invoice");
-    assert_eq!(detail.invoice.balance_cents, 8_000);
+    assert_eq!(detail.invoice.total_cents, Cents(12_000));
+    assert_eq!(detail.invoice.amount_paid_cents, Cents(4_000), "the payment stays applied to the edited invoice");
+    assert_eq!(detail.invoice.balance_cents, Cents(8_000));
     let form: Vec<(i64, &str, i64)> = detail.form_lines.iter().map(|f| (f.line_number, f.kind.as_str(), f.amount_cents)).collect();
     assert_eq!(form, vec![(1, "GROUP", 10_000), (4, "DISCOUNT", -1_000), (5, "SUBTOTAL", 9_000)]);
     assert_posts(&pool, detail.invoice.journal_entry_id.unwrap(), ar, 12_000).await;

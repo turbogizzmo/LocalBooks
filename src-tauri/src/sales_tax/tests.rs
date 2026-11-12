@@ -46,7 +46,7 @@ async fn sales_tax_is_charged_reported_and_paid() {
     }))
     .unwrap();
     let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
-    assert_eq!(inv.total_cents, 15_825);
+    assert_eq!(inv.total_cents, Cents(15_825));
     assert_eq!((balance(&pool, ar).await, balance(&pool, payable).await), (-15_825, 825));
 
     let receipt: crate::sales::SalesReceiptInput = serde_json::from_value(serde_json::json!({
@@ -137,7 +137,7 @@ async fn sales_tax_is_owed_when_invoiced_or_when_paid() {
     }))
     .unwrap();
     let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
-    assert_eq!(inv.total_cents, 130_000);
+    assert_eq!(inv.total_cents, Cents(130_000));
     // July 2: a cash sale of $50 taxable, $5 tax. Cash on either basis.
     let receipt: crate::sales::SalesReceiptInput = serde_json::from_value(serde_json::json!({
         "customerName": null, "receiptDate": "2026-07-02", "depositAccountId": checking, "paymentMethod": "CASH", "reference": null, "memo": null, "taxRateId": rate.id,
@@ -265,7 +265,7 @@ async fn cash_basis_counts_a_credit_applied_to_an_invoice_as_settling_it() {
     )
     .await
     .unwrap();
-    assert_eq!(memo.total_cents, inv.total_cents);
+    assert_eq!(memo.total_cents, inv.total_cents.get());
     let aug = |day| NaiveDate::from_ymd_opt(2026, 8, day).unwrap();
     crate::credits::apply_customer_credit(
         &pool,
@@ -313,7 +313,7 @@ async fn discounts_lower_taxable_sales_on_the_liability_report_and_the_return() 
         ]
     }))
     .unwrap();
-    assert_eq!(crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap().total_cents, 18_720);
+    assert_eq!(crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap().total_cents, Cents(18_720));
     // A $100 taxable credit memo with 10% off: $90 taxable, $7.20 tax given back.
     let memo = crate::credits::create_credit_memo(
         &pool,

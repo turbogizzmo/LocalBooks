@@ -551,8 +551,8 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
 
     record_payments(&pool, vec![pay(early, 49_000, 1_000, 11)]).await.unwrap();
     let detail = invoice_detail(&pool, early).await.unwrap();
-    assert_eq!((detail.invoice.status.as_str(), detail.invoice.balance_cents), ("PAID", 0), "closed for payment plus discount");
-    assert_eq!((detail.payments[0].amount_cents, detail.payments[0].discount_cents), (50_000, 1_000));
+    assert_eq!((detail.invoice.status.as_str(), detail.invoice.balance_cents), ("PAID", Cents(0)), "closed for payment plus discount");
+    assert_eq!((detail.payments[0].amount_cents, detail.payments[0].discount_cents), (Cents(50_000), Cents(1_000)));
     let entry = detail.payments[0].journal_entry_id.unwrap();
     let lines: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY id")
         .bind(entry)
@@ -586,7 +586,7 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
     crate::ledger::void_transaction(&pool, deposit_entry).await.unwrap();
     crate::ledger::void_transaction(&pool, entry).await.unwrap();
     let detail = invoice_detail(&pool, early).await.unwrap();
-    assert_eq!((detail.invoice.status.as_str(), detail.invoice.amount_paid_cents), ("UNPAID", 0));
+    assert_eq!((detail.invoice.status.as_str(), detail.invoice.amount_paid_cents), ("UNPAID", Cents(0)));
     assert_eq!(net_cents(&pool, discounts).await, 0, "the discount is reversed");
     assert_receivables_tie(&pool, 0, 105_000).await;
     assert_eq!(payment_discounts(&pool, &[early], d(10, 11)).await.unwrap().offered.len(), 1, "offered again once the payment is voided");

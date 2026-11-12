@@ -108,7 +108,7 @@ async fn invoice_posts_to_ar_and_income_then_payment_clears_ar() {
 
     assert_eq!(invoice.status, "UNPAID");
     assert_eq!(invoice.invoice_number, 1001);
-    assert_eq!(invoice.total_cents, 49_500);
+    assert_eq!(invoice.total_cents, Cents(49_500));
     assert_eq!(invoice.item_count, 3);
     assert_eq!(balance(&pool, ar).await, 49_500);
     assert_eq!(balance(&pool, services).await, 47_000);
@@ -116,7 +116,7 @@ async fn invoice_posts_to_ar_and_income_then_payment_clears_ar() {
 
     let paid = record_payment(&pool, payment(invoice.id, checking, 15, 49_500)).await.expect("payment posts");
     assert_eq!(paid.status, "PAID");
-    assert_eq!(paid.balance_cents, 0);
+    assert_eq!(paid.balance_cents, Cents(0));
     assert_eq!(paid.last_payment_date.as_deref(), Some("2026-10-15"));
     assert_eq!(balance(&pool, ar).await, 0);
     assert_eq!(balance(&pool, checking).await, 49_500);
@@ -134,7 +134,7 @@ async fn a_payment_can_be_dated_before_its_invoice() {
     let invoice = simple_invoice(&pool, "Initech", d(10), d(31), 50_000).await;
 
     let paid = record_payment(&pool, payment(invoice.id, checking, 3, 50_000)).await.expect("an early payment posts");
-    assert_eq!((paid.status.as_str(), paid.balance_cents), ("PAID", 0));
+    assert_eq!((paid.status.as_str(), paid.balance_cents), ("PAID", Cents(0)));
     assert_eq!(balance(&pool, ar).await, 0);
     assert_eq!(balance(&pool, checking).await, 50_000);
 }
@@ -146,19 +146,19 @@ async fn partial_payments_track_remaining_balance() {
     let invoice = simple_invoice(&pool, "Globex", d(1), d(31), 100_000).await;
 
     let first = record_payment(&pool, payment(invoice.id, checking, 5, 30_000)).await.expect("first payment");
-    assert_eq!((first.status.as_str(), first.amount_paid_cents, first.balance_cents), ("PARTIAL", 30_000, 70_000));
+    assert_eq!((first.status.as_str(), first.amount_paid_cents, first.balance_cents), ("PARTIAL", Cents(30_000), Cents(70_000)));
 
     let err = record_payment(&pool, payment(invoice.id, checking, 6, 70_001)).await.expect_err("overpayment");
     assert!(err.starts_with("INV_OVERPAYMENT"), "{err}");
 
     let second = record_payment(&pool, payment(invoice.id, checking, 7, 45_000)).await.expect("second payment");
-    assert_eq!((second.status.as_str(), second.balance_cents), ("PARTIAL", 25_000));
+    assert_eq!((second.status.as_str(), second.balance_cents), ("PARTIAL", Cents(25_000)));
 
     let last = record_payment(&pool, payment(invoice.id, checking, 9, 25_000)).await.expect("final payment");
-    assert_eq!((last.status.as_str(), last.balance_cents), ("PAID", 0));
+    assert_eq!((last.status.as_str(), last.balance_cents), ("PAID", Cents(0)));
 
     let payments = list_payments(&pool, invoice.id).await.unwrap();
-    assert_eq!(payments.iter().map(|p| p.amount_cents).collect::<Vec<_>>(), vec![30_000, 45_000, 25_000]);
+    assert_eq!(payments.iter().map(|p| p.amount_cents).collect::<Vec<_>>(), vec![Cents(30_000), Cents(45_000), Cents(25_000)]);
     assert!(payments.iter().all(|p| p.journal_entry_id.is_some()));
     assert_eq!(balance(&pool, ar).await, 0);
     assert_eq!(balance(&pool, checking).await, 100_000);
@@ -251,9 +251,9 @@ async fn invoice_detail_has_items_and_live_payments() {
     record_payment(&pool, payment(invoice.id, checking, 2, 10_000)).await.unwrap();
     let detail = invoice_detail(&pool, invoice.id).await.unwrap();
     assert_eq!(detail.items.len(), 1);
-    assert_eq!(detail.items[0].amount_cents, 25_000);
-    assert_eq!(detail.payments.iter().map(|p| p.amount_cents).sum::<i64>(), 10_000);
-    assert_eq!(detail.invoice.balance_cents, 15_000);
+    assert_eq!(detail.items[0].amount_cents, Cents(25_000));
+    assert_eq!(detail.payments.iter().map(|p| p.amount_cents.get()).sum::<i64>(), 10_000);
+    assert_eq!(detail.invoice.balance_cents, Cents(15_000));
 }
 
 #[test]
@@ -309,7 +309,7 @@ async fn fractional_quantities_post_rounded_amounts() {
     )
     .await
     .expect("fractional invoice posts");
-    assert_eq!(invoice.total_cents, 18_750 + 9_166);
+    assert_eq!(invoice.total_cents, Cents(18_750 + 9_166));
     assert_eq!(balance(&pool, ar).await, 27_916);
     let detail = invoice_detail(&pool, invoice.id).await.unwrap();
     assert_eq!(detail.items.iter().map(|i| i.quantity_e4).collect::<Vec<_>>(), vec![15_000, 27_500]);
@@ -357,7 +357,7 @@ async fn foreign_invoice_books_home_ar_and_payments_realize_fx() {
     )
     .await
     .unwrap();
-    assert_eq!((invoice.currency_code.as_deref(), invoice.total_cents, invoice.home_total_cents), (Some("EUR"), 100_000, 108_000));
+    assert_eq!((invoice.currency_code.as_deref(), invoice.total_cents, invoice.home_total_cents), (Some("EUR"), Cents(100_000), Cents(108_000)));
     assert_eq!((balance(&pool, ar).await, balance(&pool, services).await), (108_000, 108_000));
 
     let pay = |day, cents, rate| PaymentInput {
@@ -373,12 +373,12 @@ async fn foreign_invoice_books_home_ar_and_payments_realize_fx() {
     };
     // EUR 400 at 1.10 → $440 received; A/R relieved 40% of $1,080 = $432; $8 gain.
     let partial = record_payment(&pool, pay(10, Cents(40_000), 1_100_000)).await.unwrap();
-    assert_eq!((partial.status.as_str(), partial.balance_cents, partial.home_balance_cents), ("PARTIAL", 60_000, 64_800));
+    assert_eq!((partial.status.as_str(), partial.balance_cents, partial.home_balance_cents), ("PARTIAL", Cents(60_000), Cents(64_800)));
     assert_eq!((balance(&pool, checking).await, balance(&pool, ar).await, balance(&pool, fx_account).await), (44_000, 64_800, -800));
 
     // EUR 600 at 1.05 → $630 received; final payment relieves the remaining $648 exactly; $18 loss.
     let paid = record_payment(&pool, pay(20, Cents(60_000), 1_050_000)).await.unwrap();
-    assert_eq!((paid.status.as_str(), paid.home_balance_cents), ("PAID", 0));
+    assert_eq!((paid.status.as_str(), paid.home_balance_cents), ("PAID", Cents(0)));
     assert_eq!((balance(&pool, ar).await, balance(&pool, checking).await, balance(&pool, fx_account).await), (0, 107_000, 1_000));
     assert_eq!(ar_aging(&pool, d(31)).await.unwrap().total_cents, 0);
 
@@ -386,7 +386,7 @@ async fn foreign_invoice_books_home_ar_and_payments_realize_fx() {
     let last = list_payments(&pool, invoice.id).await.unwrap().pop().unwrap();
     crate::ledger::void_transaction(&pool, last.journal_entry_id.unwrap()).await.unwrap();
     let reopened = get_summary(&pool, invoice.id).await.unwrap();
-    assert_eq!((reopened.status.as_str(), reopened.balance_cents, reopened.home_balance_cents), ("PARTIAL", 60_000, 64_800));
+    assert_eq!((reopened.status.as_str(), reopened.balance_cents, reopened.home_balance_cents), ("PARTIAL", Cents(60_000), Cents(64_800)));
     assert_eq!((balance(&pool, ar).await, balance(&pool, fx_account).await), (64_800, -800));
 
     let err = record_payment(&pool, PaymentInput { exchange_rate_e6: Some(1_000_000), ..pay(21, Cents(100), 1) }).await;
@@ -429,22 +429,22 @@ async fn foreign_payment_after_voided_partial_payments_is_accepted() {
     )
     .await
     .unwrap();
-    assert_eq!(invoice.home_total_cents, 20);
+    assert_eq!(invoice.home_total_cents, Cents(20));
     let pay = |cents| PaymentInput { exchange_rate_e6: Some(rate), ..payment(invoice.id, checking, 2, cents) };
     for cents in [21, 1, 3, 1, 1] {
         record_payment(&pool, pay(cents)).await.unwrap();
     }
     let payments = list_payments(&pool, invoice.id).await.unwrap();
-    assert_eq!(payments.iter().map(|p| p.ar_relief_cents.unwrap()).collect::<Vec<_>>(), [16, 0, 3, 0, 1]);
+    assert_eq!(payments.iter().map(|p| p.ar_relief_cents.unwrap()).collect::<Vec<_>>(), [16, 0, 3, 0, 1].map(Cents));
     for p in [&payments[1], &payments[3]] {
         crate::ledger::void_transaction(&pool, p.journal_entry_id.unwrap()).await.unwrap();
     }
     assert_eq!(balance(&pool, ar).await, 0, "the voided payments relieved nothing");
 
     let summary = record_payment(&pool, pay(1)).await.expect("the payment is accepted");
-    assert_eq!((summary.balance_cents, summary.home_balance_cents, balance(&pool, ar).await), (1, 0, 0));
+    assert_eq!((summary.balance_cents, summary.home_balance_cents, balance(&pool, ar).await), (Cents(1), Cents(0), 0));
     let last = record_payment(&pool, pay(1)).await.expect("the final payment is accepted");
-    assert_eq!((last.status.as_str(), last.home_balance_cents, balance(&pool, ar).await), ("PAID", 0, 0));
+    assert_eq!((last.status.as_str(), last.home_balance_cents, balance(&pool, ar).await), ("PAID", Cents(0), 0));
     let tb = crate::reports::trial_balance(&pool).await.unwrap();
     assert_eq!(tb.total_debit_cents, tb.total_credit_cents);
 }
