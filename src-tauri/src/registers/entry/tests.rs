@@ -42,7 +42,7 @@ async fn a_bank_payment_is_recorded_as_a_check_and_shows_in_the_register() {
     let check = checks.iter().find(|x| x.id == posted.source_id).unwrap();
     assert_eq!(
         (check.kind.as_str(), check.check_number.as_deref(), check.payee_name.as_deref(), check.total_cents),
-        ("CHECK", Some("1042"), Some("Landlord LLC"), 120_000)
+        ("CHECK", Some("1042"), Some("Landlord LLC"), Cents(120_000))
     );
     assert_eq!(check.journal_entry_id, Some(posted.journal_entry_id));
 

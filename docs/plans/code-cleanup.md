@@ -92,6 +92,9 @@ Step 2b: the sales, estimate and credit views (`PartyView`, `ProductView`, `Sale
 `SalesTransaction`, `EstimateSummary`, `EstimateLineView`, `CreditMemoSummary`,
 `CreditApplicationView`, `AppliedCredits`, `CustomerCredit`, `VendorCreditSummary`); applying open
 credits to an invoice adds them up with `checked_add` on `Cents`.
+Step 2c: the purchase views (`BillSummary`, `BillPaymentView`, `ExpenseView`, `ReceiptView`,
+`ReceiptLineView`, `OrderLineReceiving`, `PurchaseFormLineView`, `RecurringView`, `SearchHit`); a memorized transaction's
+amount is now a checked sum, shown as zero if it overflows.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:

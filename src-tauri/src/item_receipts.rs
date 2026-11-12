@@ -79,7 +79,7 @@ pub struct ReceiptView {
     pub receipt_date: String,
     pub reference: Option<String>,
     pub memo: Option<String>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
     pub journal_entry_id: i64,
     pub is_voided: bool,
     /// The live bill entered for it, if any.
@@ -98,8 +98,8 @@ pub struct ReceiptLineView {
     pub product_name: Option<String>,
     pub description: String,
     pub quantity_e4: Option<i64>,
-    pub rate_cents: Option<i64>,
-    pub amount_cents: i64,
+    pub rate_cents: Option<Cents>,
+    pub amount_cents: Cents,
     pub class_id: Option<i64>,
     /// The customer or job its purchase order line is for; it carries to the bill.
     pub customer_id: Option<i64>,
@@ -117,13 +117,13 @@ pub struct OrderLineReceiving {
     pub product_name: Option<String>,
     pub description: Option<String>,
     pub quantity_e4: Option<i64>,
-    pub rate_cents: Option<i64>,
-    pub amount_cents: i64,
+    pub rate_cents: Option<Cents>,
+    pub amount_cents: Cents,
     pub class_id: Option<i64>,
     pub customer_id: Option<i64>,
     pub customer_name: Option<String>,
     pub received_quantity_e4: i64,
-    pub received_amount_cents: i64,
+    pub received_amount_cents: Cents,
 }
 
 const RECEIPT_SELECT: &str = "

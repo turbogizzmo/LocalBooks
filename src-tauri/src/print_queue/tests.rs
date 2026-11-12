@@ -164,7 +164,7 @@ async fn an_edited_queued_check_stays_queued() {
     };
     let new_id = crate::edits::replace_expense(&pool, queued.id, edited).await.unwrap();
     let queue = queued_checks(&pool, None).await.unwrap();
-    assert_eq!(queue.iter().map(|x| (x.id, x.total_cents)).collect::<Vec<_>>(), vec![(new_id, 11_000)]);
+    assert_eq!(queue.iter().map(|x| (x.id, x.total_cents.get())).collect::<Vec<_>>(), vec![(new_id, 11_000)]);
 }
 
 #[tokio::test]
