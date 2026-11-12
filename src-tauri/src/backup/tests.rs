@@ -42,7 +42,7 @@ async fn total_posted(pool: &SqlitePool) -> i64 {
 }
 
 /// The migration that keeps JSON subqueries as JSON on SQLite 3.54 (gap R24).
-const JSON_FIX: i64 = 176;
+const JSON_FIX: i64 = 177;
 
 #[tokio::test]
 async fn opening_an_older_company_file_saves_a_copy_before_upgrading_it() {
@@ -62,9 +62,9 @@ async fn opening_an_older_company_file_saves_a_copy_before_upgrading_it() {
         };
         db::migrate_with(&pool, &previous).await.unwrap();
         if previous_version < JSON_FIX {
-            // Releases before migration 0176 ran on a SQLite that kept a subquery's JSON as JSON;
+            // Releases before migration 0177 ran on a SQLite that kept a subquery's JSON as JSON;
             // the SQLite in this build stores it as text unless the view wraps it in json(...).
-            // Use 0176's view, which writes what those releases wrote, so the file is one they made.
+            // Use 0177's view, which writes what those releases wrote, so the file is one they made.
             let fix = MIGRATOR.iter().find(|m| m.version == JSON_FIX).unwrap().sql.as_str();
             let start = fix.find("DROP VIEW v_entry_snapshot;").unwrap();
             let end = start + fix[start..].find("FROM journal_entries e;").unwrap() + "FROM journal_entries e;".len();

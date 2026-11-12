@@ -414,3 +414,78 @@ async fn json_subqueries_in_the_schema_stay_json() {
     .unwrap();
     assert_eq!(changed, ("array".to_string(), r#"["email","phone"]"#.to_string()));
 }
+
+/// Unpacks a gzipped fixture from `src/db/fixtures` into `dir`.
+fn unpack_fixture(name: &str, dir: &Path) -> PathBuf {
+    use std::io::Read;
+    let gz = std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/db/fixtures").join(format!("{name}.gz"))).unwrap();
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(gz.as_slice()).read_to_end(&mut bytes).unwrap();
+    let path = dir.join(name);
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+/// A file written before migration 0177 by the SQLite before 3.54 (see `src/db/fixtures`) keeps a
+/// valid hash chain and matching posting snapshots once this build opens and upgrades it, and what
+/// it writes afterwards matches too. Without 0177 the same file would not verify here.
+#[tokio::test]
+async fn a_file_from_before_the_json_fix_still_verifies() {
+    let tmp = TempDir::new("json-fix-upgrade");
+
+    // Control: on this SQLite, the snapshot view as it was before 0177 no longer matches the file.
+    let control_dir = tmp.0.join("control");
+    std::fs::create_dir_all(&control_dir).unwrap();
+    let control = unpack_fixture("pre-0177.localbooks", &control_dir);
+    let pool = SqlitePoolOptions::new().max_connections(1).connect_with(SqliteConnectOptions::new().filename(&control)).await.unwrap();
+    let before = crate::ledger::verify_ledger_audit(&pool).await.unwrap();
+    assert!(!before.intact, "the pre-0177 view should differ from the stored snapshots on SQLite 3.54");
+    close_pool(&pool).await;
+
+    let path = unpack_fixture("pre-0177.localbooks", &tmp.0);
+    let db = Db::open_at(path, test_config(&tmp.0)).await.unwrap();
+    let pool = db.pool().await;
+    let newest: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations").fetch_one(&pool).await.unwrap();
+    assert!(newest >= 177, "the file was upgraded through 0177");
+
+    let check = |pool: SqlitePool| async move {
+        let audit = crate::ledger::verify_ledger_audit(&pool).await.unwrap();
+        assert!(audit.intact, "posting snapshots: {:?}", audit.findings);
+        let chain = crate::audit_chain::verify(&pool).await.unwrap();
+        assert!(chain.problems.is_empty(), "hash chain: {:?}", chain.problems);
+        assert_eq!(chain.records_pending, 0);
+        chain.records_sealed
+    };
+    let sealed = check(pool.clone()).await;
+    assert!(sealed > 145, "the file's own rows and the upgrade's are all sealed: {sealed}");
+
+    // Writing after the upgrade: a new post and a list change keep their arrays and still verify.
+    let account = |n: &'static str| {
+        let pool = pool.clone();
+        async move { sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_one(&pool).await.unwrap() }
+    };
+    let (checking, sales) = (account("1010").await, account("4000").await);
+    let entry = crate::ledger::JournalEntry {
+        id: None,
+        date: chrono::NaiveDate::from_ymd_opt(2026, 11, 2).unwrap(),
+        description: "After the upgrade".into(),
+        lines: vec![crate::ledger::JournalLine::debit(checking, 2_500), crate::ledger::JournalLine::credit(sales, 2_500)],
+        currency: None,
+    };
+    let posted = crate::ledger::post_journal_entry(&pool, entry).await.unwrap();
+    let mut tx = crate::ledger::begin_write(&pool).await.unwrap();
+    sqlx::query("UPDATE customers SET notes = 'Pays on the 1st' WHERE name = 'Harbor Feed'").execute(&mut *tx).await.unwrap();
+    crate::ledger::commit_write(tx).await.unwrap();
+    let kinds: Vec<String> = sqlx::query_scalar(
+        "SELECT json_type(payload_snapshot, '$.lines') FROM ledger_audit_log WHERE action_type = 'POST'
+         UNION ALL SELECT json_type(payload_snapshot, '$.changed') FROM ledger_audit_log WHERE action_type = 'LIST_CHANGE'",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(kinds.len(), 8, "five posts (one new) and three list changes (one new)");
+    assert!(kinds.iter().all(|k| k == "array"), "{kinds:?}");
+    assert!(posted > 4);
+    assert!(check(pool.clone()).await > sealed);
+    db.close().await;
+}
