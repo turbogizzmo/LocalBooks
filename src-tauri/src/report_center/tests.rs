@@ -145,8 +145,8 @@ async fn missing_checks_finds_gaps_and_duplicates_and_keeps_voids() {
     let numbers: Vec<&str> = report.rows.iter().map(|r| r.number.as_str()).collect();
     assert_eq!(numbers, ["1001", "1002", "1003", "1004", "1005", "1005", "1009", "1010"]);
     assert!(report.rows[2].is_voided && !report.rows[3].is_voided);
-    assert_eq!(report.rows[3].amount_cents, 3_500, "the edited check, once, at its corrected amount");
-    assert_eq!((report.rows[7].kind.as_str(), report.rows[7].amount_cents), ("Bill Payment", 10_000));
+    assert_eq!(report.rows[3].amount_cents, Cents(3_500), "the edited check, once, at its corrected amount");
+    assert_eq!((report.rows[7].kind.as_str(), report.rows[7].amount_cents), ("Bill Payment", Cents(10_000)));
     assert!(report.rows[4].is_duplicate && report.rows[5].is_duplicate && !report.rows[6].is_duplicate);
     assert_eq!(report.duplicate_count, 2);
     let gaps: Vec<(usize, u64, u64)> = report.gaps.iter().map(|g| (g.before, g.first, g.last)).collect();
@@ -208,26 +208,26 @@ async fn inventory_valuation_and_stock_status_follow_the_stock_ledger() {
     crate::ledger::void_transaction(&pool, entry).await.unwrap();
 
     let early = inventory_valuation(&pool, d(3, 5)).await.unwrap();
-    assert_eq!((early.rows[0].qty_on_hand_e4, early.rows[0].asset_value_cents, early.rows[0].average_cost_cents), (100_000, 10_000, Some(1_000)));
+    assert_eq!((early.rows[0].qty_on_hand_e4, early.rows[0].asset_value_cents, early.rows[0].average_cost_cents), (100_000, Cents(10_000), Some(Cents(1_000))));
     let now = inventory_valuation(&pool, d(3, 31)).await.unwrap();
     let w = &now.rows[0];
     assert_eq!((w.name.as_str(), w.sku.as_deref(), w.description.as_deref()), ("Widget", Some("W-1"), Some("Blue widget")));
-    assert_eq!((w.qty_on_hand_e4, w.asset_value_cents, w.average_cost_cents, w.retail_value_cents), (90_000, 9_900, Some(1_100), 22_500));
+    assert_eq!((w.qty_on_hand_e4, w.asset_value_cents, w.average_cost_cents, w.retail_value_cents), (90_000, Cents(9_900), Some(Cents(1_100)), Cents(22_500)));
     let gl: i64 = sqlx::query_scalar("SELECT SUM(debit_cents - credit_cents) FROM v_posted_lines WHERE account_id = ?1 AND entry_date <= '2026-03-31'")
         .bind(tracked.asset_account_id)
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(now.total_asset_value_cents, gl, "the valuation agrees with the Inventory Asset account");
+    assert_eq!(now.total_asset_value_cents.get(), gl, "the valuation agrees with the Inventory Asset account");
 
     let detail = inventory_valuation_detail(&pool, d(3, 6), d(3, 31)).await.unwrap();
     let item = &detail.items[0];
-    assert_eq!((item.opening_qty_e4, item.opening_value_cents), (100_000, 10_000));
+    assert_eq!((item.opening_qty_e4, item.opening_value_cents), (100_000, Cents(10_000)));
     let kinds: Vec<&str> = item.rows.iter().map(|r| r.kind.as_str()).collect();
     assert_eq!(kinds, ["PURCHASE", "SALE", "SALE", "VOID"]);
     assert_eq!(item.rows[1].qty_on_hand_e4, 90_000);
     assert_eq!(item.rows[3].party_name.as_deref(), Some("Walk-in"), "a void names the voided sale's customer");
-    assert_eq!((item.closing_qty_e4, item.closing_value_cents, detail.total_value_cents), (90_000, 9_900, 9_900));
+    assert_eq!((item.closing_qty_e4, item.closing_value_cents, detail.total_value_cents), (90_000, Cents(9_900), Cents(9_900)));
     assert!(inventory_valuation_detail(&pool, d(4, 1), d(4, 30)).await.unwrap().items.len() == 1, "stock on hand keeps the item in a quiet period");
 
     let po = crate::workflows::PurchaseOrderInput {

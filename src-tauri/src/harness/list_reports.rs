@@ -596,7 +596,7 @@ async fn t49_reports_tie_out_to_the_ledger() {
     // stock ledger took out for sales.
     let turnover = run_on("inventory-turnover").await;
     let valuation = crate::report_center::inventory_valuation(p, end).await.unwrap();
-    assert_eq!(cents(&total(&turnover).cells[2]), valuation.total_asset_value_cents);
+    assert_eq!(cents(&total(&turnover).cells[2]), valuation.total_asset_value_cents.get());
     let sold: i64 = sqlx::query_scalar(
         "SELECT -COALESCE(SUM(s.value_change_cents), 0) FROM stock_ledger_entries s LEFT JOIN stock_ledger_entries r ON r.id = s.reverses_id
          WHERE s.movement_date BETWEEN '2025-01-01' AND '2025-12-31' AND (s.kind = 'SALE' OR (s.kind = 'VOID' AND r.kind = 'SALE'))",

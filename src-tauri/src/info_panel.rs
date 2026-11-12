@@ -129,8 +129,8 @@ pub async fn item_summary(pool: &SqlitePool, product_id: i64, today: NaiveDate) 
         next_delivery: stock.and_then(|r| r.next_delivery),
         qty_on_sales_order_e4: stock.map_or(0, |r| r.qty_on_sales_order_e4),
         qty_available_e4: stock.map_or(qty_on_hand_e4, |r| r.qty_available_e4),
-        average_cost_cents: value.and_then(|r| r.average_cost_cents),
-        asset_value_cents: value.map_or(0, |r| r.asset_value_cents),
+        average_cost_cents: value.and_then(|r| r.average_cost_cents).map(crate::money::Cents::get),
+        asset_value_cents: value.map_or(0, |r| r.asset_value_cents.get()),
         at_reorder_point: reorder_point_e4.is_some_and(|point| qty_on_hand_e4 <= point),
         ..base
     })

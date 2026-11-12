@@ -163,7 +163,7 @@ async fn refused_invoices_change_nothing() {
     assert!(invoice_from_order(&s.pool, saved.id, &input, &takes).await.unwrap_err().starts_with("SO_CLOSED"));
     assert_eq!(entries(&s.pool).await, before, "nothing posted");
     assert_eq!(detail(&s.pool, saved.id).await.unwrap().summary.status, "CLOSED");
-    assert_eq!(pending_sales(&s.pool).await.unwrap().total_cents, 2_500, "only the other order is pending");
+    assert_eq!(pending_sales(&s.pool).await.unwrap().total_cents, Cents(2_500), "only the other order is pending");
     reopen(&s.pool, saved.id).await.unwrap();
     assert_eq!(detail(&s.pool, saved.id).await.unwrap().summary.status, "OPEN");
     delete(&s.pool, other.id).await.unwrap();
@@ -255,7 +255,7 @@ async fn editing_a_partly_invoiced_order_keeps_what_was_invoiced() {
     );
 
     let pending = pending_sales(&s.pool).await.unwrap();
-    assert_eq!((pending.rows.len(), pending.rows[0].orders, pending.total_cents), (1, 1, 22_500));
+    assert_eq!((pending.rows.len(), pending.rows[0].orders, pending.total_cents), (1, 1, Cents(22_500)));
 }
 
 #[tokio::test]
