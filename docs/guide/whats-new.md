@@ -4,6 +4,14 @@ The newest changes first, in plain words, with a link to the steps for each. Til
 new version when it starts (or check in **Settings › Updates**). The full list, including fixes, is in
 the [release notes](https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md).
 
+## 0.16.2
+
+- **Mac: Tillhouse in your Applications folder.** A copy updated from LocalBooks renames itself to
+  Tillhouse.app the next time it starts.
+- **Dashboard › Insights fits the window**: the income and expense chart keeps its size, the
+  Trial Balance shows full amounts, and A/R aging counts only invoices (unused credit is shown
+  separately). [Home and the Dashboard](getting-started.md)
+
 ## 0.16.0
 
 - **LocalBooks is now Tillhouse**: a new name, icon and colors. Your company files, settings,
