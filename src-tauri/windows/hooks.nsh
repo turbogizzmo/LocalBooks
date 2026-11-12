@@ -22,8 +22,22 @@
     Delete "$R0\THIRD-PARTY-NOTICES.txt"
     RMDir "$R0"
   ${EndIf}
-  Delete "$SMPROGRAMS\LocalBooks.lnk"
-  Delete "$DESKTOP\LocalBooks.lnk"
+  ; Replace the LocalBooks shortcuts with Tillhouse ones. An update runs this installer in update
+  ; mode, which only refreshes shortcuts that already exist under the new name, so without this the
+  ; app would drop out of the Start menu (caught by the release check of 0.16.0). Only where the old
+  ; shortcut was, so a later update never brings back a shortcut someone deleted on purpose.
+  ${If} ${FileExists} "$SMPROGRAMS\LocalBooks.lnk"
+    ${IfNot} ${FileExists} "$SMPROGRAMS\${PRODUCTNAME}.lnk"
+      CreateShortCut "$SMPROGRAMS\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+    ${EndIf}
+    Delete "$SMPROGRAMS\LocalBooks.lnk"
+  ${EndIf}
+  ${If} ${FileExists} "$DESKTOP\LocalBooks.lnk"
+    ${IfNot} ${FileExists} "$DESKTOP\${PRODUCTNAME}.lnk"
+      CreateShortCut "$DESKTOP\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+    ${EndIf}
+    Delete "$DESKTOP\LocalBooks.lnk"
+  ${EndIf}
   DeleteRegKey SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\LocalBooks"
   DeleteRegKey SHCTX "Software\localbooks\LocalBooks"
 !macroend
