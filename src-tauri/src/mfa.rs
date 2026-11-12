@@ -26,7 +26,7 @@
 //!
 //! Nothing here writes a secret, a code or a password to the audit trail, a log or an error.
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{SqliteConnection, SqlitePool};
