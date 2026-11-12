@@ -100,6 +100,10 @@ Step 2d: the bank, deposit, reconcile and sales order views (`BankTransactionVie
 `UnreconciledLine`, `ReconcileProgress`, `SalesOrderSummary` and `SalesOrderLine`); the cleared
 balance and difference of a reconciliation are now checked. `BankRow` and `BalanceCheck` are read
 from a bank file and wait for step 4; the open sales order reports wait for step 3.
+Step 2e: `FormLineView` (a document's subtotal, discount, charge and group lines), with
+`Cents::checked_neg` for loading a fixed discount back into its form. That finishes step 2. The
+form-line layout engine (`item_types::lay_out`, `Layout`, `ChargeRow`) works on bounded amounts
+as the form is entered and waits for step 4.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:
