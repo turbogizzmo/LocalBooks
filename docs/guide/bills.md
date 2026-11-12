@@ -31,6 +31,11 @@ after any split line, such as 2% off the parts or a freight charge on top:
 3. Pick a Discount or Other Charge **item** to fill in the account, text and amount, or choose the
    **Account** yourself. A discount or charge posts to an income or expense account.
 4. Enter an amount, or a percent of the line above such as `2%` (rounded to the cent).
+5. Once you have customers, choose the **Customer:Job** the line is for. On a bill, check or
+   expense, tick **Bill?** on a charge to invoice it to that customer from **Sales › Bill Costs**,
+   as you would a split line (see [Bill billable expenses to a
+   customer](getting-started.md#bill-billable-expenses-to-a-customer)). Freight on a bill for one
+   job can be billed on this way. A discount can name a customer or job but is never billed on.
 
 A discount comes off the total and a charge is added to it, so on a bill the split lines, less the
 discounts, plus the charges, must add up to the bill total. On a bill or check a discount is

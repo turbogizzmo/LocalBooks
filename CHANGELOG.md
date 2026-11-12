@@ -6,6 +6,13 @@ becomes its release notes on GitHub and in the app's update window (see
 
 ## [Unreleased]
 
+- **Bill freight and other charges on to a job.** A discount or charge under the lines of a bill,
+  check, expense, vendor credit or purchase order now has a **Customer:Job** column, and on a bill,
+  check or expense a charge has a **Bill?** box. A billable charge is listed in **Sales › Bill
+  Costs** and in **Add billable costs…** on an invoice, and is billed like any other cost.
+- **Custom reports by item list discounts and charges.** Discount lines on invoices, sales receipts
+  and credit memos, and discount and charge lines on bills, checks, expenses and vendor credits,
+  now show their Discount or Other Charge item in the **Item** column instead of a blank.
 - **Security: newer SQLite inside Tillhouse.** The database engine is now SQLCipher 4.20 on
   SQLite 3.54.1, which fixes a flaw where a specially made company file and its `-wal` log could
   make SQLite read back leftover memory (RUSTSEC-2026-0459). Tillhouse already refused such files;

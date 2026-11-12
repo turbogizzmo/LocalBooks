@@ -298,7 +298,8 @@ default.
 
 ### Bill billable expenses to a customer
 
-1. On a check, expense or bill, give the line a **Customer:Job** and tick **Bill?**.
+1. On a check, expense or bill, give the line a **Customer:Job** and tick **Bill?**. A charge
+   under the split lines, such as freight, takes a **Customer:Job** and **Bill?** the same way.
 2. Open **Sales › Bill Costs**, pick the customer, tick the costs and check the **Markup %**.
 3. Click **Create invoice**. Each cost becomes a line, crediting its expense account back (or the
    income account, if reimbursed expenses count as income), with one **Markup** line on top.
