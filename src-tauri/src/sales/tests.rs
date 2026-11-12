@@ -59,7 +59,7 @@ async fn sales_receipt_debits_cash_and_credits_revenue() {
     .await
     .expect("receipt posts");
 
-    assert_eq!((receipt.receipt_number, receipt.total_cents), (1, 10_997));
+    assert_eq!((receipt.receipt_number, receipt.total_cents), (1, Cents(10_997)));
     assert_eq!(receipt.customer_name.as_deref(), Some("Walk-in Wanda"));
     assert_eq!(balance(&pool, checking).await, 10_997);
     assert_eq!(balance(&pool, sales).await, 5_997);
@@ -171,12 +171,12 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
     .unwrap();
 
     let rows = list_all_sales(&pool).await.unwrap();
-    let kinds: Vec<(&str, i64, i64)> = rows.iter().map(|r| (r.kind.as_str(), r.total_cents, r.balance_cents)).collect();
+    let kinds: Vec<(&str, i64, i64)> = rows.iter().map(|r| (r.kind.as_str(), r.total_cents.get(), r.balance_cents.get())).collect();
     assert_eq!(kinds, vec![("SALES_RECEIPT", 5_000, 0), ("PAYMENT", 15_000, 0), ("INVOICE", 40_000, 25_000)]);
 
     let customers = list_customers(&pool).await.unwrap();
     assert_eq!(customers.len(), 1);
-    assert_eq!(customers[0].open_balance_cents, 25_000);
+    assert_eq!(customers[0].open_balance_cents, Cents(25_000));
 }
 
 #[tokio::test]

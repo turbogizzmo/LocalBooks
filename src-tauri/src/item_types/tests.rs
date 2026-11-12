@@ -160,7 +160,7 @@ async fn a_sales_receipt_with_a_subtotal_posts_balanced() {
     )
     .await
     .unwrap();
-    assert_eq!(receipt.total_cents, 10_000);
+    assert_eq!(receipt.total_cents, Cents(10_000));
     assert_posts(&pool, receipt.journal_entry_id.unwrap(), checking, 10_000).await;
     let stored: Vec<(i64, i64)> = sqlx::query_as("SELECT line_number, amount_cents FROM sales_receipt_form_lines WHERE sales_receipt_id = ?1")
         .bind(receipt.id)
@@ -200,7 +200,7 @@ async fn an_estimate_carries_its_subtotals_to_its_invoice() {
     )
     .await
     .unwrap();
-    assert_eq!(estimate.total_cents, 50_000);
+    assert_eq!(estimate.total_cents, Cents(50_000));
     let converted = crate::estimates::convert_to_invoice(&pool, estimate.id, d(5), d(30)).await.unwrap();
     let detail = invoice_detail(&pool, converted.converted_to_invoice_id.unwrap()).await.unwrap();
     assert_eq!(detail.form_lines.iter().map(|f| (f.line_number, f.amount_cents)).collect::<Vec<_>>(), vec![(2, 30_000), (4, 20_000)]);
@@ -415,7 +415,7 @@ async fn a_sales_receipt_with_a_discount_posts_balanced() {
     )
     .await
     .unwrap();
-    assert_eq!(receipt.total_cents, 6_000);
+    assert_eq!(receipt.total_cents, Cents(6_000));
     assert_posts(&pool, receipt.journal_entry_id.unwrap(), checking, 6_000).await;
 }
 
@@ -539,9 +539,9 @@ async fn fixed_and_percent_charges_post_balanced_and_carry_from_an_estimate() {
     )
     .await
     .unwrap();
-    assert_eq!(estimate.total_cents, 12_345 + 370 + 1_500);
+    assert_eq!(estimate.total_cents, Cents(12_345 + 370 + 1_500));
     let detail = crate::estimates::estimate_detail(&pool, estimate.id).await.unwrap();
-    let percents: Vec<(i64, Option<i64>, i64)> = detail.lines.iter().map(|l| (l.line_number, l.percent_ppm, l.rate_cents)).collect();
+    let percents: Vec<(i64, Option<i64>, i64)> = detail.lines.iter().map(|l| (l.line_number, l.percent_ppm, l.rate_cents.get())).collect();
     assert_eq!(percents, vec![(1, None, 12_345), (2, Some(30_000), 370), (3, None, 1_500)]);
 
     let converted = crate::estimates::convert_to_invoice(&pool, estimate.id, d(5), d(30)).await.unwrap();
@@ -622,7 +622,7 @@ async fn a_group_posts_its_items_and_can_print_as_one_line() {
     let member = |p: &crate::sales::ProductView, quantity_e4| InvoiceLineInput {
         description: p.name.clone(),
         quantity_e4,
-        rate_cents: Cents(p.rate_cents),
+        rate_cents: p.rate_cents,
         income_account_id: services,
         product_service_id: Some(p.id),
         class_id: None,
@@ -880,7 +880,7 @@ async fn a_credit_memo_with_a_discount_a_charge_and_a_subtotal_posts_balanced_an
     .await
     .unwrap();
     // 100.00 + 5.00 = 105.00, less 10% = 94.50; tax 8% of 94.50 = 7.56; total 102.06.
-    assert_eq!(memo.total_cents, 10_206);
+    assert_eq!(memo.total_cents, Cents(10_206));
     // A credit memo credits A/R by its total.
     assert_posts(&pool, memo.journal_entry_id.unwrap(), ar, -10_206).await;
     let to_discounts: i64 =

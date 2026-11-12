@@ -255,7 +255,7 @@ async fn zero_amount_estimate_lines_stay_off_the_invoice() {
     let est = create_estimate(&pool, estimate(vec![line("Design", 50_000), line("Site visit (included)", 0), line("Build", 25_000)]))
         .await
         .expect("a zero line is allowed");
-    assert_eq!(est.total_cents, 75_000);
+    assert_eq!(est.total_cents, Cents(75_000));
     assert!(
         create_estimate(&pool, estimate(vec![line("Nothing", 0)])).await.unwrap_err().starts_with("EST_AMOUNT_TOO_LARGE"),
         "the estimate itself needs an amount"

@@ -93,8 +93,8 @@ pub struct CreditMemoSummary {
     pub credit_date: String,
     pub memo: Option<String>,
     pub refund_account_id: Option<i64>,
-    pub total_cents: i64,
-    pub remaining_cents: i64,
+    pub total_cents: Cents,
+    pub remaining_cents: Cents,
     pub is_voided: bool,
     pub journal_entry_id: Option<i64>,
     /// Money received that wasn't applied to an invoice (an overpayment or a prepayment), kept as
@@ -287,7 +287,7 @@ pub struct CreditApplicationView {
     /// Invoice number, or the bill's reference.
     pub document_label: String,
     pub applied_date: String,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
 }
 
 /// Uses `amount_cents` of a credit memo against one of the same customer's open invoices.
@@ -352,7 +352,7 @@ pub(crate) async fn apply_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite>
 pub struct AppliedCredits {
     /// How many credit memos were used.
     pub count: i64,
-    pub applied_cents: i64,
+    pub applied_cents: Cents,
 }
 
 /// Uses the customer's open credit memos, oldest first, against one invoice until either the
@@ -378,7 +378,7 @@ pub async fn apply_open_credits_to_invoice(pool: &SqlitePool, invoice_id: i64, a
         .await
         .map_err(db_err)?;
         let mut open = total.checked_sub(paid).ok_or("CM_BAD_AMOUNT: the invoice balance is out of range")?;
-        let mut used = AppliedCredits { count: 0, applied_cents: 0 };
+        let mut used = AppliedCredits { count: 0, applied_cents: Cents::ZERO };
         for (credit_id, remaining) in credits {
             if open <= 0 {
                 break;
@@ -388,7 +388,7 @@ pub async fn apply_open_credits_to_invoice(pool: &SqlitePool, invoice_id: i64, a
             apply_customer_credit_in_tx(tx, &ApplyCreditInput { credit_id, document_id: invoice_id, amount_cents: Cents(amount_cents), applied_date }).await?;
             open -= amount_cents;
             used.count += 1;
-            used.applied_cents = used.applied_cents.checked_add(amount_cents).ok_or("CM_BAD_AMOUNT: too much credit")?;
+            used.applied_cents = used.applied_cents.checked_add(Cents(amount_cents)).ok_or("CM_BAD_AMOUNT: too much credit")?;
         }
         Ok(used)
     })
@@ -520,8 +520,8 @@ pub(crate) async fn refund_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite
 #[derive(Debug, Clone, Default, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct CustomerCredit {
-    pub unapplied_cents: i64,
-    pub remaining_cents: i64,
+    pub unapplied_cents: Cents,
+    pub remaining_cents: Cents,
 }
 
 pub async fn customer_credit(pool: &SqlitePool, customer_id: i64) -> Result<CustomerCredit, String> {
@@ -696,8 +696,8 @@ pub struct VendorCreditSummary {
     pub reference: Option<String>,
     pub credit_date: String,
     pub memo: Option<String>,
-    pub total_cents: i64,
-    pub remaining_cents: i64,
+    pub total_cents: Cents,
+    pub remaining_cents: Cents,
     pub is_voided: bool,
     pub journal_entry_id: Option<i64>,
 }

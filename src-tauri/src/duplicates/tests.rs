@@ -163,7 +163,7 @@ async fn a_credit_memo_copy_keeps_its_discounts_and_charges_so_it_totals_the_sam
     )
     .await
     .unwrap();
-    assert!(original.total_cents < 12_000, "the discount took something off: {}", original.total_cents);
+    assert!(original.total_cents < Cents(12_000), "the discount took something off: {}", original.total_cents);
 
     let copy = copy_source(&pool, "CREDIT_MEMO", original.id).await.unwrap();
     let kinds: Vec<&str> = copy.form_lines.iter().map(|f| f.kind.as_str()).collect();

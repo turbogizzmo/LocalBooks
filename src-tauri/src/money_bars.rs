@@ -102,7 +102,7 @@ pub async fn sales_segments(pool: &SqlitePool) -> Result<Vec<BarSegment>, String
             name: e.customer_name,
             number: Some(e.estimate_number.to_string()),
             memo: e.memo,
-            amount_cents: e.total_cents,
+            amount_cents: e.total_cents.get(),
             customer_id: None,
         })
         .collect();
