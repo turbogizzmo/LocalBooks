@@ -9,15 +9,22 @@ has to be run again. The workflows are `.github/workflows/release.yml` and
 
 1. Bump `version` in `src-tauri/tauri.conf.json`, `package.json` and `src-tauri/Cargo.toml`, and
    write the `## [<version>]` section of `CHANGELOG.md` (it becomes the release notes).
-2. Push the tag: `git tag v0.16.0 && git push origin v0.16.0`.
-3. `release.yml` runs the test jobs, then the three `Build` jobs (macOS universal, Windows,
-   Linux). They run in the `release` environment, so someone approves them; only that environment
-   holds the updater signing key.
+2. Merge that commit to `main`, then tag it: `git tag v0.16.0 && git push origin v0.16.0`. Tag
+   only a commit on `main`.
+3. `release.yml` doesn't test the tagged commit again: its push to `main` already ran the Rust
+   suite on all three platforms (a newer push to `main` doesn't cancel that run). The tag run's
+   **Tests passed on main** job waits for that run and fails unless its three `Test` jobs passed.
+   Meanwhile the three `Build` jobs (macOS universal, Windows, Linux) start as soon as they are
+   approved: they run in the `release` environment, so someone approves them; only that
+   environment holds the updater signing key. If **Tests passed on main** fails, re-run the
+   failed jobs of main's run (the job's error links it), then re-run **Tests passed on main**;
+   don't publish the draft until the whole tag run is green.
 4. The first Build job to finish creates a **draft** release for the tag; every Build job uploads
    its installers and update bundles to it and merges its platforms into the draft's
    `latest.json`.
-5. Publish the draft as a **pre-release**. `release-check.yml` runs on that and checks the files on
-   all three platforms.
+5. When the tag run is green, publish the draft as a **pre-release**. `release-check.yml` runs on
+   that and checks the files on all three platforms. Its first job also refuses a tag whose
+   commit's `Test` jobs on `main` did not all pass.
 6. When the release check is green, promote the release to **latest**. Installed copies read
    `releases/latest/download/latest.json`, so they see the update only from this point.
 

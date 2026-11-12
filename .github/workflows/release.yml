@@ -2,11 +2,16 @@
 #
 # pull request   → run the Rust test suite on Windows and Linux, and on macOS for batch/* branches
 #                  or a PR labelled `macos` (no secrets, read-only).
-# push to main   → same tests.
-# manual run     → run tests, then build installers; keep workflow artifacts for 7 days.
-# push tag v*    → same gates, then build and upload the installers and latest.json to a DRAFT
-#                  GitHub Release named after the tag. Review the draft and click "Publish":
-#                  installed copies see the update only once the release is published.
+# push to main   → the suite on all three platforms, for every commit (a newer push doesn't cancel
+#                  it): these are the results a release of that commit relies on, and these runs
+#                  save the Rust caches that pull requests read.
+# manual run     → run tests and build installers side by side; keep workflow artifacts for 7 days.
+# push tag v*    → don't test the commit again. "Tests passed on main" waits for that commit's
+#                  push-to-main run and fails unless its three Test jobs passed; meanwhile the Build
+#                  jobs (after the `release` approval) upload installers and latest.json to a DRAFT
+#                  GitHub Release named after the tag. Publish the draft as a pre-release only when
+#                  the whole run is green; the release check refuses a tag whose commit didn't pass
+#                  on main. Installed copies see the update only once the release is latest.
 #
 # Cut a release:   bump "version" in src-tauri/tauri.conf.json (and package.json / Cargo.toml),
 #                  commit, then:  git tag v0.2.0 && git push origin v0.2.0
@@ -39,9 +44,10 @@ permissions:
   contents: read
 
 concurrency:
-  # A newer push to main supersedes an older run; tag builds always run to completion.
+  # A newer push to a pull request supersedes its older run. Pushes to main and tags always run to
+  # completion: a tag of a commit relies on that commit's run on main (job `main-tests`).
   group: release-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -62,6 +68,8 @@ env:
 jobs:
   test:
     name: Test (${{ matrix.platform }})
+    # A tag's commit was tested by its push to main (job `main-tests` checks that run).
+    if: github.ref_type != 'tag'
     permissions:
       contents: read
     strategy:
@@ -89,6 +97,20 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Test files on the work disk (Windows)
+        # The suite ran twice as long on Windows as on Linux (776 s against 407 s for PR #408's
+        # tests, both on 4 cores), and most tests write company files to the temp folder. That folder
+        # is on the runner's system disk C:, the workspace on its work disk D:. With the temp folder
+        # next to the workspace and SQLite built optimized (Cargo.toml), PR #409 ran them in 367 s.
+        # (Defender's real-time scan is already off on these runners.)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:RUNNER_TEMP 'tmp'
+          New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+          "TMP=$tmp" >> $env:GITHUB_ENV
+          "TEMP=$tmp" >> $env:GITHUB_ENV
+
       - name: Cache Rust build
         uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
@@ -109,11 +131,12 @@ jobs:
     # held batch PRs for hours. So on a pull request the macOS suite runs only for batch branches
     # (`batch/*`, which merge every feature PR) or a PR labelled `macos` (adding the label runs the
     # suite at once through macos-label.yml). Pushes to main, tags and manual runs always run it. A
-    # skipped job counts as passing for required checks.
+    # skipped job counts as passing for required checks. Tags rely on the run on main (`main-tests`).
     if: >-
+      github.ref_type != 'tag' && (
       github.event_name != 'pull_request' ||
       startsWith(github.head_ref, 'batch/') ||
-      contains(github.event.pull_request.labels.*.name, 'macos')
+      contains(github.event.pull_request.labels.*.name, 'macos'))
     permissions:
       contents: read
     # No matrix: with one, GitHub appends "(macos-latest)" to the name and it no longer matches the
@@ -151,9 +174,63 @@ jobs:
         working-directory: src-tauri
         run: cargo test --locked
 
+  main-tests:
+    name: Tests passed on main
+    # The tagged commit reached main through a pull request whose checks passed, and its push to
+    # main ran the suite on all three platforms. Testing it a third time here held every release
+    # for about 19 minutes (v0.16.0: Test (windows-latest) 18.5 min before any build started). This
+    # job waits for that run's three Test jobs instead, on one small runner, while the Build jobs
+    # run. It fails if one failed or was cancelled (re-run it there, then re-run this job), or if
+    # the commit has no push-to-main run (tag only commits that are on main).
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    # Main's macOS job may take up to its own 110-minute limit.
+    timeout-minutes: 120
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Wait for the Test jobs of this commit's run on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          for i in $(seq 1 115); do
+            run=$(gh api "repos/$REPO/actions/workflows/release.yml/runs?head_sha=$SHA&event=push&branch=main&per_page=10" \
+              --jq '.workflow_runs | sort_by(.created_at) | last | .id // empty')
+            if [ -z "$run" ]; then
+              # The push to main starts its run at the same moment as the tag's; allow a few minutes.
+              if [ "$i" -ge 10 ]; then
+                echo "::error::$SHA has no push-to-main run of release.yml. Tag only a commit that is on main."
+                exit 1
+              fi
+            else
+              # Its three jobs named "Test (<platform>)": ubuntu-latest, windows-latest, macos-latest.
+              jobs=$(gh api "repos/$REPO/actions/runs/$run/jobs?filter=latest&per_page=100" \
+                --jq '.jobs[] | select(.name | startswith("Test (")) | "\(.name)=\(.status)/\(.conclusion // "")"')
+              echo "$(date -u +%H:%M) run $run: $(echo "$jobs" | tr '\n' ' ')"
+              done_ok=$(echo "$jobs" | grep -c '=completed/success$' || true)
+              bad=$(echo "$jobs" | grep '=completed/' | grep -v '/success$' || true)
+              if [ -n "$bad" ]; then
+                echo "::error::Main's run for this commit did not pass: $(echo "$bad" | tr '\n' ' '). Re-run its failed jobs (https://github.com/$REPO/actions/runs/$run), then re-run this job."
+                exit 1
+              fi
+              if [ "$done_ok" -eq 3 ]; then
+                echo "All three Test jobs passed on main for $SHA: https://github.com/$REPO/actions/runs/$run" | tee -a "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+            fi
+            sleep 60
+          done
+          echo "::error::Main's Test jobs for $SHA did not finish in time."
+          exit 1
+
   build:
     name: Build (${{ matrix.name }})
-    needs: [test, test-macos]
+    # No `needs`: the builds start at once (after the `release` approval) and run beside the tests.
+    # A draft release is invisible to installed copies, and nothing is published until the run is
+    # green and the release check passes (docs/dev/releasing.md).
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     # Holds the updater signing key; its deployment rules (tags only, required reviewer) gate this job.
     environment: release
@@ -211,13 +288,9 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.rust-targets }}
 
-      - name: Cache Rust build
-        uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-        with:
-          workspaces: src-tauri -> target
-          shared-key: build-${{ matrix.platform }}
-          # A tag's cache can only be read by that same tag, so saving it only takes space from main.
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # No Rust cache. This job never runs on main, and a cache saved by a tag or a manual run can
+      # be read only by that same ref, so the `build-*` cache this step used to restore was never
+      # saved by anything (none existed in Nov 2026): every release build compiles from scratch.
 
       - name: Install frontend dependencies
         # No install scripts: the only ones (esbuild, fsevents) are optional, and none should run in
