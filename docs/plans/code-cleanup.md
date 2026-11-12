@@ -105,6 +105,11 @@ Step 2e: `FormLineView` (a document's subtotal, discount, charge and group lines
 form-line layout engine (`item_types::lay_out`, `Layout`, `ChargeRow`) works on bounded amounts
 as the form is entered and waits for step 4.
 
+Step 3, the reports, goes in stages "A7 step 3a" onward. Step 3a: the chart of accounts, trial
+balance and dashboard (`reports`), and the A/R aging buckets (`invoices::ar_aging`). The trial
+balance and the dashboard's month-end series were unchecked `+=`; they are now checked, with a
+`REPORT_OVERFLOW` error.
+
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:
 

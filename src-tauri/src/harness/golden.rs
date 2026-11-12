@@ -77,7 +77,7 @@ async fn trial_balance() {
     for r in &tb.rows {
         let name = format!("{} {}", r.account_number.as_deref().unwrap_or("----"), r.full_name);
         let side = |c: i64| if c == 0 { String::new() } else { money(c) };
-        writeln!(out, "{name:<44}{:<24}{:>16}{:>16}", r.account_type_name, side(r.debit_cents), side(r.credit_cents)).unwrap();
+        writeln!(out, "{name:<44}{:<24}{:>16}{:>16}", r.account_type_name, side(r.debit_cents.get()), side(r.credit_cents.get())).unwrap();
     }
     writeln!(out, "{:<68}{:>16}{:>16}", "Total", money(tb.total_debit_cents), money(tb.total_credit_cents)).unwrap();
     insta::assert_snapshot!(out);
