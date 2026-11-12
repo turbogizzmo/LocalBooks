@@ -124,6 +124,8 @@ every subtotal, total and column is a checked sum (`RPT_OVERFLOW`); they were un
 and `.sum()`. `ReportLine.amount_cents` is `Option<Cents>`. The multi-column reports
 (`ClassReportLine.amounts_cents`) stay `i64`, because their `percent` columns hold basis points,
 not cents. `Cents::checked_abs` is new, for the rows a multi-column report shows.
+Step 3e: the graphs (`graphs`): income and expense, net worth, aging, sales and budget vs actual.
+The "Other" slice, net worth and the budget figures are now checked sums; they were unchecked.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:
