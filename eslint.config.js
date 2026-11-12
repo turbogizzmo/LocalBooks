@@ -2,8 +2,11 @@
 //
 // - Gap A15: a name used but never defined. Vite builds such a file, and the screen fails only when
 //   it renders. `no-undef` and its JSX twin `react/jsx-no-undef` (a component used but never
-//   imported). The react-hooks plugin is loaded so the code's existing
-//   `eslint-disable … react-hooks/exhaustive-deps` comments name a rule that exists.
+//   imported; since ESLint 10 `no-undef` sees JSX names too, so both report it). The react-hooks
+//   plugin is loaded so the code's existing `eslint-disable … react-hooks/exhaustive-deps` comments
+//   name a rule that exists.
+// - ESLint 10 (gap A21): the react and jsx-a11y plugins still declare a peer range that ends at
+//   ESLint 9 but run on 10 unchanged, so `overrides` in package.json lets them take this ESLint.
 // - Gap R19: accessibility. jsx-a11y's strict set: every field has a label, ARIA roles and
 //   properties are valid and complete, menus and dialogs are focusable, a click on a non-control has
 //   a keyboard equivalent. Adjusted where LocalBooks' own patterns are deliberate:

@@ -10,18 +10,18 @@ repository = "https://github.com/turbogizzmo/LocalBooks"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-aes = "=0.8.4"
+aes = "=0.9.3"
 aes-gcm = { version = "=0.11.1", default-features = false, features = ["aes", "alloc"] }
 argon2 = { version = "=0.6.0", default-features = false, features = ["alloc"] }
 base64 = "0.23"
 calamine = { version = "0.38", default-features = false }
-cbc = { version = "=0.1.2", features = ["alloc"] }
+cbc = { version = "=0.2.1", features = ["alloc"] }
 cfb = "0.16"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 csv = "1"
 flate2 = "1"
 getrandom = "=0.2.17"
-hmac = "=0.12.1"
+hmac = "=0.13.0"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "smtp-transport", "tokio1-native-tls"] }
 libc = "0.2"
@@ -36,9 +36,9 @@ rust_xlsxwriter = "0.102"
 reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
-sha2 = "=0.10.9"
+sha2 = "=0.11.1"
 # TOTP codes (RFC 6238) use HMAC-SHA-1, the only hash every authenticator app supports.
-sha1 = "=0.10.7"
+sha1 = "=0.11.0"
 sqlx = { version = "=0.9.0", default-features = false, features = ["runtime-tokio", "sqlite-bundled", "sqlite-unlock-notify", "sqlite-deserialize", "chrono", "migrate", "macros", "derive"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"

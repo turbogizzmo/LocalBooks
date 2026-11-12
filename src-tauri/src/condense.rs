@@ -1053,8 +1053,13 @@ async fn kept_tables_digest(pool: &SqlitePool) -> Result<BTreeMap<String, String
         .fetch_all(&mut *conn)
         .await
         .map_err(db_err)?;
-    digests.insert("system_preferences".into(), format!("{:x}", Sha256::digest(serde_json::to_string(&preferences).unwrap_or_default())));
+    digests.insert("system_preferences".into(), lower_hex(&Sha256::digest(serde_json::to_string(&preferences).unwrap_or_default())));
     Ok(digests)
+}
+
+/// A digest as lowercase hex, the form stored and compared.
+fn lower_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 async fn table_digest(conn: &mut SqliteConnection, table: &str) -> Result<String, String> {
@@ -1070,7 +1075,7 @@ async fn table_digest(conn: &mut SqliteConnection, table: &str) -> Result<String
         hash.update(r.as_bytes());
         hash.update(b"\n");
     }
-    Ok(format!("{:x}", hash.finalize()))
+    Ok(lower_hex(&hash.finalize()))
 }
 
 /// A digest of every row of every table: equal digests mean the books did not change.
@@ -1081,7 +1086,7 @@ pub async fn content_digest(pool: &SqlitePool) -> Result<String, String> {
         hash.update(table.as_bytes());
         hash.update(table_digest(&mut conn, &table).await?.as_bytes());
     }
-    Ok(format!("{:x}", hash.finalize()))
+    Ok(lower_hex(&hash.finalize()))
 }
 
 /// Compares the condensed copy with the archive it was made from.
