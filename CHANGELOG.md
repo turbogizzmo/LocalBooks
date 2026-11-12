@@ -6,6 +6,11 @@ becomes its release notes on GitHub and in the app's update window (see
 
 ## [Unreleased]
 
+- **Mac: the app is called Tillhouse in your Applications folder too.** A copy updated from
+  LocalBooks kept the name LocalBooks.app. It now renames itself to Tillhouse.app the next time it
+  starts, so Finder, Spotlight and Launchpad show the new name. If you keep it in the Dock, the Dock
+  follows the rename. Nothing else changes: your company files and settings stay where they are.
+
 ## [0.16.1]
 
 - **Windows: Tillhouse keeps its place in the Start menu.** Updating from LocalBooks 0.15 now

@@ -52,9 +52,12 @@ https://claude.ai/artifact/BHgvY6tz4kUG3QjL3UhBFo (private to the maintainer).
   it replaces: `localbooks.exe`, its uninstaller and notices file, the folder if then empty, the
   Start menu and desktop shortcuts, and the `Uninstall\LocalBooks` and `Software\localbooks\LocalBooks`
   registry keys. App data is keyed on the identifier and is not touched.
-- **macOS.** The updater replaces the bundle where it is, so an updated copy keeps the folder name
-  `LocalBooks.app` while showing Tillhouse in the menu bar and Dock. A fresh download is
-  `Tillhouse.app`; both are the same app with the same data.
+- **macOS.** The updater replaces the bundle where it is, so an updated copy is still named
+  `LocalBooks.app` until it next starts. From 0.16.2, on launch and before any window, a bundle
+  named `LocalBooks.app` renames itself to `Tillhouse.app` beside it and restarts from there
+  (`src-tauri/src/mac_app_name.rs`). It leaves things as they are if `Tillhouse.app` already
+  exists there or the folder can't be written. A fresh download is `Tillhouse.app`; data is keyed
+  on the identifier either way.
 - **Linux.** The package name follows the product name (`local-books` → `tillhouse`). The `.deb`
   conflicts with and replaces `local-books`; the `.rpm` obsoletes it. The AppImage updates in place.
 
@@ -73,7 +76,8 @@ the previous release, applies the new one the way tauri-plugin-updater 2.14.1 do
 - [ ] **macOS:** the new `.app.tar.gz` swapped into the old bundle's path. Tauri's updater keeps the
       running bundle's path (`updater.rs`: `extract_path_from_executable`, then `swap_bundle` or
       `replace_bundle` on `self.extract_path`), so an updated copy stays at `LocalBooks.app` and
-      shows Tillhouse; the check asserts it launches from there.
+      shows Tillhouse; the check asserts it launches from there. A second step puts the new build
+      at `LocalBooks.app` and launches it: it must rename itself to `Tillhouse.app` and keep running.
 - [ ] **Everywhere:** the `com.localbooks.desktop` data folder keeps every file, and the upgraded app
       opens each seeded company with `--check-file` with unchanged balances.
 

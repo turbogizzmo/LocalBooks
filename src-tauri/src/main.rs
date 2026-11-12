@@ -8,6 +8,7 @@ mod accountants_copy;
 mod accounts;
 mod app_menu;
 mod ach;
+mod mac_app_name;
 mod approvals;
 mod attachment_export;
 mod attachments_library;
@@ -177,6 +178,8 @@ fn main() {
     if let Some(code) = release_check::run_from_args() {
         std::process::exit(code);
     }
+    // A Mac copy updated from LocalBooks takes its new name, before any window (mac_app_name.rs).
+    mac_app_name::adopt_new_name();
     tauri::Builder::default()
         .on_page_load(|webview, payload| {
             if webview.label() == windows::MAIN && payload.event() == tauri::webview::PageLoadEvent::Finished {
