@@ -367,7 +367,9 @@ Things to know:
   line of its own, as it is on the Balance Sheet.
 - On ledger lines, **Item**, **Qty** and **Rate** are filled in when the line was posted from a single
   item line of its invoice, sales receipt, credit memo or bill. The reports by product or service
-  read the documents' item lines instead, in your home currency.
+  read the documents' item lines instead, in your home currency. Discount lines on sales forms and
+  discount and charge lines on bills, checks, expenses and vendor credits count as lines of their
+  Discount or Other Charge item, so a custom report by item lists them.
 
 ## Accountant & Taxes reports
 

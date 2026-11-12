@@ -128,7 +128,7 @@ function VendorCreditForm({ accounts, onPosted, onCancel, savedStep, copyOf = nu
         </div>
       </div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withClasses withJobs withBillable={false} />
-      <PurchaseFormLines rows={formRows} setRows={setFormRows} laid={laid} lines={lines} accounts={accounts} />
+      <PurchaseFormLines rows={formRows} setRows={setFormRows} laid={laid} lines={lines} accounts={accounts} withBillable={false} />
       <div className="flex items-center gap-2 px-2 py-1">
         {files.length > 0 && <PendingAttachments paths={files} onChange={setFiles} label="Attach another…" />}
         {error && <span className="text-sm text-qb-negative">{error}</span>}

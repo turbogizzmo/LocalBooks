@@ -547,9 +547,12 @@ const ENTRY_COLUMNS: &str = "
     END AS open_cents,
     rep.id AS rep_id, rep.initials AS rep_initials, rep.name AS rep_name";
 
-/// The item lines of every posted sales and purchase document, with the entry that posted them.
-/// Amounts are in home currency (prorated as `report_center::sales_by_product` does) and negative
-/// for credits.
+/// The item lines of every posted sales and purchase document, with the entry that posted them,
+/// and their discount and charge lines (the sales forms' discounts, a purchase form's discounts
+/// and charges; a sales form's percent charge is already an item line). Amounts are in home
+/// currency (prorated as `report_center::sales_by_product` does) and negative for credits; a
+/// discount counts against its document. A purchase form's line takes the number of the split line
+/// it follows.
 const ITEM_LINES: &str = "
     SELECT i.journal_entry_id AS je, it.line_number, it.description AS memo, it.income_account_id AS account_id, it.class_id,
            it.product_service_id AS item_id, it.quantity_e4 AS qty_e4, it.rate_cents,
@@ -579,6 +582,35 @@ const ITEM_LINES: &str = "
     SELECT x.journal_entry_id, el.line_number, el.memo, el.account_id, el.class_id, NULL, NULL, NULL,
            CASE WHEN x.is_credit = 1 THEN -1 ELSE 1 END * el.amount_cents * COALESCE(x.home_total_cents, x.total_cents) / x.total_cents
     FROM expense_lines el JOIN expenses x ON x.id = el.expense_id
+    WHERE x.is_voided = 0 AND x.journal_entry_id IS NOT NULL
+    UNION ALL
+    SELECT i.journal_entry_id, f.line_number, f.description, f.account_id, f.class_id, f.product_service_id, NULL, NULL,
+           f.amount_cents * COALESCE(i.home_total_cents, i.total_cents) / i.total_cents
+    FROM invoice_form_lines f JOIN invoices i ON i.id = f.invoice_id
+    WHERE f.kind = 'DISCOUNT' AND i.is_voided = 0 AND i.journal_entry_id IS NOT NULL
+    UNION ALL
+    SELECT r.journal_entry_id, f.line_number, f.description, f.account_id, f.class_id, f.product_service_id, NULL, NULL, f.amount_cents
+    FROM sales_receipt_form_lines f JOIN sales_receipts r ON r.id = f.sales_receipt_id
+    WHERE f.kind = 'DISCOUNT' AND r.is_voided = 0 AND r.journal_entry_id IS NOT NULL
+    UNION ALL
+    SELECT m.journal_entry_id, f.line_number, f.description, f.account_id, f.class_id, f.product_service_id, NULL, NULL, -f.amount_cents
+    FROM credit_memo_form_lines f JOIN credit_memos m ON m.id = f.credit_memo_id
+    WHERE f.kind = 'DISCOUNT' AND m.is_voided = 0 AND m.journal_entry_id IS NOT NULL
+    UNION ALL
+    SELECT b.journal_entry_id, f.after_line, f.description, f.account_id, f.class_id, f.product_service_id, NULL, NULL,
+           CASE f.kind WHEN 'CHARGE' THEN 1 ELSE -1 END * f.amount_cents
+    FROM purchase_form_lines f JOIN bills b ON b.id = f.bill_id
+    WHERE b.is_voided = 0 AND b.journal_entry_id IS NOT NULL
+    UNION ALL
+    SELECT c.journal_entry_id, f.after_line, f.description, f.account_id, f.class_id, f.product_service_id, NULL, NULL,
+           CASE f.kind WHEN 'CHARGE' THEN -1 ELSE 1 END * f.amount_cents
+    FROM purchase_form_lines f JOIN vendor_credits c ON c.id = f.vendor_credit_id
+    WHERE c.is_voided = 0 AND c.journal_entry_id IS NOT NULL
+    UNION ALL
+    SELECT x.journal_entry_id, f.after_line, f.description, f.account_id, f.class_id, f.product_service_id, NULL, NULL,
+           CASE WHEN x.is_credit = 1 THEN -1 ELSE 1 END * CASE f.kind WHEN 'CHARGE' THEN 1 ELSE -1 END
+           * f.amount_cents * COALESCE(x.home_total_cents, x.total_cents) / x.total_cents
+    FROM purchase_form_lines f JOIN expenses x ON x.id = f.expense_id
     WHERE x.is_voided = 0 AND x.journal_entry_id IS NOT NULL";
 
 const ACCOUNT_COLUMNS: &str = "a.id AS account_id, a.full_name AS account_name, a.account_number, a.account_type, a.classification,

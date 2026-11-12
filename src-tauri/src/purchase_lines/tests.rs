@@ -33,6 +33,8 @@ fn line(after: usize, kind: PurchaseLineKind, percent: Option<i64>, amount: Opti
         amount_cents: amount.map(Cents),
         account_id,
         class_id: None,
+        customer_id: None,
+        billable: None,
     }
 }
 
