@@ -69,7 +69,7 @@ pub struct CopyRecord {
 const RECORD_SELECT: &str = "SELECT id, dividing_date, file_name, status, created_at, created_by, closed_at, closed_by, entries_posted, accounts_created, changes_sha256 FROM accountants_copies";
 
 pub async fn copies(pool: &SqlitePool) -> Result<Vec<CopyRecord>, String> {
-    sqlx::query_as(&format!("{RECORD_SELECT} ORDER BY id DESC")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{RECORD_SELECT} ORDER BY id DESC"))).fetch_all(pool).await.map_err(db_err)
 }
 
 /// What the open file is: the copy's dividing date when it is an Accountant's Copy.
@@ -123,7 +123,7 @@ pub async fn create(pool: &SqlitePool, live_path: &Path, destination: &Path, div
 }
 
 async fn record(pool: &SqlitePool, id: i64) -> Result<CopyRecord, String> {
-    sqlx::query_as(&format!("{RECORD_SELECT} WHERE id = ?1")).bind(id).fetch_one(pool).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{RECORD_SELECT} WHERE id = ?1"))).bind(id).fetch_one(pool).await.map_err(db_err)
 }
 
 /// Lifts the client's lock without importing anything; the copy's changes are then refused.

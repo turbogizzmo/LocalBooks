@@ -394,7 +394,7 @@ async fn job_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate) 
          WHERE a.classification IN ('INCOME', 'EXPENSE')
          ORDER BY e.entry_date, e.entry_number, l.line_number"
     );
-    let raw: Vec<RawLine> = sqlx::query_as(&sql).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)?;
+    let raw: Vec<RawLine> = sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str())).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)?;
     if raw.is_empty() {
         return Ok(Vec::new());
     }

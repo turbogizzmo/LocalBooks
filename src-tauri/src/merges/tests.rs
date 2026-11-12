@@ -11,7 +11,7 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn id_of(pool: &SqlitePool, table: &str, name: &str) -> i64 {
-    sqlx::query_scalar(&format!("SELECT id FROM {table} WHERE name = ?1")).bind(name).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT id FROM {table} WHERE name = ?1"))).bind(name).fetch_one(pool).await.unwrap()
 }
 
 async fn invoice(pool: &SqlitePool, customer: &str, cents: i64, item: Option<i64>) -> i64 {

@@ -365,7 +365,7 @@ fn mentions(candidate: &DepositCandidate, name: &str) -> bool {
 
 pub async fn undeposited(pool: &SqlitePool) -> Result<UndepositedReview, String> {
     let items = crate::banking::list_undeposited(pool).await?;
-    let lines: Vec<DepositCandidate> = sqlx::query_as::<_, DepositCandidate>(&format!("{CANDIDATES_SELECT} ORDER BY d.deposit_date, l.id"))
+    let lines: Vec<DepositCandidate> = sqlx::query_as::<_, DepositCandidate>(sqlx::AssertSqlSafe(format!("{CANDIDATES_SELECT} ORDER BY d.deposit_date, l.id")))
         .fetch_all(pool)
         .await
         .map_err(db_err)?
@@ -396,8 +396,10 @@ pub async fn undeposited(pool: &SqlitePool) -> Result<UndepositedReview, String>
             }
         })
         .collect();
-    let matches =
-        sqlx::query_as::<_, UndepositedMatch>(&format!("{MATCHES_SELECT} WHERE m.is_voided = 0 ORDER BY m.id DESC")).fetch_all(pool).await.map_err(db_err)?;
+    let matches = sqlx::query_as::<_, UndepositedMatch>(sqlx::AssertSqlSafe(format!("{MATCHES_SELECT} WHERE m.is_voided = 0 ORDER BY m.id DESC")))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
     Ok(UndepositedReview { customers, matches })
 }
 
@@ -443,7 +445,7 @@ pub async fn match_undeposited(pool: &SqlitePool, items: &[MatchItem]) -> Result
                 return Err("UF_NOT_UNDEPOSITED: that payment went straight to a bank account, not Undeposited Funds".into());
             }
             let column = if item.kind == "PAYMENT" { "invoice_payment_id" } else { "sales_receipt_id" };
-            let matched: bool = sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM undeposited_fund_matches WHERE {column} = ?1 AND is_voided = 0)"))
+            let matched: bool = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT EXISTS (SELECT 1 FROM undeposited_fund_matches WHERE {column} = ?1 AND is_voided = 0)")))
                 .bind(item.id)
                 .fetch_one(&mut **tx)
                 .await

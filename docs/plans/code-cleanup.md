@@ -83,8 +83,15 @@ order inputs and views (`PurchaseOrderLineInput.rate_cents` and `amount_cents`,
 `PurchaseOrderView.total_cents`, `PurchaseOrderLineView.rate_cents` and `amount_cents`); a bill made
 from an order now copies the line amounts as they are. That finishes step 1 for the modules it
 lists; 27 `Deserialize` cents fields in other modules (bounced checks, statement charges, mileage,
-vouchers, register entry, cleanup and others) wait for step 4. Next: step 2,
-the document views of invoices, sales, bills and expenses, then step 3 (reports).
+vouchers, register entry, cleanup and others) wait for step 4.
+
+Step 2, the document views, goes in stages named "A7 step 2a" onward. Step 2a: the invoice views
+(`InvoiceSummary`, `PaymentView`, `InvoiceItemView`); the printed invoice reads them with `.get()`
+where it formats money. The A/R aging buckets in `invoices` are a report and wait for step 3.
+Step 2b: the sales, estimate and credit views (`PartyView`, `ProductView`, `SalesReceiptSummary`,
+`SalesTransaction`, `EstimateSummary`, `EstimateLineView`, `CreditMemoSummary`,
+`CreditApplicationView`, `AppliedCredits`, `CustomerCredit`, `VendorCreditSummary`); applying open
+credits to an invoice adds them up with `checked_add` on `Cents`.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:

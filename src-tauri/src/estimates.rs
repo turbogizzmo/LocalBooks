@@ -39,10 +39,10 @@ pub struct EstimateSummary {
     pub expiration_date: Option<String>,
     pub status: String,
     pub memo: Option<String>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
     pub tax_rate_id: Option<i64>,
-    pub tax_cents: i64,
-    pub discount_cents: i64,
+    pub tax_cents: Cents,
+    pub discount_cents: Cents,
     /// The invoice this estimate became (kept as a permanent link).
     pub converted_to_invoice_id: Option<i64>,
     pub invoice_number: Option<i64>,
@@ -61,11 +61,11 @@ const SUMMARY_SELECT: &str = "
     LEFT JOIN invoices i ON i.id = e.converted_to_invoice_id";
 
 pub async fn list_estimates(pool: &SqlitePool) -> Result<Vec<EstimateSummary>, String> {
-    sqlx::query_as::<_, EstimateSummary>(&format!("{SUMMARY_SELECT} ORDER BY e.estimate_number DESC")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as::<_, EstimateSummary>(sqlx::AssertSqlSafe(format!("{SUMMARY_SELECT} ORDER BY e.estimate_number DESC"))).fetch_all(pool).await.map_err(db_err)
 }
 
 async fn get_estimate(pool: &SqlitePool, id: i64) -> Result<EstimateSummary, String> {
-    sqlx::query_as::<_, EstimateSummary>(&format!("{SUMMARY_SELECT} WHERE e.id = ?1")).bind(id).fetch_one(pool).await.map_err(db_err)
+    sqlx::query_as::<_, EstimateSummary>(sqlx::AssertSqlSafe(format!("{SUMMARY_SELECT} WHERE e.id = ?1"))).bind(id).fetch_one(pool).await.map_err(db_err)
 }
 
 pub async fn create_estimate(pool: &SqlitePool, input: EstimateInput) -> Result<EstimateSummary, String> {
@@ -294,7 +294,7 @@ pub struct EstimateLineView {
     pub product_service_id: Option<i64>,
     pub description: String,
     pub quantity_e4: i64,
-    pub rate_cents: i64,
+    pub rate_cents: Cents,
     pub income_account_id: i64,
     pub class_id: Option<i64>,
     pub is_taxable: bool,

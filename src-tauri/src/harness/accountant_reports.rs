@@ -90,7 +90,7 @@ async fn reconciliation_discrepancy() {
             .await
             .unwrap();
     for t in triggers {
-        sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP TRIGGER {t}"))).execute(&pool).await.unwrap();
     }
     let cleared: Vec<(i64, i64)> = sqlx::query_as("SELECT id, journal_entry_id FROM journal_lines WHERE reconciliation_id = ?1 ORDER BY id LIMIT 3")
         .bind(april)

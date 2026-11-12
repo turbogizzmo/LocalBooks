@@ -96,12 +96,13 @@ impl DocKind {
 
 /// The number the next form of `kind` gets: one more than the highest used.
 pub async fn next_number(conn: &mut SqliteConnection, kind: DocKind) -> Result<i64, String> {
-    let next: i64 = sqlx::query_scalar(&format!("SELECT COALESCE(MAX({}), ?1) + 1 FROM {} WHERE {} <= ?2", kind.column(), kind.table(), kind.column()))
-        .bind(kind.before_first())
-        .bind(kind.highest())
-        .fetch_one(conn)
-        .await
-        .map_err(db_err)?;
+    let next: i64 =
+        sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT COALESCE(MAX({}), ?1) + 1 FROM {} WHERE {} <= ?2", kind.column(), kind.table(), kind.column())))
+            .bind(kind.before_first())
+            .bind(kind.highest())
+            .fetch_one(conn)
+            .await
+            .map_err(db_err)?;
     if next > kind.highest() && kind == DocKind::CreditMemo {
         return Err("CM_NUMBERS_FULL: credit memo numbers have reached 999,999,999".into());
     }

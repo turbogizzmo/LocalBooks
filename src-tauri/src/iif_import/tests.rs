@@ -476,7 +476,10 @@ fn a_file_with_only_a_class_list_reads() {
 }
 
 async fn class_of_lines(pool: &sqlx::SqlitePool, table: &str) -> Vec<Option<String>> {
-    sqlx::query_scalar(&format!("SELECT k.full_name FROM {table} l LEFT JOIN v_classes k ON k.id = l.class_id ORDER BY l.id")).fetch_all(pool).await.unwrap()
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT k.full_name FROM {table} l LEFT JOIN v_classes k ON k.id = l.class_id ORDER BY l.id")))
+        .fetch_all(pool)
+        .await
+        .unwrap()
 }
 
 async fn class_active(pool: &sqlx::SqlitePool, full_name: &str) -> bool {

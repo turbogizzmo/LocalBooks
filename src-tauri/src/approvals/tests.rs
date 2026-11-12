@@ -13,7 +13,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, cents: i64) -> Value {
 }
 
 async fn count(pool: &SqlitePool, sql: &str) -> i64 {
-    sqlx::query_scalar(sql).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).fetch_one(pool).await.unwrap()
 }
 
 #[tokio::test]

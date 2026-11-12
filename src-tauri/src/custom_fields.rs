@@ -283,8 +283,11 @@ pub(crate) async fn set_record_values(tx: &mut Transaction<'_, Sqlite>, list: Fi
 
 /// Sets one record's values from the fields' editor.
 pub async fn save_record_values(pool: &SqlitePool, list: FieldList, record_id: i64, values: &[FieldValue]) -> Result<Vec<RecordField>, String> {
-    let exists: bool =
-        sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM {} WHERE id = ?1)", list.records())).bind(record_id).fetch_one(pool).await.map_err(db_err)?;
+    let exists: bool = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT EXISTS (SELECT 1 FROM {} WHERE id = ?1)", list.records())))
+        .bind(record_id)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
     if !exists {
         return Err(format!("CF_NO_RECORD: that {} does not exist", list.noun()));
     }

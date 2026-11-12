@@ -50,7 +50,7 @@ async fn a_batch_invoices_every_customer_in_a_group_and_queues_each_as_they_pref
     let result = create(&pool, input).await.unwrap();
     assert_eq!(result.invoices.iter().map(|i| i.customer_name.as_str()).collect::<Vec<_>>(), ["Alder Cafe", "Cedar Clinic"]);
     assert_eq!(result.skipped, vec![("Dogwood Deli".to_string(), "inactive".to_string())]);
-    assert!(result.invoices.iter().all(|i| i.total_cents == 15_000));
+    assert!(result.invoices.iter().all(|i| i.total_cents == crate::money::Cents(15_000)));
     // Each on its own terms: Alder's 15 days, Cedar the batch's 30.
     assert_eq!(result.invoices.iter().map(|i| i.due_date.as_str()).collect::<Vec<_>>(), ["2026-06-16", "2026-07-01"]);
     assert_eq!((result.emailed_later, result.printed_later), (1, 1));

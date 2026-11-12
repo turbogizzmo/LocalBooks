@@ -190,7 +190,7 @@ async fn assessing_posts_an_invoice_to_ar_and_income_and_shows_in_aging_and_stat
     let made = assess(&pool, AssessInput { as_of: d(10, 1), charges: vec![AssessCharge { customer_name: "Acme".into(), charge_cents: 1_500 }] }).await.unwrap();
     assert_eq!(made.len(), 1);
     let fc = &made[0];
-    assert_eq!((fc.customer_name.as_str(), fc.total_cents, fc.issue_date.as_str(), fc.status.as_str()), ("Acme", 1_500, "2026-10-01", "UNPAID"));
+    assert_eq!((fc.customer_name.as_str(), fc.total_cents, fc.issue_date.as_str(), fc.status.as_str()), ("Acme", Cents(1_500), "2026-10-01", "UNPAID"));
     assert!(fc.is_finance_charge);
     assert_eq!(balance(&pool, ar).await - ar_before, 1_500);
     assert_eq!(balance(&pool, interest).await - interest_before, 1_500, "credit-normal income grows");

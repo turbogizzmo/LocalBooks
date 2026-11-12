@@ -83,7 +83,7 @@ fn link_query(source_type: &str) -> Option<&'static str> {
 /// The transaction behind `journal_entry_id` and the transactions linked to it, in date order.
 /// Manual journal entries, checks, expenses and transfers have no links; the list is then empty.
 pub async fn transaction_history(pool: &SqlitePool, journal_entry_id: i64) -> Result<TransactionHistory, String> {
-    let entry: HistoryEntry = sqlx::query_as(&select_entry("e.id = ?1"))
+    let entry: HistoryEntry = sqlx::query_as(sqlx::AssertSqlSafe(select_entry("e.id = ?1")))
         .bind(journal_entry_id)
         .fetch_optional(pool)
         .await
@@ -98,7 +98,8 @@ pub async fn transaction_history(pool: &SqlitePool, journal_entry_id: i64) -> Re
             select_entry("e.source_type = ?1 AND e.source_id = ?2 AND e.reverses_entry_id IS NULL AND e.status = 'POSTED' ORDER BY e.id LIMIT 1");
         for (source_type, id, relation, amount_cents, link_voided) in found {
             // A document saved but never posted has no entry to show.
-            let linked: Option<HistoryEntry> = sqlx::query_as(&linked_entry).bind(&source_type).bind(id).fetch_optional(pool).await.map_err(db_err)?;
+            let linked: Option<HistoryEntry> =
+                sqlx::query_as(sqlx::AssertSqlSafe(linked_entry.as_str())).bind(&source_type).bind(id).fetch_optional(pool).await.map_err(db_err)?;
             if let Some(linked) = linked {
                 links.push(LinkedTransaction { relation, amount_cents, link_voided, entry: linked });
             }

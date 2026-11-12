@@ -144,7 +144,7 @@ pub async fn merge_target(pool: &SqlitePool, kind: MergeKind, except: i64, name:
             .to_string(),
         _ => format!("SELECT id, name FROM {} WHERE name = ?1 COLLATE NOCASE AND id <> ?2 AND merged_into_id IS NULL", kind.table()),
     };
-    sqlx::query_as(&sql).bind(name).bind(except).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str())).bind(name).bind(except).fetch_optional(pool).await.map_err(db_err)
 }
 
 async fn exists(tx: &mut Transaction<'_, Sqlite>, table: &str) -> Result<bool, String> {
@@ -157,8 +157,12 @@ async fn repoint(tx: &mut Transaction<'_, Sqlite>, columns: &[(&str, &str)], fro
         if !exists(tx, table).await? {
             continue;
         }
-        let done =
-            sqlx::query(&format!("UPDATE {table} SET {column} = ?2 WHERE {column} = ?1")).bind(from).bind(to).execute(&mut **tx).await.map_err(db_err)?;
+        let done = sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {table} SET {column} = ?2 WHERE {column} = ?1")))
+            .bind(from)
+            .bind(to)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
         moved += i64::try_from(done.rows_affected()).unwrap_or(i64::MAX);
     }
     Ok(moved)
@@ -230,8 +234,8 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, kind: MergeKind, from_id: i64, 
     }
     let table = kind.table();
     let load = |id: i64| format!("SELECT name, merged_into_id IS NOT NULL FROM {table} WHERE id = {id}");
-    let from: Option<(String, bool)> = sqlx::query_as(&load(from_id)).fetch_optional(&mut **tx).await.map_err(db_err)?;
-    let to: Option<(String, bool)> = sqlx::query_as(&load(to_id)).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let from: Option<(String, bool)> = sqlx::query_as(sqlx::AssertSqlSafe(load(from_id))).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let to: Option<(String, bool)> = sqlx::query_as(sqlx::AssertSqlSafe(load(to_id))).fetch_optional(&mut **tx).await.map_err(db_err)?;
     let ((from_name, from_merged), (to_name, to_merged)) = match (from, to) {
         (Some(f), Some(t)) => (f, t),
         _ => return Err(format!("MERGE_NOT_FOUND: that {noun} does not exist")),
@@ -420,7 +424,7 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, kind: MergeKind, from_id: i64, 
         .map_err(db_err)?;
     moved += i64::try_from(files.rows_affected()).unwrap_or(i64::MAX);
 
-    sqlx::query(&format!("UPDATE {table} SET is_active = 0, merged_into_id = ?2 WHERE id = ?1"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {table} SET is_active = 0, merged_into_id = ?2 WHERE id = ?1")))
         .bind(from_id)
         .bind(to_id)
         .execute(&mut **tx)

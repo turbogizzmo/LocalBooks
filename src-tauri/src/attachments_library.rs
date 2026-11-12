@@ -149,7 +149,7 @@ pub struct LibraryFile {
 /// Every file, newest first. `query` (case ignored) matches the file name, keywords, and what it is
 /// attached to; `include_deleted` adds the deleted ones (marked by `deletedAt`).
 pub async fn library(pool: &SqlitePool, query: Option<&str>, include_deleted: bool) -> Result<Vec<LibraryFile>, String> {
-    let mut files: Vec<LibraryFile> = sqlx::query_as(&format!(
+    let mut files: Vec<LibraryFile> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT * FROM (
             SELECT 'ENTRY' AS source, a.id, a.file_name, a.media_type, a.size_bytes, a.created_at, a.keywords, a.send_with_form, a.deleted_at,
                    {DISPLAY_SOURCE_TYPE} AS attached_kind, e.id AS attached_id,
@@ -192,7 +192,7 @@ pub async fn library(pool: &SqlitePool, query: Option<&str>, include_deleted: bo
             FROM record_attachments r
          ) WHERE ?1 OR deleted_at IS NULL
          ORDER BY created_at DESC, source, id DESC"
-    ))
+    )))
     .bind(include_deleted)
     .fetch_all(pool)
     .await
@@ -210,7 +210,7 @@ pub async fn library(pool: &SqlitePool, query: Option<&str>, include_deleted: bo
 
 /// A file's name, media type and bytes (to save a copy or preview it).
 pub async fn content(pool: &SqlitePool, file: FileRef) -> Result<(String, String, Vec<u8>), String> {
-    sqlx::query_as(&format!("SELECT file_name, media_type, content FROM {} WHERE id = ?1", file.source.table()))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT file_name, media_type, content FROM {} WHERE id = ?1", file.source.table())))
         .bind(file.id)
         .fetch_optional(pool)
         .await
@@ -221,13 +221,13 @@ pub async fn content(pool: &SqlitePool, file: FileRef) -> Result<(String, String
 /// What a preview shows of a file, read in SQL so no more than that leaves the database: a picture
 /// whole, the first `text_bytes` of a text file, and nothing of any other kind.
 pub async fn preview(pool: &SqlitePool, file: FileRef, text_bytes: i64) -> Result<(String, String, Option<Vec<u8>>), String> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT file_name, media_type,
                 CASE WHEN media_type LIKE 'image/%' OR media_type = 'application/pdf' THEN content
                      WHEN media_type LIKE 'text/%' THEN substr(content, 1, ?2) END
          FROM {} WHERE id = ?1",
         file.source.table()
-    ))
+    )))
     .bind(file.id)
     .bind(text_bytes)
     .fetch_optional(pool)
@@ -243,7 +243,7 @@ pub async fn set_details(pool: &SqlitePool, file: FileRef, keywords: Option<&str
         return Err("ATTACH_KEYWORDS_LONG: keep keywords to 500 characters".into());
     }
     one_row(
-        sqlx::query(&format!("UPDATE {} SET keywords = ?1, send_with_form = ?2 WHERE id = ?3", file.source.table()))
+        sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {} SET keywords = ?1, send_with_form = ?2 WHERE id = ?3", file.source.table())))
             .bind(keywords)
             .bind(send_with_form)
             .bind(file.id)
@@ -257,19 +257,22 @@ pub async fn set_details(pool: &SqlitePool, file: FileRef, keywords: Option<&str
 /// Deletes a file reversibly: hidden everywhere but the library's Deleted view, and kept.
 pub async fn delete(pool: &SqlitePool, file: FileRef) -> Result<(), String> {
     one_row(
-        sqlx::query(&format!("UPDATE {} SET deleted_at = COALESCE(deleted_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) WHERE id = ?1", file.source.table()))
-            .bind(file.id)
-            .execute(pool)
-            .await
-            .map_err(db_err)?
-            .rows_affected(),
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "UPDATE {} SET deleted_at = COALESCE(deleted_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) WHERE id = ?1",
+            file.source.table()
+        )))
+        .bind(file.id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?
+        .rows_affected(),
     )
 }
 
 /// Brings a deleted file back to its transaction or record.
 pub async fn restore(pool: &SqlitePool, file: FileRef) -> Result<(), String> {
     one_row(
-        sqlx::query(&format!("UPDATE {} SET deleted_at = NULL WHERE id = ?1", file.source.table()))
+        sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {} SET deleted_at = NULL WHERE id = ?1", file.source.table())))
             .bind(file.id)
             .execute(pool)
             .await
@@ -280,7 +283,7 @@ pub async fn restore(pool: &SqlitePool, file: FileRef) -> Result<(), String> {
 
 /// Removes a deleted file for good. A file not deleted first is refused (by the schema too).
 pub async fn purge(pool: &SqlitePool, file: FileRef) -> Result<(), String> {
-    let deleted: Option<Option<String>> = sqlx::query_scalar(&format!("SELECT deleted_at FROM {} WHERE id = ?1", file.source.table()))
+    let deleted: Option<Option<String>> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT deleted_at FROM {} WHERE id = ?1", file.source.table())))
         .bind(file.id)
         .fetch_optional(pool)
         .await
@@ -288,9 +291,12 @@ pub async fn purge(pool: &SqlitePool, file: FileRef) -> Result<(), String> {
     match deleted {
         None => Err("ATTACH_NOT_FOUND: that attachment does not exist".into()),
         Some(None) => Err("ATTACH_NOT_DELETED: delete the file first; only deleted files can be removed for good".into()),
-        Some(Some(_)) => {
-            sqlx::query(&format!("DELETE FROM {} WHERE id = ?1", file.source.table())).bind(file.id).execute(pool).await.map(|_| ()).map_err(db_err)
-        }
+        Some(Some(_)) => sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {} WHERE id = ?1", file.source.table())))
+            .bind(file.id)
+            .execute(pool)
+            .await
+            .map(|_| ())
+            .map_err(db_err),
     }
 }
 

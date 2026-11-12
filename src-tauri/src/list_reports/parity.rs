@@ -69,7 +69,7 @@ pub(super) async fn terms_listing(pool: &SqlitePool, today: NaiveDate) -> Result
 
 pub(super) async fn unbilled_costs_by_job(pool: &SqlitePool, today: NaiveDate) -> Result<AccountantReport, String> {
     let costs = crate::billable_costs::list_unbilled(pool, None).await?;
-    let names: BTreeMap<i64, String> = sqlx::query_as::<_, (i64, String)>(&format!("{CUSTOMER_NAMES} SELECT id, full_name FROM cn"))
+    let names: BTreeMap<i64, String> = sqlx::query_as::<_, (i64, String)>(sqlx::AssertSqlSafe(format!("{CUSTOMER_NAMES} SELECT id, full_name FROM cn")))
         .fetch_all(pool)
         .await
         .map_err(db_err)?

@@ -25,7 +25,11 @@ async fn company() -> SqlitePool {
     let id = |table: &'static str, name: &'static str| {
         let p = p.clone();
         async move {
-            sqlx::query_scalar::<_, i64>(&format!("SELECT id FROM {table} WHERE name = ?1")).bind(name).fetch_one(&p).await.unwrap_or_else(|_| panic!("{name}"))
+            sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!("SELECT id FROM {table} WHERE name = ?1")))
+                .bind(name)
+                .fetch_one(&p)
+                .await
+                .unwrap_or_else(|_| panic!("{name}"))
         }
     };
     let cafe = id("customers", "Brightwater Cafe").await;
@@ -562,13 +566,13 @@ async fn t49_reports_tie_out_to_the_ledger() {
     let ledger = |classification_or_type: &'static str, column: &'static str| {
         let p = p.clone();
         async move {
-            sqlx::query_scalar::<_, i64>(&format!(
+            sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!(
                 "SELECT COALESCE(SUM({}), 0) FROM journal_lines l
                  JOIN journal_entries e ON e.id = l.journal_entry_id JOIN v_chart_of_accounts a ON a.id = l.account_id
                  WHERE a.{column} = ?1 AND e.status = 'POSTED' AND e.entry_date BETWEEN '2025-01-01' AND '2025-12-31'
                    AND e.id IN (SELECT journal_entry_id FROM invoices WHERE is_voided = 0)",
                 if column == "classification" { "l.credit_cents - l.debit_cents" } else { "l.debit_cents - l.credit_cents" }
-            ))
+            )))
             .bind(classification_or_type)
             .fetch_one(&p)
             .await

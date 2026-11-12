@@ -142,7 +142,8 @@ const ROW_SELECT: &str = "SELECT id, timestamp, action_type, target_entity_id, a
 /// head, or `None` when the file has no audit rows yet.
 pub async fn seal(conn: &mut SqliteConnection) -> Result<Option<ChainHead>, String> {
     let file_id: String = sqlx::query_scalar("SELECT file_id FROM ledger_chain WHERE id = 1").fetch_one(&mut *conn).await.map_err(db_err)?;
-    let unsealed: Vec<AuditRow> = sqlx::query_as(&format!("{ROW_SELECT} WHERE row_hash IS NULL ORDER BY id")).fetch_all(&mut *conn).await.map_err(db_err)?;
+    let unsealed: Vec<AuditRow> =
+        sqlx::query_as(sqlx::AssertSqlSafe(format!("{ROW_SELECT} WHERE row_hash IS NULL ORDER BY id"))).fetch_all(&mut *conn).await.map_err(db_err)?;
     for (id, timestamp, action, target, row_actor, payload, _, _) in unsealed {
         let prev: Option<String> = sqlx::query_scalar("SELECT row_hash FROM ledger_audit_log WHERE id < ?1 ORDER BY id DESC LIMIT 1")
             .bind(id)
@@ -272,7 +273,7 @@ pub struct ChainVerification {
 pub async fn verify(pool: &SqlitePool) -> Result<ChainVerification, String> {
     let mut conn = pool.acquire().await.map_err(db_err)?;
     let file_id: String = sqlx::query_scalar("SELECT file_id FROM ledger_chain WHERE id = 1").fetch_one(&mut *conn).await.map_err(db_err)?;
-    let rows: Vec<AuditRow> = sqlx::query_as(&format!("{ROW_SELECT} ORDER BY id")).fetch_all(&mut *conn).await.map_err(db_err)?;
+    let rows: Vec<AuditRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!("{ROW_SELECT} ORDER BY id"))).fetch_all(&mut *conn).await.map_err(db_err)?;
 
     let mut problems = Vec::new();
     let (mut sealed, mut pending) = (0, 0);

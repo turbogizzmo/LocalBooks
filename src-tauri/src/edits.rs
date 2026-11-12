@@ -27,8 +27,11 @@ async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transacti
 
 /// The live journal entry of a document, or why it cannot be edited.
 async fn live_entry(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64, noun: &str) -> Result<i64, String> {
-    let row: Option<(Option<i64>, bool)> =
-        sqlx::query_as(&format!("SELECT journal_entry_id, is_voided FROM {table} WHERE id = ?1")).bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let row: Option<(Option<i64>, bool)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT journal_entry_id, is_voided FROM {table} WHERE id = ?1")))
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)?;
     match row {
         None => Err(format!("EDIT_NOT_FOUND: that {noun} does not exist")),
         Some((_, true)) => Err(format!("EDIT_VOIDED: a voided {noun} cannot be edited")),
@@ -55,7 +58,7 @@ async fn record(tx: &mut Transaction<'_, Sqlite>, old_entry: i64, new_entry: i64
 }
 
 async fn entry_of(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64) -> Result<i64, String> {
-    sqlx::query_scalar(&format!("SELECT journal_entry_id FROM {table} WHERE id = ?1")).bind(id).fetch_one(&mut **tx).await.map_err(db_err)
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT journal_entry_id FROM {table} WHERE id = ?1"))).bind(id).fetch_one(&mut **tx).await.map_err(db_err)
 }
 
 /// Replaces an invoice with an edited one; returns the new invoice's id. Payments, applied credits
@@ -268,12 +271,14 @@ pub async fn replace_journal_entry(pool: &SqlitePool, journal_entry_id: i64, ent
 /// the original's mark.
 pub async fn replace_journal_entry_flagged(pool: &SqlitePool, journal_entry_id: i64, entry: JournalEntry, adjusting: Option<bool>) -> Result<i64, String> {
     run(pool, async |tx| {
-        let manual: Option<(bool, bool)> =
-            sqlx::query_as(&format!("SELECT e.is_voided = 0 AND {}, e.is_adjusting FROM journal_entries e WHERE e.id = ?1", crate::ledger::MANUAL_JOURNAL))
-                .bind(journal_entry_id)
-                .fetch_optional(&mut **tx)
-                .await
-                .map_err(db_err)?;
+        let manual: Option<(bool, bool)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+            "SELECT e.is_voided = 0 AND {}, e.is_adjusting FROM journal_entries e WHERE e.id = ?1",
+            crate::ledger::MANUAL_JOURNAL
+        )))
+        .bind(journal_entry_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)?;
         let was_adjusting = match manual {
             None => return Err("EDIT_NOT_FOUND: that journal entry does not exist".into()),
             Some((false, _)) => {

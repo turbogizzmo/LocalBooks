@@ -90,12 +90,17 @@ mod imp {
     }
 }
 
+// Generated code keeps the Windows API's own names.
+#[cfg(windows)]
+#[allow(non_snake_case, non_camel_case_types, non_upper_case_globals, dead_code, clippy::all, reason = "generated bindings")]
+#[path = "platform_auth/windows_bindings.rs"]
+mod windows_bindings;
+
 #[cfg(windows)]
 mod imp {
-    use windows::core::HSTRING;
-    use windows::Security::Credentials::UI::{UserConsentVerificationResult, UserConsentVerifier, UserConsentVerifierAvailability};
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::System::WinRT::IUserConsentVerifierInterop;
+    use super::windows_bindings::Windows::Security::Credentials::UI::{UserConsentVerificationResult, UserConsentVerifier, UserConsentVerifierAvailability};
+    use super::windows_bindings::Windows::Win32::{IUserConsentVerifierInterop, HWND};
+    use windows_core::HSTRING;
     use windows_future::IAsyncOperation;
 
     pub fn available() -> bool {
@@ -107,7 +112,7 @@ mod imp {
             return Err(super::UNSUPPORTED.into());
         }
         // A desktop app names the window the prompt belongs to, so it opens in front of it.
-        let interop = windows::core::factory::<UserConsentVerifier, IUserConsentVerifierInterop>()
+        let interop = windows_core::factory::<UserConsentVerifier, IUserConsentVerifierInterop>()
             .map_err(|e| format!("MFA_DEVICE: Windows Hello can't be reached ({e})"))?;
         let hwnd = HWND(parent.unwrap_or(0) as *mut core::ffi::c_void);
         // SAFETY: `hwnd` is the app's own window handle (or null, which Windows accepts).

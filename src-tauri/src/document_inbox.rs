@@ -116,7 +116,7 @@ pub async fn add(pool: &SqlitePool, file_name: &str, content: &[u8]) -> Result<I
 }
 
 pub async fn get(pool: &SqlitePool, id: i64) -> Result<InboxDocument, String> {
-    sqlx::query_as::<_, InboxDocument>(&format!("{SELECT} WHERE id = ?1"))
+    sqlx::query_as::<_, InboxDocument>(sqlx::AssertSqlSafe(format!("{SELECT} WHERE id = ?1")))
         .bind(id)
         .fetch_optional(pool)
         .await
@@ -126,7 +126,7 @@ pub async fn get(pool: &SqlitePool, id: i64) -> Result<InboxDocument, String> {
 
 /// The inbox, oldest first.
 pub async fn list(pool: &SqlitePool) -> Result<Vec<InboxDocument>, String> {
-    sqlx::query_as::<_, InboxDocument>(&format!("{SELECT} ORDER BY added_at, id")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as::<_, InboxDocument>(sqlx::AssertSqlSafe(format!("{SELECT} ORDER BY added_at, id"))).fetch_all(pool).await.map_err(db_err)
 }
 
 /// A document's file, for the preview: (file name, media type, bytes).

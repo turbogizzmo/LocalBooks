@@ -296,7 +296,7 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
             line("Printed collateral", 25_000 * (4 + m % 4), 4_250, c.sales, true),
         ];
         let inv = invoice(p, customer, d(2025, month, 10), 30, lines, Some(tax), None).await;
-        let total = crate::invoices::list_invoices(p).await.unwrap().into_iter().find(|i| i.id == inv).unwrap().total_cents;
+        let total = crate::invoices::list_invoices(p).await.unwrap().into_iter().find(|i| i.id == inv).unwrap().total_cents.get();
         open_items.push((inv, d(2025, month, 10), total));
 
         // A walk-in product sale each quarter, into Undeposited Funds.

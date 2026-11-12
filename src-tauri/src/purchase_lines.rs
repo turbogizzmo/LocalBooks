@@ -257,7 +257,7 @@ pub async fn write(tx: &mut Transaction<'_, Sqlite>, doc: PurchaseDoc, id: i64, 
             (PurchaseDoc::VendorCredit, _) | (_, PurchaseLineKind::Discount) => false,
             _ => crate::expenses::is_billable(tx, line.billable, line.customer_id).await?,
         };
-        sqlx::query(&sql)
+        sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(id)
             .bind(i64::try_from(line.after_line).map_err(|_| "FORM_LINE_PLACE: line number out of range".to_string())?)
             .bind(line.kind.key())
@@ -293,11 +293,11 @@ pub fn journal_lines(form: &[PurchaseFormLineInput], amounts: &[i64], split_debi
 /// A document's stored discount and charge lines, in place order (from the pool, or inside a
 /// transaction with `&mut **tx`).
 pub async fn lines_of<'e, E: sqlx::Executor<'e, Database = Sqlite>>(executor: E, doc: PurchaseDoc, id: i64) -> Result<Vec<PurchaseFormLineView>, String> {
-    sqlx::query_as::<_, PurchaseFormLineView>(&format!(
+    sqlx::query_as::<_, PurchaseFormLineView>(sqlx::AssertSqlSafe(format!(
         "SELECT after_line, kind, description, product_service_id, percent_ppm, amount_cents, account_id, class_id, customer_id, is_billable AS billable
          FROM purchase_form_lines WHERE {} = ?1 ORDER BY after_line",
         doc.column()
-    ))
+    )))
     .bind(id)
     .fetch_all(executor)
     .await

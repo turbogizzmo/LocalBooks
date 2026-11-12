@@ -81,7 +81,7 @@ async fn bill_accrues_payable_and_payments_relieve_it() {
     assert_eq!(balance(&pool, card).await, 62_345);
 
     let vendors = list_vendors(&pool).await.unwrap();
-    assert_eq!((vendors.len(), vendors[0].open_balance_cents), (1, 0));
+    assert_eq!((vendors.len(), vendors[0].open_balance_cents), (1, Cents(0)));
     assert!(balance_sheet(&pool, d(31)).await.unwrap().is_balanced);
 }
 

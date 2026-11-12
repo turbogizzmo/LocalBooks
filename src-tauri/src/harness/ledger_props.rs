@@ -430,7 +430,7 @@ fn closed_code(closed: bool) -> Option<&'static str> {
 }
 
 async fn scalar(pool: &SqlitePool, sql: &str, id: i64) -> Result<i64, String> {
-    sqlx::query_scalar(sql).bind(id).fetch_one(pool).await.map_err(|e| format!("{sql}: {e}"))
+    sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(id).fetch_one(pool).await.map_err(|e| format!("{sql}: {e}"))
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -36,7 +36,7 @@ async fn customer_estimates_and_unbilled_costs_match_their_lists() {
         .into_iter()
         .filter(|e| e.customer_name.ends_with("Maple St Addition") && e.status == "PENDING")
         .collect();
-    assert_eq!((summary.active_estimate_count, summary.active_estimate_cents), (pending.len() as i64, pending.iter().map(|e| e.total_cents).sum()));
+    assert_eq!((summary.active_estimate_count, summary.active_estimate_cents), (pending.len() as i64, pending.iter().map(|e| e.total_cents.get()).sum()));
     assert!(summary.active_estimate_count > 0);
     let lakeview: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Kestrel Homes:Lakeview Remodel'").fetch_one(&pool).await.unwrap();
     assert_eq!(party_summary(&pool, "customer", lakeview).await.unwrap().active_estimate_count, 0);
