@@ -43,6 +43,7 @@ fn bill(lines: Vec<(i64, i64, Option<i64>)>) -> BillInput {
 
 #[test]
 fn shares_add_up_exactly() {
+    let split = |amount: i64, weights: &[i64]| -> Vec<i64> { split(Cents(amount), weights).unwrap().into_iter().map(Cents::get).collect() };
     assert_eq!(split(100, &[1, 1, 1]), vec![33, 34, 33]);
     assert_eq!(split(-100, &[1, 1, 1]), vec![-33, -34, -33]);
     assert_eq!(split(1_001, &[120_000, 80_000, 30_000]), vec![522, 348, 131]);
@@ -86,7 +87,7 @@ async fn a_bill_line_is_shared_among_its_jobs() {
     let posted =
         crate::expenses::post_vendor_bill(&pool, bill(vec![(supplies, 600, Some(job)), (supplies, 300, Some(acme)), (supplies, 101, None)])).await.unwrap();
     let lines = job_lines(&pool, None, d(31)).await.unwrap();
-    let shares: Vec<(Option<i64>, i64)> = lines.iter().map(|l| (l.job, l.cost())).collect();
+    let shares: Vec<(Option<i64>, i64)> = lines.iter().map(|l| (l.job, l.cost().unwrap().get())).collect();
     assert_eq!(shares, vec![(Some(job), 600), (Some(acme), 300), (None, 101)]);
 
     // Editing keeps the jobs: the lines load back with them.

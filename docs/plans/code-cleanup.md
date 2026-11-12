@@ -128,9 +128,10 @@ Step 3e: the graphs (`graphs`): income and expense, net worth, aging, sales and 
 The "Other" slice, net worth and the budget figures are now checked sums; they were unchecked.
 Step 3f: the list reports (`list_reports`): unpaid bills by job, open purchase orders (detail and by
 job), average days to pay, contact and item listings, and the audit exceptions. Their subtotals and
-totals were unchecked `+=`; they are now checked. Left in step 3: step 3g, `job_reports` and
-`custom_reports`, whose sum helpers are unchecked `i64` vectors that also carry drill-down ids. Step 4
-is gaps row A22.
+totals were unchecked `+=`; they are now checked. Step 3g: the job reports (`job_reports`) and the
+custom report engine (`custom_reports`, with Find). Their sum helpers (`add`, `Sums`, the summary
+columns, running balances, `split`) were unchecked `i64`; they are now `Cents` with checked sums, and
+the drill-down ids stay separate `i64` vectors. That finishes step 3, and A7. Step 4 is gaps row A22.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:

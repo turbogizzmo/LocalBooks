@@ -545,9 +545,9 @@ async fn filters_narrow_lines() {
     assert!(values(&rent, "Memo").iter().all(|m| text(m).to_lowercase().contains("studio rent")));
 
     // Amount range on the line's size, either side.
-    let big = run(&pool, &lines_report(Filters { amount_min_cents: Some(1_000_000), ..Filters::default() })).await;
+    let big = run(&pool, &lines_report(Filters { amount_min_cents: Some(Cents(1_000_000)), ..Filters::default() })).await;
     assert!(values(&big, "Amount").iter().all(|a| cents(a).abs() >= 1_000_000));
-    let band = run(&pool, &lines_report(Filters { amount_min_cents: Some(95_000), amount_max_cents: Some(95_000), ..Filters::default() })).await;
+    let band = run(&pool, &lines_report(Filters { amount_min_cents: Some(Cents(95_000)), amount_max_cents: Some(Cents(95_000)), ..Filters::default() })).await;
     assert_eq!(band.line_count, 12, "six $950 contractor checks, two lines each");
 
     // Class (with subclasses) and unclassified.

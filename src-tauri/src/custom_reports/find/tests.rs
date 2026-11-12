@@ -48,7 +48,7 @@ async fn finds_transactions_by_the_core_filters() {
     // Nothing chosen: every transaction, newest first, with a count and a total.
     let all = run(filters(Filters::default())).await;
     assert_eq!(ids(&all), [inv_entry, paper, feb_rent, jan_rent]);
-    assert_eq!((all.match_count, all.total_cents, all.end_date), (4, 120_000 * 2 + 4_250 + 50_000, today));
+    assert_eq!((all.match_count, all.total_cents, all.end_date), (4, Cents(120_000 * 2 + 4_250 + 50_000), today));
     let check = &all.rows[2];
     assert_eq!(
         (check.type_label.as_str(), check.num.as_deref(), check.name.as_deref(), check.name_kind),
@@ -79,9 +79,9 @@ async fn finds_transactions_by_the_core_filters() {
     assert_eq!(ids(&run(FindQuery { number: Some(inv.invoice_number.to_string()), ..filters(Filters::default()) }).await), [inv_entry]);
 
     // Amounts bound the transaction's total, not a line.
-    let exact = run(filters(Filters { amount_min_cents: Some(120_000), amount_max_cents: Some(120_000), ..Filters::default() })).await;
+    let exact = run(filters(Filters { amount_min_cents: Some(Cents(120_000)), amount_max_cents: Some(Cents(120_000)), ..Filters::default() })).await;
     assert_eq!(ids(&exact), [feb_rent, jan_rent]);
-    assert_eq!(ids(&run(filters(Filters { amount_max_cents: Some(50_000), ..Filters::default() })).await), [inv_entry, paper]);
+    assert_eq!(ids(&run(filters(Filters { amount_max_cents: Some(Cents(50_000)), ..Filters::default() })).await), [inv_entry, paper]);
 
     // Free text: the name, number or a line's memo.
     assert_eq!(ids(&run(FindQuery { text: Some("landlord".into()), ..filters(Filters::default()) }).await), [feb_rent, jan_rent]);
@@ -103,7 +103,7 @@ async fn finds_transactions_by_the_core_filters() {
     // Bad bounds.
     let backwards = FindQuery { start_date: Some(d(3, 1)), end_date: Some(d(2, 1)), ..FindQuery::default() };
     assert!(find(&pool, &backwards, today).await.unwrap_err().starts_with("RPT_BAD_RANGE"));
-    let crossed = filters(Filters { amount_min_cents: Some(500), amount_max_cents: Some(100), ..Filters::default() });
+    let crossed = filters(Filters { amount_min_cents: Some(Cents(500)), amount_max_cents: Some(Cents(100)), ..Filters::default() });
     assert!(find(&pool, &crossed, today).await.unwrap_err().starts_with("FIND_BAD_AMOUNT"));
 }
 

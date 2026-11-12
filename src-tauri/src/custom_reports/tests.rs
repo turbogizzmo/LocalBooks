@@ -17,11 +17,11 @@ fn periods_have_labels_and_bounds() {
 #[test]
 fn signs() {
     // A $10 credit to an income account, then a $10 debit to an expense account.
-    assert_eq!(signed(-1_000, false, Sign::Natural), 1_000);
-    assert_eq!(signed(-1_000, false, Sign::Debit), -1_000);
-    assert_eq!(signed(-1_000, false, Sign::Credit), 1_000);
-    assert_eq!(signed(1_000, true, Sign::Natural), 1_000);
-    assert_eq!(signed(1_000, true, Sign::Credit), -1_000);
+    assert_eq!(signed(Cents(-1_000), false, Sign::Natural), Ok(Cents(1_000)));
+    assert_eq!(signed(Cents(-1_000), false, Sign::Debit), Ok(Cents(-1_000)));
+    assert_eq!(signed(Cents(-1_000), false, Sign::Credit), Ok(Cents(1_000)));
+    assert_eq!(signed(Cents(1_000), true, Sign::Natural), Ok(Cents(1_000)));
+    assert_eq!(signed(Cents(1_000), true, Sign::Credit), Ok(Cents(-1_000)));
 }
 
 #[test]
@@ -134,7 +134,7 @@ async fn the_items_source_lists_discount_and_charge_lines() {
     crate::expenses::post_vendor_bill(&pool, bill).await.unwrap();
 
     let lines = item_lines(&pool, None, d(2026, 5, 31)).await.unwrap();
-    let mut by_item: Vec<(String, i64)> = lines.iter().filter_map(|l| Some((l.item_name.clone()?, l.item_amount_cents?))).collect();
+    let mut by_item: Vec<(String, i64)> = lines.iter().filter_map(|l| Some((l.item_name.clone()?, l.item_amount_cents?.get()))).collect();
     by_item.sort();
     assert_eq!(by_item, [("Loyalty".to_string(), -1_000), ("Rebate".to_string(), -2_000), ("Shipping".to_string(), 1_200)]);
 }
