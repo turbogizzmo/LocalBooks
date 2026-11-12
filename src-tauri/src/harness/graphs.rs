@@ -10,7 +10,7 @@ use crate::report_center;
 use crate::statements::{self, Basis, BudgetAmount, ClassReportLine, LineKind, PeriodColumn, PeriodReportInput};
 
 fn sum(slices: &[GraphSlice]) -> i64 {
-    slices.iter().map(|s| s.amount_cents).sum()
+    slices.iter().map(|s| s.amount_cents.get()).sum()
 }
 
 /// A depth-0 total line of a multi-column statement, column by column.
@@ -38,11 +38,11 @@ async fn income_and_expense_match_profit_and_loss() {
         let g = graphs::income_expense(&pool, start, end, basis).await.unwrap();
         let pl = statements::profit_and_loss_basis(&pool, start, end, None, basis).await.unwrap();
         assert_eq!(
-            (g.total_income_cents, g.total_expense_cents, g.net_income_cents),
+            (g.total_income_cents.get(), g.total_expense_cents.get(), g.net_income_cents.get()),
             (pl.total_revenue_cents.get(), pl.total_expenses_cents.get(), pl.net_income_cents.get())
         );
         assert_eq!(g.months.len(), 12);
-        assert!(g.total_income_cents > 0 && g.total_expense_cents > 0, "the fixture has a year of activity");
+        assert!(g.total_income_cents.get() > 0 && g.total_expense_cents.get() > 0, "the fixture has a year of activity");
         // The pies split the range's totals exactly ("Other" included).
         assert_eq!(sum(&g.income_slices), pl.total_revenue_cents.get());
         assert_eq!(sum(&g.expense_slices), pl.total_expenses_cents.get());
@@ -56,15 +56,15 @@ async fn income_and_expense_match_profit_and_loss() {
         let net = &periods.lines.iter().find(|l| l.kind == LineKind::Net).unwrap().amounts_cents;
         let income = total_row(&periods.lines, "Total Income");
         for (i, m) in g.months.iter().enumerate() {
-            assert_eq!(Some(m.net_income_cents), net[i], "{} net income", m.month.month);
-            assert_eq!(m.income_cents - m.expense_cents, m.net_income_cents);
+            assert_eq!(Some(m.net_income_cents.get()), net[i], "{} net income", m.month.month);
+            assert_eq!(m.income_cents.get() - m.expense_cents.get(), m.net_income_cents.get());
             // The fixture has no Other Income, so Total Income is the month's whole income.
-            assert_eq!(Some(m.income_cents), income[i], "{} income", m.month.month);
+            assert_eq!(Some(m.income_cents.get()), income[i], "{} income", m.month.month);
         }
         if basis == Basis::Accrual {
             // Accrual months add up to the year; cash basis is checked month by month above.
-            assert_eq!(g.months.iter().map(|m| m.income_cents).sum::<i64>(), pl.total_revenue_cents.get());
-            assert_eq!(g.months.iter().map(|m| m.expense_cents).sum::<i64>(), pl.total_expenses_cents.get());
+            assert_eq!(g.months.iter().map(|m| m.income_cents.get()).sum::<i64>(), pl.total_revenue_cents.get());
+            assert_eq!(g.months.iter().map(|m| m.expense_cents.get()).sum::<i64>(), pl.total_expenses_cents.get());
         }
     }
 }
@@ -102,7 +102,7 @@ async fn expense_slices_roll_subaccounts_into_their_parent() {
     let pl = statements::profit_and_loss(&pool, d(2025, 1, 1), d(2025, 12, 31)).await.unwrap();
     let total_rent = pl.lines.iter().find(|l| l.kind == LineKind::Subtotal && l.account_id == Some(rent)).unwrap().amount_cents.unwrap().get();
     let slice = g.expense_slices.iter().find(|s| s.account_id == Some(rent)).expect("rent is one of the largest expenses");
-    assert_eq!(slice.amount_cents, total_rent);
+    assert_eq!(slice.amount_cents.get(), total_rent);
     assert!(g.expense_slices.iter().all(|s| s.account_id != Some(sub.id)), "a subaccount is part of its parent's slice");
     assert_eq!(sum(&g.expense_slices), pl.total_expenses_cents.get());
 }
@@ -116,8 +116,8 @@ async fn net_worth_matches_each_month_end_balance_sheet() {
     assert_eq!(g.months[11].as_of, d(2025, 12, 15), "the last point is the range's end date");
     for p in &g.months {
         let bs = statements::balance_sheet(&pool, p.as_of).await.unwrap();
-        assert_eq!((p.assets_cents, p.liabilities_cents), (bs.total_assets_cents.get(), bs.total_liabilities_cents.get()), "{}", p.as_of);
-        assert_eq!(p.net_worth_cents, bs.total_equity_cents.get(), "net worth is the balance sheet's equity");
+        assert_eq!((p.assets_cents.get(), p.liabilities_cents.get()), (bs.total_assets_cents.get(), bs.total_liabilities_cents.get()), "{}", p.as_of);
+        assert_eq!(p.net_worth_cents.get(), bs.total_equity_cents.get(), "net worth is the balance sheet's equity");
     }
 }
 
@@ -128,16 +128,16 @@ async fn aging_graphs_match_the_aging_summaries() {
         for as_of in [d(2025, 3, 31), d(2025, 12, 31)] {
             let g = graphs::aging(&pool, payable, as_of).await.unwrap();
             let report = report_center::aging(&pool, payable, as_of).await.unwrap();
-            assert_eq!(g.buckets.iter().map(|b| b.amount_cents).collect::<Vec<_>>(), report.totals_cents.map(Cents::get).to_vec());
-            assert_eq!(g.buckets.iter().map(|b| b.amount_cents).sum::<i64>(), report.total_cents.get());
-            assert_eq!(g.total_cents, report.total_cents.get());
+            assert_eq!(g.buckets.iter().map(|b| b.amount_cents.get()).collect::<Vec<_>>(), report.totals_cents.map(Cents::get).to_vec());
+            assert_eq!(g.buckets.iter().map(|b| b.amount_cents.get()).sum::<i64>(), report.total_cents.get());
+            assert_eq!(g.total_cents.get(), report.total_cents.get());
             let owed: i64 = report.rows.iter().map(|r| r.total_cents.get()).filter(|&c| c > 0).sum();
             assert_eq!(sum(&g.parties), owed, "payable={payable} {as_of}");
             assert!(g.parties.windows(2).all(|w| w[1].other || w[0].amount_cents >= w[1].amount_cents), "largest first");
         }
     }
     let ar = graphs::aging(&pool, false, d(2025, 12, 31)).await.unwrap();
-    assert!(ar.total_cents > 0, "the fixture has open invoices at year end");
+    assert!(ar.total_cents.get() > 0, "the fixture has open invoices at year end");
 }
 
 #[tokio::test]
@@ -152,17 +152,17 @@ async fn sales_graph_matches_the_sales_summaries() {
             SalesBy::Rep => report_center::sales_by_rep(&pool, start, end).await,
         }
         .unwrap();
-        assert_eq!(g.total_cents, report.total_cents.get(), "{by:?}");
-        assert_eq!(g.months.iter().map(|m| m.amount_cents).sum::<i64>(), report.total_cents.get(), "{by:?} months add up to the year");
+        assert_eq!(g.total_cents.get(), report.total_cents.get(), "{by:?}");
+        assert_eq!(g.months.iter().map(|m| m.amount_cents.get()).sum::<i64>(), report.total_cents.get(), "{by:?} months add up to the year");
         let positive: i64 = report.rows.iter().map(|r| r.amount_cents.get()).filter(|&c| c > 0).sum();
         assert_eq!(sum(&g.top), positive, "{by:?}");
         let march = report_center::by_party(&pool, false, d(2025, 3, 1), d(2025, 3, 31)).await.unwrap();
         if by == SalesBy::Customer {
-            assert_eq!(g.months[2].amount_cents, march.total_cents.get());
+            assert_eq!(g.months[2].amount_cents.get(), march.total_cents.get());
         }
     }
     let by_customer = graphs::sales(&pool, SalesBy::Customer, start, end).await.unwrap();
-    assert!(by_customer.total_cents > 0);
+    assert!(by_customer.total_cents.get() > 0);
 }
 
 #[tokio::test]
@@ -181,24 +181,28 @@ async fn budget_graph_matches_budget_vs_actual() {
     assert_eq!(g.months.len(), 12);
     let report = statements::budget_vs_actual(&pool, budget.id, 1, 12).await.unwrap();
     let net = &report.lines.iter().find(|l| l.kind == LineKind::Net).unwrap().amounts_cents;
-    assert_eq!((Some(g.actual.net_income_cents), Some(g.budget.net_income_cents)), (net[0], net[1]));
+    assert_eq!((Some(g.actual.net_income_cents.get()), Some(g.budget.net_income_cents.get())), (net[0], net[1]));
     assert_eq!(
-        (Some(g.actual.income_cents), Some(g.budget.income_cents)),
+        (Some(g.actual.income_cents.get()), Some(g.budget.income_cents.get())),
         (total_row(&report.lines, "Total Income")[0], total_row(&report.lines, "Total Income")[1])
     );
-    assert_eq!(g.budget.income_cents, (1..=12).map(|p| 1_500_000 + p * 10_000).sum::<i64>());
-    assert_eq!(g.budget.expense_cents, 12 * 270_000);
+    assert_eq!(g.budget.income_cents.get(), (1..=12).map(|p| 1_500_000 + p * 10_000).sum::<i64>());
+    assert_eq!(g.budget.expense_cents.get(), 12 * 270_000);
     // The months add up to the year, and the actuals are the year's Profit and Loss.
-    for pick in [|f: &graphs::BudgetFigures| f.income_cents, |f: &graphs::BudgetFigures| f.expense_cents, |f: &graphs::BudgetFigures| f.net_income_cents] {
+    for pick in [
+        |f: &graphs::BudgetFigures| f.income_cents.get(),
+        |f: &graphs::BudgetFigures| f.expense_cents.get(),
+        |f: &graphs::BudgetFigures| f.net_income_cents.get(),
+    ] {
         assert_eq!(g.months.iter().map(|m| pick(&m.actual)).sum::<i64>(), pick(&g.actual));
         assert_eq!(g.months.iter().map(|m| pick(&m.budget)).sum::<i64>(), pick(&g.budget));
     }
     let pl = statements::profit_and_loss(&pool, d(2025, 1, 1), d(2025, 12, 31)).await.unwrap();
     assert_eq!(
-        (g.actual.income_cents, g.actual.expense_cents, g.actual.net_income_cents),
+        (g.actual.income_cents.get(), g.actual.expense_cents.get(), g.actual.net_income_cents.get()),
         (pl.total_revenue_cents.get(), pl.total_expenses_cents.get(), pl.net_income_cents.get())
     );
-    assert_eq!(g.months[3].budget.income_cents, 1_540_000);
+    assert_eq!(g.months[3].budget.income_cents.get(), 1_540_000);
     assert_eq!((g.months[3].month.start_date, g.months[3].month.end_date), (d(2025, 4, 1), d(2025, 4, 30)));
 
     let q2 = graphs::budget_vs_actual(&pool, budget.id, 4, 6).await.unwrap();

@@ -293,12 +293,12 @@ async fn figures(
                 .iter()
                 .map(|p| TrendPoint {
                     month: p.month.month.clone(),
-                    income_cents: p.income_cents,
-                    expense_cents: p.expense_cents,
-                    net_cents: p.net_income_cents,
+                    income_cents: p.income_cents.get(),
+                    expense_cents: p.expense_cents.get(),
+                    net_cents: p.net_income_cents.get(),
                 })
                 .collect();
-            (Vec::new(), 0, trend, graph.net_income_cents, "pl")
+            (Vec::new(), 0, trend, graph.net_income_cents.get(), "pl")
         }
         WidgetKind::TopCustomers => {
             let (lines, others, total) = top(&crate::report_center::by_party(pool, false, start, end).await?);
