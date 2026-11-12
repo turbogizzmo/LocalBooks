@@ -573,6 +573,9 @@ next and open it with one click.
 The **Insights** tab has the totals, income and expense for the last 12 months (by month, on the
 basis set in Preferences, the same figures as the Income and Expense Graph), the cash forecast, the
 assets and liabilities chart, the trial balance and Reminders. Tillhouse remembers which tab you last chose.
+The **A/R aging** panel counts open invoices by how late they are; credit a customer hasn't used yet
+(an open credit memo) is subtracted from the amounts and shown under them, but not counted as an
+invoice, so its count matches the **Overdue invoices** reminder's.
 
 ## Use the toolbar on a form
 

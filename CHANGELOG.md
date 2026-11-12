@@ -6,6 +6,8 @@ becomes its release notes on GitHub and in the app's update window (see
 
 ## [Unreleased]
 
+## [0.16.2]
+
 - **Mac: the app is called Tillhouse in your Applications folder too.** A copy updated from
   LocalBooks kept the name LocalBooks.app. It now renames itself to Tillhouse.app the next time it
   starts, so Finder, Spotlight and Launchpad show the new name. If you keep it in the Dock, the Dock
@@ -20,6 +22,9 @@ becomes its release notes on GitHub and in the app's update window (see
   invoices reminder.
 - **Trial Balance amounts on the Dashboard show in full.** Amounts over a million dollars no longer
   end in "…".
+- **Screen readers and voice control.** The Home page's steps (such as "Invoices, 5 overdue") and
+  the totals bar on Sales and Bills now announce the words you see first, so a voice command
+  using the visible name works.
 
 ## [0.16.1]
 
