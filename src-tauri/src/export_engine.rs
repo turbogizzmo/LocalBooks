@@ -43,7 +43,7 @@ pub fn statement_to_csv(company: &str, title: &str, period: &str, lines: &[Repor
     row(&["Account", "Line type", "Total"])?;
     for line in lines {
         let label = format!("{}{}", "  ".repeat(line.depth as usize), line.label);
-        let amount = line.amount_cents.map(plain_amount).unwrap_or_default();
+        let amount = line.amount_cents.map(|c| plain_amount(c.get())).unwrap_or_default();
         row(&[label.as_str(), kind_label(line.kind), amount.as_str()])?;
     }
     let bytes = writer.into_inner().map_err(|e| format!("EXPORT_CSV: {e}"))?;

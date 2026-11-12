@@ -645,7 +645,7 @@ async fn summary_columns_by_period() {
         let quarters: i64 = row.cells[1..5].iter().map(cents).sum();
         assert_eq!(quarters, cents(&row.cells[5]), "quarters add up to the total");
     }
-    assert_eq!(cents(report.rows.last().unwrap().cells.last().unwrap()), pl.total_revenue_cents);
+    assert_eq!(cents(report.rows.last().unwrap().cells.last().unwrap()), pl.total_revenue_cents.get());
     // Each account row drills to its own lines.
     let first = &report.rows[0];
     assert_eq!(first.drill.as_ref().unwrap().account_ids, vec![first.account_id.unwrap()]);
@@ -744,7 +744,7 @@ async fn net_income_and_rep_details_tie_out() {
     let report = run(&pool, &preset("net-income-detail")).await;
     let amount = column(&report, "Amount");
     let pl = crate::statements::profit_and_loss(&pool, d(2025, 1, 1), d(2025, 12, 31)).await.unwrap();
-    assert_eq!(cents(&report.rows.last().unwrap().cells[amount]), pl.net_income_cents);
+    assert_eq!(cents(&report.rows.last().unwrap().cells[amount]), pl.net_income_cents.get());
 
     // Sales by Rep Detail: each rep's subtotal (and the total) is the Sales by Rep Summary's.
     let report = run(&pool, &preset("sales-rep-detail")).await;

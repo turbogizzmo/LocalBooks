@@ -467,7 +467,7 @@ async fn balance_sheet_summary(pool: &SqlitePool, as_of: NaiveDate) -> Result<Ac
     let notes = vec![if bs.is_balanced {
         "Accrual basis.".to_string()
     } else {
-        format!("Accrual basis. Out of balance by {}.", crate::ledger::format_money(bs.difference_cents, ""))
+        format!("Accrual basis. Out of balance by {}.", crate::ledger::format_money(bs.difference_cents.get(), ""))
     }];
     Ok(done(None, as_of, columns, rows, count, notes))
 }

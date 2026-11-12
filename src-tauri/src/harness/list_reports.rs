@@ -173,8 +173,8 @@ async fn company() -> SqlitePool {
     let budget = crate::statements::create_budget(p, "Plan 2025", d(2025, 6, 1)).await.unwrap().id;
     let rent = account(p, "6300").await;
     let amounts: Vec<crate::statements::BudgetAmount> = (1..=12)
-        .map(|period| crate::statements::BudgetAmount { account_id: sales, period, amount_cents: 1_000_000 })
-        .chain((1..=12).map(|period| crate::statements::BudgetAmount { account_id: rent, period, amount_cents: 250_000 }))
+        .map(|period| crate::statements::BudgetAmount { account_id: sales, period, amount_cents: Cents(1_000_000) })
+        .chain((1..=12).map(|period| crate::statements::BudgetAmount { account_id: rent, period, amount_cents: Cents(250_000) }))
         .collect();
     crate::statements::set_budget_amounts(p, budget, &amounts).await.unwrap();
     sqlx::query("INSERT INTO todos (title, note, due_date, customer_id) VALUES ('Call about the patio menu', 'Ask for the final copy', '2025-12-20', ?1)")
@@ -293,10 +293,10 @@ async fn statement_summaries_tie_out() {
     let folded: BTreeMap<String, i64> = details(&summary).map(|r| (text(&r.cells[0]), last(r))).collect();
     for line in bs.lines.iter().filter(|l| matches!(l.kind, crate::statements::LineKind::Total | crate::statements::LineKind::Net)) {
         let shown = totals.get(&line.label).or_else(|| folded.get(line.label.trim_start_matches("Total ")));
-        assert_eq!(shown, line.amount_cents.as_ref(), "{}", line.label);
+        assert_eq!(shown, line.amount_cents.map(crate::money::Cents::get).as_ref(), "{}", line.label);
     }
     let lines: i64 = details(&summary).map(last).sum();
-    assert_eq!(lines, bs.total_assets_cents + bs.total_liabilities_cents + bs.total_equity_cents);
+    assert_eq!(lines, bs.total_assets_cents.get() + bs.total_liabilities_cents.get() + bs.total_equity_cents.get());
     assert!(details(&summary).count() < bs.lines.iter().filter(|l| l.account_id.is_some()).count(), "accounts fold into groups");
 
     // Profit & Loss YTD Comparison: each column's net income is a Profit & Loss for its dates.
@@ -304,7 +304,7 @@ async fn statement_summaries_tie_out() {
     let net = ytd.report.rows.last().unwrap();
     let month = crate::statements::profit_and_loss(&pool, d(2025, 11, 1), d(2025, 11, 30)).await.unwrap();
     let year = crate::statements::profit_and_loss(&pool, d(2025, 1, 1), d(2025, 11, 30)).await.unwrap();
-    assert_eq!((cents(&net.cells[1]), cents(&net.cells[2])), (month.net_income_cents, year.net_income_cents));
+    assert_eq!((cents(&net.cells[1]), cents(&net.cells[2])), (month.net_income_cents.get(), year.net_income_cents.get()));
     assert_ne!(month.net_income_cents, year.net_income_cents);
 }
 
@@ -398,7 +398,7 @@ async fn time_inventory_and_lists_tie_out() {
     for line in bs.lines.iter().filter(|l| l.kind == crate::statements::LineKind::Account) {
         if let (Some(id), Some(amount)) = (line.account_id, line.amount_cents) {
             if let Some(Some(shown)) = listed.get(&id) {
-                assert_eq!(*shown, amount, "{}", line.label);
+                assert_eq!(*shown, amount.get(), "{}", line.label);
                 checked += 1;
             }
         }
