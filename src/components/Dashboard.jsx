@@ -34,19 +34,20 @@ function TrialBalance({ tb }) {
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
-        <table className="qb-grid">
+        <table className="qb-grid min-w-[400px]">
           <colgroup>
-            <col className="w-[64px]" />
+            <col className="w-[56px]" />
             <col />
-            <col className="w-[150px]" />
-            <col className="w-[112px]" />
-            <col className="w-[112px]" />
+            {/* The type column only where the panel is wide enough for it and full amounts. */}
+            <col className="hidden w-[150px] 2xl:table-column" />
+            <col className="w-[128px]" />
+            <col className="w-[128px]" />
           </colgroup>
           <thead>
             <tr>
               <th className="qb-grid-head">No.</th>
               <th className="qb-grid-head">Account</th>
-              <th className="qb-grid-head">Type</th>
+              <th className="qb-grid-head hidden 2xl:table-cell">Type</th>
               <th className="qb-grid-head text-right">Debit</th>
               <th className="qb-grid-head text-right">Credit</th>
             </tr>
@@ -63,7 +64,7 @@ function TrialBalance({ tb }) {
               <tr key={row.accountId} className="qb-grid-row">
                 <td className="qb-grid-cell text-qb-ink-muted">{row.accountNumber ?? ''}</td>
                 <td className="qb-grid-cell" title={row.fullName}>{row.fullName}</td>
-                <td className="qb-grid-cell text-qb-ink-muted">{row.accountTypeName}</td>
+                <td className="qb-grid-cell hidden text-qb-ink-muted 2xl:table-cell">{row.accountTypeName}</td>
                 <td className="qb-grid-cell num">{row.debitCents ? formatCents(row.debitCents) : ''}</td>
                 <td className="qb-grid-cell num">{row.creditCents ? formatCents(row.creditCents) : ''}</td>
               </tr>
@@ -71,7 +72,8 @@ function TrialBalance({ tb }) {
           </tbody>
           <tfoot>
             <tr className="sticky bottom-0 bg-qb-row-header font-semibold">
-              <td className="qb-grid-cell" colSpan={3}>Total</td>
+              <td className="qb-grid-cell" colSpan={2}>Total</td>
+              <td className="qb-grid-cell hidden 2xl:table-cell" />
               <td className="qb-grid-cell num border-t-2 border-double border-qb-ink">{formatCents(tb.totalDebitCents)}</td>
               <td className="qb-grid-cell num border-t-2 border-double border-qb-ink">{formatCents(tb.totalCreditCents)}</td>
             </tr>
@@ -117,7 +119,7 @@ function IncomeExpenseTrend({ navigate }) {
         )}
       </div>
       {error && <Notice kind="error" text={error} />}
-      {data && <Trend points={data.months.map((p) => ({ month: p.month, incomeCents: p.incomeCents, expenseCents: p.expenseCents, netCents: p.netIncomeCents }))} />}
+      {data && <Trend height={120} points={data.months.map((p) => ({ month: p.month, incomeCents: p.incomeCents, expenseCents: p.expenseCents, netCents: p.netIncomeCents }))} />}
       <button type="button" className="self-start text-xs text-qb-info hover:underline" onClick={() => navigate?.('reports', 'open', { report: 'graph-ie', dates: { startDate: start, endDate: end } })}>
         Open the Income &amp; Expense graph
       </button>

@@ -46,6 +46,11 @@ export default function ArAgingWidget() {
               </div>
             ))}
           </div>
+          {data.unusedCreditCents > 0 && (
+            <div className="mt-0.5 text-2xs text-qb-ink-muted">
+              Net of {formatCents(data.unusedCreditCents)} unused customer credit
+            </div>
+          )}
         </>
       )}
     </div>
