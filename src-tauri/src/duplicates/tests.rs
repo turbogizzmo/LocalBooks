@@ -184,7 +184,7 @@ async fn a_credit_memo_copy_keeps_its_discounts_and_charges_so_it_totals_the_sam
                 after(f.line_number),
                 f.account_id.unwrap(),
                 f.percent_ppm,
-                f.percent_ppm.is_none().then_some(f.amount_cents),
+                f.percent_ppm.is_none().then_some(f.amount_cents.get()),
                 f.is_taxable,
             ),
         })
