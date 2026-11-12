@@ -770,7 +770,7 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         (Ok(a), Ok(b)) => (b - a).num_days(),
         _ => 0,
     };
-    let balance = if inv.is_voided { 0 } else { inv.balance_cents };
+    let balance = if inv.is_voided { 0 } else { inv.balance_cents.get() };
     // The term it was issued with; an invoice from before the Terms list shows its days.
     let terms = inv.terms.terms_name.clone().unwrap_or_else(|| if terms_days == 0 { "Due on receipt".into() } else { format!("Net {terms_days}") });
     let mut meta = vec![
@@ -791,7 +791,7 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         .iter()
         .zip(details)
         .map(|(i, details)| {
-            let rate = i.percent_ppm.map_or_else(|| money(i.rate_cents), crate::item_types::percent_text);
+            let rate = i.percent_ppm.map_or_else(|| money(i.rate_cents.get()), crate::item_types::percent_text);
             let service_date = i.service_date.map(|d| format_date(&d.to_string())).unwrap_or_default();
             (
                 i.line_number,
@@ -799,7 +799,7 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
                     description: i.description.clone(),
                     quantity: format_quantity(i.quantity_e4),
                     rate,
-                    amount: money(i.amount_cents),
+                    amount: money(i.amount_cents.get()),
                     details,
                     service_date,
                 },
@@ -810,18 +810,18 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
     let mark = marks_taxable(pool, inv.tax_rate_id.is_some()).await?;
     let lines = with_form_lines(mark_taxable(items, &taxable, mark), &detail.form_lines, &money, mark);
     let mut totals = Vec::new();
-    breakdown(&mut totals, inv.total_cents, inv.tax_cents, inv.discount_cents, inv.tax_rate_name.as_deref(), &money);
-    totals.push(TotalRow { label: "Total".into(), value: money(inv.total_cents), grand: false, payment: false });
+    breakdown(&mut totals, inv.total_cents.get(), inv.tax_cents.get(), inv.discount_cents.get(), inv.tax_rate_name.as_deref(), &money);
+    totals.push(TotalRow { label: "Total".into(), value: money(inv.total_cents.get()), grand: false, payment: false });
     for p in &detail.payments {
         totals.push(TotalRow {
             label: format!("Payment received {}", format_date(&p.payment_date.to_string())),
-            value: money(-p.amount_cents),
+            value: money(-p.amount_cents.get()),
             grand: false,
             payment: true,
         });
     }
-    if inv.credits_applied_cents > 0 {
-        totals.push(TotalRow { label: "Credits applied".into(), value: money(-inv.credits_applied_cents), grand: false, payment: true });
+    if inv.credits_applied_cents.is_positive() {
+        totals.push(TotalRow { label: "Credits applied".into(), value: money(-inv.credits_applied_cents.get()), grand: false, payment: true });
     }
     totals.push(TotalRow { label: "Balance due".into(), value: money(balance), grand: true, payment: false });
     Ok(FormDoc {
@@ -839,7 +839,7 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         memo: inv.is_voided.then(|| "This invoice has been voided and no payment is due.".to_string()),
         date: format_date(&inv.issue_date),
         due_date: format_date(&inv.due_date),
-        total: money(inv.total_cents),
+        total: money(inv.total_cents.get()),
         balance: money(balance),
         statement: None,
         sales: FormSales::of(&detail.details),

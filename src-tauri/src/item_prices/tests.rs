@@ -183,7 +183,7 @@ async fn applying_sets_prices_records_the_audit_trail_and_leaves_documents_alone
 
     // The invoice keeps the price it was written with.
     let detail = crate::invoices::invoice_detail(&c.pool, invoice.id).await.unwrap();
-    assert_eq!((detail.items[0].rate_cents, detail.invoice.total_cents), (15_000, 15_000));
+    assert_eq!((detail.items[0].rate_cents, detail.invoice.total_cents), (Cents(15_000), Cents(15_000)));
 
     // One sealed PRICE_CHANGE record, listing old and new prices, and the chain still verifies.
     let history = history(&c.pool, 10).await.unwrap();

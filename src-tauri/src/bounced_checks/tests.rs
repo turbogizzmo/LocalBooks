@@ -130,7 +130,7 @@ async fn a_bounced_payment_reopens_the_invoice_takes_the_bank_down_and_charges_f
 
     // The invoice is open again; the bank is down by the check and the fee.
     let reopened = get_summary(&pool, invoice_id).await.unwrap();
-    assert_eq!((reopened.status.as_str(), reopened.balance_cents, reopened.home_balance_cents), ("UNPAID", 50_000, 50_000));
+    assert_eq!((reopened.status.as_str(), reopened.balance_cents, reopened.home_balance_cents), ("UNPAID", Cents(50_000), Cents(50_000)));
     assert_eq!(balance(&pool, checking).await, -2_500);
     assert_eq!(balance(&pool, bank_fees).await, 2_500);
     // A/R holds the reopened invoice plus the returned-check charge.
@@ -519,7 +519,7 @@ async fn a_payment_that_took_a_discount_bounces_for_the_whole_invoice_and_revers
         "the bank and the discount go back; A/R is the whole invoice"
     );
     let reopened = get_summary(&pool, invoice_id).await.unwrap();
-    assert_eq!((reopened.status.as_str(), reopened.balance_cents), ("UNPAID", 50_000));
+    assert_eq!((reopened.status.as_str(), reopened.balance_cents), ("UNPAID", Cents(50_000)));
     books_balance(&pool).await;
 
     void(&pool, recorded.id, None).await.unwrap();
