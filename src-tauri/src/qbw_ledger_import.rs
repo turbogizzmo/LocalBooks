@@ -947,14 +947,14 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
                    AND NOT EXISTS (SELECT 1 FROM sales_receipts WHERE {col} = ?1) AND NOT EXISTS (SELECT 1 FROM estimates WHERE {col} = ?1)",
                 col = if kind == "REP" { "sales_rep_id" } else { "ship_method_id" }
             );
-            if let Err(e) = sqlx::query(&unused).bind(id).execute(&mut *tx).await {
+            if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(unused.as_str())).bind(id).execute(&mut *tx).await {
                 return Err(ledger::rollback(tx, db_err(e)).await);
             }
         }
     }
     for p in parties {
         let table = if p.kind == "CUSTOMER" { "customers" } else { "vendors" };
-        let existing: Option<i64> = sqlx::query_scalar(&format!("SELECT id FROM {table} WHERE name = ?1 COLLATE NOCASE"))
+        let existing: Option<i64> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT id FROM {table} WHERE name = ?1 COLLATE NOCASE")))
             .bind(&p.name)
             .fetch_optional(&mut *tx)
             .await

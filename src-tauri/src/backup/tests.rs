@@ -41,6 +41,9 @@ async fn total_posted(pool: &SqlitePool) -> i64 {
     sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents), 0) FROM v_posted_lines").fetch_one(pool).await.unwrap()
 }
 
+/// The migration that keeps JSON subqueries as JSON on SQLite 3.54 (gap R24).
+const JSON_FIX: i64 = 176;
+
 #[tokio::test]
 async fn opening_an_older_company_file_saves_a_copy_before_upgrading_it() {
     let tmp = TempDir::new("pre-upgrade");
@@ -58,6 +61,15 @@ async fn opening_an_older_company_file_saves_a_copy_before_upgrading_it() {
             ..sqlx::migrate::Migrator::DEFAULT
         };
         db::migrate_with(&pool, &previous).await.unwrap();
+        if previous_version < JSON_FIX {
+            // Releases before migration 0176 ran on a SQLite that kept a subquery's JSON as JSON;
+            // the SQLite in this build stores it as text unless the view wraps it in json(...).
+            // Use 0176's view, which writes what those releases wrote, so the file is one they made.
+            let fix = MIGRATOR.iter().find(|m| m.version == JSON_FIX).unwrap().sql.as_str();
+            let start = fix.find("DROP VIEW v_entry_snapshot;").unwrap();
+            let end = start + fix[start..].find("FROM journal_entries e;").unwrap() + "FROM journal_entries e;".len();
+            sqlx::raw_sql(sqlx::AssertSqlSafe(&fix[start..end])).execute(&pool).await.unwrap();
+        }
         let entry: i64 =
             sqlx::query_scalar("INSERT INTO journal_entries (entry_number, entry_date, memo) VALUES (1, '2026-10-01', 'Sale \u{2014} \"cash\"') RETURNING id")
                 .fetch_one(&pool)

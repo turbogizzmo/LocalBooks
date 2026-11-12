@@ -70,9 +70,9 @@ fn too_long(value: &Option<String>, max: usize, what: &str) -> Result<(), String
 
 pub async fn list_contacts(pool: &SqlitePool, kind: &str, party_id: i64) -> Result<Vec<Contact>, String> {
     let column = owner(kind)?;
-    sqlx::query_as::<_, Contact>(&format!(
+    sqlx::query_as::<_, Contact>(sqlx::AssertSqlSafe(format!(
         "SELECT id, name, role, email, phone, mobile, for_invoices, for_statements FROM party_contacts WHERE {column} = ?1 ORDER BY position, id"
-    ))
+    )))
     .bind(party_id)
     .fetch_all(pool)
     .await
@@ -94,8 +94,11 @@ pub async fn save_contacts(pool: &SqlitePool, kind: &str, party_id: i64, contact
 pub(crate) async fn write_contacts(tx: &mut Transaction<'_, Sqlite>, kind: &str, party_id: i64, contacts: &[ContactInput]) -> Result<(), String> {
     let column = owner(kind)?;
     let table = if kind == "customer" { "customers" } else { "vendors" };
-    let exists: bool =
-        sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM {table} WHERE id = ?1)")).bind(party_id).fetch_one(&mut **tx).await.map_err(db_err)?;
+    let exists: bool = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT EXISTS (SELECT 1 FROM {table} WHERE id = ?1)")))
+        .bind(party_id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)?;
     if !exists {
         return Err(format!("PARTY_NOT_FOUND: that {kind} does not exist"));
     }
@@ -108,8 +111,11 @@ pub(crate) async fn write_contacts(tx: &mut Transaction<'_, Sqlite>, kind: &str,
     if kind == "vendor" && contacts.iter().any(|c| c.for_statements) {
         return Err("CONTACT_VENDOR_STATEMENTS: vendors have no statements".into());
     }
-    let current: Vec<(i64,)> =
-        sqlx::query_as(&format!("SELECT id FROM party_contacts WHERE {column} = ?1")).bind(party_id).fetch_all(&mut **tx).await.map_err(db_err)?;
+    let current: Vec<(i64,)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT id FROM party_contacts WHERE {column} = ?1")))
+        .bind(party_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(db_err)?;
     let current: Vec<i64> = current.into_iter().map(|(id,)| id).collect();
     for contact in contacts {
         if let Some(id) = contact.id {
@@ -126,7 +132,7 @@ pub(crate) async fn write_contacts(tx: &mut Transaction<'_, Sqlite>, kind: &str,
     // is left alone (no audit row for it).
     for flag in ["for_invoices", "for_statements"] {
         let keeps = contacts.iter().find(|c| if flag == "for_invoices" { c.for_invoices } else { c.for_statements }).and_then(|c| c.id);
-        sqlx::query(&format!("UPDATE party_contacts SET {flag} = 0 WHERE {column} = ?1 AND {flag} = 1 AND id IS NOT ?2"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE party_contacts SET {flag} = 0 WHERE {column} = ?1 AND {flag} = 1 AND id IS NOT ?2")))
             .bind(party_id)
             .bind(keeps)
             .execute(&mut **tx)
@@ -156,7 +162,7 @@ pub(crate) async fn write_contacts(tx: &mut Transaction<'_, Sqlite>, kind: &str,
                  WHERE id = ?1",
             )
             .bind(id),
-            None => sqlx::query(&insert).bind(party_id),
+            None => sqlx::query(sqlx::AssertSqlSafe(insert.as_str())).bind(party_id),
         };
         query
             .bind(position)
@@ -198,10 +204,10 @@ async fn sync_customer(tx: &mut Transaction<'_, Sqlite>, customer_id: i64) -> Re
 /// Copies a customer's or vendor's contacts to a copy of the record (Duplicate on the lists).
 pub(crate) async fn copy_contacts(tx: &mut Transaction<'_, Sqlite>, kind: &str, from: i64, to: i64) -> Result<(), String> {
     let column = owner(kind)?;
-    sqlx::query(&format!(
+    sqlx::query(sqlx::AssertSqlSafe(format!(
         "INSERT INTO party_contacts ({column}, position, name, role, email, phone, mobile, for_invoices, for_statements)
          SELECT ?2, position, name, role, email, phone, mobile, for_invoices, for_statements FROM party_contacts WHERE {column} = ?1 ORDER BY position"
-    ))
+    )))
     .bind(from)
     .bind(to)
     .execute(&mut **tx)

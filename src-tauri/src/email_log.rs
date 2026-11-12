@@ -217,7 +217,7 @@ pub async fn queue(pool: &SqlitePool) -> Result<Vec<QueuedForm>, String> {
     type Row = (String, i64, i64, String, Option<String>, String, i64, Option<String>, String);
     // The default invoice contact's email when it has one, else the customer's.
     let to = crate::party_contacts::recipient_sql("invoices");
-    let rows: Vec<Row> = sqlx::query_as(&format!(
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT q.form_type, q.document_id, i.invoice_number, COALESCE(c.name, i.customer_name), {to}, i.issue_date, i.total_cents, i.currency_code, q.queued_at
          FROM form_email_queue q JOIN invoices i ON q.form_type = 'INVOICE' AND i.id = q.document_id LEFT JOIN customers c ON c.id = i.customer_id
          UNION ALL
@@ -240,7 +240,7 @@ pub async fn queue(pool: &SqlitePool) -> Result<Vec<QueuedForm>, String> {
          SELECT q.form_type, q.document_id, o.po_number, v.name, v.email, o.po_date, o.total_cents, NULL, q.queued_at
          FROM form_email_queue q JOIN purchase_orders o ON q.form_type = 'PURCHASE_ORDER' AND o.id = q.document_id JOIN vendors v ON v.id = o.vendor_id
          ORDER BY 9, 1, 3"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)?;

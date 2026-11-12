@@ -100,7 +100,7 @@ async fn candidates_for_lines(
         candidate: MatchCandidate,
     }
     let ids = serde_json::to_string(transaction_ids).map_err(|e| e.to_string())?;
-    let rows: Vec<Row> = sqlx::query_as(&sql).bind(ids).bind(before).bind(after).fetch_all(conn).await.map_err(db_err)?;
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str())).bind(ids).bind(before).bind(after).fetch_all(conn).await.map_err(db_err)?;
     Ok(rows.into_iter().map(|r| (r.line_id, r.candidate)).collect())
 }
 
@@ -225,7 +225,7 @@ pub async fn list_matched(pool: &SqlitePool) -> Result<Vec<MatchedLine>, String>
         doc = crate::registers::DOC_NUMBER,
     );
     type Row = (i64, i64, NaiveDate, String, i64, String, i64, NaiveDate, String, Option<i64>, Option<String>, Option<String>, Option<String>);
-    let rows: Vec<Row> = sqlx::query_as(&sql).fetch_all(pool).await.map_err(db_err)?;
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str())).fetch_all(pool).await.map_err(db_err)?;
     Ok(rows
         .into_iter()
         .map(|(id, bank_account_id, date, description, amount_cents, origin, entry, entry_date, source_type, source_id, num, name, memo)| MatchedLine {

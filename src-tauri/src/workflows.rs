@@ -73,13 +73,15 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
          JOIN v_chart_of_accounts a ON a.id = l.account_id AND a.account_type = 'ACCOUNTS_RECEIVABLE'
          JOIN v_entry_party p ON p.journal_entry_id = l.journal_entry_id
          JOIN journal_entries je ON je.id = l.journal_entry_id";
-    let opening: i64 = sqlx::query_scalar(&format!("SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) {ar_lines} WHERE {mine} AND l.entry_date < ?2"))
-        .bind(&name)
-        .bind(start_date)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
-    let mut rows: Vec<StatementRow> = sqlx::query_as(&format!(
+    let opening: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) {ar_lines} WHERE {mine} AND l.entry_date < ?2"
+    )))
+    .bind(&name)
+    .bind(start_date)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
+    let mut rows: Vec<StatementRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT l.entry_date AS date,
                 CASE WHEN je.reverses_entry_id IS NOT NULL THEN 'VOID'
                      WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM finance_charge_invoices WHERE invoice_id = l.source_id)
@@ -119,7 +121,7 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
          {ar_lines}
          WHERE {mine} AND l.entry_date BETWEEN ?2 AND ?3
          ORDER BY l.entry_date, l.entry_number, l.line_number"
-    ))
+    )))
     .bind(&name)
     .bind(start_date)
     .bind(end_date)
@@ -819,7 +821,10 @@ const PO_SELECT: &str = "SELECT o.id, o.po_number, o.vendor_id, v.name AS vendor
  FROM purchase_orders o JOIN vendors v ON v.id = o.vendor_id";
 
 pub async fn list_purchase_orders(pool: &SqlitePool) -> Result<Vec<PurchaseOrderView>, String> {
-    sqlx::query_as::<_, PurchaseOrderView>(&format!("{PO_SELECT} ORDER BY o.status = 'OPEN' DESC, o.po_number DESC")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as::<_, PurchaseOrderView>(sqlx::AssertSqlSafe(format!("{PO_SELECT} ORDER BY o.status = 'OPEN' DESC, o.po_number DESC")))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn purchase_order_lines(pool: &SqlitePool, id: i64) -> Result<Vec<PurchaseOrderLineView>, String> {
@@ -1140,7 +1145,7 @@ pub async fn search(pool: &SqlitePool, query: &str) -> Result<Vec<SearchHit>, St
     let amount = q.trim_start_matches('$').replace(',', "");
     let amount_cents = parse_amount(&amount);
     let number: Option<i64> = q.trim_start_matches('#').parse().ok();
-    sqlx::query_as::<_, SearchHit>(&format!(
+    sqlx::query_as::<_, SearchHit>(sqlx::AssertSqlSafe(format!(
         "SELECT * FROM (
             SELECT 'TRANSACTION' AS kind, e.id, COALESCE(p.party_name, e.memo, 'Journal entry') AS label, e.memo AS detail, e.entry_date AS date,
                    (SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = e.id) AS amount_cents, {DISPLAY_SOURCE_TYPE} AS source_type
@@ -1158,7 +1163,7 @@ pub async fn search(pool: &SqlitePool, query: &str) -> Result<Vec<SearchHit>, St
          UNION ALL SELECT * FROM (SELECT 'PRODUCT', id, name, description, NULL, rate_cents, NULL FROM products_services WHERE name LIKE ?1 ESCAPE '\\' LIMIT 6)
          UNION ALL SELECT * FROM (SELECT 'ACCOUNT', id, full_name, account_type_name, NULL, NULL, NULL FROM v_chart_of_accounts
                                   WHERE full_name LIKE ?1 ESCAPE '\\' OR account_number = ?4 LIMIT 6)"
-    ))
+    )))
     .bind(&like)
     .bind(amount_cents)
     .bind(number)

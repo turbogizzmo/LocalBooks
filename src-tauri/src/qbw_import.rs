@@ -366,10 +366,10 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<BatchSumm
     .fetch_one(pool)
     .await
     .map_err(db_err)?;
-    let already_posted_invoice_count: i64 = sqlx::query_scalar(&format!(
+    let already_posted_invoice_count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT COUNT(DISTINCT qb_invoice_id) FROM staging_raw_transactions
          WHERE batch_id = ?1 AND qb_invoice_id IN ({LIVE_POSTED})"
-    ))
+    )))
     .bind(batch_id)
     .fetch_one(pool)
     .await
@@ -619,11 +619,11 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostBatchInput) -> Result<Pos
         raw_account_label: String,
         already_posted: i64,
     }
-    let rows: Vec<Row> = sqlx::query_as(&format!(
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT qb_invoice_id, date, raw_amount_cents, raw_account_label,
                 qb_invoice_id IN ({LIVE_POSTED}) AS already_posted
          FROM staging_raw_transactions WHERE batch_id = ?1 ORDER BY qb_invoice_id, id"
-    ))
+    )))
     .bind(batch_id)
     .fetch_all(pool)
     .await

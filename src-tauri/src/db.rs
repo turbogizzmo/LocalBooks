@@ -808,7 +808,7 @@ async fn remove_sidecars(path: &Path) -> Result<(), String> {
 
 /// Closes `pool` and waits until every one of its connections has closed.
 ///
-/// `Pool::close` in sqlx 0.8 can return with a connection still open: after a query, a connection
+/// `Pool::close` in sqlx (seen in 0.8) can return with a connection still open: after a query, a connection
 /// goes back to the pool in a spawned task that pings it first, and if `close` starts during that
 /// ping, its last wait ends when the connection reaches the idle queue, which it does not look at
 /// again. That connection (and the file, its `-wal` and `-shm`) then stays open for as long as any
@@ -1179,7 +1179,7 @@ pub(crate) async fn migrate_with(pool: &SqlitePool, migrator: &sqlx::migrate::Mi
     sqlx::query("PRAGMA foreign_keys = OFF").execute(&mut *conn).await.map_err(|e| e.to_string())?;
     // `run_direct` takes the connection itself rather than an `Acquire` impl, which keeps this
     // future provably `Send` when a restore runs it inside a Tauri command.
-    let migrated = migrator.run_direct(&mut *conn).await.map_err(|e| e.to_string());
+    let migrated = migrator.run_direct(None, &mut *conn, false).await.map_err(|e| e.to_string());
     let violations = sqlx::query("SELECT 1 FROM pragma_foreign_key_check LIMIT 1").fetch_optional(&mut *conn).await.map_err(|e| e.to_string());
     if let Err(e) = sqlx::query("PRAGMA foreign_keys = ON").execute(&mut *conn).await {
         // Never hand a connection without enforcement back to the pool.

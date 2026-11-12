@@ -73,7 +73,7 @@ fn request(id: &str, account: i64, bills: &[(i64, i64)]) -> AchPaymentInput {
 }
 
 async fn count(pool: &SqlitePool, sql: &str) -> i64 {
-    sqlx::query_scalar(sql).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).fetch_one(pool).await.unwrap()
 }
 
 /// Two vendors with bank details (a business with two bills, a person with one) and a third without.

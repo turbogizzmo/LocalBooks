@@ -61,11 +61,11 @@ const SUMMARY_SELECT: &str = "
     LEFT JOIN invoices i ON i.id = e.converted_to_invoice_id";
 
 pub async fn list_estimates(pool: &SqlitePool) -> Result<Vec<EstimateSummary>, String> {
-    sqlx::query_as::<_, EstimateSummary>(&format!("{SUMMARY_SELECT} ORDER BY e.estimate_number DESC")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as::<_, EstimateSummary>(sqlx::AssertSqlSafe(format!("{SUMMARY_SELECT} ORDER BY e.estimate_number DESC"))).fetch_all(pool).await.map_err(db_err)
 }
 
 async fn get_estimate(pool: &SqlitePool, id: i64) -> Result<EstimateSummary, String> {
-    sqlx::query_as::<_, EstimateSummary>(&format!("{SUMMARY_SELECT} WHERE e.id = ?1")).bind(id).fetch_one(pool).await.map_err(db_err)
+    sqlx::query_as::<_, EstimateSummary>(sqlx::AssertSqlSafe(format!("{SUMMARY_SELECT} WHERE e.id = ?1"))).bind(id).fetch_one(pool).await.map_err(db_err)
 }
 
 pub async fn create_estimate(pool: &SqlitePool, input: EstimateInput) -> Result<EstimateSummary, String> {

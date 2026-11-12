@@ -34,7 +34,10 @@ const MAX_ROWS: usize = 100_000;
 
 /// The ids with a place, first to last.
 pub async fn get(pool: &SqlitePool, list: OrderedList) -> Result<Vec<i64>, String> {
-    sqlx::query_scalar(&format!("SELECT id FROM {} WHERE list_order IS NOT NULL ORDER BY list_order, id", list.table())).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT id FROM {} WHERE list_order IS NOT NULL ORDER BY list_order, id", list.table())))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Keeps `ids` as the list's order (0 first); every other row goes back to the usual order. Ids
@@ -49,10 +52,10 @@ pub async fn set(pool: &SqlitePool, list: OrderedList, ids: &[i64]) -> Result<Ve
     }
     let table = list.table();
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
-    sqlx::query(&format!("UPDATE {table} SET list_order = NULL WHERE list_order IS NOT NULL")).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {table} SET list_order = NULL WHERE list_order IS NOT NULL"))).execute(&mut *tx).await.map_err(db_err)?;
     let update = format!("UPDATE {table} SET list_order = ?1 WHERE id = ?2");
     for (place, id) in (0_i64..).zip(ids) {
-        sqlx::query(&update).bind(place).bind(id).execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query(sqlx::AssertSqlSafe(update.as_str())).bind(place).bind(id).execute(&mut *tx).await.map_err(db_err)?;
     }
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
     get(pool, list).await

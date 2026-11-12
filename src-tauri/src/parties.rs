@@ -192,7 +192,8 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
     // Customers may be jobs ("Customer:Job"); renaming one renames its jobs too.
     let full = if t == "customers" { crate::sales::job_name(typed)? } else { typed.to_string() };
     let name = full.as_str();
-    let old_name: Option<String> = sqlx::query_scalar(&format!("SELECT name FROM {t} WHERE id = ?1")).bind(id).fetch_optional(pool).await.map_err(db_err)?;
+    let old_name: Option<String> =
+        sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT name FROM {t} WHERE id = ?1"))).bind(id).fetch_optional(pool).await.map_err(db_err)?;
     let old_name = old_name.ok_or_else(|| format!("PARTY_NOT_FOUND: that {kind} does not exist"))?;
     let email = clean(&input.email);
     if let Some(e) = &email {
@@ -406,7 +407,7 @@ async fn check_profile(pool: &SqlitePool, t: &str, id: i64, input: &PartyDetails
 
 pub async fn set_party_active(pool: &SqlitePool, kind: &str, id: i64, active: bool, access: Access<'_>) -> Result<PartyDetails, String> {
     let t = table(kind)?;
-    sqlx::query(&format!("UPDATE {t} SET is_active = ?1 WHERE id = ?2")).bind(active).bind(id).execute(pool).await.map_err(db_err)?;
+    sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {t} SET is_active = ?1 WHERE id = ?2"))).bind(active).bind(id).execute(pool).await.map_err(db_err)?;
     get_party(pool, kind, id, access).await
 }
 
@@ -455,11 +456,12 @@ pub async fn duplicate_party(pool: &SqlitePool, kind: &str, id: i64, name: &str,
         }
     }
     let copied = if kind == "customer" { CUSTOMER_COPIED } else { VENDOR_COPIED };
-    let inserted = sqlx::query_scalar::<_, i64>(&format!("INSERT INTO {t} (name, {copied}) SELECT ?1, {copied} FROM {t} WHERE id = ?2 RETURNING id"))
-        .bind(name)
-        .bind(id)
-        .fetch_one(&mut *tx)
-        .await;
+    let inserted =
+        sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!("INSERT INTO {t} (name, {copied}) SELECT ?1, {copied} FROM {t} WHERE id = ?2 RETURNING id")))
+            .bind(name)
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await;
     let new_id = match inserted {
         Ok(new_id) => new_id,
         Err(err) if err.as_database_error().is_some_and(|e| e.is_unique_violation()) => {

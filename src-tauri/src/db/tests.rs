@@ -387,3 +387,30 @@ fn an_empty_db_can_be_made_outside_a_runtime() {
     .join();
     assert!(made.is_ok(), "Db::closed panicked outside a Tokio runtime");
 }
+
+/// SQLite 3.54 stopped carrying the JSON subtype out of a scalar subquery, so
+/// `json_object('lines', (SELECT json_group_array(...)))` stores the array as a quoted string.
+/// Every view and trigger that nests a JSON subquery wraps it in `json(...)`, which keeps the audit
+/// snapshots byte-identical to the ones earlier releases wrote (gap R24).
+#[tokio::test]
+async fn json_subqueries_in_the_schema_stay_json() {
+    let pool = test_pool().await;
+    let objects: Vec<(String, String)> =
+        sqlx::query_as("SELECT name, sql FROM sqlite_schema WHERE type IN ('view', 'trigger') AND sql IS NOT NULL").fetch_all(&pool).await.unwrap();
+    let nested = regex::Regex::new(r"(?is)(json\s*\(\s*)?\(\s*SELECT\s+json_\w+").unwrap();
+    let bare: Vec<&str> = objects.iter().filter(|(_, sql)| nested.captures_iter(sql).any(|c| c.get(1).is_none())).map(|(name, _)| name.as_str()).collect();
+    assert!(bare.is_empty(), "wrap these JSON subqueries in json(...): {bare:?}");
+
+    // A list change records which fields changed as an array, as before.
+    let id: i64 = sqlx::query_scalar("INSERT INTO customers (name) VALUES ('Harbor Feed') RETURNING id").fetch_one(&pool).await.unwrap();
+    sqlx::query("UPDATE customers SET email = 'orders@harbor.test', phone = '555-0100' WHERE id = ?1").bind(id).execute(&pool).await.unwrap();
+    let changed: (String, String) = sqlx::query_as(
+        "SELECT json_type(payload_snapshot, '$.changed'), json_extract(payload_snapshot, '$.changed') FROM ledger_audit_log
+         WHERE action_type = 'LIST_CHANGE' AND target_entity_id = ?1",
+    )
+    .bind(id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(changed, ("array".to_string(), r#"["email","phone"]"#.to_string()));
+}

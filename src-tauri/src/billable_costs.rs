@@ -126,12 +126,13 @@ fn hours_e4(minutes: i64) -> Option<i64> {
 
 /// Unbilled billable time, for one customer or job or for all, oldest first.
 pub async fn list_unbilled_time(pool: &SqlitePool, customer_id: Option<i64>) -> Result<Vec<UnbilledTime>, String> {
-    let mut rows: Vec<UnbilledTime> =
-        sqlx::query_as(&format!("SELECT * FROM ({UNBILLED_TIME}) WHERE ?1 IS NULL OR customer_id = ?1 ORDER BY customer_name COLLATE NOCASE, date, id"))
-            .bind(customer_id)
-            .fetch_all(pool)
-            .await
-            .map_err(db_err)?;
+    let mut rows: Vec<UnbilledTime> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT * FROM ({UNBILLED_TIME}) WHERE ?1 IS NULL OR customer_id = ?1 ORDER BY customer_name COLLATE NOCASE, date, id"
+    )))
+    .bind(customer_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
     for r in &mut rows {
         r.hours_e4 = hours_e4(r.minutes).ok_or("TIME_AMOUNT: the hours are out of range")?;
         r.amount_cents = mul_div_round(r.hours_e4, r.hourly_rate_cents, QUANTITY_SCALE).ok_or("TIME_AMOUNT: the amount is out of range")?;
@@ -174,9 +175,9 @@ pub async fn set_reimbursement_account(pool: &SqlitePool, expense_account_id: i6
 
 /// Unbilled costs, for one customer or job or for all, oldest first.
 pub async fn list_unbilled(pool: &SqlitePool, customer_id: Option<i64>) -> Result<Vec<UnbilledCost>, String> {
-    sqlx::query_as::<_, UnbilledCost>(&format!(
+    sqlx::query_as::<_, UnbilledCost>(sqlx::AssertSqlSafe(format!(
         "SELECT * FROM ({UNBILLED}) WHERE ?1 IS NULL OR customer_id = ?1 ORDER BY customer_name COLLATE NOCASE, date, source, line_id"
-    ))
+    )))
     .bind(customer_id)
     .fetch_all(pool)
     .await
@@ -358,7 +359,7 @@ async fn write_with_billing(
             "BILL" => "bill_line_id",
             other => return Err(format!("COST_BAD_SOURCE: '{other}' is not a cost source")),
         };
-        let found: Option<UnbilledCost> = sqlx::query_as(&format!("SELECT * FROM ({UNBILLED}) WHERE source = ?1 AND line_id = ?2"))
+        let found: Option<UnbilledCost> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT * FROM ({UNBILLED}) WHERE source = ?1 AND line_id = ?2")))
             .bind(&cost.source)
             .bind(cost.line_id)
             .fetch_optional(&mut **tx)
@@ -404,8 +405,11 @@ async fn write_with_billing(
     }
     let mut time_links = Vec::with_capacity(chosen.time.len());
     for &activity in &chosen.time {
-        let found: Option<UnbilledTime> =
-            sqlx::query_as(&format!("SELECT * FROM ({UNBILLED_TIME}) WHERE id = ?1")).bind(activity).fetch_optional(&mut **tx).await.map_err(db_err)?;
+        let found: Option<UnbilledTime> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT * FROM ({UNBILLED_TIME}) WHERE id = ?1")))
+            .bind(activity)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(db_err)?;
         let Some(found) = found else {
             return Err("TIME_NOT_BILLABLE: a time entry is not billable, or is already on an invoice".into());
         };
@@ -467,7 +471,7 @@ async fn write_with_billing(
             .map_err(db_err)?;
     }
     for (column, line_id, amount, markup) in links {
-        sqlx::query(&format!("INSERT INTO billed_costs ({column}, invoice_id, amount_cents, markup_cents) VALUES (?1, ?2, ?3, ?4)"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("INSERT INTO billed_costs ({column}, invoice_id, amount_cents, markup_cents) VALUES (?1, ?2, ?3, ?4)")))
             .bind(line_id)
             .bind(invoice_id)
             .bind(amount)
@@ -525,13 +529,13 @@ pub(crate) async fn follow_replaced_lines(tx: &mut Transaction<'_, Sqlite>, tabl
         "bills" => ("bill_lines", "bill_id", "bill_line_id"),
         _ => return Ok(()),
     };
-    sqlx::query(&format!(
+    sqlx::query(sqlx::AssertSqlSafe(format!(
         "INSERT INTO billed_costs ({column}, invoice_id, amount_cents, markup_cents)
          SELECT n.id, b.invoice_id, b.amount_cents, b.markup_cents
          FROM billed_costs b JOIN {lines} o ON o.id = b.{column} JOIN invoices i ON i.id = b.invoice_id
          JOIN {lines} n ON n.{parent} = ?2 AND n.line_number = o.line_number AND n.customer_id IS o.customer_id
          WHERE o.{parent} = ?1 AND i.is_voided = 0"
-    ))
+    )))
     .bind(old_id)
     .bind(new_id)
     .execute(&mut **tx)

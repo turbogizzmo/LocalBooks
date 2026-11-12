@@ -176,12 +176,12 @@ pub async fn protect_all(conn: &mut SqliteConnection, key: &DataKey) -> Result<u
     for (table, id_column) in [(BANK, "vendor_id"), ("ach_entries", "id")] {
         for column in ["routing_number", "account_number"] {
             let rows: Vec<(i64, String)> =
-                sqlx::query_as(&format!("SELECT {id_column}, {column} FROM {table} WHERE {column} NOT LIKE 'lb1:%' AND {column} <> ''"))
+                sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {id_column}, {column} FROM {table} WHERE {column} NOT LIKE 'lb1:%' AND {column} <> ''")))
                     .fetch_all(&mut *conn)
                     .await
                     .map_err(db_err)?;
             for (id, plain) in rows {
-                sqlx::query(&format!("UPDATE {table} SET {column} = ?1 WHERE {id_column} = ?2"))
+                sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {table} SET {column} = ?1 WHERE {id_column} = ?2")))
                     .bind(seal(access, table, column, id, &plain)?)
                     .bind(id)
                     .execute(&mut *conn)
@@ -245,7 +245,7 @@ const ORIGINATOR_COLUMNS: &str =
     "account_id, immediate_destination, immediate_destination_name, immediate_origin, immediate_origin_name, company_name, company_id, entry_description";
 
 pub async fn get_ach_originator(pool: &SqlitePool, account_id: i64) -> Result<Option<OriginatorDetails>, String> {
-    sqlx::query_as(&format!("SELECT {ORIGINATOR_COLUMNS} FROM ach_originators WHERE account_id = ?1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {ORIGINATOR_COLUMNS} FROM ach_originators WHERE account_id = ?1")))
         .bind(account_id)
         .fetch_optional(pool)
         .await
@@ -281,14 +281,14 @@ pub async fn set_ach_originator(pool: &SqlitePool, input: OriginatorDetails) -> 
             return Err(format!("ACH_TOO_LONG: the {what} has at most {max} characters"));
         }
     }
-    sqlx::query(&format!(
+    sqlx::query(sqlx::AssertSqlSafe(format!(
         "INSERT INTO ach_originators ({ORIGINATOR_COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          ON CONFLICT (account_id) DO UPDATE SET immediate_destination = excluded.immediate_destination,
              immediate_destination_name = excluded.immediate_destination_name, immediate_origin = excluded.immediate_origin,
              immediate_origin_name = excluded.immediate_origin_name, company_name = excluded.company_name,
              company_id = excluded.company_id, entry_description = excluded.entry_description,
              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
-    ))
+    )))
     .bind(details.account_id)
     .bind(&details.immediate_destination)
     .bind(&details.immediate_destination_name)
@@ -446,7 +446,7 @@ async fn write_ach_payments(
     if input.effective_date < input.payment_date {
         return Err("ACH_BAD_EFFECTIVE_DATE: the date vendors are paid cannot be before the payment date".into());
     }
-    let originator: OriginatorDetails = sqlx::query_as(&format!("SELECT {ORIGINATOR_COLUMNS} FROM ach_originators WHERE account_id = ?1"))
+    let originator: OriginatorDetails = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {ORIGINATOR_COLUMNS} FROM ach_originators WHERE account_id = ?1")))
         .bind(input.payment_account_id)
         .fetch_optional(&mut **tx)
         .await

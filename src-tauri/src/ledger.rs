@@ -488,13 +488,13 @@ pub(crate) async fn recompute_paid(
     } else {
         ""
     };
-    let (total, paid): (i64, i64) = sqlx::query_as(&format!(
+    let (total, paid): (i64, i64) = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT d.total_cents,
                 COALESCE((SELECT SUM(amount_cents) FROM {payment_table} WHERE {fk} = d.id AND is_voided = 0), 0)
               + COALESCE((SELECT SUM(amount_cents) FROM {credit_table} WHERE {fk} = d.id AND is_voided = 0), 0)
               {bounced}
          FROM {document_table} d WHERE d.id = ?1"
-    ))
+    )))
     .bind(document_id)
     .fetch_one(&mut **tx)
     .await
@@ -506,7 +506,7 @@ pub(crate) async fn recompute_paid(
     } else {
         "PAID"
     };
-    sqlx::query(&format!("UPDATE {document_table} SET amount_paid_cents = ?1, status = ?2 WHERE id = ?3"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {document_table} SET amount_paid_cents = ?1, status = ?2 WHERE id = ?3")))
         .bind(paid)
         .bind(status)
         .bind(document_id)
@@ -547,12 +547,13 @@ pub(crate) async fn relink_applied(tx: &mut Transaction<'_, Sqlite>, to: Applied
     };
     let mut moved = Vec::new();
     for (kind, table, fk) in tables {
-        let mut rows: Vec<(i64, i64)> = sqlx::query_as(&format!("UPDATE {table} SET {fk} = ?2 WHERE {fk} = ?1 AND is_voided = 0 RETURNING id, amount_cents"))
-            .bind(old_id)
-            .bind(new_id)
-            .fetch_all(&mut **tx)
-            .await
-            .map_err(db_err)?;
+        let mut rows: Vec<(i64, i64)> =
+            sqlx::query_as(sqlx::AssertSqlSafe(format!("UPDATE {table} SET {fk} = ?2 WHERE {fk} = ?1 AND is_voided = 0 RETURNING id, amount_cents")))
+                .bind(old_id)
+                .bind(new_id)
+                .fetch_all(&mut **tx)
+                .await
+                .map_err(db_err)?;
         rows.sort_unstable();
         moved.extend(rows.into_iter().map(|(id, amount_cents)| Relinked { kind, id, amount_cents }));
     }
@@ -562,7 +563,7 @@ pub(crate) async fn relink_applied(tx: &mut Transaction<'_, Sqlite>, to: Applied
     };
     recompute_paid(tx, document, payments, fk, old_id).await?;
     recompute_paid(tx, document, payments, fk, new_id).await?;
-    sqlx::query(&format!("UPDATE {document} SET is_voided = 1 WHERE id = ?1")).bind(old_id).execute(&mut **tx).await.map_err(db_err)?;
+    sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {document} SET is_voided = 1 WHERE id = ?1"))).bind(old_id).execute(&mut **tx).await.map_err(db_err)?;
     Ok(moved)
 }
 
@@ -767,38 +768,38 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
     match source_type.as_str() {
         "INVOICE" | "BILL" if replacing => {}
         "INVOICE" => {
-            sqlx::query(&flag("invoices")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(sqlx::AssertSqlSafe(flag("invoices"))).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
         }
         "SALES_RECEIPT" => {
-            sqlx::query(&flag("sales_receipts")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(sqlx::AssertSqlSafe(flag("sales_receipts"))).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
         }
         "BILL" => {
-            sqlx::query(&flag("bills")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(sqlx::AssertSqlSafe(flag("bills"))).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
         }
         "EXPENSE" | "CHECK" => {
-            sqlx::query(&flag("expenses")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(sqlx::AssertSqlSafe(flag("expenses"))).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
         }
         "TRANSFER" => {
-            sqlx::query(&flag("transfers")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(sqlx::AssertSqlSafe(flag("transfers"))).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
         }
         "CREDIT_MEMO" => {
-            sqlx::query(&flag("credit_memos")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(sqlx::AssertSqlSafe(flag("credit_memos"))).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
         }
         "VENDOR_CREDIT" => {
-            sqlx::query(&flag("vendor_credits")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(sqlx::AssertSqlSafe(flag("vendor_credits"))).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
         }
         "DEPOSIT" => {
-            sqlx::query(&flag("deposits")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(sqlx::AssertSqlSafe(flag("deposits"))).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
             sqlx::query("UPDATE deposit_lines SET is_voided = 1 WHERE deposit_id = ?1").bind(doc).execute(&mut **tx).await.map_err(db_err)?;
         }
         "RECEIVE_PAYMENT" => {
-            sqlx::query(&flag("invoice_payments")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(sqlx::AssertSqlSafe(flag("invoice_payments"))).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
             let invoice_id: i64 =
                 sqlx::query_scalar("SELECT invoice_id FROM invoice_payments WHERE id = ?1").bind(doc).fetch_one(&mut **tx).await.map_err(db_err)?;
             recompute_paid(tx, "invoices", "invoice_payments", "invoice_id", invoice_id).await?;
         }
         "BILL_PAYMENT" => {
-            sqlx::query(&flag("bill_payments")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(sqlx::AssertSqlSafe(flag("bill_payments"))).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
             let bill_id: i64 = sqlx::query_scalar("SELECT bill_id FROM bill_payments WHERE id = ?1").bind(doc).fetch_one(&mut **tx).await.map_err(db_err)?;
             recompute_paid(tx, "bills", "bill_payments", "bill_id", bill_id).await?;
         }
@@ -916,7 +917,7 @@ pub const MANUAL_JOURNAL: &str = "(e.source_type = 'JOURNAL' AND e.reverses_entr
     AND NOT EXISTS (SELECT 1 FROM fx_revaluations WHERE journal_entry_id = e.id OR reversal_entry_id = e.id))";
 
 pub async fn list_journal_entries(pool: &SqlitePool, limit: i64) -> Result<Vec<JournalEntryView>, String> {
-    sqlx::query_as::<_, JournalEntryView>(&format!(
+    sqlx::query_as::<_, JournalEntryView>(sqlx::AssertSqlSafe(format!(
         "SELECT e.id, e.entry_number, e.entry_date, e.memo, {DISPLAY_SOURCE_TYPE} AS source_type, e.source_id,
                 COALESCE((SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = e.id), 0) AS total_cents,
                 e.is_voided, e.reverses_entry_id, o.entry_number AS reverses_entry_number,
@@ -927,7 +928,7 @@ pub async fn list_journal_entries(pool: &SqlitePool, limit: i64) -> Result<Vec<J
          WHERE e.status = 'POSTED'
          ORDER BY e.entry_date DESC, e.entry_number DESC
          LIMIT ?1"
-    ))
+    )))
     .bind(limit)
     .fetch_all(pool)
     .await

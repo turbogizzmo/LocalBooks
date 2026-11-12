@@ -320,7 +320,7 @@ async fn post_sale(fx: &Fixture, cents: i64, memo: &str) -> i64 {
 }
 
 async fn sql_err(pool: &SqlitePool, sql: &str) -> String {
-    sqlx::query(sql).execute(pool).await.map(|_| String::new()).unwrap_or_else(db_err)
+    sqlx::query(sqlx::AssertSqlSafe(sql)).execute(pool).await.map(|_| String::new()).unwrap_or_else(db_err)
 }
 
 #[tokio::test]
@@ -463,20 +463,20 @@ async fn schema_rejects_unbalanced_or_missing_foreign_amounts() {
     };
     let post = |id: i64| format!("UPDATE journal_entries SET status = 'POSTED', posted_at = 'now' WHERE id = {id}");
 
-    let unbalanced: i64 = sqlx::query_scalar(&draft(901, true)).fetch_one(&fx.pool).await.unwrap();
-    sqlx::raw_sql(&lines(unbalanced, "1000", "999")).execute(&fx.pool).await.unwrap();
+    let unbalanced: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(draft(901, true))).fetch_one(&fx.pool).await.unwrap();
+    sqlx::raw_sql(sqlx::AssertSqlSafe(lines(unbalanced, "1000", "999"))).execute(&fx.pool).await.unwrap();
     assert!(sql_err(&fx.pool, &post(unbalanced)).await.starts_with("JE_FOREIGN_UNBALANCED"));
 
-    let missing: i64 = sqlx::query_scalar(&draft(902, true)).fetch_one(&fx.pool).await.unwrap();
-    sqlx::raw_sql(&lines(missing, "NULL", "1000")).execute(&fx.pool).await.unwrap();
+    let missing: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(draft(902, true))).fetch_one(&fx.pool).await.unwrap();
+    sqlx::raw_sql(sqlx::AssertSqlSafe(lines(missing, "NULL", "1000"))).execute(&fx.pool).await.unwrap();
     assert!(sql_err(&fx.pool, &post(missing)).await.starts_with("JE_FOREIGN_MISSING"));
 
-    let home: i64 = sqlx::query_scalar(&draft(903, false)).fetch_one(&fx.pool).await.unwrap();
-    sqlx::raw_sql(&lines(home, "1000", "1000")).execute(&fx.pool).await.unwrap();
+    let home: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(draft(903, false))).fetch_one(&fx.pool).await.unwrap();
+    sqlx::raw_sql(sqlx::AssertSqlSafe(lines(home, "1000", "1000"))).execute(&fx.pool).await.unwrap();
     assert!(sql_err(&fx.pool, &post(home)).await.starts_with("JE_FOREIGN_ON_HOME"));
 
-    let good: i64 = sqlx::query_scalar(&draft(904, true)).fetch_one(&fx.pool).await.unwrap();
-    sqlx::raw_sql(&lines(good, "1000", "1000")).execute(&fx.pool).await.unwrap();
+    let good: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(draft(904, true))).fetch_one(&fx.pool).await.unwrap();
+    sqlx::raw_sql(sqlx::AssertSqlSafe(lines(good, "1000", "1000"))).execute(&fx.pool).await.unwrap();
     assert_eq!(sql_err(&fx.pool, &post(good)).await, "");
 }
 
@@ -498,12 +498,13 @@ async fn classes_join_the_snapshot_without_changing_unclassified_ones() {
     };
 
     let plain = post(vec![JournalLine::debit(rent, 1_250).with_memo(Some("tab\there")), JournalLine::credit(fx.checking, 1_250)]).await.unwrap();
-    let (live, old): (String, String) =
-        sqlx::query_as(&format!("SELECT json_extract(snapshot, '$.lines'), ({PRE_CLASS_LINES_SQL}) FROM v_entry_snapshot WHERE entry_id = ?1"))
-            .bind(plain)
-            .fetch_one(&fx.pool)
-            .await
-            .unwrap();
+    let (live, old): (String, String) = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT json_extract(snapshot, '$.lines'), ({PRE_CLASS_LINES_SQL}) FROM v_entry_snapshot WHERE entry_id = ?1"
+    )))
+    .bind(plain)
+    .fetch_one(&fx.pool)
+    .await
+    .unwrap();
     assert_eq!(live, old);
 
     let classed = post(vec![JournalLine::debit(rent, 700).with_class(Some(east)), JournalLine::credit(fx.checking, 700)]).await.unwrap();

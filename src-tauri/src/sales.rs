@@ -37,8 +37,12 @@ pub(crate) async fn find_or_create_named(tx: &mut Transaction<'_, Sqlite>, party
     if matches!(party, Party::Customer) {
         return customer_path(tx, name).await;
     }
-    sqlx::query(&format!("INSERT OR IGNORE INTO {table} (name) VALUES (?1)")).bind(name).execute(&mut **tx).await.map_err(db_err)?;
-    sqlx::query_scalar(&format!("SELECT id FROM {table} WHERE name = ?1 COLLATE NOCASE")).bind(name).fetch_one(&mut **tx).await.map_err(db_err)
+    sqlx::query(sqlx::AssertSqlSafe(format!("INSERT OR IGNORE INTO {table} (name) VALUES (?1)"))).bind(name).execute(&mut **tx).await.map_err(db_err)?;
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT id FROM {table} WHERE name = ?1 COLLATE NOCASE")))
+        .bind(name)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)
 }
 
 /// The error a form gets when it posts a name that is not on the list.
@@ -60,7 +64,7 @@ pub(crate) async fn require_listed(pool: &SqlitePool, party: Party, name: &str) 
         Party::Customer => (job_name(name)?, "customer"),
         Party::Vendor => (name.to_string(), "vendor"),
     };
-    let listed: bool = sqlx::query_scalar(&format!("SELECT EXISTS (SELECT 1 FROM {} WHERE name = ?1 COLLATE NOCASE)", party.table()))
+    let listed: bool = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT EXISTS (SELECT 1 FROM {} WHERE name = ?1 COLLATE NOCASE)", party.table())))
         .bind(&full)
         .fetch_one(pool)
         .await

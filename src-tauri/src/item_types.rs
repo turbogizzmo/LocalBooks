@@ -463,10 +463,10 @@ pub(crate) async fn write_charges(
 ) -> Result<(), String> {
     let LineTables { items: table, key, .. } = doc.into();
     for c in charges {
-        sqlx::query(&format!(
+        sqlx::query(sqlx::AssertSqlSafe(format!(
             "INSERT INTO {table} ({key}, line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id, is_taxable, percent_ppm)
              VALUES (?1, ?2, ?3, 10000, ?4, ?4, ?5, ?6, ?7, ?8, ?9)"
-        ))
+        )))
         .bind(id)
         .bind(c.line_number)
         .bind(&c.description)
@@ -501,11 +501,11 @@ pub(crate) async fn write_form_lines(
         }
         let discount = f.kind == FormLineKind::Discount;
         let is_group = f.kind == FormLineKind::Group;
-        sqlx::query(&format!(
+        sqlx::query(sqlx::AssertSqlSafe(format!(
             "INSERT INTO {table} ({key}, line_number, kind, description, amount_cents, product_service_id, percent_ppm, account_id, class_id, is_taxable,
                                   item_group_id, group_quantity_e4, group_line_count, print_items)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)"
-        ))
+        )))
         .bind(id)
         .bind(number)
         .bind(f.kind.key())
@@ -553,10 +553,10 @@ pub async fn form_lines_of<'e, E: sqlx::Executor<'e, Database = Sqlite>>(
     id: i64,
 ) -> Result<Vec<FormLineView>, String> {
     let (table, key) = table(doc);
-    sqlx::query_as::<_, FormLineView>(&format!(
+    sqlx::query_as::<_, FormLineView>(sqlx::AssertSqlSafe(format!(
         "SELECT line_number, kind, description, amount_cents, product_service_id, percent_ppm, account_id, class_id, is_taxable,
                 item_group_id, group_quantity_e4, group_line_count, print_items FROM {table} WHERE {key} = ?1 ORDER BY line_number"
-    ))
+    )))
     .bind(id)
     .fetch_all(executor)
     .await
