@@ -73,9 +73,9 @@ pub struct SalesOrderSummary {
     /// `OPEN` (nothing invoiced), `PARTLY_INVOICED` or `CLOSED` (nothing left to invoice).
     pub status: String,
     /// Ordered amount, before tax.
-    pub total_cents: i64,
+    pub total_cents: Cents,
     /// What is left to invoice, at the order's rates.
-    pub open_cents: i64,
+    pub open_cents: Cents,
     pub line_count: i64,
     /// Invoices were made from it (voided ones too), so it can be closed but not deleted.
     pub has_invoices: bool,
@@ -90,8 +90,8 @@ pub struct SalesOrderLine {
     pub item_name: Option<String>,
     pub description: String,
     pub quantity_e4: i64,
-    pub rate_cents: i64,
-    pub amount_cents: i64,
+    pub rate_cents: Cents,
+    pub amount_cents: Cents,
     pub income_account_id: i64,
     pub class_id: Option<i64>,
     pub is_taxable: bool,
@@ -144,11 +144,11 @@ const SUMMARY_SELECT: &str = "
 /// Every sales order, newest first; `open_only` leaves out closed ones.
 pub async fn list(pool: &SqlitePool, open_only: bool) -> Result<Vec<SalesOrderSummary>, String> {
     let filter = if open_only { "WHERE status <> 'CLOSED'" } else { "" };
-    sqlx::query_as(&format!("SELECT * FROM ({SUMMARY_SELECT}) {filter} ORDER BY order_number DESC")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT * FROM ({SUMMARY_SELECT}) {filter} ORDER BY order_number DESC"))).fetch_all(pool).await.map_err(db_err)
 }
 
 async fn summary(conn: &mut sqlx::SqliteConnection, id: i64) -> Result<SalesOrderSummary, String> {
-    sqlx::query_as(&format!("{SUMMARY_SELECT} WHERE o.id = ?1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{SUMMARY_SELECT} WHERE o.id = ?1")))
         .bind(id)
         .fetch_optional(conn)
         .await
@@ -775,9 +775,9 @@ pub struct OpenLine {
     pub quantity_e4: i64,
     pub invoiced_qty_e4: i64,
     pub left_qty_e4: i64,
-    pub rate_cents: i64,
+    pub rate_cents: Cents,
     /// Left × rate.
-    pub open_cents: i64,
+    pub open_cents: Cents,
     /// The part of what is left that stock on hand can't cover, oldest orders served first.
     pub backordered_qty_e4: i64,
 }
@@ -800,12 +800,12 @@ pub struct ItemStock {
 pub struct OpenSalesOrders {
     pub lines: Vec<OpenLine>,
     pub items: Vec<ItemStock>,
-    pub total_open_cents: i64,
+    pub total_open_cents: Cents,
 }
 
 /// Every open order line (Open Sales Orders by Customer and by Item read this), oldest order first.
 pub async fn open_lines(pool: &SqlitePool) -> Result<OpenSalesOrders, String> {
-    type Row = (i64, i64, NaiveDate, Option<NaiveDate>, i64, String, i64, Option<i64>, Option<String>, String, i64, i64, i64, i64, Option<i64>);
+    type Row = (i64, i64, NaiveDate, Option<NaiveDate>, i64, String, i64, Option<i64>, Option<String>, String, i64, i64, i64, Cents, Option<i64>);
     let rows: Vec<Row> = sqlx::query_as(
         "SELECT o.id, o.order_number, o.order_date, o.expected_date, o.customer_id, c.name, l.id, l.product_service_id, p.name, l.description,
                 l.quantity_e4, l.invoiced_qty_e4, l.quantity_e4 - l.invoiced_qty_e4 - l.closed_qty_e4, l.rate_cents, i.qty_on_hand_e4
@@ -822,7 +822,7 @@ pub async fn open_lines(pool: &SqlitePool) -> Result<OpenSalesOrders, String> {
     let mut free: HashMap<i64, i64> = HashMap::new();
     let mut items: BTreeMap<i64, ItemStock> = BTreeMap::new();
     let mut lines = Vec::with_capacity(rows.len());
-    let mut total_open_cents: i64 = 0;
+    let mut total_open_cents = Cents::ZERO;
     for (
         order_id,
         order_number,
@@ -841,7 +841,7 @@ pub async fn open_lines(pool: &SqlitePool) -> Result<OpenSalesOrders, String> {
         on_hand,
     ) in rows
     {
-        let open_cents = crate::ledger::quantity_amount(left, rate_cents).ok_or_else(overflow)?;
+        let open_cents = Cents(crate::ledger::quantity_amount(left, rate_cents.get()).ok_or_else(overflow)?);
         total_open_cents = total_open_cents.checked_add(open_cents).ok_or_else(overflow)?;
         let mut backordered = 0;
         if let Some(product) = product {
@@ -890,21 +890,21 @@ pub struct PendingSalesRow {
     pub customer_id: i64,
     pub customer_name: String,
     pub orders: i64,
-    pub open_cents: i64,
+    pub open_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingSales {
     pub rows: Vec<PendingSalesRow>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
 }
 
 pub async fn pending_sales(pool: &SqlitePool) -> Result<PendingSales, String> {
     let open = open_lines(pool).await?;
-    let mut by_customer: BTreeMap<(String, i64), (Vec<i64>, i64)> = BTreeMap::new();
+    let mut by_customer: BTreeMap<(String, i64), (Vec<i64>, Cents)> = BTreeMap::new();
     for line in &open.lines {
-        let entry = by_customer.entry((line.customer_name.to_lowercase(), line.customer_id)).or_insert_with(|| (Vec::new(), 0));
+        let entry = by_customer.entry((line.customer_name.to_lowercase(), line.customer_id)).or_insert_with(|| (Vec::new(), Cents::ZERO));
         if !entry.0.contains(&line.order_id) {
             entry.0.push(line.order_id);
         }

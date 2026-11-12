@@ -102,7 +102,7 @@ pub async fn sales_segments(pool: &SqlitePool) -> Result<Vec<BarSegment>, String
             name: e.customer_name,
             number: Some(e.estimate_number.to_string()),
             memo: e.memo,
-            amount_cents: e.total_cents,
+            amount_cents: e.total_cents.get(),
             customer_id: None,
         })
         .collect();
@@ -137,7 +137,9 @@ pub async fn bill_segments(pool: &SqlitePool, today: NaiveDate) -> Result<Vec<Ba
     let owed: Vec<BarItem> = bs
         .lines
         .iter()
-        .filter(|l| l.kind == crate::statements::LineKind::Account && l.account_id.is_some_and(|id| cards.contains(&id)) && l.amount_cents.unwrap_or(0) != 0)
+        .filter(|l| {
+            l.kind == crate::statements::LineKind::Account && l.account_id.is_some_and(|id| cards.contains(&id)) && l.amount_cents.is_some_and(|c| !c.is_zero())
+        })
         .map(|l| BarItem {
             kind: "CARD",
             id: l.account_id.unwrap_or_default(),
@@ -145,7 +147,7 @@ pub async fn bill_segments(pool: &SqlitePool, today: NaiveDate) -> Result<Vec<Ba
             name: l.label.clone(),
             number: None,
             memo: None,
-            amount_cents: l.amount_cents.unwrap_or(0),
+            amount_cents: l.amount_cents.map_or(0, crate::money::Cents::get),
             customer_id: None,
         })
         .collect();

@@ -17,22 +17,20 @@ updates:
       default-days: 7
     open-pull-requests-limit: 5
     groups:
+      # The Windows Hello bindings (src/platform_auth/windows_bindings.rs) are generated for one
+      # windows-core and windows-future version, so the two arrive in one PR.
+      windows-bindings:
+        patterns: [windows-core, windows-future]
       rust-minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      # Pinned deliberately (exact versions in Cargo.toml): update by hand after review.
+      # Pinned deliberately (exact versions in Cargo.toml): update by hand after review. sha1, sha2
+      # and hmac share the digest traits, so they move together in one change.
       - dependency-name: openqbw
       - dependency-name: opensqlany
       - dependency-name: sha2
       - dependency-name: hmac
       - dependency-name: sha1
-      # Moves with the windows crates; update together by hand (gap A21).
-      - dependency-name: windows-future
-      # Major versions that need porting work (gap A21): the build fails on them as they are.
-      - dependency-name: aes
-        update-types: [version-update:semver-major]
-      - dependency-name: cbc
-        update-types: [version-update:semver-major]
 
   - package-ecosystem: npm
     directory: /
@@ -48,9 +46,6 @@ updates:
     ignore:
       # Pinned deliberately; the icon registry in src/lib/icons.js is checked against this version.
       - dependency-name: lucide-react
-      # Major versions that need porting work (gap A21): new config format.
-      - dependency-name: eslint
-        update-types: [version-update:semver-major]
 
   # End-to-end test tooling (WebdriverIO); never ships in the app.
   - package-ecosystem: npm

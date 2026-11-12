@@ -255,7 +255,7 @@ async fn zero_amount_estimate_lines_stay_off_the_invoice() {
     let est = create_estimate(&pool, estimate(vec![line("Design", 50_000), line("Site visit (included)", 0), line("Build", 25_000)]))
         .await
         .expect("a zero line is allowed");
-    assert_eq!(est.total_cents, 75_000);
+    assert_eq!(est.total_cents, Cents(75_000));
     assert!(
         create_estimate(&pool, estimate(vec![line("Nothing", 0)])).await.unwrap_err().starts_with("EST_AMOUNT_TOO_LARGE"),
         "the estimate itself needs an amount"
@@ -454,12 +454,12 @@ async fn assert_receivables_tie(pool: &SqlitePool, customer_id: i64, expected: i
     .unwrap();
     let open: i64 =
         sqlx::query_scalar("SELECT COALESCE(SUM(total_cents - amount_paid_cents), 0) FROM invoices WHERE is_voided = 0").fetch_one(pool).await.unwrap();
-    let aging = crate::invoices::ar_aging(pool, d(12, 31)).await.unwrap().total_cents;
+    let aging = crate::invoices::ar_aging(pool, d(12, 31)).await.unwrap().total_cents.get();
     // A voided payment's reversing entry has no customer on the statement yet (see docs/gaps.md),
     // so after a void the statement is left out.
     let statement = match customer_id {
         0 => expected,
-        id => crate::workflows::customer_statement(pool, id, d(1, 1), d(12, 31)).await.unwrap().closing_balance_cents,
+        id => crate::workflows::customer_statement(pool, id, d(1, 1), d(12, 31)).await.unwrap().closing_balance_cents.get(),
     };
     assert_eq!((ledger, open, aging, statement), (expected, expected, expected, expected), "A/R, open invoices, aging and the statement tie out");
 }
@@ -551,8 +551,8 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
 
     record_payments(&pool, vec![pay(early, 49_000, 1_000, 11)]).await.unwrap();
     let detail = invoice_detail(&pool, early).await.unwrap();
-    assert_eq!((detail.invoice.status.as_str(), detail.invoice.balance_cents), ("PAID", 0), "closed for payment plus discount");
-    assert_eq!((detail.payments[0].amount_cents, detail.payments[0].discount_cents), (50_000, 1_000));
+    assert_eq!((detail.invoice.status.as_str(), detail.invoice.balance_cents), ("PAID", Cents(0)), "closed for payment plus discount");
+    assert_eq!((detail.payments[0].amount_cents, detail.payments[0].discount_cents), (Cents(50_000), Cents(1_000)));
     let entry = detail.payments[0].journal_entry_id.unwrap();
     let lines: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY id")
         .bind(entry)
@@ -568,7 +568,7 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
 
     // Only the money reaches Undeposited Funds and the bank deposit.
     let waiting = crate::banking::list_undeposited(&pool).await.unwrap();
-    let item = waiting.iter().find(|w| w.amount_cents == 49_000).expect("the discounted payment waits to be deposited for 490.00");
+    let item = waiting.iter().find(|w| w.amount_cents == Cents(49_000)).expect("the discounted payment waits to be deposited for 490.00");
     let deposit = crate::banking::DepositInput {
         bank_account_id: bank,
         deposit_date: d(10, 12),
@@ -586,7 +586,7 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
     crate::ledger::void_transaction(&pool, deposit_entry).await.unwrap();
     crate::ledger::void_transaction(&pool, entry).await.unwrap();
     let detail = invoice_detail(&pool, early).await.unwrap();
-    assert_eq!((detail.invoice.status.as_str(), detail.invoice.amount_paid_cents), ("UNPAID", 0));
+    assert_eq!((detail.invoice.status.as_str(), detail.invoice.amount_paid_cents), ("UNPAID", Cents(0)));
     assert_eq!(net_cents(&pool, discounts).await, 0, "the discount is reversed");
     assert_receivables_tie(&pool, 0, 105_000).await;
     assert_eq!(payment_discounts(&pool, &[early], d(10, 11)).await.unwrap().offered.len(), 1, "offered again once the payment is voided");

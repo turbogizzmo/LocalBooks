@@ -19,7 +19,8 @@ fn table(kind: &str) -> Result<(&'static str, &'static str), String> {
 pub async fn delete_record(pool: &SqlitePool, kind: &str, id: i64) -> Result<String, String> {
     let (t, list) = table(kind)?;
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
-    let name: Option<String> = sqlx::query_scalar(&format!("SELECT name FROM {t} WHERE id = ?1")).bind(id).fetch_optional(&mut *tx).await.map_err(db_err)?;
+    let name: Option<String> =
+        sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT name FROM {t} WHERE id = ?1"))).bind(id).fetch_optional(&mut *tx).await.map_err(db_err)?;
     let Some(name) = name else {
         return Err(rollback(tx, format!("LIST_NOT_FOUND: that {kind} does not exist")).await);
     };
@@ -43,7 +44,7 @@ pub async fn delete_record(pool: &SqlitePool, kind: &str, id: i64) -> Result<Str
     if let Err(err) = cleared {
         return Err(rollback(tx, db_err(err)).await);
     }
-    match sqlx::query(&format!("DELETE FROM {t} WHERE id = ?1")).bind(id).execute(&mut *tx).await {
+    match sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {t} WHERE id = ?1"))).bind(id).execute(&mut *tx).await {
         Ok(_) => {}
         // A row still pointing at this one (SQLite reports FOREIGN KEY constraint failed).
         Err(err) if err.as_database_error().is_some_and(|e| e.is_foreign_key_violation() || e.message().contains("FOREIGN KEY")) => {

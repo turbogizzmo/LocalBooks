@@ -77,7 +77,7 @@ const SALES_LINE: &str = "line_number, product_service_id, description, quantity
 /// A saved document of `kind` read as a new form loads it.
 pub async fn copy_source(pool: &SqlitePool, kind: &str, id: i64) -> Result<CopySource, String> {
     let missing = || format!("DUP_NOT_FOUND: that {} does not exist", kind.to_lowercase().replace('_', " "));
-    let lines = |sql: String| async move { sqlx::query_as::<_, CopyLine>(&sql).bind(id).fetch_all(pool).await.map_err(db_err) };
+    let lines = |sql: String| async move { sqlx::query_as::<_, CopyLine>(sqlx::AssertSqlSafe(sql.as_str())).bind(id).fetch_all(pool).await.map_err(db_err) };
     let mut copy = CopySource { kind: kind.to_string(), ..Default::default() };
     match kind {
         "SALES_RECEIPT" => {

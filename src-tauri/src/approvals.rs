@@ -185,7 +185,7 @@ fn describe(kind: Kind, input: &Value) -> Result<(String, i64, NaiveDate, Option
 }
 
 async fn get(pool: &SqlitePool, id: i64) -> Result<ApprovalRequest, String> {
-    sqlx::query_as(&format!("{SELECT} WHERE id = ?1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{SELECT} WHERE id = ?1")))
         .bind(id)
         .fetch_optional(pool)
         .await
@@ -261,7 +261,7 @@ pub async fn submit_purchase_order_bill(pool: &SqlitePool, order_id: i64, bill: 
 
 /// Requests with `status` (all when `None`), newest first.
 pub async fn list(pool: &SqlitePool, status: Option<&str>) -> Result<Vec<ApprovalRequest>, String> {
-    sqlx::query_as(&format!("{SELECT} WHERE ?1 IS NULL OR status = ?1 ORDER BY (status = 'PENDING') DESC, id DESC"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{SELECT} WHERE ?1 IS NULL OR status = ?1 ORDER BY (status = 'PENDING') DESC, id DESC")))
         .bind(status)
         .fetch_all(pool)
         .await

@@ -1,11 +1,13 @@
 //! Refuses a SQLite file whose write-ahead log was written for a different page size.
 //!
 //! SQLite before 3.54 can hand back uninitialized memory when it opens a database together with a
-//! `-wal` file whose page size doesn't match the database's (RUSTSEC-2026-0459). LocalBooks bundles
-//! an older SQLite through sqlx (gap R24 in `docs/gaps.md`), and it opens files other people send:
-//! company files, backups, and GnuCash or QuickBooks for Mac files to import. A real log always has
-//! its database's page size (SQLite can't change the page size of a database in WAL mode), so a
-//! mismatch only comes from a leftover or crafted file, and refusing it costs nothing.
+//! `-wal` file whose page size doesn't match the database's (RUSTSEC-2026-0459). Tillhouse now
+//! bundles SQLCipher on SQLite 3.54.1, which fixes that (gap R24 in `docs/gaps.md`); this guard
+//! stays as defense in depth, because Tillhouse opens files other people send (company files,
+//! backups, and GnuCash or QuickBooks for Mac files to import) and a future SQLite could regress.
+//! A real log always has its database's page size (SQLite can't change the page size of a database
+//! in WAL mode), so a mismatch only comes from a leftover or crafted file, and refusing it costs
+//! nothing.
 //!
 //! **Two checks, before and at use.** [`check`] reads both headers by path just before a file is
 //! opened, to refuse it with a clear message. But a log can change between that check and the

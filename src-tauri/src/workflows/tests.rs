@@ -36,7 +36,7 @@ async fn discounts_statements_and_1099s() {
                   { "description": "Labor", "quantityE4": 10_000, "rateCents": 10_000, "incomeAccountId": services, "isTaxable": false }] }))
     .unwrap();
     let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
-    assert_eq!((inv.total_cents, inv.tax_cents, inv.discount_cents), (28_800, 1_800, 3_000));
+    assert_eq!((inv.total_cents, inv.tax_cents, inv.discount_cents), (Cents(28_800), Cents(1_800), Cents(3_000)));
     assert_eq!(inv.customer_name, "Acme:Kitchen");
     let discounts: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Discounts Given'").fetch_one(&pool).await.unwrap();
     assert_eq!(balance(&pool, discounts).await, 3_000);
@@ -61,8 +61,8 @@ async fn discounts_statements_and_1099s() {
     let statement = customer_statement(&pool, acme, d(3, 1), d(4, 30)).await.unwrap();
     assert_eq!(statement.rows.len(), 2, "the job's invoice and payment appear on the customer's statement");
     assert_eq!((statement.rows[0].po_number.as_deref(), statement.rows[1].po_number.as_deref()), (Some("PO-77"), None), "the invoice's P.O. number");
-    assert_eq!((statement.opening_balance_cents, statement.closing_balance_cents), (0, 18_800));
-    assert_eq!(statement.aging_cents, [0, 18_800, 0, 0, 0]);
+    assert_eq!((statement.opening_balance_cents, statement.closing_balance_cents), (Cents(0), Cents(18_800)));
+    assert_eq!(statement.aging_cents, [0, 18_800, 0, 0, 0].map(Cents));
     assert_eq!(balance(&pool, ar).await, 18_800);
     let listed = statement_customers(&pool, d(3, 1), d(4, 30)).await.unwrap();
     assert_eq!(listed.iter().map(|c| c.1.as_str()).collect::<Vec<_>>(), ["Acme"]);
@@ -108,7 +108,7 @@ async fn a_voided_payment_comes_off_the_customers_statement() {
     .await
     .unwrap();
     let birch: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Birch'").fetch_one(&pool).await.unwrap();
-    assert_eq!(customer_statement(&pool, birch, d(3, 1), d(3, 31)).await.unwrap().closing_balance_cents, 30_000);
+    assert_eq!(customer_statement(&pool, birch, d(3, 1), d(3, 31)).await.unwrap().closing_balance_cents, Cents(30_000));
 
     let payment_entry: i64 = sqlx::query_scalar(
         "SELECT e.id FROM journal_entries e JOIN invoice_payments p ON p.id = e.source_id WHERE e.source_type = 'RECEIVE_PAYMENT' AND p.invoice_id = ?1",
@@ -120,8 +120,8 @@ async fn a_voided_payment_comes_off_the_customers_statement() {
     crate::ledger::void_transaction(&pool, payment_entry).await.unwrap();
 
     let statement = customer_statement(&pool, birch, d(3, 1), d(3, 31)).await.unwrap();
-    assert_eq!(statement.closing_balance_cents, 50_000, "the whole invoice is owed again, as A/R and the invoice say");
-    let kinds: Vec<(&str, i64)> = statement.rows.iter().map(|r| (r.source_type.as_str(), r.amount_cents)).collect();
+    assert_eq!(statement.closing_balance_cents, Cents(50_000), "the whole invoice is owed again, as A/R and the invoice say");
+    let kinds: Vec<(&str, i64)> = statement.rows.iter().map(|r| (r.source_type.as_str(), r.amount_cents.get())).collect();
     assert_eq!(kinds, [("INVOICE", 50_000), ("RECEIVE_PAYMENT", -20_000), ("VOID", 20_000)]);
     // The reversal carries the customer's name everywhere names come from.
     let named: Option<String> =
@@ -159,7 +159,7 @@ async fn recurring_purchase_orders_search_attachments_and_budgets() {
     assert_eq!(enter_due(&pool, d(3, 15), None).await.unwrap(), 2, "January 31 and February 28");
     assert_eq!(balance(&pool, rent).await, 240_000);
     let listed = list_recurring(&pool).await.unwrap();
-    assert_eq!((listed[0].next_date, listed[0].run_count, listed[0].amount_cents), (d(3, 31), 2, 120_000), "back to month end after February");
+    assert_eq!((listed[0].next_date, listed[0].run_count, listed[0].amount_cents), (d(3, 31), 2, Cents(120_000)), "back to month end after February");
     assert_eq!(enter_due(&pool, d(12, 31), Some(id)).await.unwrap(), 2, "March and April, then the end date");
     assert!(!list_recurring(&pool).await.unwrap()[0].is_active);
 
@@ -213,8 +213,8 @@ async fn recurring_purchase_orders_search_attachments_and_budgets() {
     let amounts: Vec<crate::statements::BudgetAmount> = (1..=3)
         .flat_map(|m| {
             [
-                crate::statements::BudgetAmount { account_id: rent, period: m, amount_cents: 100_000 },
-                crate::statements::BudgetAmount { account_id: services, period: m, amount_cents: 50_000 },
+                crate::statements::BudgetAmount { account_id: rent, period: m, amount_cents: Cents(100_000) },
+                crate::statements::BudgetAmount { account_id: services, period: m, amount_cents: Cents(50_000) },
             ]
         })
         .collect();

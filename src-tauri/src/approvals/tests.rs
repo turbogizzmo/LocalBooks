@@ -13,7 +13,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, cents: i64) -> Value {
 }
 
 async fn count(pool: &SqlitePool, sql: &str) -> i64 {
-    sqlx::query_scalar(sql).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).fetch_one(pool).await.unwrap()
 }
 
 #[tokio::test]
@@ -46,7 +46,10 @@ async fn rules_hold_matching_bills_until_approved() {
     assert_eq!((approved.status.as_str(), approved.decided_by.as_deref()), ("APPROVED", Some("Alex")));
     let bills = crate::expenses::list_bills(&pool).await.unwrap();
     assert_eq!(bills.len(), 1);
-    assert_eq!((Some(bills[0].id), bills[0].total_cents, bills[0].vendor_name.as_str()), (approved.bill_id, 250_000, "Harborview Leasing"));
+    assert_eq!(
+        (Some(bills[0].id), bills[0].total_cents, bills[0].vendor_name.as_str()),
+        (approved.bill_id, crate::money::Cents(250_000), "Harborview Leasing")
+    );
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM journal_entries WHERE status = 'POSTED'").await, 1);
     assert!(approve(&pool, request.id, "Alex").await.unwrap_err().starts_with("APPROVAL_DECIDED"), "approved once only");
     assert!(reject(&pool, request.id, "Alex", "late").await.unwrap_err().starts_with("APPROVAL_DECIDED"));
@@ -146,7 +149,7 @@ async fn approving_a_held_bill_from_a_purchase_order_posts_it_and_marks_the_orde
     let approved = approve(&pool, request.id, "Alex").await.unwrap();
     assert_eq!(approved.status, "APPROVED");
     let bills = crate::expenses::list_bills(&pool).await.unwrap();
-    assert_eq!((bills.len(), Some(bills[0].id), bills[0].total_cents), (1, approved.bill_id, 80_000));
+    assert_eq!((bills.len(), Some(bills[0].id), bills[0].total_cents), (1, approved.bill_id, crate::money::Cents(80_000)));
     assert_eq!(order_state(&pool, po).await, ("BILLED".into(), approved.bill_id, false), "the order is billed with the approved bill's id");
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM journal_entries WHERE status = 'POSTED'").await, 1);
 }

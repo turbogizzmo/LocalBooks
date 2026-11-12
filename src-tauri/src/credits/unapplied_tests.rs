@@ -86,13 +86,13 @@ async fn an_overpayment_is_kept_as_credit_deposited_and_used_on_a_later_invoice(
     assert_eq!(status(&pool, first).await, "PAID");
     let credit = credit_memo(&pool, credit_id).await.unwrap();
     assert!(credit.is_payment);
-    assert_eq!((credit.customer_name.as_str(), credit.total_cents, credit.remaining_cents), ("Acme", 10_000, 10_000));
+    assert_eq!((credit.customer_name.as_str(), credit.total_cents, credit.remaining_cents), ("Acme", Cents(10_000), Cents(10_000)));
     assert_eq!(balance(&pool, ar).await, -10_000, "the customer is owed 100.00");
     assert_eq!(balance(&pool, undeposited).await, 60_000);
 
     // Both parts wait in Undeposited Funds and go to the bank in one deposit.
     let waiting = list_undeposited(&pool).await.unwrap();
-    let kinds: Vec<(&str, i64)> = waiting.iter().map(|i| (i.kind.as_str(), i.amount_cents)).collect();
+    let kinds: Vec<(&str, i64)> = waiting.iter().map(|i| (i.kind.as_str(), i.amount_cents.get())).collect();
     assert_eq!(kinds, vec![("CREDIT", 10_000), ("PAYMENT", 50_000)]);
     let items = waiting.iter().map(|i| DepositItemRef { kind: i.kind.clone(), id: i.id }).collect();
     post_bank_deposit(
@@ -112,9 +112,9 @@ async fn an_overpayment_is_kept_as_credit_deposited_and_used_on_a_later_invoice(
     // The next invoice takes the credit, as a credit memo's would be.
     let second = invoice(&pool, "Acme", services, 8_000).await;
     let used = apply_open_credits_to_invoice(&pool, second, d(12)).await.unwrap();
-    assert_eq!((used.count, used.applied_cents), (1, 8_000));
+    assert_eq!((used.count, used.applied_cents), (1, Cents(8_000)));
     assert_eq!(status(&pool, second).await, "PAID");
-    assert_eq!(credit_memo(&pool, credit_id).await.unwrap().remaining_cents, 2_000);
+    assert_eq!(credit_memo(&pool, credit_id).await.unwrap().remaining_cents, Cents(2_000));
     assert_eq!(balance(&pool, ar).await, -2_000);
 
     // It is no sale: sales lines are unchanged, and the aging lists it as a payment.
@@ -137,7 +137,7 @@ async fn a_prepayment_can_be_refunded_or_written_off_and_bad_choices_post_nothin
             .await
             .unwrap();
     let credit = credit_memo(&pool, refunded.credit_id.unwrap()).await.unwrap();
-    assert_eq!((credit.remaining_cents, balance(&pool, checking).await, balance(&pool, ar).await), (0, 0, 0));
+    assert_eq!((credit.remaining_cents, balance(&pool, checking).await, balance(&pool, ar).await), (Cents(0), 0, 0));
 
     // 30.00 too much is kept as income.
     let inv = invoice(&pool, "Newco", services, 10_000).await;
@@ -183,7 +183,7 @@ async fn a_prepayment_can_be_refunded_or_written_off_and_bad_choices_post_nothin
     )
     .await
     .unwrap();
-    assert_eq!(after.remaining_cents, 0);
+    assert_eq!(after.remaining_cents, Cents(0));
     assert_eq!(balance(&pool, interest).await, -3_700);
     assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
 }
@@ -222,7 +222,7 @@ async fn the_center_totals_unapplied_payments_and_credit_left_and_takes_only_und
     .await
     .unwrap();
     let credit = customer_credit(&pool, id).await.unwrap();
-    assert_eq!((credit.unapplied_cents, credit.remaining_cents), (4_000, 1_500));
+    assert_eq!((credit.unapplied_cents, credit.remaining_cents), (Cents(4_000), Cents(1_500)));
 
     // A current asset other than Undeposited Funds would never reach Make Deposits.
     let other: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Prepaid Rent', 'OTHER_CURRENT_ASSET') RETURNING id")

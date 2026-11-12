@@ -35,13 +35,13 @@ async fn a_renaming_rule_names_later_downloads_and_the_list_edits_and_removes_it
     crate::bank::insert_line(&mut tx, checking, "2026-03-04".parse().unwrap(), "AMZN MKTP REFUND", 1_000, "b").await.unwrap().unwrap();
     tx.commit().await.unwrap();
     let lines = crate::bank::list_pending(&pool, &Suggester::default(), "test").await.unwrap();
-    let out = lines.iter().find(|l| l.amount_cents < 0).unwrap();
+    let out = lines.iter().find(|l| l.amount_cents.is_negative()).unwrap();
     assert_eq!((out.payee.as_deref(), out.payee_origin), (Some("Amazon"), Some("RULE")));
-    assert_eq!(lines.iter().find(|l| l.amount_cents > 0).unwrap().payee, None, "money in has no payee");
+    assert_eq!(lines.iter().find(|l| l.amount_cents.is_positive()).unwrap().payee, None, "money in has no payee");
 
     save(&pool, PayeeRule { id: saved.id, ..rule("CONTAINS", "MKTP", "Amazon Marketplace") }).await.unwrap();
     let lines = crate::bank::list_pending(&pool, &Suggester::default(), "test").await.unwrap();
-    assert_eq!(lines.iter().find(|l| l.amount_cents < 0).unwrap().payee.as_deref(), Some("Amazon Marketplace"));
+    assert_eq!(lines.iter().find(|l| l.amount_cents.is_negative()).unwrap().payee.as_deref(), Some("Amazon Marketplace"));
     remove(&pool, saved.id).await.unwrap();
     assert!(list(&pool).await.unwrap().is_empty());
     assert!(remove(&pool, saved.id).await.unwrap_err().starts_with("BANK_RENAME_NOT_FOUND"));

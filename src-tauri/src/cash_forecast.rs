@@ -14,6 +14,7 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 
 use crate::ledger::db_err;
+use crate::money::Cents;
 use crate::report_center::{aging, AgingItem};
 
 /// One column of the forecast.
@@ -27,11 +28,11 @@ pub struct ForecastPeriod {
     /// The week's first and last day (none for past due and later).
     pub start: Option<NaiveDate>,
     pub end: Option<NaiveDate>,
-    pub money_in_cents: i64,
-    pub money_out_cents: i64,
-    pub net_cents: i64,
+    pub money_in_cents: Cents,
+    pub money_out_cents: Cents,
+    pub net_cents: Cents,
     /// Cash on hand once this column's money has come in and gone out.
-    pub ending_cash_cents: i64,
+    pub ending_cash_cents: Cents,
     /// The documents in the column: (A/R or A/P, the aging item).
     pub items: Vec<ForecastItem>,
 }
@@ -45,7 +46,7 @@ pub struct ForecastItem {
     pub kind: String,
     pub number: Option<String>,
     pub due_date: NaiveDate,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -53,20 +54,20 @@ pub struct ForecastItem {
 pub struct CashFlowForecast {
     pub as_of: NaiveDate,
     pub weeks: u32,
-    pub bank_cents: i64,
-    pub undeposited_cents: i64,
-    pub starting_cash_cents: i64,
+    pub bank_cents: Cents,
+    pub undeposited_cents: Cents,
+    pub starting_cash_cents: Cents,
     pub periods: Vec<ForecastPeriod>,
     /// All money in and out: the A/R and A/P aging totals as of `as_of`.
-    pub receivable_cents: i64,
-    pub payable_cents: i64,
-    pub ending_cash_cents: i64,
+    pub receivable_cents: Cents,
+    pub payable_cents: Cents,
+    pub ending_cash_cents: Cents,
 }
 
 /// The most weeks a forecast spans.
 pub const MAX_WEEKS: u32 = 26;
 
-fn add(total: i64, cents: i64) -> Result<i64, String> {
+fn add(total: Cents, cents: Cents) -> Result<Cents, String> {
     total.checked_add(cents).ok_or_else(|| "FORECAST_OVERFLOW: the amounts are too large to add up".to_string())
 }
 
@@ -75,7 +76,7 @@ pub async fn forecast(pool: &SqlitePool, as_of: NaiveDate, weeks: u32) -> Result
     if !(1..=MAX_WEEKS).contains(&weeks) {
         return Err(format!("FORECAST_WEEKS: forecast 1 to {MAX_WEEKS} weeks"));
     }
-    let (bank_cents, undeposited_cents): (i64, i64) = sqlx::query_as(
+    let (bank_cents, undeposited_cents): (Cents, Cents) = sqlx::query_as(
         "SELECT COALESCE(SUM(CASE WHEN a.account_type = 'BANK' THEN l.debit_cents - l.credit_cents END), 0),
                 COALESCE(SUM(CASE WHEN a.account_type = 'OTHER_CURRENT_ASSET' AND a.is_system = 1 THEN l.debit_cents - l.credit_cents END), 0)
          FROM v_posted_lines l JOIN chart_of_accounts a ON a.id = l.account_id
@@ -93,10 +94,10 @@ pub async fn forecast(pool: &SqlitePool, as_of: NaiveDate, weeks: u32) -> Result
         kind,
         start,
         end,
-        money_in_cents: 0,
-        money_out_cents: 0,
-        net_cents: 0,
-        ending_cash_cents: 0,
+        money_in_cents: Cents::ZERO,
+        money_out_cents: Cents::ZERO,
+        net_cents: Cents::ZERO,
+        ending_cash_cents: Cents::ZERO,
         items: Vec::new(),
     };
     periods.push(blank("Past due".into(), "PAST_DUE", None, Some(as_of - Duration::days(1))));

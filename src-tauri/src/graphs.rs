@@ -7,6 +7,7 @@ use chrono::{Datelike, Months, NaiveDate};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
+use crate::money::Cents;
 use crate::report_center::{self, SummaryReport};
 use crate::statements::{self, Basis, ClassReportLine, LineKind, ReportLine};
 
@@ -33,7 +34,7 @@ pub struct GraphMonth {
 pub struct GraphSlice {
     pub label: String,
     pub account_id: Option<i64>,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub other: bool,
 }
 
@@ -57,16 +58,20 @@ pub fn months(start: NaiveDate, end: NaiveDate) -> Result<Vec<GraphMonth>, Strin
 }
 
 /// The largest `TOP_N` amounts, then one "Other" slice with the rest (when there is any rest).
-fn top(mut slices: Vec<GraphSlice>) -> Vec<GraphSlice> {
+fn top(mut slices: Vec<GraphSlice>) -> Result<Vec<GraphSlice>, String> {
     slices.sort_by(|a, b| b.amount_cents.cmp(&a.amount_cents).then_with(|| a.label.to_lowercase().cmp(&b.label.to_lowercase())));
     if slices.len() <= TOP_N + 1 {
-        return slices;
+        return Ok(slices);
     }
-    let rest: i64 = slices[TOP_N..].iter().map(|s| s.amount_cents).sum();
+    let rest = Cents::checked_sum(slices[TOP_N..].iter().map(|s| s.amount_cents)).ok_or_else(overflow)?;
     let count = slices.len() - TOP_N;
     slices.truncate(TOP_N);
     slices.push(GraphSlice { label: format!("Other ({count})"), account_id: None, amount_cents: rest, other: true });
-    slices
+    Ok(slices)
+}
+
+fn overflow() -> String {
+    "RPT_OVERFLOW: the graph's amounts are too large to add up".to_string()
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -79,10 +84,10 @@ pub struct IncomeExpensePoint {
     #[serde(flatten)]
     pub month: GraphMonth,
     /// The month's Profit and Loss "Total Income" plus "Total Other Income".
-    pub income_cents: i64,
+    pub income_cents: Cents,
     /// Its Cost of Goods Sold, Expenses and Other Expenses.
-    pub expense_cents: i64,
-    pub net_income_cents: i64,
+    pub expense_cents: Cents,
+    pub net_income_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -93,9 +98,9 @@ pub struct IncomeExpenseGraph {
     pub basis: Basis,
     pub months: Vec<IncomeExpensePoint>,
     /// Totals of the Profit and Loss for the whole range.
-    pub total_income_cents: i64,
-    pub total_expense_cents: i64,
-    pub net_income_cents: i64,
+    pub total_income_cents: Cents,
+    pub total_expense_cents: Cents,
+    pub net_income_cents: Cents,
     /// Top-level income accounts (with their subaccounts) for the whole range, largest first.
     pub income_slices: Vec<GraphSlice>,
     pub expense_slices: Vec<GraphSlice>,
@@ -118,18 +123,21 @@ fn section_accounts(lines: &[ReportLine], sections: &[&str]) -> Vec<GraphSlice> 
             continue;
         }
         match line.kind {
-            LineKind::Account => {
-                out.push(GraphSlice { label: line.label.clone(), account_id: line.account_id, amount_cents: line.amount_cents.unwrap_or(0), other: false })
-            }
+            LineKind::Account => out.push(GraphSlice {
+                label: line.label.clone(),
+                account_id: line.account_id,
+                amount_cents: line.amount_cents.unwrap_or(Cents::ZERO),
+                other: false,
+            }),
             LineKind::Subtotal => {
                 if let Some(parent) = out.iter_mut().rev().find(|s| s.account_id == line.account_id) {
-                    parent.amount_cents = line.amount_cents.unwrap_or(0);
+                    parent.amount_cents = line.amount_cents.unwrap_or(Cents::ZERO);
                 }
             }
             _ => {}
         }
     }
-    out.retain(|s| s.amount_cents != 0);
+    out.retain(|s| !s.amount_cents.is_zero());
     out
 }
 
@@ -154,8 +162,8 @@ pub async fn income_expense(pool: &SqlitePool, start: NaiveDate, end: NaiveDate,
         total_income_cents: whole.total_revenue_cents,
         total_expense_cents: whole.total_expenses_cents,
         net_income_cents: whole.net_income_cents,
-        income_slices: top(section_accounts(&whole.lines, INCOME_SECTIONS)),
-        expense_slices: top(section_accounts(&whole.lines, EXPENSE_SECTIONS)),
+        income_slices: top(section_accounts(&whole.lines, INCOME_SECTIONS))?,
+        expense_slices: top(section_accounts(&whole.lines, EXPENSE_SECTIONS))?,
     })
 }
 
@@ -169,9 +177,9 @@ pub struct NetWorthPoint {
     pub month: String,
     /// The Balance Sheet date: the month end, or the range's end date in its last month.
     pub as_of: NaiveDate,
-    pub assets_cents: i64,
-    pub liabilities_cents: i64,
-    pub net_worth_cents: i64,
+    pub assets_cents: Cents,
+    pub liabilities_cents: Cents,
+    pub net_worth_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -192,7 +200,7 @@ pub async fn net_worth(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> R
             as_of: month.end_date,
             assets_cents: bs.total_assets_cents,
             liabilities_cents: bs.total_liabilities_cents,
-            net_worth_cents: bs.total_assets_cents - bs.total_liabilities_cents,
+            net_worth_cents: bs.total_assets_cents.checked_sub(bs.total_liabilities_cents).ok_or_else(overflow)?,
         });
     }
     Ok(NetWorthGraph { start_date: start, end_date: end, months: points })
@@ -206,7 +214,7 @@ pub async fn net_worth(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> R
 #[serde(rename_all = "camelCase")]
 pub struct AgingBucket {
     pub label: &'static str,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -217,7 +225,7 @@ pub struct AgingGraph {
     pub as_of: NaiveDate,
     /// The A/R (A/P) Aging Summary's TOTAL row, column by column.
     pub buckets: Vec<AgingBucket>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
     /// Customers (vendors) by balance, largest first; credit balances are left out.
     pub parties: Vec<GraphSlice>,
 }
@@ -228,10 +236,10 @@ pub async fn aging(pool: &SqlitePool, payable: bool, as_of: NaiveDate) -> Result
     let parties = report
         .rows
         .iter()
-        .filter(|r| r.total_cents > 0)
+        .filter(|r| r.total_cents.is_positive())
         .map(|r| GraphSlice { label: r.party_name.clone(), account_id: None, amount_cents: r.total_cents, other: false })
         .collect();
-    Ok(AgingGraph { kind: report.kind, as_of, buckets, total_cents: report.total_cents, parties: top(parties) })
+    Ok(AgingGraph { kind: report.kind, as_of, buckets, total_cents: report.total_cents, parties: top(parties)? })
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -255,7 +263,7 @@ pub enum SalesBy {
 pub struct SalesPoint {
     #[serde(flatten)]
     pub month: GraphMonth,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -265,7 +273,7 @@ pub struct SalesGraph {
     pub end_date: NaiveDate,
     pub by: SalesBy,
     pub months: Vec<SalesPoint>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
     pub top: Vec<GraphSlice>,
 }
 
@@ -287,10 +295,10 @@ pub async fn sales(pool: &SqlitePool, by: SalesBy, start: NaiveDate, end: NaiveD
     let ranked = whole
         .rows
         .into_iter()
-        .filter(|r| r.amount_cents > 0)
+        .filter(|r| r.amount_cents.is_positive())
         .map(|r| GraphSlice { label: r.label, account_id: None, amount_cents: r.amount_cents, other: false })
         .collect();
-    Ok(SalesGraph { start_date: start, end_date: end, by, months: points, total_cents: whole.total_cents, top: top(ranked) })
+    Ok(SalesGraph { start_date: start, end_date: end, by, months: points, total_cents: whole.total_cents, top: top(ranked)? })
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -300,9 +308,9 @@ pub async fn sales(pool: &SqlitePool, by: SalesBy, start: NaiveDate, end: NaiveD
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BudgetFigures {
-    pub income_cents: i64,
-    pub expense_cents: i64,
-    pub net_income_cents: i64,
+    pub income_cents: Cents,
+    pub expense_cents: Cents,
+    pub net_income_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -326,25 +334,26 @@ pub struct BudgetGraph {
 }
 
 /// Income, expenses and net income in one column of a Profit and Loss Budget vs. Actual.
-fn budget_figures(lines: &[ClassReportLine], column: usize) -> BudgetFigures {
+/// The column must hold amounts (Actual or Budget), not a percent.
+fn budget_figures(lines: &[ClassReportLine], column: usize) -> Result<BudgetFigures, String> {
     let mut figures = BudgetFigures::default();
     let mut section = "";
     for line in lines.iter().filter(|l| l.depth == 0) {
-        let amount = line.amounts_cents.get(column).copied().flatten().unwrap_or(0);
+        let amount = Cents(line.amounts_cents.get(column).copied().flatten().unwrap_or(0));
         match line.kind {
             LineKind::Section => section = &line.label,
             LineKind::Total if line.label == format!("Total {section}") => {
                 if INCOME_SECTIONS.contains(&section) {
-                    figures.income_cents += amount;
+                    figures.income_cents = figures.income_cents.checked_add(amount).ok_or_else(overflow)?;
                 } else if EXPENSE_SECTIONS.contains(&section) {
-                    figures.expense_cents += amount;
+                    figures.expense_cents = figures.expense_cents.checked_add(amount).ok_or_else(overflow)?;
                 }
             }
             LineKind::Net => figures.net_income_cents = amount,
             _ => {}
         }
     }
-    figures
+    Ok(figures)
 }
 
 /// Each fiscal month of a budget's year: its Profit and Loss Budget vs. Actual for that month alone.
@@ -356,8 +365,8 @@ pub async fn budget_vs_actual(pool: &SqlitePool, budget_id: i64, from_period: i6
     for period in from_period..=to_period {
         let report = statements::budget_vs_actual(pool, budget_id, period, period).await?;
         let month = GraphMonth { month: report.start_date.format("%Y-%m").to_string(), start_date: report.start_date, end_date: report.end_date };
-        points.push(BudgetPoint { month, period, actual: budget_figures(&report.lines, 0), budget: budget_figures(&report.lines, 1) });
+        points.push(BudgetPoint { month, period, actual: budget_figures(&report.lines, 0)?, budget: budget_figures(&report.lines, 1)? });
     }
     let whole = statements::budget_vs_actual(pool, budget_id, from_period, to_period).await?;
-    Ok(BudgetGraph { budget_id, months: points, actual: budget_figures(&whole.lines, 0), budget: budget_figures(&whole.lines, 1) })
+    Ok(BudgetGraph { budget_id, months: points, actual: budget_figures(&whole.lines, 0)?, budget: budget_figures(&whole.lines, 1)? })
 }

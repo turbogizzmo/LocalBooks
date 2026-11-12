@@ -79,7 +79,7 @@ pub(super) async fn open_by_customer(pool: &SqlitePool, today: NaiveDate) -> Res
     for (name, lines) in groups.values() {
         rows.push(section(0, w, name));
         rows.extend(lines.iter().map(|l| line_row(l, item_of(l))));
-        rows.push(labeled(RowKind::Subtotal, 0, w, &format!("Total {name}"), &[json!(sum(lines.iter().map(|l| l.open_cents))?)]));
+        rows.push(labeled(RowKind::Subtotal, 0, w, &format!("Total {name}"), &[json!(sum(lines.iter().map(|l| l.open_cents.get()))?)]));
     }
     rows.push(labeled(RowKind::Total, 0, w, "TOTAL", &[json!(open.total_open_cents)]));
     let notes = vec![format!(
@@ -124,7 +124,7 @@ pub(super) async fn open_by_item(pool: &SqlitePool, today: NaiveDate) -> Result<
             0,
             w,
             &format!("Total {name}"),
-            &[json!(left), json!(backordered), json!(sum(lines.iter().map(|l| l.open_cents))?)],
+            &[json!(left), json!(backordered), json!(sum(lines.iter().map(|l| l.open_cents.get()))?)],
         ));
     }
     rows.push(labeled(RowKind::Total, 0, w, "TOTAL", &[json!(open.total_open_cents)]));

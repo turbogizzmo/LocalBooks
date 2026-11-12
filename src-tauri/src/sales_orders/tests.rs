@@ -105,7 +105,7 @@ async fn an_order_posts_nothing_and_is_invoiced_in_parts() {
     let s = shop().await;
     let before = entries(&s.pool).await;
     let saved = create(&s.pool, &order("Acme", d(2), vec![line(&s, s.widget, 10, 2_500), line(&s, s.service, 1, 10_000)])).await.unwrap();
-    assert_eq!((saved.order_number, saved.status.as_str(), saved.total_cents, saved.open_cents), (1, "OPEN", 35_000, 35_000));
+    assert_eq!((saved.order_number, saved.status.as_str(), saved.total_cents, saved.open_cents), (1, "OPEN", Cents(35_000), Cents(35_000)));
     assert_eq!(entries(&s.pool).await, before, "a sales order posts nothing");
     let lines = detail(&s.pool, saved.id).await.unwrap().lines;
     let (widgets, setup) = (lines[0].id, lines[1].id);
@@ -125,7 +125,7 @@ async fn an_order_posts_nothing_and_is_invoiced_in_parts() {
     let after = detail(&s.pool, saved.id).await.unwrap();
     assert_eq!(after.summary.status, "PARTLY_INVOICED");
     assert_eq!((after.lines[0].invoiced_qty_e4, after.lines[0].left_qty_e4, after.lines[1].left_qty_e4), (70_000, 30_000, 0));
-    assert_eq!(after.summary.open_cents, 7_500);
+    assert_eq!(after.summary.open_cents, Cents(7_500));
     assert_eq!(after.invoices.len(), 1);
     let on_hand: i64 = sqlx::query_scalar("SELECT qty_on_hand_e4 FROM inventory_items").fetch_one(&s.pool).await.unwrap();
     assert_eq!(on_hand, 0, "the invoice sold the stock");
@@ -136,7 +136,7 @@ async fn an_order_posts_nothing_and_is_invoiced_in_parts() {
     let (input, takes) = invoice(&s, "Acme", &[(widgets, s.widget, 3)]);
     invoice_from_order(&s.pool, saved.id, &input, &takes).await.unwrap();
     let done = detail(&s.pool, saved.id).await.unwrap();
-    assert_eq!((done.summary.status.as_str(), done.summary.open_cents, done.invoices.len()), ("CLOSED", 0, 2));
+    assert_eq!((done.summary.status.as_str(), done.summary.open_cents, done.invoices.len()), ("CLOSED", Cents(0), 2));
     assert!(open_lines(&s.pool).await.unwrap().lines.is_empty());
     assert!(delete(&s.pool, saved.id).await.unwrap_err().starts_with("SO_HAS_INVOICES"));
 }
@@ -163,7 +163,7 @@ async fn refused_invoices_change_nothing() {
     assert!(invoice_from_order(&s.pool, saved.id, &input, &takes).await.unwrap_err().starts_with("SO_CLOSED"));
     assert_eq!(entries(&s.pool).await, before, "nothing posted");
     assert_eq!(detail(&s.pool, saved.id).await.unwrap().summary.status, "CLOSED");
-    assert_eq!(pending_sales(&s.pool).await.unwrap().total_cents, 2_500, "only the other order is pending");
+    assert_eq!(pending_sales(&s.pool).await.unwrap().total_cents, Cents(2_500), "only the other order is pending");
     reopen(&s.pool, saved.id).await.unwrap();
     assert_eq!(detail(&s.pool, saved.id).await.unwrap().summary.status, "OPEN");
     delete(&s.pool, other.id).await.unwrap();
@@ -247,7 +247,7 @@ async fn editing_a_partly_invoiced_order_keeps_what_was_invoiced() {
 
     // Keep the widgets at 4, drop the setup line, add a new one first.
     let changed = update(&s.pool, saved.id, &order("Acme", d(2), vec![line(&s, s.service, 2, 10_000), keep(lines[0].id, 4)])).await.unwrap();
-    assert_eq!(changed.open_cents, 20_000 + 2_500);
+    assert_eq!(changed.open_cents, Cents(20_000 + 2_500));
     let now = detail(&s.pool, saved.id).await.unwrap().lines;
     assert_eq!(
         now.iter().map(|l| (l.line_number, l.product_service_id, l.left_qty_e4)).collect::<Vec<_>>(),
@@ -255,7 +255,7 @@ async fn editing_a_partly_invoiced_order_keeps_what_was_invoiced() {
     );
 
     let pending = pending_sales(&s.pool).await.unwrap();
-    assert_eq!((pending.rows.len(), pending.rows[0].orders, pending.total_cents), (1, 1, 22_500));
+    assert_eq!((pending.rows.len(), pending.rows[0].orders, pending.total_cents), (1, 1, Cents(22_500)));
 }
 
 #[tokio::test]
@@ -331,7 +331,7 @@ async fn an_estimate_becomes_an_order_once_and_is_then_invoiced_through_it() {
     .await
     .unwrap();
     let made = create_from_estimate(&s.pool, estimate.id, d(3)).await.unwrap();
-    assert_eq!((made.order.customer_name.as_str(), made.order.total_cents, made.order.memo.as_deref()), ("Acme", 20_000, Some("Spring order")));
+    assert_eq!((made.order.customer_name.as_str(), made.order.total_cents, made.order.memo.as_deref()), ("Acme", Cents(20_000), Some("Spring order")));
     assert_eq!(made.left_out, vec!["the $10.00 discount".to_string()]);
     let lines = detail(&s.pool, made.order.id).await.unwrap().lines;
     assert_eq!(lines.iter().map(|l| (l.product_service_id, l.quantity_e4)).collect::<Vec<_>>(), vec![(Some(s.widget), 40_000), (Some(s.service), 10_000)]);

@@ -215,11 +215,12 @@ pub async fn recipient(pool: &SqlitePool, doc: &VoucherDoc) -> Result<String, St
     let vendor_first = matches!(doc.name_label.as_deref().map(str::trim), Some("Vendor" | "Payee" | "Pay to" | "Pay to the order of"));
     let order = if vendor_first { ["vendors", "customers"] } else { ["customers", "vendors"] };
     for table in order {
-        let email: Option<Option<String>> = sqlx::query_scalar(&format!("SELECT email FROM {table} WHERE name = ?1 COLLATE NOCASE ORDER BY id LIMIT 1"))
-            .bind(name)
-            .fetch_optional(pool)
-            .await
-            .map_err(ledger::db_err)?;
+        let email: Option<Option<String>> =
+            sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT email FROM {table} WHERE name = ?1 COLLATE NOCASE ORDER BY id LIMIT 1")))
+                .bind(name)
+                .fetch_optional(pool)
+                .await
+                .map_err(ledger::db_err)?;
         if let Some(email) = email.flatten().map(|e| e.trim().to_string()).filter(|e| !e.is_empty()) {
             return Ok(email);
         }

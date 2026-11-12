@@ -225,14 +225,16 @@ const TODO_SELECT: &str = "
 
 /// Every to-do: open ones first, by due date (undated last), then done ones, latest first.
 pub async fn list_todos(pool: &SqlitePool) -> Result<Vec<TodoView>, String> {
-    sqlx::query_as(&format!("{TODO_SELECT} ORDER BY t.is_done, CASE WHEN t.is_done = 1 THEN t.done_at END DESC, t.due_date IS NULL, t.due_date, t.id"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "{TODO_SELECT} ORDER BY t.is_done, CASE WHEN t.is_done = 1 THEN t.done_at END DESC, t.due_date IS NULL, t.due_date, t.id"
+    )))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 pub async fn get_todo(pool: &SqlitePool, id: i64) -> Result<TodoView, String> {
-    sqlx::query_as(&format!("{TODO_SELECT} WHERE t.id = ?1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{TODO_SELECT} WHERE t.id = ?1")))
         .bind(id)
         .fetch_optional(pool)
         .await
@@ -551,11 +553,11 @@ pub async fn bills_due(pool: &SqlitePool, as_of: NaiveDate, days: i64) -> Result
 
 /// Open to-dos due on or before `as_of` + `days`. With users on, the viewer's own and unassigned ones.
 pub async fn todos_due(pool: &SqlitePool, as_of: NaiveDate, days: i64, viewer: Viewer) -> Result<Vec<ReminderItem>, String> {
-    let rows: Vec<TodoView> = sqlx::query_as(&format!(
+    let rows: Vec<TodoView> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{TODO_SELECT} WHERE t.is_done = 0 AND t.due_date IS NOT NULL AND t.due_date <= ?1
            AND (?2 IS NULL OR t.assigned_user_id IS NULL OR t.assigned_user_id = ?2)
          ORDER BY t.due_date, t.id"
-    ))
+    )))
     .bind(ahead(as_of, days))
     .bind(viewer.user_id)
     .fetch_all(pool)
@@ -610,7 +612,7 @@ pub async fn recurring_due(pool: &SqlitePool, as_of: NaiveDate, days: i64) -> Re
                     None => kind.to_string(),
                 },
                 date: Some(t.next_date.to_string()),
-                amount_cents: (t.amount_cents != 0).then_some(t.amount_cents),
+                amount_cents: (!t.amount_cents.is_zero()).then_some(t.amount_cents.get()),
                 entry_id: None,
             }
         })

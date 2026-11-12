@@ -34,6 +34,21 @@ pub const MISSING_DOMAIN: u16 = 0;
 /// byte says, so it could make a damaged row read through to its end with every value shifted.
 const MISSING_COLUMN_GUESSES: [(u16, bool, u32); 4] = [(2, true, 4), (1, true, 2), (24, false, 1), (2, false, 4)];
 
+/// Columns lost after the last one the catalog defines can't be seen as a gap in the column ids;
+/// rows still store them, and set their bits in the null bitmap past the defined columns' bits.
+/// Up to this many are added after the last column.
+const MAX_TRAILING_COLUMNS: u32 = 2;
+
+/// What a lost trailing column is tried as: a nullable 4-byte id, amount or 2-byte code. Columns
+/// added to a table late are nullable (older rows lack them). An amount takes as many bytes as its
+/// length byte says, so it is tried only here, where the reading must still end exactly on the
+/// row's end with its bit set in the row's null bitmap.
+const TRAILING_GUESSES: [(u16, bool, u32); 3] = [(2, true, 4), (3, true, 20), (1, true, 2)];
+
+/// How many defined columns on each side of a lost one another table must agree on before its
+/// definition is borrowed (see `borrow_lost_columns`).
+const NEIGHBOURS: usize = 3;
+
 /// Up to this many missing columns, each row is tried with every guess (at most 125 readings).
 const MAX_GUESSED_COLUMNS: u32 = 3;
 
@@ -291,13 +306,85 @@ pub fn read_catalog(pages: &[LogicalPage]) -> Catalog {
     }
     let mut columns: HashMap<u32, Vec<Column>> = HashMap::new();
     for ((table, id), candidates) in defs {
-        let ((name, domain, nullable, width), _) = candidates.into_iter().max_by_key(|(_, (count, object_id))| (*count, *object_id)).expect("non-empty");
+        // A definition whose type the reader knows beats one it doesn't (a damaged byte).
+        let ((name, domain, nullable, width), _) =
+            candidates.into_iter().max_by_key(|((_, domain, _, _), (count, object_id))| (known_domain(*domain), *count, *object_id)).expect("non-empty");
+        let domain = if known_domain(domain) { domain } else { domain_from_width(&name, width) };
         columns.entry(table).or_default().push(Column { id, name, domain, nullable, width });
     }
     for cols in columns.values_mut() {
         fill_missing_columns(cols);
     }
+    borrow_lost_columns(&mut columns);
     Catalog { names, columns }
+}
+
+/// Gives a lost column (see `fill_missing_columns`, or a definition whose type was damaged) the
+/// definition another table of the same file gives the column between the same neighbours: the
+/// nearest defined columns on each side, by name and type, at the same distance in ids (a table
+/// may number the run from another id). Tables of the same kind share their layout: every
+/// transaction line table starts with the same columns, so an invoice line table that lost
+/// `transaction_id` gets it back from the bill line table, and a bill line table that lost
+/// `open_qnty` gets it from the check line table, where it is one id lower. The definition most
+/// tables give wins; a column no table vouches for stays lost.
+///
+/// Up to three defined columns on each side must agree, and at least two in all: one on each side
+/// is not enough, as a table whose columns are in name order can have the same two names the same
+/// distance apart with others between.
+fn borrow_lost_columns(columns: &mut HashMap<u32, Vec<Column>>) {
+    let snapshot = columns.clone();
+    let known = |c: &Column| c.domain != MISSING_DOMAIN;
+    for (table, cols) in columns.iter_mut() {
+        let lost: Vec<usize> = cols.iter().enumerate().filter(|(_, c)| !known(c)).map(|(i, _)| i).collect();
+        for i in lost {
+            let id = cols[i].id;
+            // The nearest defined columns on each side, up to `NEIGHBOURS` each.
+            let neighbours: Vec<Column> = cols[..i]
+                .iter()
+                .rev()
+                .filter(|c| known(c))
+                .take(NEIGHBOURS)
+                .chain(cols[i + 1..].iter().filter(|c| known(c)).take(NEIGHBOURS))
+                .cloned()
+                .collect();
+            if neighbours.len() < 2 {
+                continue;
+            }
+            // A column that kept its name (only its type was damaged) borrows only under that name.
+            let own_name = (!cols[i].name.starts_with("column_")).then(|| cols[i].name.clone());
+            let mut votes: HashMap<(String, u16, bool, u32), usize> = HashMap::new();
+            for (_, theirs) in snapshot.iter().filter(|(t, _)| *t != table) {
+                // Where the other table has this table's neighbour (same name and type), and how
+                // far its ids are from this table's.
+                let shift =
+                    |mine: &Column| theirs.iter().find(|c| c.name == mine.name && c.domain == mine.domain).map(|c| i64::from(c.id) - i64::from(mine.id));
+                let shifts: Vec<Option<i64>> = neighbours.iter().map(shift).collect();
+                let Some(Some(offset)) = shifts.first().copied() else { continue };
+                if shifts.iter().any(|s| *s != Some(offset)) {
+                    continue;
+                }
+                let Some(def) = u32::try_from(i64::from(id) + offset).ok().and_then(|at| theirs.iter().find(|c| c.id == at && known(c))) else { continue };
+                if own_name.as_ref().is_some_and(|n| *n != def.name) {
+                    continue;
+                }
+                *votes.entry((def.name.clone(), def.domain, def.nullable, def.width)).or_default() += 1;
+            }
+            if let Some(((name, domain, nullable, width), _)) = votes.into_iter().max_by(|a, b| a.1.cmp(&b.1).then_with(|| b.0.cmp(&a.0))) {
+                cols[i] = Column { id, name, domain, nullable, width };
+            }
+        }
+        // A borrowed definition can show where a column of this table really is: one whose id was
+        // damaged (open_qnty defined as column 93 instead of 48) left a gap at its true id and
+        // placeholders up to the wild one. The copy at the wild id goes, and with it the
+        // placeholders past the last column that remains.
+        let last = cols.iter().rfind(|c| known(c)).cloned();
+        if let Some(last) = last.filter(|l| cols.iter().any(|c| known(c) && c.name == l.name && c.id < l.id)) {
+            cols.retain(|c| c.id < last.id);
+            while cols.last().is_some_and(|c| !known(c)) {
+                cols.pop();
+            }
+        }
+    }
 }
 
 /// Sorts a table's columns by id and puts a placeholder (`MISSING_DOMAIN`) where an id is
@@ -316,6 +403,25 @@ fn fill_missing_columns(cols: &mut Vec<Column>) {
         cols.push(Column { id, name: format!("column_{id}"), domain: MISSING_DOMAIN, nullable: false, width: 0 });
     }
     cols.sort_by_key(|c| c.id);
+}
+
+/// The type of a column whose definition has a type no column has (a damaged byte), from the
+/// rest of its definition: a date by its name, else a whole number of its width. Other widths
+/// (text, amounts) are guessed as a lost column is (`MISSING_DOMAIN`).
+fn domain_from_width(name: &str, width: u32) -> u16 {
+    match width {
+        4 if name.ends_with("_date") => 6,
+        1 => 24,
+        2 => 1,
+        4 => 2,
+        8 => 20,
+        _ => MISSING_DOMAIN,
+    }
+}
+
+/// Whether `read_value` knows how a column of this type is stored.
+fn known_domain(domain: u16) -> bool {
+    matches!(domain, 1..=14 | 19..=24 | 27 | 28)
 }
 
 /// Reads one value at `o`; returns it and the offset after it, or `None` when the bytes cannot
@@ -475,15 +581,15 @@ fn walk_dropping(row: &[u8], cols: &[Column]) -> Option<HashMap<String, Value>> 
 
 /// Tries the missing columns (the first `limit` of them guessed, the rest taken as not stored)
 /// as not stored, then as each likely type, and returns the first reading that fits with the
-/// column list that gave it. `row` has had its extra byte removed.
+/// column list that gave it. When none fits, a reading whose null bitmap has bits set past its
+/// last nullable column is tried with that many lost columns after the last one (see
+/// `TRAILING_GUESSES`).
+/// `row` has had its extra byte removed.
 fn guess_layout(row: &[u8], cols: &[Column], limit: u32) -> Option<(HashMap<String, Value>, Vec<Column>)> {
     let missing: Vec<usize> = cols.iter().enumerate().filter(|(_, c)| c.domain == MISSING_DOMAIN).map(|(i, _)| i).collect();
-    if missing.is_empty() {
-        return walk_dropping(row, cols).map(|values| (values, cols.to_vec()));
-    }
     let options = MISSING_COLUMN_GUESSES.len() + 1;
     let tries = options.pow(limit.min(missing.len() as u32));
-    (0..tries).find_map(|n| {
+    let layout = |n: usize| {
         let mut guess = n;
         let mut chosen = Vec::with_capacity(cols.len());
         for (i, col) in cols.iter().enumerate() {
@@ -500,7 +606,55 @@ fn guess_layout(row: &[u8], cols: &[Column], limit: u32) -> Option<(HashMap<Stri
                 chosen.push(Column { domain, nullable, width, ..col.clone() });
             }
         }
-        walk_dropping(row, &chosen).map(|values| (values, chosen))
+        chosen
+    };
+    // Lost trailing columns only once no reading without them fits: with more columns to place,
+    // a wrong guess is likelier to fit by chance.
+    (0..tries)
+        .find_map(|n| {
+            let chosen = layout(n);
+            walk_dropping(row, &chosen).map(|values| (values, chosen))
+        })
+        .or_else(|| (0..tries).find_map(|n| with_trailing(row, layout(n))))
+}
+
+/// How many nullable columns the row's null bitmap shows after the last one of `cols`: bits set
+/// in the bitmap's last byte past the columns' own bits.
+fn trailing_bits(row: &[u8], cols: &[Column]) -> u32 {
+    let nullable = cols.iter().filter(|c| c.nullable).count();
+    let bitmap_len = nullable.div_ceil(8);
+    let spare = (bitmap_len * 8 - nullable) as u32;
+    match row.get(3 + bitmap_len.saturating_sub(1)) {
+        Some(&last) if bitmap_len > 0 && spare > 0 => {
+            let low = last & ((1u16 << spare) - 1) as u8;
+            if low == 0 {
+                0
+            } else {
+                spare - low.trailing_zeros()
+            }
+        }
+        _ => 0,
+    }
+}
+
+/// Reads a row whose bitmap shows lost columns after the last defined one, with that many
+/// columns added, each tried as every type of `TRAILING_GUESSES`.
+fn with_trailing(row: &[u8], cols: Vec<Column>) -> Option<(HashMap<String, Value>, Vec<Column>)> {
+    let extra = trailing_bits(row, &cols);
+    if extra == 0 || extra > MAX_TRAILING_COLUMNS {
+        return None;
+    }
+    let last = cols.iter().map(|c| c.id).max().unwrap_or(0);
+    (0..TRAILING_GUESSES.len().pow(extra)).find_map(|t| {
+        let mut chosen = cols.clone();
+        let mut pick = t;
+        for k in 1..=extra {
+            let (domain, nullable, width) = TRAILING_GUESSES[pick % TRAILING_GUESSES.len()];
+            pick /= TRAILING_GUESSES.len();
+            let id = last + k;
+            chosen.push(Column { id, name: format!("column_{id}"), domain, nullable, width });
+        }
+        walk_columns(row, &chosen).map(|values| (values, chosen))
     })
 }
 

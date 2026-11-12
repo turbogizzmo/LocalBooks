@@ -16,7 +16,7 @@ async fn open_balances_match_the_aging_reports_for_every_name() {
         let mut checked = 0;
         for p in &names {
             let summary = party_summary(&pool, kind, p.id).await.unwrap();
-            let report = aging.rows.iter().find(|r| r.party_name == p.name).map_or(0, |r| r.total_cents);
+            let report = aging.rows.iter().find(|r| r.party_name == p.name).map_or(0, |r| r.total_cents.get());
             assert_eq!(summary.open_balance_cents, report, "{kind} {}: panel vs aging report", p.name);
             checked += usize::from(report != 0);
         }
@@ -36,7 +36,7 @@ async fn customer_estimates_and_unbilled_costs_match_their_lists() {
         .into_iter()
         .filter(|e| e.customer_name.ends_with("Maple St Addition") && e.status == "PENDING")
         .collect();
-    assert_eq!((summary.active_estimate_count, summary.active_estimate_cents), (pending.len() as i64, pending.iter().map(|e| e.total_cents).sum()));
+    assert_eq!((summary.active_estimate_count, summary.active_estimate_cents), (pending.len() as i64, pending.iter().map(|e| e.total_cents.get()).sum()));
     assert!(summary.active_estimate_count > 0);
     let lakeview: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Kestrel Homes:Lakeview Remodel'").fetch_one(&pool).await.unwrap();
     assert_eq!(party_summary(&pool, "customer", lakeview).await.unwrap().active_estimate_count, 0);
@@ -100,7 +100,7 @@ async fn item_figures_match_inventory_valuation_and_stock_status() {
     assert!(summary.tracked);
     assert_eq!(
         (summary.qty_on_hand_e4, summary.average_cost_cents, summary.asset_value_cents),
-        (row.qty_on_hand_e4, row.average_cost_cents, row.asset_value_cents)
+        (row.qty_on_hand_e4, row.average_cost_cents.map(crate::money::Cents::get), row.asset_value_cents.get())
     );
     assert!(summary.qty_on_hand_e4 > 0);
     let status = crate::report_center::stock_status(&pool, today, today).await.unwrap();

@@ -213,10 +213,10 @@ async fn profit_and_loss(pool: &SqlitePool, args: &Value) -> Result<(Value, Stri
         .collect();
     let text = format!(
         "Profit and loss {start} to {end}: revenue {}, gross profit {}, expenses {}, net income {}",
-        plain_amount(pl.total_revenue_cents),
-        plain_amount(pl.gross_profit_cents),
-        plain_amount(pl.total_expenses_cents),
-        plain_amount(pl.net_income_cents)
+        plain_amount(pl.total_revenue_cents.get()),
+        plain_amount(pl.gross_profit_cents.get()),
+        plain_amount(pl.total_expenses_cents.get()),
+        plain_amount(pl.net_income_cents.get())
     );
     let data = json!({
         "startDate": start,
@@ -234,10 +234,12 @@ async fn overdue_aging(pool: &SqlitePool, args: &Value) -> Result<(Value, String
     let as_of = date_arg(args, "asOf")?.unwrap_or_else(|| Local::now().date_naive());
     let aging = invoices::ar_aging(pool, as_of).await?;
     let overdue: Vec<&invoices::AgingBucket> = aging.buckets.iter().filter(|b| b.key != "current").collect();
-    let overdue_cents: i64 = overdue.iter().map(|b| b.amount_cents).sum();
+    let overdue_cents =
+        crate::money::Cents::checked_sum(overdue.iter().map(|b| b.amount_cents)).ok_or("AGING_OVERFLOW: overdue receivables are too large to add up")?;
     let overdue_count: i64 = overdue.iter().map(|b| b.invoice_count).sum();
     // Integer basis points (1/100 of a percent), rounded half up, so no floating point is involved.
-    let share_bp = if aging.total_cents > 0 { (overdue_cents * 10_000 * 2 + aging.total_cents) / (aging.total_cents * 2) } else { 0 };
+    let share_bp =
+        if aging.total_cents.is_positive() { crate::ledger::mul_div_round(overdue_cents.get(), 10_000, aging.total_cents.get()).unwrap_or(0) } else { 0 };
 
     let worst: Vec<(i64, String, NaiveDate, i64)> = sqlx::query_as(
         "SELECT i.invoice_number, i.customer_name, i.due_date, b.home_open_cents
@@ -260,8 +262,8 @@ async fn overdue_aging(pool: &SqlitePool, args: &Value) -> Result<(Value, String
         aging.buckets.iter().map(|b| json!({ "bucket": b.key, "label": b.label, "invoiceCount": b.invoice_count, "amountCents": b.amount_cents })).collect();
     let text = format!(
         "Receivables as of {as_of}: {} open, {} overdue across {overdue_count} invoices ({}.{:02}% of receivables)",
-        plain_amount(aging.total_cents),
-        plain_amount(overdue_cents),
+        plain_amount(aging.total_cents.get()),
+        plain_amount(overdue_cents.get()),
         share_bp / 100,
         share_bp % 100
     );

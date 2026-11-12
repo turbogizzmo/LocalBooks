@@ -17,6 +17,7 @@ use sqlx::SqlitePool;
 use crate::accountant_reports::AccountantReport;
 use crate::custom_reports::{self, type_label, ColumnHead, ColumnKind, CustomReport, NameKind, ReportRow, RowKind};
 use crate::ledger::{db_err, mul_div_round, QUANTITY_SCALE};
+use crate::money::Cents;
 use crate::preferences::{fiscal_start_month, fiscal_year_bounds};
 use crate::statements::LineKind;
 
@@ -24,6 +25,11 @@ mod more_reports;
 mod parity;
 mod profitability;
 mod sales_orders;
+
+/// `a + b`, or `RPT_OVERFLOW`.
+fn plus(a: Cents, b: Cents) -> Result<Cents, String> {
+    a.checked_add(b).ok_or_else(|| "RPT_OVERFLOW: amount out of range".to_string())
+}
 
 // ------------------------------------------------------------------------------------------------
 // Catalog
@@ -238,7 +244,7 @@ async fn parties(pool: &SqlitePool, kind: NameKind) -> Result<Vec<Party>, String
                             FROM other_names WHERE is_active = 1 ORDER BY name COLLATE NOCASE, id"
             .to_string(),
     };
-    sqlx::query_as(&sql).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str())).fetch_all(pool).await.map_err(db_err)
 }
 
 fn noun(kind: NameKind) -> (&'static str, &'static str) {
@@ -276,7 +282,8 @@ async fn balances(pool: &SqlitePool, kind: NameKind, as_of: NaiveDate) -> Result
         match r.kind {
             RowKind::Detail => {
                 for n in r.drill.iter().flat_map(|d| d.names.iter()).filter(|n| n.kind == kind) {
-                    *out.entry(n.id).or_insert(0) += amount;
+                    let entry = out.entry(n.id).or_insert(0i64);
+                    *entry = entry.checked_add(amount).ok_or("RPT_OVERFLOW: amount out of range")?;
                 }
             }
             RowKind::Total => total = amount,
@@ -304,10 +311,10 @@ async fn contact_list(pool: &SqlitePool, kind: NameKind, today: NaiveDate) -> Re
     columns.push(head("Balance", ColumnKind::Money));
     let w = columns.len();
     let mut rows = Vec::new();
-    let mut total = 0;
+    let mut total: i64 = 0;
     for p in &list {
         let b = balance.get(&p.id).copied().unwrap_or(0);
-        total += b;
+        total = total.checked_add(b).ok_or("RPT_OVERFLOW: amount out of range")?;
         let mut cells =
             vec![json!(p.name), json!(p.company_name), json!(one_line(p.address.as_deref())), json!(p.phone), json!(p.email), json!(terms_text(p.terms_days))];
         if kind == NameKind::Vendor {
@@ -325,7 +332,7 @@ async fn contact_list(pool: &SqlitePool, kind: NameKind, today: NaiveDate) -> Re
 struct ItemRow {
     name: String,
     description: Option<String>,
-    rate_cents: i64,
+    rate_cents: Cents,
     account: String,
     is_inventory: bool,
     sku: Option<String>,
@@ -374,7 +381,7 @@ struct AccountRow {
     type_name: String,
     is_balance_sheet: bool,
     description: Option<String>,
-    balance_cents: i64,
+    balance_cents: Cents,
 }
 
 async fn account_listing(pool: &SqlitePool, today: NaiveDate) -> Result<AccountantReport, String> {
@@ -467,7 +474,7 @@ async fn balance_sheet_summary(pool: &SqlitePool, as_of: NaiveDate) -> Result<Ac
     let notes = vec![if bs.is_balanced {
         "Accrual basis.".to_string()
     } else {
-        format!("Accrual basis. Out of balance by {}.", crate::ledger::format_money(bs.difference_cents, ""))
+        format!("Accrual basis. Out of balance by {}.", crate::ledger::format_money(bs.difference_cents.get(), ""))
     }];
     Ok(done(None, as_of, columns, rows, count, notes))
 }
@@ -516,16 +523,16 @@ struct Settlement {
     customer_id: i64,
     customer: String,
     issue_date: NaiveDate,
-    total_cents: i64,
+    total_cents: Cents,
     date: NaiveDate,
-    amount_cents: i64,
+    amount_cents: Cents,
 }
 
 /// For each invoice paid in full during the range (the payment or credit that brought its balance
 /// to zero is dated in the range), the days from the invoice date to that day; averaged by customer.
 async fn average_days_to_pay(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Result<AccountantReport, String> {
     // Payments and credits applied, in date order, with the same arithmetic as the A/R aging.
-    let events: Vec<Settlement> = sqlx::query_as(&format!(
+    let events: Vec<Settlement> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{CUSTOMER_NAMES}
          SELECT i.id AS invoice_id, i.customer_id, cn.full_name AS customer, i.issue_date, COALESCE(i.home_total_cents, i.total_cents) AS total_cents, s.date, s.amount_cents
          FROM invoices i JOIN cn ON cn.id = i.customer_id
@@ -534,7 +541,7 @@ async fn average_days_to_pay(pool: &SqlitePool, start: NaiveDate, end: NaiveDate
            ON s.invoice_id = i.id
          WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND s.date <= ?1
          ORDER BY cn.full_name COLLATE NOCASE, i.customer_id, i.id, s.date, s.seq"
-    ))
+    )))
     .bind(end)
     .fetch_all(pool)
     .await
@@ -544,11 +551,11 @@ async fn average_days_to_pay(pool: &SqlitePool, start: NaiveDate, end: NaiveDate
     let mut i = 0;
     while i < events.len() {
         let first = &events[i];
-        let mut paid = 0i64;
+        let mut paid = Cents::ZERO;
         let mut paid_on = None;
         while i < events.len() && events[i].invoice_id == first.invoice_id {
             let e = &events[i];
-            paid += e.amount_cents;
+            paid = plus(paid, e.amount_cents)?;
             if paid_on.is_none() && paid >= first.total_cents {
                 paid_on = Some(e.date);
             }
@@ -585,7 +592,7 @@ type JobPart = (Option<i64>, Option<String>, i64);
 type GroupKey = (u8, String, i64);
 
 /// A job's name and its open bills, each with the job's share of the open balance.
-type JobBills<'a> = (String, Vec<(&'a OpenBill, i64)>);
+type JobBills<'a> = (String, Vec<(&'a OpenBill, Cents)>);
 
 #[derive(Debug, sqlx::FromRow)]
 struct OpenBill {
@@ -595,8 +602,8 @@ struct OpenBill {
     number: Option<String>,
     date: NaiveDate,
     due_date: NaiveDate,
-    total_cents: i64,
-    open_cents: i64,
+    total_cents: Cents,
+    open_cents: Cents,
 }
 
 /// Bills with a balance as of `as_of`, under the customer or job their lines are for. A bill for
@@ -619,11 +626,11 @@ async fn unpaid_bills_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<Acco
     .await
     .map_err(db_err)?;
     // bill → [(job id, job name, line amount)] in line order.
-    let lines: Vec<(i64, Option<i64>, Option<String>, i64)> = sqlx::query_as(&format!(
+    let lines: Vec<(i64, Option<i64>, Option<String>, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{CUSTOMER_NAMES}
          SELECT l.bill_id, l.customer_id, cn.full_name, SUM(l.amount_cents) FROM bill_lines l LEFT JOIN cn ON cn.id = l.customer_id
          GROUP BY l.bill_id, l.customer_id ORDER BY l.bill_id, MIN(l.line_number)"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
@@ -637,8 +644,12 @@ async fn unpaid_bills_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<Acco
         let parts = by_bill.get(&b.bill_id).cloned().unwrap_or_default();
         let mut left = b.open_cents;
         for (k, (job, name, amount)) in parts.iter().enumerate() {
-            let share = if k + 1 == parts.len() { left } else { mul_div_round(b.open_cents, *amount, b.total_cents).ok_or("RPT_OVERFLOW: open balance")? };
-            left -= share;
+            let share = if k + 1 == parts.len() {
+                left
+            } else {
+                Cents(mul_div_round(b.open_cents.get(), *amount, b.total_cents.get()).ok_or("RPT_OVERFLOW: open balance")?)
+            };
+            left = left.checked_sub(share).ok_or("RPT_OVERFLOW: open balance")?;
             let key = match (job, name) {
                 (Some(id), Some(n)) => (0, n.to_lowercase(), *id),
                 _ => (1, String::new(), 0),
@@ -659,10 +670,10 @@ async fn unpaid_bills_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<Acco
     ];
     let w = columns.len();
     let mut rows = Vec::new();
-    let mut total = 0;
+    let mut total = Cents::ZERO;
     for (name, items) in jobs.values() {
         rows.push(section(0, w, name));
-        let mut sub = 0;
+        let mut sub = Cents::ZERO;
         for (b, share) in items {
             let aging = (as_of - b.due_date).num_days().max(0);
             let mut r = row(
@@ -672,10 +683,10 @@ async fn unpaid_bills_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<Acco
             );
             r.journal_entry_id = Some(b.journal_entry_id);
             rows.push(r);
-            sub += share;
+            sub = plus(sub, *share)?;
         }
         rows.push(labeled(RowKind::Subtotal, 0, w, &format!("Total {name}"), &[json!(sub)]));
-        total += sub;
+        total = plus(total, sub)?;
     }
     rows.push(labeled(RowKind::Total, 0, w, "TOTAL", &[json!(total)]));
     let notes = vec![format!("{} with a balance as of {as_of}. A bill for several jobs is split by its lines' amounts.", plural(bills.len(), "bill", "bills"))];
@@ -692,8 +703,8 @@ struct PoLine {
     item: Option<String>,
     description: Option<String>,
     quantity_e4: Option<i64>,
-    rate_cents: Option<i64>,
-    amount_cents: i64,
+    rate_cents: Option<Cents>,
+    amount_cents: Cents,
 }
 
 /// Every line of the purchase orders still open as of `as_of`, by vendor (the Open Purchase Orders
@@ -725,13 +736,13 @@ async fn open_po_detail(pool: &SqlitePool, as_of: NaiveDate) -> Result<Accountan
     ];
     let w = columns.len();
     let mut rows = Vec::new();
-    let mut total = 0;
+    let mut total = Cents::ZERO;
     let mut orders = 0;
     let mut i = 0;
     while i < lines.len() {
         let vendor = &lines[i];
         rows.push(section(0, w, &vendor.vendor));
-        let mut sub = 0;
+        let mut sub = Cents::ZERO;
         let mut last_po = None;
         while i < lines.len() && lines[i].vendor_id == vendor.vendor_id {
             let l = &lines[i];
@@ -754,11 +765,11 @@ async fn open_po_detail(pool: &SqlitePool, as_of: NaiveDate) -> Result<Accountan
                     json!(l.amount_cents),
                 ],
             ));
-            sub += l.amount_cents;
+            sub = plus(sub, l.amount_cents)?;
             i += 1;
         }
         rows.push(labeled(RowKind::Subtotal, 0, w, &format!("Total {}", vendor.vendor), &[json!(sub)]));
-        total += sub;
+        total = plus(total, sub)?;
     }
     rows.push(labeled(RowKind::Total, 0, w, "TOTAL", &[json!(total)]));
     let notes = vec![format!("{} open as of {as_of}. Purchase orders do not post to the books.", plural(orders, "purchase order", "purchase orders"))];
@@ -775,14 +786,14 @@ struct PoJobLine {
     expected_date: Option<NaiveDate>,
     item: Option<String>,
     description: Option<String>,
-    amount_cents: i64,
+    amount_cents: Cents,
 }
 
 /// The lines of the purchase orders still open as of `as_of`, under the customer or job on each
 /// line (lines for no one under "No customer or job", last). Its total is Open Purchase Orders
 /// Detail's: the same lines, grouped another way.
 async fn open_po_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<AccountantReport, String> {
-    let lines: Vec<PoJobLine> = sqlx::query_as(&format!(
+    let lines: Vec<PoJobLine> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{CUSTOMER_NAMES}
          SELECT l.customer_id, cn.full_name AS job, v.name AS vendor, p.po_number, p.po_date, p.expected_date, ps.name AS item, l.description, l.amount_cents
          FROM purchase_orders p JOIN vendors v ON v.id = p.vendor_id
@@ -791,7 +802,7 @@ async fn open_po_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<Accountan
          LEFT JOIN cn ON cn.id = l.customer_id
          WHERE p.status = 'OPEN' AND p.po_date <= ?1
          ORDER BY l.customer_id IS NULL, cn.full_name COLLATE NOCASE, l.customer_id, p.po_date, p.po_number, l.line_number"
-    ))
+    )))
     .bind(as_of)
     .fetch_all(pool)
     .await
@@ -808,14 +819,14 @@ async fn open_po_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<Accountan
     ];
     let w = columns.len();
     let mut rows = Vec::new();
-    let mut total: i64 = 0;
+    let mut total = Cents::ZERO;
     let mut i = 0;
     while i < lines.len() {
         // Grouped by the customer or job itself, so two that share a name (as during a merge) stay apart.
         let customer = lines[i].customer_id;
         let name = lines[i].job.clone().unwrap_or_else(|| "No customer or job".into());
         rows.push(section(0, w, &name));
-        let mut sub: i64 = 0;
+        let mut sub = Cents::ZERO;
         while i < lines.len() && lines[i].customer_id == customer {
             let l = &lines[i];
             rows.push(row(
@@ -862,7 +873,7 @@ struct TimeRow {
 }
 
 async fn time_rows(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Result<Vec<TimeRow>, String> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{CUSTOMER_NAMES}
          SELECT t.activity_date AS date, t.employee_id, e.name AS employee, t.customer_id AS job_id, cn.full_name AS job,
                 t.product_service_id AS item_id, ps.name AS item, t.description, t.minutes, t.billable
@@ -871,7 +882,7 @@ async fn time_rows(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Resul
          LEFT JOIN products_services ps ON ps.id = t.product_service_id
          WHERE t.activity_date BETWEEN ?1 AND ?2
          ORDER BY t.activity_date, t.id"
-    ))
+    )))
     .bind(start)
     .bind(end)
     .fetch_all(pool)
@@ -1013,7 +1024,7 @@ struct AuditRow {
     entry_number: Option<i64>,
     entry_date: Option<NaiveDate>,
     source_type: Option<String>,
-    amount_cents: Option<i64>,
+    amount_cents: Option<Cents>,
     list: Option<String>,
     list_name: Option<String>,
     changed: Option<String>,

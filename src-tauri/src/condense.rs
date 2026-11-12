@@ -430,8 +430,10 @@ async fn plan(conn: &mut SqliteConnection, cutoff: NaiveDate) -> Result<Plan, St
     let mut nodes = Nodes { tables: Vec::new(), base: Vec::new(), rowids: Vec::new() };
     let mut total = 0;
     for (table, _) in TRANSACTION_TABLES {
-        let rowids: Vec<i64> =
-            sqlx::query_scalar(&format!("SELECT rowid FROM {} ORDER BY rowid", quote_ident(table))).fetch_all(&mut *conn).await.map_err(db_err)?;
+        let rowids: Vec<i64> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT rowid FROM {} ORDER BY rowid", quote_ident(table))))
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(db_err)?;
         nodes.tables.push(table);
         nodes.base.push(total);
         total += rowids.len();
@@ -453,17 +455,18 @@ async fn plan(conn: &mut SqliteConnection, cutoff: NaiveDate) -> Result<Plan, St
                 std::collections::hash_map::Entry::Vacant(slot) => {
                     let (parent, to) = slot.key();
                     let pairs: Vec<(i64, i64)> =
-                        sqlx::query_as(&format!("SELECT {}, rowid FROM {} WHERE {0} IS NOT NULL", quote_ident(to), quote_ident(parent)))
+                        sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {}, rowid FROM {} WHERE {0} IS NOT NULL", quote_ident(to), quote_ident(parent))))
                             .fetch_all(&mut *conn)
                             .await
                             .map_err(db_err)?;
                     slot.insert(pairs.into_iter().collect())
                 }
             };
-            let links: Vec<(i64, i64)> = sqlx::query_as(&format!("SELECT rowid, {} FROM {} WHERE {0} IS NOT NULL", quote_ident(&from), quote_ident(&child)))
-                .fetch_all(&mut *conn)
-                .await
-                .map_err(db_err)?;
+            let links: Vec<(i64, i64)> =
+                sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT rowid, {} FROM {} WHERE {0} IS NOT NULL", quote_ident(&from), quote_ident(&child))))
+                    .fetch_all(&mut *conn)
+                    .await
+                    .map_err(db_err)?;
             let child_table = nodes.table(&child);
             for (rowid, value) in links {
                 let Some(parent_node) = target.get(&value).and_then(|r| nodes.node(parent_table, *r)) else {
@@ -477,12 +480,12 @@ async fn plan(conn: &mut SqliteConnection, cutoff: NaiveDate) -> Result<Plan, St
         }
     }
     for (table, kind_column, id_column) in FORM_LINKS {
-        let links: Vec<(i64, String, i64)> = sqlx::query_as(&format!(
+        let links: Vec<(i64, String, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT rowid, {0}, {1} FROM {2} WHERE {0} IS NOT NULL AND {1} IS NOT NULL",
             quote_ident(kind_column),
             quote_ident(id_column),
             quote_ident(table)
-        ))
+        )))
         .fetch_all(&mut *conn)
         .await
         .map_err(db_err)?;
@@ -503,8 +506,11 @@ async fn plan(conn: &mut SqliteConnection, cutoff: NaiveDate) -> Result<Plan, St
     };
     for (table, dates) in TRANSACTION_TABLES.iter().filter(|(_, dates)| !dates.is_empty()) {
         let after = dates.iter().map(|c| format!("date({}) > ?1", quote_ident(c))).collect::<Vec<_>>().join(" OR ");
-        let rows: Vec<i64> =
-            sqlx::query_scalar(&format!("SELECT rowid FROM {} WHERE {after}", quote_ident(table))).bind(&cut).fetch_all(&mut *conn).await.map_err(db_err)?;
+        let rows: Vec<i64> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT rowid FROM {} WHERE {after}", quote_ident(table))))
+            .bind(&cut)
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(db_err)?;
         keep_rows(table, rows, KeepReason::AfterCutoff, &mut kept);
     }
     for (table, sql, reason) in [
@@ -768,7 +774,7 @@ async fn condense_copy(conn: &mut SqliteConnection, plan: &Plan, archive: &Archi
     let triggers: Vec<(String, String)> =
         sqlx::query_as("SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' ORDER BY rowid").fetch_all(&mut *tx).await.map_err(db_err)?;
     for (name, _) in &triggers {
-        sqlx::query(&format!("DROP TRIGGER {}", quote_ident(name))).execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP TRIGGER {}", quote_ident(name)))).execute(&mut *tx).await.map_err(db_err)?;
     }
 
     sqlx::query("CREATE TEMP TABLE condense_removed (tbl TEXT NOT NULL, rid INTEGER NOT NULL, PRIMARY KEY (tbl, rid))")
@@ -779,11 +785,14 @@ async fn condense_copy(conn: &mut SqliteConnection, plan: &Plan, archive: &Archi
         for rowid in rowids {
             sqlx::query("INSERT INTO temp.condense_removed (tbl, rid) VALUES (?1, ?2)").bind(table).bind(rowid).execute(&mut *tx).await.map_err(db_err)?;
         }
-        sqlx::query(&format!("DELETE FROM main.{} WHERE rowid IN (SELECT rid FROM temp.condense_removed WHERE tbl = ?1)", quote_ident(table)))
-            .bind(table)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_err)?;
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "DELETE FROM main.{} WHERE rowid IN (SELECT rid FROM temp.condense_removed WHERE tbl = ?1)",
+            quote_ident(table)
+        )))
+        .bind(table)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     }
     sqlx::query("DROP TABLE temp.condense_removed").execute(&mut *tx).await.map_err(db_err)?;
 
@@ -926,7 +935,10 @@ async fn condense_copy(conn: &mut SqliteConnection, plan: &Plan, archive: &Archi
         .map_err(db_err)?;
 
     for (name, sql) in &triggers {
-        sqlx::query(sql).execute(&mut *tx).await.map_err(|e| format!("CONDENSE_TRIGGERS: could not restore trigger {name} ({e}); nothing was changed"))?;
+        sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("CONDENSE_TRIGGERS: could not restore trigger {name} ({e}); nothing was changed"))?;
     }
     crate::audit_chain::seal(&mut tx).await?;
     tx.commit().await.map_err(db_err)?;
@@ -1019,7 +1031,7 @@ async fn reconcile_state(pool: &SqlitePool) -> Result<BTreeMap<i64, (i64, Vec<i6
     .map_err(db_err)?;
     let mut state = BTreeMap::new();
     for account in accounts {
-        let cleared = crate::reconcile::account_state(pool, account).await?.reconciled_balance_cents;
+        let cleared = crate::reconcile::account_state(pool, account).await?.reconciled_balance_cents.get();
         let open = crate::reconcile::unreconciled_lines(pool, account).await?.into_iter().map(|l| l.line_id).collect();
         state.insert(account, (cleared, open));
     }
@@ -1041,22 +1053,29 @@ async fn kept_tables_digest(pool: &SqlitePool) -> Result<BTreeMap<String, String
         .fetch_all(&mut *conn)
         .await
         .map_err(db_err)?;
-    digests.insert("system_preferences".into(), format!("{:x}", Sha256::digest(serde_json::to_string(&preferences).unwrap_or_default())));
+    digests.insert("system_preferences".into(), lower_hex(&Sha256::digest(serde_json::to_string(&preferences).unwrap_or_default())));
     Ok(digests)
+}
+
+/// A digest as lowercase hex, the form stored and compared.
+fn lower_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 async fn table_digest(conn: &mut SqliteConnection, table: &str) -> Result<String, String> {
     let columns: Vec<String> =
         sqlx::query_scalar("SELECT name FROM pragma_table_info(?1) ORDER BY cid").bind(table).fetch_all(&mut *conn).await.map_err(db_err)?;
     let row = columns.iter().map(|c| format!("quote({})", quote_ident(c))).collect::<Vec<_>>().join(" || ',' || ");
-    let rows: Vec<String> =
-        sqlx::query_scalar(&format!("SELECT {row} FROM {} ORDER BY rowid", quote_ident(table))).fetch_all(&mut *conn).await.map_err(db_err)?;
+    let rows: Vec<String> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT {row} FROM {} ORDER BY rowid", quote_ident(table))))
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(db_err)?;
     let mut hash = Sha256::new();
     for r in rows {
         hash.update(r.as_bytes());
         hash.update(b"\n");
     }
-    Ok(format!("{:x}", hash.finalize()))
+    Ok(lower_hex(&hash.finalize()))
 }
 
 /// A digest of every row of every table: equal digests mean the books did not change.
@@ -1067,7 +1086,7 @@ pub async fn content_digest(pool: &SqlitePool) -> Result<String, String> {
         hash.update(table.as_bytes());
         hash.update(table_digest(&mut conn, &table).await?.as_bytes());
     }
-    Ok(format!("{:x}", hash.finalize()))
+    Ok(lower_hex(&hash.finalize()))
 }
 
 /// Compares the condensed copy with the archive it was made from.

@@ -8,6 +8,7 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 
 use crate::ledger::{db_err, mul_div_round, QUANTITY_SCALE};
+use crate::money::Cents;
 use crate::preferences::{fiscal_start_month, fiscal_year_bounds};
 use crate::registers::{account_register, RegisterRow};
 
@@ -21,11 +22,11 @@ pub struct LedgerAccount {
     pub account_id: i64,
     pub account_name: String,
     pub account_type_name: String,
-    pub opening_balance_cents: i64,
+    pub opening_balance_cents: Cents,
     pub rows: Vec<RegisterRow>,
-    pub total_debit_cents: i64,
-    pub total_credit_cents: i64,
-    pub ending_balance_cents: i64,
+    pub total_debit_cents: Cents,
+    pub total_credit_cents: Cents,
+    pub ending_balance_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -72,29 +73,33 @@ pub async fn general_ledger(pool: &SqlitePool, start_date: NaiveDate, end_date: 
             .fetch_one(pool)
             .await
             .map_err(db_err)?;
-            let ytd_opening = if reg.is_debit_normal { since } else { -since };
-            let shift = reg.opening_balance_cents - ytd_opening;
+            let ytd_opening = if reg.is_debit_normal { Some(since) } else { since.checked_neg() }.ok_or_else(overflow)?;
+            let shift = reg.opening_balance_cents.checked_sub(ytd_opening).ok_or_else(overflow)?;
             reg.opening_balance_cents = ytd_opening;
             for row in &mut reg.rows {
-                row.balance_cents -= shift;
+                row.balance_cents = row.balance_cents.checked_sub(shift).ok_or_else(overflow)?;
             }
-            reg.ending_balance_cents -= shift;
+            reg.ending_balance_cents = reg.ending_balance_cents.checked_sub(shift).ok_or_else(overflow)?;
         }
         if reg.rows.is_empty() && reg.opening_balance_cents == 0 {
             continue;
         }
         out.push(LedgerAccount {
             account_id: id,
-            total_debit_cents: reg.rows.iter().map(|r| r.debit_cents).sum(),
-            total_credit_cents: reg.rows.iter().map(|r| r.credit_cents).sum(),
+            total_debit_cents: Cents::checked_sum(reg.rows.iter().map(|r| Cents(r.debit_cents))).ok_or_else(overflow)?,
+            total_credit_cents: Cents::checked_sum(reg.rows.iter().map(|r| Cents(r.credit_cents))).ok_or_else(overflow)?,
             account_name: names.label(number.as_deref(), &full_name),
             account_type_name: reg.account_type_name,
-            opening_balance_cents: reg.opening_balance_cents,
-            ending_balance_cents: reg.ending_balance_cents,
+            opening_balance_cents: Cents(reg.opening_balance_cents),
+            ending_balance_cents: Cents(reg.ending_balance_cents),
             rows: reg.rows,
         });
     }
     Ok(GeneralLedger { start_date, end_date, accounts: out })
+}
+
+fn overflow() -> String {
+    "RPT_OVERFLOW: the amounts are too large to add up".to_string()
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -108,8 +113,8 @@ pub const AGING_LABELS: [&str; 5] = ["Current", "1 - 30", "31 - 60", "61 - 90", 
 pub struct AgingRow {
     pub party_name: String,
     /// Current, 1–30, 31–60, 61–90 and 91+ days past due.
-    pub buckets_cents: [i64; 5],
-    pub total_cents: i64,
+    pub buckets_cents: [Cents; 5],
+    pub total_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -124,7 +129,7 @@ pub struct AgingItem {
     #[sqlx(skip)]
     pub days_past_due: i64,
     /// Still open as of the report date; negative for credit not yet used.
-    pub open_cents: i64,
+    pub open_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -137,13 +142,13 @@ pub struct AgingReport {
     pub basis: String,
     pub bucket_labels: [&'static str; 5],
     pub rows: Vec<AgingRow>,
-    pub totals_cents: [i64; 5],
-    pub total_cents: i64,
+    pub totals_cents: [Cents; 5],
+    pub total_cents: Cents,
     /// Every open item, oldest due first within each name.
     pub items: Vec<AgingItem>,
     /// Payables only: goods received on item receipts whose bills aren't entered yet (Items Received
     /// Not Billed). Not part of the total, which is what A/P holds; shown underneath it.
-    pub received_not_billed_cents: i64,
+    pub received_not_billed_cents: Cents,
 }
 
 /// Company preference: aging reports count days from the `due` date (the default) or the
@@ -210,27 +215,27 @@ pub async fn aging(pool: &SqlitePool, payable: bool, as_of: NaiveDate) -> Result
     };
     let mut items: Vec<AgingItem> = sqlx::query_as(sql).bind(as_of).fetch_all(pool).await.map_err(db_err)?;
     let mut rows: Vec<AgingRow> = Vec::new();
-    let mut totals = [0i64; 5];
+    let mut totals = [Cents::ZERO; 5];
     for item in &mut items {
         let aged_from = if from_transaction_date { item.date } else { item.due_date };
         item.days_past_due = (as_of - aged_from).num_days();
         let b = aging_bucket(item.days_past_due);
         if rows.last().map(|r| r.party_name.as_str()) != Some(item.party_name.as_str()) {
-            rows.push(AgingRow { party_name: item.party_name.clone(), buckets_cents: [0; 5], total_cents: 0 });
+            rows.push(AgingRow { party_name: item.party_name.clone(), buckets_cents: [Cents::ZERO; 5], total_cents: Cents::ZERO });
         }
         let row = rows.last_mut().unwrap();
-        row.buckets_cents[b] += item.open_cents;
-        row.total_cents += item.open_cents;
-        totals[b] += item.open_cents;
+        row.buckets_cents[b] = row.buckets_cents[b].checked_add(item.open_cents).ok_or_else(overflow)?;
+        row.total_cents = row.total_cents.checked_add(item.open_cents).ok_or_else(overflow)?;
+        totals[b] = totals[b].checked_add(item.open_cents).ok_or_else(overflow)?;
     }
-    let received_not_billed_cents = if payable { crate::item_receipts::received_not_billed(pool, as_of).await? } else { 0 };
+    let received_not_billed_cents = if payable { Cents(crate::item_receipts::received_not_billed(pool, as_of).await?) } else { Cents::ZERO };
     Ok(AgingReport {
         received_not_billed_cents,
         kind: if payable { "PAYABLE" } else { "RECEIVABLE" }.into(),
         as_of,
         basis: if from_transaction_date { "TRANSACTION" } else { "DUE" }.into(),
         bucket_labels: AGING_LABELS,
-        total_cents: totals.iter().sum(),
+        total_cents: Cents::checked_sum(totals).ok_or_else(overflow)?,
         rows,
         totals_cents: totals,
         items,
@@ -247,7 +252,7 @@ pub struct SummaryRow {
     pub label: String,
     /// Units sold, scaled by 10,000 (product summaries only).
     pub quantity_e4: Option<i64>,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -256,17 +261,18 @@ pub struct SummaryReport {
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
     pub rows: Vec<SummaryRow>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
 }
 
-fn summary(start_date: NaiveDate, end_date: NaiveDate, rows: Vec<SummaryRow>) -> SummaryReport {
-    SummaryReport { start_date, end_date, total_cents: rows.iter().map(|r| r.amount_cents).sum(), rows }
+fn summary(start_date: NaiveDate, end_date: NaiveDate, rows: Vec<SummaryRow>) -> Result<SummaryReport, String> {
+    let total_cents = Cents::checked_sum(rows.iter().map(|r| r.amount_cents)).ok_or_else(overflow)?;
+    Ok(SummaryReport { start_date, end_date, total_cents, rows })
 }
 
 /// Income (net of credits and voids) by customer, or expenses by vendor, for the period.
 pub async fn by_party(pool: &SqlitePool, expenses: bool, start_date: NaiveDate, end_date: NaiveDate) -> Result<SummaryReport, String> {
     let (classification, sign) = if expenses { ("EXPENSE", "l.debit_cents - l.credit_cents") } else { ("INCOME", "l.credit_cents - l.debit_cents") };
-    let rows: Vec<(Option<String>, i64)> = sqlx::query_as(&format!(
+    let rows: Vec<(Option<String>, Cents)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT p.party_name, SUM({sign})
          FROM v_posted_lines l
          JOIN v_chart_of_accounts a ON a.id = l.account_id
@@ -275,7 +281,7 @@ pub async fn by_party(pool: &SqlitePool, expenses: bool, start_date: NaiveDate, 
          GROUP BY p.party_name COLLATE NOCASE
          HAVING SUM({sign}) <> 0
          ORDER BY p.party_name IS NULL, p.party_name COLLATE NOCASE"
-    ))
+    )))
     .bind(classification)
     .bind(start_date)
     .bind(end_date)
@@ -283,18 +289,18 @@ pub async fn by_party(pool: &SqlitePool, expenses: bool, start_date: NaiveDate, 
     .await
     .map_err(db_err)?;
     let none = if expenses { "No vendor" } else { "No customer" };
-    Ok(summary(
+    summary(
         start_date,
         end_date,
         rows.into_iter().map(|(name, cents)| SummaryRow { label: name.unwrap_or_else(|| none.into()), quantity_e4: None, amount_cents: cents }).collect(),
-    ))
+    )
 }
 
 /// Quantity and amount sold per product or service, from invoices and sales receipts less credit
 /// memos, by document date. Voided documents are left out.
 pub async fn sales_by_product(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate) -> Result<SummaryReport, String> {
     let items = crate::preferences::ItemNames::load(pool).await?;
-    let rows: Vec<(Option<String>, Option<String>, i64, i64)> = sqlx::query_as(
+    let rows: Vec<(Option<String>, Option<String>, i64, Cents)> = sqlx::query_as(
         "SELECT p.name, p.description, SUM(x.qty), SUM(x.amount) FROM (
             SELECT it.product_service_id AS product, it.quantity_e4 AS qty,
                    it.amount_cents * COALESCE(i.home_total_cents, i.total_cents) / i.total_cents AS amount
@@ -330,7 +336,7 @@ pub async fn sales_by_product(pool: &SqlitePool, start_date: NaiveDate, end_date
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    Ok(summary(
+    summary(
         start_date,
         end_date,
         rows.into_iter()
@@ -340,7 +346,7 @@ pub async fn sales_by_product(pool: &SqlitePool, start_date: NaiveDate, end_date
                 amount_cents: cents,
             })
             .collect(),
-    ))
+    )
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -349,9 +355,9 @@ pub async fn sales_by_product(pool: &SqlitePool, start_date: NaiveDate, end_date
 
 /// Average cost per unit of `value_cents` over `qty_e4` units, rounded to the cent; `None` unless
 /// there are units on hand.
-fn unit_cost(value_cents: i64, qty_e4: i64) -> Option<i64> {
+fn unit_cost(value_cents: Cents, qty_e4: i64) -> Option<Cents> {
     if qty_e4 > 0 {
-        mul_div_round(value_cents, QUANTITY_SCALE, qty_e4)
+        mul_div_round(value_cents.get(), QUANTITY_SCALE, qty_e4).map(Cents)
     } else {
         None
     }
@@ -365,11 +371,11 @@ pub struct InventoryValuationRow {
     pub sku: Option<String>,
     pub description: Option<String>,
     pub qty_on_hand_e4: i64,
-    pub average_cost_cents: Option<i64>,
-    pub asset_value_cents: i64,
-    pub sales_price_cents: i64,
+    pub average_cost_cents: Option<Cents>,
+    pub asset_value_cents: Cents,
+    pub sales_price_cents: Cents,
     /// On hand at the sales price.
-    pub retail_value_cents: i64,
+    pub retail_value_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -377,8 +383,8 @@ pub struct InventoryValuationRow {
 pub struct InventoryValuation {
     pub as_of: NaiveDate,
     pub rows: Vec<InventoryValuationRow>,
-    pub total_asset_value_cents: i64,
-    pub total_retail_value_cents: i64,
+    pub total_asset_value_cents: Cents,
+    pub total_retail_value_cents: Cents,
 }
 
 /// Quantity and value (moving average cost) of every tracked item as of a date: the stock movements
@@ -386,7 +392,7 @@ pub struct InventoryValuation {
 /// Inactive items are left out unless they still have stock or value.
 pub async fn inventory_valuation(pool: &SqlitePool, as_of: NaiveDate) -> Result<InventoryValuation, String> {
     let names = crate::preferences::ItemNames::load(pool).await?;
-    type ItemRow = (i64, String, Option<String>, Option<String>, i64, bool, i64, i64);
+    type ItemRow = (i64, String, Option<String>, Option<String>, Cents, bool, i64, Cents);
     let items: Vec<ItemRow> = sqlx::query_as(
         "SELECT i.id, p.name, i.sku, p.description, p.rate_cents, p.is_active,
                 COALESCE(SUM(s.qty_change_e4), 0), COALESCE(SUM(s.value_change_cents), 0)
@@ -400,10 +406,10 @@ pub async fn inventory_valuation(pool: &SqlitePool, as_of: NaiveDate) -> Result<
     .map_err(db_err)?;
     let mut rows = Vec::with_capacity(items.len());
     for (item_id, name, sku, description, sales_price_cents, is_active, qty, value) in items {
-        if !is_active && qty == 0 && value == 0 {
+        if !is_active && qty == 0 && value.is_zero() {
             continue;
         }
-        let retail_value_cents = mul_div_round(sales_price_cents, qty, QUANTITY_SCALE).ok_or("RPT_OVERFLOW: amount out of range")?;
+        let retail_value_cents = Cents(mul_div_round(sales_price_cents.get(), qty, QUANTITY_SCALE).ok_or("RPT_OVERFLOW: amount out of range")?);
         rows.push(InventoryValuationRow {
             item_id,
             name: names.label(&name, description.as_deref()),
@@ -418,8 +424,8 @@ pub async fn inventory_valuation(pool: &SqlitePool, as_of: NaiveDate) -> Result<
     }
     Ok(InventoryValuation {
         as_of,
-        total_asset_value_cents: rows.iter().map(|r| r.asset_value_cents).sum(),
-        total_retail_value_cents: rows.iter().map(|r| r.retail_value_cents).sum(),
+        total_asset_value_cents: Cents::checked_sum(rows.iter().map(|r| r.asset_value_cents)).ok_or_else(overflow)?,
+        total_retail_value_cents: Cents::checked_sum(rows.iter().map(|r| r.retail_value_cents)).ok_or_else(overflow)?,
         rows,
     })
 }
@@ -436,13 +442,13 @@ pub struct InventoryMovementRow {
     pub source_type: String,
     pub party_name: Option<String>,
     pub qty_change_e4: i64,
-    pub value_change_cents: i64,
+    pub value_change_cents: Cents,
     #[sqlx(skip)]
     pub qty_on_hand_e4: i64,
     #[sqlx(skip)]
-    pub asset_value_cents: i64,
+    pub asset_value_cents: Cents,
     #[sqlx(skip)]
-    pub average_cost_cents: Option<i64>,
+    pub average_cost_cents: Option<Cents>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -451,10 +457,10 @@ pub struct InventoryItemDetail {
     pub item_id: i64,
     pub name: String,
     pub opening_qty_e4: i64,
-    pub opening_value_cents: i64,
+    pub opening_value_cents: Cents,
     pub rows: Vec<InventoryMovementRow>,
     pub closing_qty_e4: i64,
-    pub closing_value_cents: i64,
+    pub closing_value_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -463,7 +469,7 @@ pub struct InventoryValuationDetail {
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
     pub items: Vec<InventoryItemDetail>,
-    pub total_value_cents: i64,
+    pub total_value_cents: Cents,
 }
 
 /// Every stock movement in the period per tracked item, from its quantity and value on the start
@@ -473,7 +479,7 @@ pub async fn inventory_valuation_detail(pool: &SqlitePool, start_date: NaiveDate
     if end_date < start_date {
         return Err("RPT_BAD_RANGE: the end date is before the start date".into());
     }
-    let items: Vec<(i64, String, i64, i64)> = sqlx::query_as(
+    let items: Vec<(i64, String, i64, Cents)> = sqlx::query_as(
         "SELECT i.id, p.name, COALESCE(SUM(s.qty_change_e4), 0), COALESCE(SUM(s.value_change_cents), 0)
          FROM inventory_items i JOIN products_services p ON p.id = i.product_id
          LEFT JOIN stock_ledger_entries s ON s.item_id = i.id AND s.movement_date < ?1
@@ -500,13 +506,13 @@ pub async fn inventory_valuation_detail(pool: &SqlitePool, start_date: NaiveDate
         .fetch_all(pool)
         .await
         .map_err(db_err)?;
-        if rows.is_empty() && opening_qty == 0 && opening_value == 0 {
+        if rows.is_empty() && opening_qty == 0 && opening_value.is_zero() {
             continue;
         }
         let (mut qty, mut value) = (opening_qty, opening_value);
         for r in &mut rows {
-            qty += r.qty_change_e4;
-            value += r.value_change_cents;
+            qty = qty.checked_add(r.qty_change_e4).ok_or_else(overflow)?;
+            value = value.checked_add(r.value_change_cents).ok_or_else(overflow)?;
             r.qty_on_hand_e4 = qty;
             r.asset_value_cents = value;
             r.average_cost_cents = unit_cost(value, qty);
@@ -521,7 +527,8 @@ pub async fn inventory_valuation_detail(pool: &SqlitePool, start_date: NaiveDate
             closing_value_cents: value,
         });
     }
-    Ok(InventoryValuationDetail { start_date, end_date, total_value_cents: out.iter().map(|i| i.closing_value_cents).sum(), items: out })
+    let total_value_cents = Cents::checked_sum(out.iter().map(|i| i.closing_value_cents)).ok_or_else(overflow)?;
+    Ok(InventoryValuationDetail { start_date, end_date, total_value_cents, items: out })
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -619,7 +626,7 @@ pub struct CheckRow {
     pub kind: String,
     pub party_name: Option<String>,
     pub memo: Option<String>,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub is_voided: bool,
     pub journal_entry_id: Option<i64>,
     /// Another check from the account has the same number.
@@ -741,7 +748,7 @@ pub async fn missing_checks(pool: &SqlitePool, account_id: i64, start_date: Opti
 /// Amount sold per sales rep, from the lines of invoices and sales receipts, by document date, in
 /// home currency. Credit memos carry no rep, so this is gross sales; voided documents are left out.
 pub async fn sales_by_rep(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate) -> Result<SummaryReport, String> {
-    let rows: Vec<(Option<String>, Option<String>, i64, i64)> = sqlx::query_as(
+    let rows: Vec<(Option<String>, Option<String>, i64, Cents)> = sqlx::query_as(
         "SELECT r.initials, r.name, SUM(x.qty), SUM(x.amount) FROM (
             SELECT i.sales_rep_id AS rep, it.quantity_e4 AS qty,
                    it.amount_cents * COALESCE(i.home_total_cents, i.total_cents) / i.total_cents AS amount
@@ -761,7 +768,7 @@ pub async fn sales_by_rep(pool: &SqlitePool, start_date: NaiveDate, end_date: Na
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    Ok(summary(
+    summary(
         start_date,
         end_date,
         rows.into_iter()
@@ -775,7 +782,7 @@ pub async fn sales_by_rep(pool: &SqlitePool, start_date: NaiveDate, end_date: Na
                 amount_cents: cents,
             })
             .collect(),
-    ))
+    )
 }
 
 #[cfg(test)]

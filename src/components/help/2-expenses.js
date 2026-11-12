@@ -110,7 +110,7 @@ export const topics = [
   {
     id: 'purchase-discounts', area: 'expenses', views: ['expenses/bills', 'expenses/expenses', 'expenses/credits', 'expenses/purchase-orders', 'sales/products'],
     title: 'Take a discount or add a charge on a bill, check or purchase order',
-    body: 'Under the split lines, click Add a discount or charge, choose the split line it follows, and enter an amount or a percent of that line such as 2%. Picking a Discount or Other Charge item fills in its account and amount. A discount comes off the total and a charge is added. A purchase order\'s discounts and charges carry over to its bill. An Other Charge or Discount item can have its own expense account for bills and checks (Edit the item).',
+    body: 'Under the split lines, click Add a discount or charge, choose the split line it follows, and enter an amount or a percent of that line such as 2%. Picking a Discount or Other Charge item fills in its account and amount. A discount comes off the total and a charge is added. A purchase order\'s discounts and charges carry over to its bill. An Other Charge or Discount item can have its own expense account for bills and checks (Edit the item). Once you have customers, each line can name a Customer:Job; on a bill, check or expense, tick Bill? on a charge (freight, say) to invoice it to that customer from Sales › Bill Costs.',
     keywords: 'discount charge freight shipping other charge item purchase bill check expense vendor credit purchase order po percent expense account',
     go: { label: 'Go to Bills', view: 'expenses/bills' },
     guide: 'bills',

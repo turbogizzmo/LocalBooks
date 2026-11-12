@@ -109,9 +109,9 @@ pub struct InvoiceSummary {
     pub customer_name: String,
     pub issue_date: String,
     pub due_date: String,
-    pub total_cents: i64,
-    pub amount_paid_cents: i64,
-    pub balance_cents: i64,
+    pub total_cents: Cents,
+    pub amount_paid_cents: Cents,
+    pub balance_cents: Cents,
     pub status: String,
     pub journal_entry_id: Option<i64>,
     pub last_payment_date: Option<String>,
@@ -121,13 +121,13 @@ pub struct InvoiceSummary {
     pub currency_code: Option<String>,
     pub exchange_rate_e6: Option<i64>,
     /// A/R booked in home currency, and the home-currency A/R still open.
-    pub home_total_cents: i64,
-    pub home_balance_cents: i64,
-    pub tax_cents: i64,
+    pub home_total_cents: Cents,
+    pub home_balance_cents: Cents,
+    pub tax_cents: Cents,
     pub tax_rate_name: Option<String>,
-    pub discount_cents: i64,
+    pub discount_cents: Cents,
     /// Credit memos applied to this invoice (included in amount paid).
-    pub credits_applied_cents: i64,
+    pub credits_applied_cents: Cents,
     /// Written by Assess Finance Charges.
     pub is_finance_charge: bool,
     /// Entered as a statement charge (billed on the next statement, never printed on its own).
@@ -162,7 +162,7 @@ const SUMMARY_SELECT: &str = "
     LEFT JOIN tax_rates t ON t.id = i.tax_rate_id LEFT JOIN terms tm ON tm.id = i.terms_id";
 
 fn with_discount(mut invoice: InvoiceSummary) -> InvoiceSummary {
-    invoice.terms.fill(invoice.total_cents);
+    invoice.terms.fill(invoice.total_cents.get());
     invoice
 }
 
@@ -196,7 +196,7 @@ pub struct PaymentInput {
 pub struct PaymentView {
     pub id: i64,
     pub payment_date: String,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub payment_method: String,
     /// The Payment Method list entry's name ("Visa"), when the payment has one.
     pub payment_method_name: Option<String>,
@@ -206,10 +206,10 @@ pub struct PaymentView {
     pub is_voided: bool,
     pub exchange_rate_e6: Option<i64>,
     /// Home-currency cash received and A/R relieved (`None` for home-currency payments).
-    pub home_amount_cents: Option<i64>,
-    pub ar_relief_cents: Option<i64>,
+    pub home_amount_cents: Option<Cents>,
+    pub ar_relief_cents: Option<Cents>,
     /// The part of `amount_cents` taken as an early-payment discount rather than received.
-    pub discount_cents: i64,
+    pub discount_cents: Cents,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -219,7 +219,7 @@ pub struct AgingBucket {
     pub key: &'static str,
     pub label: &'static str,
     pub invoice_count: i64,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -229,9 +229,9 @@ pub struct ArAging {
     /// Open invoices by age. A bucket's amount is net of unused credit dated in it; its count is
     /// invoices only, so a credit is never counted as an invoice.
     pub buckets: Vec<AgingBucket>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
     /// Credit not yet used (credit memos with something left), already netted into the buckets.
-    pub unused_credit_cents: i64,
+    pub unused_credit_cents: Cents,
 }
 
 /// round_half_up(quantity_e4 × rate / 10,000), rejecting zero, overflow and the per-line ceiling.
@@ -283,7 +283,7 @@ pub fn validate_invoice(input: &InvoiceInput) -> Result<i64, String> {
 }
 
 pub async fn list_invoices(pool: &SqlitePool) -> Result<Vec<InvoiceSummary>, String> {
-    sqlx::query_as::<_, InvoiceSummary>(&format!("{SUMMARY_SELECT} ORDER BY i.is_voided, i.invoice_number DESC"))
+    sqlx::query_as::<_, InvoiceSummary>(sqlx::AssertSqlSafe(format!("{SUMMARY_SELECT} ORDER BY i.is_voided, i.invoice_number DESC")))
         .fetch_all(pool)
         .await
         .map(|all| all.into_iter().map(with_discount).collect())
@@ -292,20 +292,22 @@ pub async fn list_invoices(pool: &SqlitePool) -> Result<Vec<InvoiceSummary>, Str
 
 /// Invoices waiting in the print queue, lowest number first.
 pub(crate) async fn list_to_print(pool: &SqlitePool) -> Result<Vec<InvoiceSummary>, String> {
-    sqlx::query_as::<_, InvoiceSummary>(&format!("{SUMMARY_SELECT} WHERE i.to_be_printed = 1 AND i.is_voided = 0 ORDER BY i.invoice_number"))
-        .fetch_all(pool)
-        .await
-        .map(|all| all.into_iter().map(with_discount).collect())
-        .map_err(db_err)
+    sqlx::query_as::<_, InvoiceSummary>(sqlx::AssertSqlSafe(format!(
+        "{SUMMARY_SELECT} WHERE i.to_be_printed = 1 AND i.is_voided = 0 ORDER BY i.invoice_number"
+    )))
+    .fetch_all(pool)
+    .await
+    .map(|all| all.into_iter().map(with_discount).collect())
+    .map_err(db_err)
 }
 
 /// A customer's (and their jobs') statement charges, oldest first, in one query.
 pub(crate) async fn statement_charge_summaries(pool: &SqlitePool, customer_id: i64) -> Result<Vec<InvoiceSummary>, String> {
-    sqlx::query_as::<_, InvoiceSummary>(&format!(
+    sqlx::query_as::<_, InvoiceSummary>(sqlx::AssertSqlSafe(format!(
         "{SUMMARY_SELECT} WHERE i.id IN (SELECT invoice_id FROM statement_charge_invoices)
            AND (i.customer_id = ?1 OR i.customer_id IN (SELECT id FROM customers WHERE parent_id = ?1))
          ORDER BY i.issue_date, i.id"
-    ))
+    )))
     .bind(customer_id)
     .fetch_all(pool)
     .await
@@ -314,7 +316,12 @@ pub(crate) async fn statement_charge_summaries(pool: &SqlitePool, customer_id: i
 }
 
 pub(crate) async fn get_summary(pool: &SqlitePool, invoice_id: i64) -> Result<InvoiceSummary, String> {
-    sqlx::query_as::<_, InvoiceSummary>(&format!("{SUMMARY_SELECT} WHERE i.id = ?1")).bind(invoice_id).fetch_one(pool).await.map(with_discount).map_err(db_err)
+    sqlx::query_as::<_, InvoiceSummary>(sqlx::AssertSqlSafe(format!("{SUMMARY_SELECT} WHERE i.id = ?1")))
+        .bind(invoice_id)
+        .fetch_one(pool)
+        .await
+        .map(with_discount)
+        .map_err(db_err)
 }
 
 /// Creates the invoice and posts it to the ledger atomically; the invoice comes back UNPAID.
@@ -800,8 +807,8 @@ pub struct InvoiceItemView {
     pub line_number: i64,
     pub description: String,
     pub quantity_e4: i64,
-    pub rate_cents: i64,
-    pub amount_cents: i64,
+    pub rate_cents: Cents,
+    pub amount_cents: Cents,
     pub income_account_id: i64,
     pub product_service_id: Option<i64>,
     pub class_id: Option<i64>,
@@ -843,7 +850,7 @@ pub async fn invoice_detail(pool: &SqlitePool, invoice_id: i64) -> Result<Invoic
 /// Groups open invoice balances (home currency, i.e. the A/R still on the books) by days past due.
 pub async fn ar_aging(pool: &SqlitePool, as_of: NaiveDate) -> Result<ArAging, String> {
     // Open invoices by due date, and credit not yet used (negative) by the credit memo's date.
-    let open: Vec<(NaiveDate, i64)> = sqlx::query_as(
+    let open: Vec<(NaiveDate, Cents)> = sqlx::query_as(
         "SELECT i.due_date, b.home_open_cents FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
          WHERE i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0
          UNION ALL
@@ -855,14 +862,14 @@ pub async fn ar_aging(pool: &SqlitePool, as_of: NaiveDate) -> Result<ArAging, St
     .map_err(db_err)?;
 
     let mut buckets = vec![
-        AgingBucket { key: "current", label: "Current", invoice_count: 0, amount_cents: 0 },
-        AgingBucket { key: "days1To30", label: "1–30 days", invoice_count: 0, amount_cents: 0 },
-        AgingBucket { key: "days31To60", label: "31–60 days", invoice_count: 0, amount_cents: 0 },
-        AgingBucket { key: "days61Plus", label: "61+ days", invoice_count: 0, amount_cents: 0 },
+        AgingBucket { key: "current", label: "Current", invoice_count: 0, amount_cents: Cents::ZERO },
+        AgingBucket { key: "days1To30", label: "1–30 days", invoice_count: 0, amount_cents: Cents::ZERO },
+        AgingBucket { key: "days31To60", label: "31–60 days", invoice_count: 0, amount_cents: Cents::ZERO },
+        AgingBucket { key: "days61Plus", label: "61+ days", invoice_count: 0, amount_cents: Cents::ZERO },
     ];
     let overflow = || "AGING_OVERFLOW: open receivables are too large to add up".to_string();
-    let mut total_cents: i64 = 0;
-    let mut unused_credit_cents: i64 = 0;
+    let mut total_cents = Cents::ZERO;
+    let mut unused_credit_cents = Cents::ZERO;
     for (due, balance) in open {
         let days_overdue = (as_of - due).num_days();
         let idx = match days_overdue {
@@ -871,7 +878,7 @@ pub async fn ar_aging(pool: &SqlitePool, as_of: NaiveDate) -> Result<ArAging, St
             31..=60 => 2,
             _ => 3,
         };
-        if balance > 0 {
+        if balance.is_positive() {
             buckets[idx].invoice_count += 1;
         } else {
             unused_credit_cents = unused_credit_cents.checked_sub(balance).ok_or_else(overflow)?;

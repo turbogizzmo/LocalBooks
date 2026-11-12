@@ -119,7 +119,7 @@ pub async fn encrypt_into(source: &Path, dest: &Path, key: &keys::PageKey, heade
         let mut conn = open_options(source, None)?.connect().await.map_err(|e| format!("FILE_ENCRYPT: cannot open {}: {e}", source.display()))?;
         let hex: zeroize::Zeroizing<String> = zeroize::Zeroizing::new(key.bytes().iter().map(|b| format!("{b:02X}")).collect());
         let exported = async {
-            sqlx::query(&format!("ATTACH DATABASE ?1 AS encrypted KEY \"x'{}'\"", hex.as_str()))
+            sqlx::query(sqlx::AssertSqlSafe(format!("ATTACH DATABASE ?1 AS encrypted KEY \"x'{}'\"", hex.as_str())))
                 .bind(dest.to_string_lossy().into_owned())
                 .execute(&mut conn)
                 .await?;

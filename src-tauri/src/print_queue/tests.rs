@@ -164,7 +164,7 @@ async fn an_edited_queued_check_stays_queued() {
     };
     let new_id = crate::edits::replace_expense(&pool, queued.id, edited).await.unwrap();
     let queue = queued_checks(&pool, None).await.unwrap();
-    assert_eq!(queue.iter().map(|x| (x.id, x.total_cents)).collect::<Vec<_>>(), vec![(new_id, 11_000)]);
+    assert_eq!(queue.iter().map(|x| (x.id, x.total_cents.get())).collect::<Vec<_>>(), vec![(new_id, 11_000)]);
 }
 
 #[tokio::test]
@@ -290,17 +290,17 @@ async fn a_payment_taken_on_the_invoice_is_saved_with_it() {
 
     // Part paid at the counter: the invoice is PARTIAL and the money is in the bank, dated the invoice's date.
     let part = create_invoice(&pool, invoice_input(services), &Default::default(), false, Some(&paid(5_000))).await.unwrap();
-    assert_eq!((part.status.as_str(), part.balance_cents), ("PARTIAL", 7_500));
+    assert_eq!((part.status.as_str(), part.balance_cents), ("PARTIAL", Cents(7_500)));
     let payments = crate::invoices::list_payments(&pool, part.id).await.unwrap();
     assert_eq!(
         payments.iter().map(|p| (p.amount_cents, p.payment_date.clone(), p.reference.clone())).collect::<Vec<_>>(),
-        [(5_000, d(1).to_string(), Some("1042".into()))]
+        [(Cents(5_000), d(1).to_string(), Some("1042".into()))]
     );
     assert_eq!((balance(ar).await, balance(checking).await), (7_500, 5_000));
 
     // Paid in full and queued to print.
     let full = create_invoice(&pool, invoice_input(services), &Default::default(), true, Some(&paid(12_500))).await.unwrap();
-    assert_eq!((full.status.as_str(), full.balance_cents, full.to_be_printed), ("PAID", 0, true));
+    assert_eq!((full.status.as_str(), full.balance_cents, full.to_be_printed), ("PAID", Cents(0), true));
 
     // More than the invoice, or into an account money can't be deposited to: nothing is saved.
     let before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM invoices").fetch_one(&pool).await.unwrap();

@@ -148,7 +148,10 @@ const CANDIDATES: &str = "
       AND NOT EXISTS (SELECT 1 FROM bounced_checks b WHERE b.deposit_line_id = dl.id AND b.is_voided = 0)";
 
 pub async fn candidates(pool: &SqlitePool) -> Result<Vec<BounceCandidate>, String> {
-    sqlx::query_as::<_, BounceCandidate>(&format!("SELECT * FROM ({CANDIDATES}) ORDER BY date DESC, kind, id DESC")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as::<_, BounceCandidate>(sqlx::AssertSqlSafe(format!("SELECT * FROM ({CANDIDATES}) ORDER BY date DESC, kind, id DESC")))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 const VIEW_SELECT: &str = "
@@ -169,7 +172,10 @@ const VIEW_SELECT: &str = "
     JOIN invoices ci ON ci.id = b.charge_invoice_id)";
 
 pub async fn list(pool: &SqlitePool) -> Result<Vec<BouncedCheckView>, String> {
-    sqlx::query_as::<_, BouncedCheckView>(&format!("{VIEW_SELECT} ORDER BY is_voided, bounce_date DESC, id DESC")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as::<_, BouncedCheckView>(sqlx::AssertSqlSafe(format!("{VIEW_SELECT} ORDER BY is_voided, bounce_date DESC, id DESC")))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// What bounced, resolved inside the write transaction.
@@ -195,13 +201,14 @@ struct Source {
 }
 
 async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Result<Source, String> {
-    let row: Option<(NaiveDate, i64, i64, i64)> =
-        sqlx::query_as(&format!("SELECT date, amount_cents, bank_account_id, home_amount_cents FROM ({CANDIDATES}) WHERE kind = ?1 AND id = ?2"))
-            .bind(kind)
-            .bind(id)
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(db_err)?;
+    let row: Option<(NaiveDate, i64, i64, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT date, amount_cents, bank_account_id, home_amount_cents FROM ({CANDIDATES}) WHERE kind = ?1 AND id = ?2"
+    )))
+    .bind(kind)
+    .bind(id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
     let Some((date, amount, bank, bank_cents)) = row else {
         return Err(match kind {
             "PAYMENT" | "DEPOSIT_LINE" | "SALES_RECEIPT" => {
@@ -360,7 +367,12 @@ async fn classification(tx: &mut Transaction<'_, Sqlite>, account_id: i64) -> Re
 /// Records a bounced check; returns it.
 pub async fn record(pool: &SqlitePool, input: BounceInput) -> Result<BouncedCheckView, String> {
     let (kind, id) = run(pool, async |tx| write(tx, &input).await).await?;
-    sqlx::query_as::<_, BouncedCheckView>(&format!("{VIEW_SELECT} WHERE kind = ?1 AND id = ?2")).bind(kind).bind(id).fetch_one(pool).await.map_err(db_err)
+    sqlx::query_as::<_, BouncedCheckView>(sqlx::AssertSqlSafe(format!("{VIEW_SELECT} WHERE kind = ?1 AND id = ?2")))
+        .bind(kind)
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)
 }
 
 async fn write(tx: &mut Transaction<'_, Sqlite>, input: &BounceInput) -> Result<(&'static str, i64), String> {
@@ -521,11 +533,12 @@ pub async fn void(pool: &SqlitePool, id: i64, kind: Option<&str>) -> Result<(), 
     let table = if receipt { "bounced_sales_receipts" } else { "bounced_checks" };
     let invoice_column = if receipt { "charge_invoice_id" } else { "fee_invoice_id" };
     run(pool, async |tx| {
-        let row: Option<(i64, bool, Option<i64>)> = sqlx::query_as(&format!("SELECT journal_entry_id, is_voided, {invoice_column} FROM {table} WHERE id = ?1"))
-            .bind(id)
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(db_err)?;
+        let row: Option<(i64, bool, Option<i64>)> =
+            sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT journal_entry_id, is_voided, {invoice_column} FROM {table} WHERE id = ?1")))
+                .bind(id)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(db_err)?;
         let (entry, voided, invoice) = row.ok_or("BOUNCE_NOT_FOUND: that bounced check does not exist")?;
         if voided {
             return Err("BOUNCE_ALREADY_VOIDED: that bounced check is already voided".into());

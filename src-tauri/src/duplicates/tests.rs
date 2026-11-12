@@ -3,7 +3,7 @@ use crate::money::Cents;
 use serde_json::json;
 
 async fn count(pool: &SqlitePool, sql: &str, id: i64) -> usize {
-    sqlx::query_scalar::<_, i64>(sql).bind(id).fetch_one(pool).await.unwrap() as usize
+    sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(sql)).bind(id).fetch_one(pool).await.unwrap() as usize
 }
 
 /// One of each kind, written through the forms' own save paths.
@@ -163,7 +163,7 @@ async fn a_credit_memo_copy_keeps_its_discounts_and_charges_so_it_totals_the_sam
     )
     .await
     .unwrap();
-    assert!(original.total_cents < 12_000, "the discount took something off: {}", original.total_cents);
+    assert!(original.total_cents < Cents(12_000), "the discount took something off: {}", original.total_cents);
 
     let copy = copy_source(&pool, "CREDIT_MEMO", original.id).await.unwrap();
     let kinds: Vec<&str> = copy.form_lines.iter().map(|f| f.kind.as_str()).collect();
@@ -184,7 +184,7 @@ async fn a_credit_memo_copy_keeps_its_discounts_and_charges_so_it_totals_the_sam
                 after(f.line_number),
                 f.account_id.unwrap(),
                 f.percent_ppm,
-                f.percent_ppm.is_none().then_some(f.amount_cents),
+                f.percent_ppm.is_none().then_some(f.amount_cents.get()),
                 f.is_taxable,
             ),
         })

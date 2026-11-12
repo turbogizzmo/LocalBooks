@@ -27,7 +27,7 @@ fn row(out: &mut String, depth: u32, label: &str, amount: Option<i64>) {
 
 fn lines(out: &mut String, lines: &[ReportLine]) {
     for line in lines {
-        row(out, line.depth, &line.label, line.amount_cents);
+        row(out, line.depth, &line.label, line.amount_cents.map(Cents::get));
     }
 }
 
@@ -42,10 +42,10 @@ async fn profit_and_loss() {
     let mut out = format!("Profit & Loss, {} to {}\n\n", pl.start_date, pl.end_date);
     lines(&mut out, &pl.lines);
     writeln!(out).unwrap();
-    row(&mut out, 0, "Total revenue", Some(pl.total_revenue_cents));
-    row(&mut out, 0, "Total expenses", Some(pl.total_expenses_cents));
-    row(&mut out, 0, "Gross profit", Some(pl.gross_profit_cents));
-    row(&mut out, 0, "Net income", Some(pl.net_income_cents));
+    row(&mut out, 0, "Total revenue", Some(pl.total_revenue_cents.get()));
+    row(&mut out, 0, "Total expenses", Some(pl.total_expenses_cents.get()));
+    row(&mut out, 0, "Gross profit", Some(pl.gross_profit_cents.get()));
+    row(&mut out, 0, "Net income", Some(pl.net_income_cents.get()));
     insta::assert_snapshot!(out);
 }
 
@@ -59,11 +59,11 @@ async fn balance_sheet() {
         writeln!(out, "Balance Sheet as of {} (fiscal year from {})\n", bs.as_of, bs.fiscal_year_start).unwrap();
         lines(&mut out, &bs.lines);
         writeln!(out).unwrap();
-        row(&mut out, 0, "Total assets", Some(bs.total_assets_cents));
-        row(&mut out, 0, "Total liabilities", Some(bs.total_liabilities_cents));
-        row(&mut out, 0, "Total equity", Some(bs.total_equity_cents));
-        row(&mut out, 0, "Net income", Some(bs.net_income_cents));
-        writeln!(out, "Balanced: {} (difference {})\n", bs.is_balanced, money(bs.difference_cents)).unwrap();
+        row(&mut out, 0, "Total assets", Some(bs.total_assets_cents.get()));
+        row(&mut out, 0, "Total liabilities", Some(bs.total_liabilities_cents.get()));
+        row(&mut out, 0, "Total equity", Some(bs.total_equity_cents.get()));
+        row(&mut out, 0, "Net income", Some(bs.net_income_cents.get()));
+        writeln!(out, "Balanced: {} (difference {})\n", bs.is_balanced, money(bs.difference_cents.get())).unwrap();
     }
     insta::assert_snapshot!(out);
 }
@@ -77,9 +77,9 @@ async fn trial_balance() {
     for r in &tb.rows {
         let name = format!("{} {}", r.account_number.as_deref().unwrap_or("----"), r.full_name);
         let side = |c: i64| if c == 0 { String::new() } else { money(c) };
-        writeln!(out, "{name:<44}{:<24}{:>16}{:>16}", r.account_type_name, side(r.debit_cents), side(r.credit_cents)).unwrap();
+        writeln!(out, "{name:<44}{:<24}{:>16}{:>16}", r.account_type_name, side(r.debit_cents.get()), side(r.credit_cents.get())).unwrap();
     }
-    writeln!(out, "{:<68}{:>16}{:>16}", "Total", money(tb.total_debit_cents), money(tb.total_credit_cents)).unwrap();
+    writeln!(out, "{:<68}{:>16}{:>16}", "Total", money(tb.total_debit_cents.get()), money(tb.total_credit_cents.get())).unwrap();
     insta::assert_snapshot!(out);
 }
 
@@ -100,9 +100,9 @@ async fn aging(payable: bool) -> String {
         writeln!(out).unwrap();
     };
     for r in &report.rows {
-        row(&r.party_name, &r.buckets_cents, r.total_cents);
+        row(&r.party_name, &r.buckets_cents.map(Cents::get), r.total_cents.get());
     }
-    row("TOTAL", &report.totals_cents, report.total_cents);
+    row("TOTAL", &report.totals_cents.map(Cents::get), report.total_cents.get());
     writeln!(out, "\nOpen items").unwrap();
     for item in &report.items {
         writeln!(
@@ -114,7 +114,7 @@ async fn aging(payable: bool) -> String {
             item.date,
             item.due_date,
             item.days_past_due,
-            money(item.open_cents)
+            money(item.open_cents.get())
         )
         .unwrap();
     }
@@ -249,7 +249,13 @@ async fn budget_vs_actual() {
     let mut amounts = Vec::new();
     for period in 1..=12 {
         let a = |account_id, amount_cents| crate::statements::BudgetAmount { account_id, period, amount_cents };
-        amounts.extend([a(services, 1_500_000), a(rent, 240_000), a(office, 30_000), a(checking, 4_000_000 + period * 100_000), a(card, 50_000)]);
+        amounts.extend([
+            a(services, Cents(1_500_000)),
+            a(rent, Cents(240_000)),
+            a(office, Cents(30_000)),
+            a(checking, Cents(4_000_000 + period * 100_000)),
+            a(card, Cents(50_000)),
+        ]);
     }
     crate::statements::set_budget_amounts(&pool, budget.id, &amounts).await.unwrap();
     let mut out = String::from("Profit & Loss Budget vs. Actual, Q1 2025\n\n");
@@ -287,7 +293,7 @@ async fn missing_checks() {
             r.date,
             r.kind,
             r.party_name.as_deref().unwrap_or("-"),
-            money(r.amount_cents),
+            money(r.amount_cents.get()),
             if r.is_voided { "  VOID" } else { "" },
             if r.is_duplicate { "  DUPLICATE" } else { "" }
         )
@@ -357,19 +363,19 @@ async fn inventory_reports() {
             "{:<16}{:>10}{:>12}{:>14}{:>12}{:>14}",
             r.name,
             qty(r.qty_on_hand_e4),
-            cost(r.average_cost_cents),
-            money(r.asset_value_cents),
-            money(r.sales_price_cents),
-            money(r.retail_value_cents)
+            cost(r.average_cost_cents.map(Cents::get)),
+            money(r.asset_value_cents.get()),
+            money(r.sales_price_cents.get()),
+            money(r.retail_value_cents.get())
         )
         .unwrap();
     }
-    writeln!(out, "{:<50}{:>14}{:>26}", "Total", money(v.total_asset_value_cents), money(v.total_retail_value_cents)).unwrap();
+    writeln!(out, "{:<50}{:>14}{:>26}", "Total", money(v.total_asset_value_cents.get()), money(v.total_retail_value_cents.get())).unwrap();
 
     let detail = crate::report_center::inventory_valuation_detail(p, d(2025, 11, 15), d(2025, 12, 31)).await.unwrap();
     writeln!(out, "\nInventory Valuation Detail, {} to {}\n", detail.start_date, detail.end_date).unwrap();
     for item in &detail.items {
-        writeln!(out, "{}  (opening {} worth {})", item.name, qty(item.opening_qty_e4), money(item.opening_value_cents)).unwrap();
+        writeln!(out, "{}  (opening {} worth {})", item.name, qty(item.opening_qty_e4), money(item.opening_value_cents.get())).unwrap();
         for r in &item.rows {
             writeln!(
                 out,
@@ -378,15 +384,15 @@ async fn inventory_reports() {
                 r.kind,
                 r.party_name.as_deref().unwrap_or("-"),
                 qty(r.qty_change_e4),
-                money(r.value_change_cents),
+                money(r.value_change_cents.get()),
                 qty(r.qty_on_hand_e4),
-                cost(r.average_cost_cents),
-                money(r.asset_value_cents)
+                cost(r.average_cost_cents.map(Cents::get)),
+                money(r.asset_value_cents.get())
             )
             .unwrap();
         }
     }
-    writeln!(out, "Total value {}", money(detail.total_value_cents)).unwrap();
+    writeln!(out, "Total value {}", money(detail.total_value_cents.get())).unwrap();
 
     let status = crate::report_center::stock_status(p, d(2025, 11, 1), d(2025, 12, 31)).await.unwrap();
     writeln!(out, "\nInventory Stock Status by Item, {} to {}\n", status.start_date, status.end_date).unwrap();

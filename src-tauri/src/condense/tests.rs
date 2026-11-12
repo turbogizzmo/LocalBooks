@@ -68,15 +68,15 @@ async fn reconcile(pool: &SqlitePool, account_id: i64, through: NaiveDate) {
         return;
     }
     let cleared = crate::reconcile::account_state(pool, account_id).await.unwrap().reconciled_balance_cents;
-    let ending = cleared + lines.iter().map(|l| l.amount_cents).sum::<i64>();
+    let ending = cleared.get() + lines.iter().map(|l| l.amount_cents.get()).sum::<i64>();
     let rec = crate::reconcile::start(pool, account_id, through, ending).await.unwrap();
     let ids: Vec<i64> = lines.iter().map(|l| l.line_id).collect();
-    assert_eq!(crate::reconcile::set_lines_cleared(pool, rec.id, &ids, true).await.unwrap().difference_cents, 0);
+    assert_eq!(crate::reconcile::set_lines_cleared(pool, rec.id, &ids, true).await.unwrap().difference_cents, Cents(0));
     crate::reconcile::lock(pool, rec.id).await.unwrap();
 }
 
 async fn count(pool: &SqlitePool, sql: &str) -> i64 {
-    sqlx::query_scalar(sql).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).fetch_one(pool).await.unwrap()
 }
 
 /// What a person compares before and after: balances, aging, inventory, reconciliation.
@@ -444,7 +444,7 @@ async fn refuses_when_the_books_cannot_be_archived_as_verified() {
     let trigger: String = sqlx::query_scalar("SELECT sql FROM sqlite_schema WHERE name = 'trg_jl_update_draft_only'").fetch_one(&mut *conn).await.unwrap();
     sqlx::query("DROP TRIGGER trg_jl_update_draft_only").execute(&mut *conn).await.unwrap();
     sqlx::query("UPDATE journal_lines SET memo = 'edited' WHERE id = (SELECT MIN(id) FROM journal_lines)").execute(&mut *conn).await.unwrap();
-    sqlx::query(&trigger).execute(&mut *conn).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(trigger.as_str())).execute(&mut *conn).await.unwrap();
     drop(conn);
     let tampered = content_digest(&pool).await.unwrap();
     let err = condense_live_on(&db, d(2025, 3, 31), today()).await.unwrap_err();

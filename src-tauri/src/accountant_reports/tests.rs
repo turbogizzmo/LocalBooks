@@ -132,7 +132,7 @@ async fn reconcile_all_but_last(pool: &SqlitePool, account_id: i64, end: NaiveDa
         .collect();
     let (clear, _) = lines.split_at(lines.len() - 1);
     let state = crate::reconcile::account_state(pool, account_id).await.unwrap();
-    let ending = state.reconciled_balance_cents + clear.iter().map(|l| l.amount_cents).sum::<i64>();
+    let ending = state.reconciled_balance_cents.get() + clear.iter().map(|l| l.amount_cents.get()).sum::<i64>();
     let rec = crate::reconcile::start(pool, account_id, end, ending).await.unwrap();
     crate::reconcile::set_lines_cleared(pool, rec.id, &clear.iter().map(|l| l.line_id).collect::<Vec<_>>(), true).await.unwrap();
     crate::reconcile::lock(pool, rec.id).await.unwrap();
@@ -200,7 +200,7 @@ async fn reconciliations_keep_a_snapshot_and_report_changes_made_afterwards() {
             .await
             .unwrap();
     for t in triggers {
-        sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP TRIGGER {t}"))).execute(&pool).await.unwrap();
     }
     let cleared: Vec<(i64, i64)> =
         sqlx::query_as("SELECT id, journal_entry_id FROM journal_lines WHERE reconciliation_id = ?1 ORDER BY id").bind(january).fetch_all(&pool).await.unwrap();
@@ -231,7 +231,7 @@ async fn older_reconciliations_are_checked_by_their_totals() {
     let rec = reconcile_all_but_last(&pool, checking, d(2025, 1, 31)).await;
     // As if completed before migration 0056: no snapshot.
     for t in ["trg_rec_snapshot_lines_no_delete", "trg_rec_snapshot_no_delete"] {
-        sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP TRIGGER {t}"))).execute(&pool).await.unwrap();
     }
     sqlx::query("DELETE FROM reconciliation_snapshot_lines").execute(&pool).await.unwrap();
     sqlx::query("DELETE FROM reconciliation_snapshots").execute(&pool).await.unwrap();
@@ -244,7 +244,7 @@ async fn older_reconciliations_are_checked_by_their_totals() {
     let triggers: Vec<String> =
         sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'journal_lines'").fetch_all(&pool).await.unwrap();
     for t in triggers {
-        sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP TRIGGER {t}"))).execute(&pool).await.unwrap();
     }
     sqlx::query("UPDATE journal_lines SET debit_cents = 12000 WHERE reconciliation_id = ?1").bind(rec).execute(&pool).await.unwrap();
     let report = discrepancy(&pool, None, d(2025, 3, 1)).await.unwrap();

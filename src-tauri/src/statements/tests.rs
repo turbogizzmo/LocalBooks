@@ -76,10 +76,10 @@ async fn profit_and_loss_by_class_splits_every_row_and_adds_across() {
     assert_eq!(report.lines.len(), plain.lines.len());
     for (row, line) in report.lines.iter().zip(&plain.lines) {
         assert_eq!(row.label, line.label);
-        assert_eq!(*row.amounts_cents.last().unwrap(), line.amount_cents, "Total column of {}", row.label);
+        assert_eq!(*row.amounts_cents.last().unwrap(), line.amount_cents.map(Cents::get), "Total column of {}", row.label);
         if let Some(total) = line.amount_cents {
             let across: i64 = row.amounts_cents[..3].iter().map(|a| a.unwrap_or(0)).sum();
-            assert_eq!(across, total, "{} adds across", row.label);
+            assert_eq!(across, total.get(), "{} adds across", row.label);
         }
     }
     let row = |label: &str| report.lines.iter().find(|l| l.label == label).unwrap().amounts_cents.clone();
@@ -156,11 +156,11 @@ async fn cash_basis_counts_invoices_as_paid_and_periods_line_up() {
     pay(second, ymd(2026, 3, 20), Cents(30_000)).await.unwrap();
 
     let net = |basis, m: u32, last: u32| profit_and_loss_basis(&pool, ymd(2026, m, 1), ymd(2026, m, last), None, basis);
-    assert_eq!(net(Basis::Accrual, 1, 31).await.unwrap().net_income_cents, 90_000);
-    assert_eq!(net(Basis::Cash, 1, 31).await.unwrap().net_income_cents, -10_000, "January: only the rent was paid");
-    assert_eq!(net(Basis::Cash, 2, 28).await.unwrap().net_income_cents, 40_000);
-    assert_eq!(net(Basis::Accrual, 3, 31).await.unwrap().net_income_cents, 30_000, "invoice 50,000 less the 20,000 credit");
-    assert_eq!(net(Basis::Cash, 3, 31).await.unwrap().net_income_cents, 90_000, "60,000 + 30,000 received; the credit applied nets to zero");
+    assert_eq!(net(Basis::Accrual, 1, 31).await.unwrap().net_income_cents, Cents(90_000));
+    assert_eq!(net(Basis::Cash, 1, 31).await.unwrap().net_income_cents, Cents(-10_000), "January: only the rent was paid");
+    assert_eq!(net(Basis::Cash, 2, 28).await.unwrap().net_income_cents, Cents(40_000));
+    assert_eq!(net(Basis::Accrual, 3, 31).await.unwrap().net_income_cents, Cents(30_000), "invoice 50,000 less the 20,000 credit");
+    assert_eq!(net(Basis::Cash, 3, 31).await.unwrap().net_income_cents, Cents(90_000), "60,000 + 30,000 received; the credit applied nets to zero");
     let year = |basis| profit_and_loss_basis(&pool, ymd(2026, 1, 1), ymd(2026, 12, 31), None, basis);
     assert_eq!(year(Basis::Cash).await.unwrap().net_income_cents, year(Basis::Accrual).await.unwrap().net_income_cents, "everything is paid by year end");
 
@@ -224,12 +224,12 @@ async fn parent_classes_get_subclass_columns_other_and_a_total() {
     // Filtering the plain Profit & Loss by East includes its subclasses; West alone excludes them.
     let east_only =
         profit_and_loss_filtered(&pool, ymd(2026, 5, 1), ymd(2026, 5, 31), Some(&ClassFilter { class_ids: vec![east], unclassified: false })).await.unwrap();
-    assert_eq!(east_only.net_income_cents, 700);
+    assert_eq!(east_only.net_income_cents, Cents(700));
     let west_only =
         profit_and_loss_filtered(&pool, ymd(2026, 5, 1), ymd(2026, 5, 31), Some(&ClassFilter { class_ids: vec![west], unclassified: false })).await.unwrap();
-    assert_eq!(west_only.net_income_cents, 100);
+    assert_eq!(west_only.net_income_cents, Cents(100));
     let none = profit_and_loss_filtered(&pool, ymd(2026, 5, 1), ymd(2026, 5, 31), Some(&ClassFilter { class_ids: vec![], unclassified: true })).await.unwrap();
-    assert_eq!(none.net_income_cents, 0);
+    assert_eq!(none.net_income_cents, Cents(0));
 }
 
 #[tokio::test]
@@ -258,33 +258,33 @@ async fn statements_tie_out_with_subaccounts_and_retained_earnings() {
     post(&pool, ymd(2026, 2, 20), checking, interest, 1_234).await;
 
     let pl = profit_and_loss(&pool, ymd(2026, 1, 1), ymd(2026, 12, 31)).await.unwrap();
-    assert_eq!(pl.total_revenue_cents, 501_234);
-    assert_eq!(pl.total_expenses_cents, 187_500);
-    assert_eq!(pl.gross_profit_cents, 450_000);
-    assert_eq!(pl.net_income_cents, 313_734);
+    assert_eq!(pl.total_revenue_cents, Cents(501_234));
+    assert_eq!(pl.total_expenses_cents, Cents(187_500));
+    assert_eq!(pl.gross_profit_cents, Cents(450_000));
+    assert_eq!(pl.net_income_cents, Cents(313_734));
     assert_eq!(pl.net_income_display, "$3,137.34");
     let net = pl.lines.last().unwrap();
-    assert_eq!((net.kind, net.label.as_str(), net.amount_cents), (LineKind::Net, "Net Income", Some(313_734)));
+    assert_eq!((net.kind, net.label.as_str(), net.amount_cents), (LineKind::Net, "Net Income", Some(Cents(313_734))));
     // Subaccount nests under its parent with a parent total.
     assert_eq!(find(&pl.lines, "6510 Electric").depth, 2);
-    assert_eq!(find(&pl.lines, "6500 Utilities").amount_cents, Some(10_000));
-    assert_eq!(find(&pl.lines, "Total 6500 Utilities").amount_cents, Some(17_500));
-    assert_eq!(find(&pl.lines, "Total Other Income").amount_cents, Some(1_234));
+    assert_eq!(find(&pl.lines, "6500 Utilities").amount_cents, Some(Cents(10_000)));
+    assert_eq!(find(&pl.lines, "Total 6500 Utilities").amount_cents, Some(Cents(17_500)));
+    assert_eq!(find(&pl.lines, "Total Other Income").amount_cents, Some(Cents(1_234)));
 
     let bs = balance_sheet(&pool, ymd(2026, 6, 30)).await.unwrap();
     assert!(bs.is_balanced, "difference {}", bs.difference_cents);
-    assert_eq!(bs.total_assets_cents, 1_531_234);
-    assert_eq!(bs.total_liabilities_cents, 17_500);
-    assert_eq!(bs.net_income_cents, 313_734);
-    assert_eq!(bs.total_equity_cents, 1_000_000 + 200_000 + 313_734);
-    assert_eq!(find(&bs.lines, "3900 Retained Earnings").amount_cents, Some(200_000));
+    assert_eq!(bs.total_assets_cents, Cents(1_531_234));
+    assert_eq!(bs.total_liabilities_cents, Cents(17_500));
+    assert_eq!(bs.net_income_cents, Cents(313_734));
+    assert_eq!(bs.total_equity_cents, Cents(1_000_000 + 200_000 + 313_734));
+    assert_eq!(find(&bs.lines, "3900 Retained Earnings").amount_cents, Some(Cents(200_000)));
     assert_eq!(find(&bs.lines, "TOTAL ASSETS").kind, LineKind::Net);
-    assert_eq!(find(&bs.lines, "TOTAL LIABILITIES AND EQUITY").amount_cents, Some(1_531_234));
+    assert_eq!(find(&bs.lines, "TOTAL LIABILITIES AND EQUITY").amount_cents, Some(Cents(1_531_234)));
 
     // As of the prior year end, everything is still current-year income.
     let prior = balance_sheet(&pool, ymd(2025, 12, 31)).await.unwrap();
     assert!(prior.is_balanced);
-    assert_eq!(prior.net_income_cents, 200_000);
+    assert_eq!(prior.net_income_cents, Cents(200_000));
     assert!(prior.lines.iter().all(|l| l.label != "3900 Retained Earnings"));
 }
 
@@ -296,14 +296,14 @@ async fn balance_sheet_closes_net_income_at_the_configured_fiscal_year() {
     post(&pool, ymd(2026, 8, 1), checking, services, 40_000).await; // fiscal 2026-27
 
     let calendar = balance_sheet(&pool, ymd(2026, 10, 13)).await.unwrap();
-    assert_eq!((calendar.fiscal_year_start, calendar.net_income_cents), (ymd(2026, 1, 1), 140_000));
+    assert_eq!((calendar.fiscal_year_start, calendar.net_income_cents), (ymd(2026, 1, 1), Cents(140_000)));
 
     crate::preferences::set(&pool, "fiscal_year_start", "07-01").await.unwrap();
     crate::preferences::set(&pool, "currency_symbol", "€").await.unwrap();
     let july = balance_sheet(&pool, ymd(2026, 10, 13)).await.unwrap();
     assert!(july.is_balanced);
-    assert_eq!((july.fiscal_year_start, july.net_income_cents), (ymd(2026, 7, 1), 40_000));
-    assert_eq!(find(&july.lines, "3900 Retained Earnings").amount_cents, Some(100_000));
+    assert_eq!((july.fiscal_year_start, july.net_income_cents), (ymd(2026, 7, 1), Cents(40_000)));
+    assert_eq!(find(&july.lines, "3900 Retained Earnings").amount_cents, Some(Cents(100_000)));
     assert_eq!(july.currency_symbol, "€");
     let pl = profit_and_loss(&pool, ymd(2026, 7, 1), ymd(2026, 10, 13)).await.unwrap();
     assert_eq!(pl.net_income_display, "€400.00");
@@ -345,7 +345,7 @@ async fn balance_sheet_previous_year_comparison_lines_up_and_matches_each_date()
     for (i, as_of) in [now, then].into_iter().enumerate() {
         let bs = balance_sheet(&pool, as_of).await.unwrap();
         for line in &bs.lines {
-            assert_eq!(row(&report.lines, &line.label)[i], line.amount_cents, "{} on {as_of}", line.label);
+            assert_eq!(row(&report.lines, &line.label)[i], line.amount_cents.map(Cents::get), "{} on {as_of}", line.label);
         }
     }
     assert_eq!(row(&report.lines, "1020 Savings"), [Some(300_000), Some(0), Some(300_000), None], "new this year: no percent against zero");
@@ -375,15 +375,15 @@ async fn balance_sheet_budget_vs_actual_compares_month_end_balances() {
         budget.id,
         &[
             // Balance sheet accounts: the month-end balance.
-            a(checking, 1, 550_000),
-            a(checking, 2, 600_000),
-            a(card, 2, 20_000),
-            a(owner, 2, 500_000),
+            a(checking, 1, Cents(550_000)),
+            a(checking, 2, Cents(600_000)),
+            a(card, 2, Cents(20_000)),
+            a(owner, 2, Cents(500_000)),
             // Income and expense: each month's amount, giving the budgeted net income to date.
-            a(services, 1, 50_000),
-            a(services, 2, 50_000),
-            a(services, 3, 50_000),
-            a(rent, 2, 25_000),
+            a(services, 1, Cents(50_000)),
+            a(services, 2, Cents(50_000)),
+            a(services, 3, Cents(50_000)),
+            a(rent, 2, Cents(25_000)),
         ],
     )
     .await
@@ -399,7 +399,7 @@ async fn balance_sheet_budget_vs_actual_compares_month_end_balances() {
         "100,000 income less 25,000 rent budgeted through February"
     );
     let actual = balance_sheet(&pool, ymd(2026, 2, 28)).await.unwrap();
-    assert_eq!(row(&report.lines, "TOTAL ASSETS")[0], Some(actual.total_assets_cents));
+    assert_eq!(row(&report.lines, "TOTAL ASSETS")[0], Some(actual.total_assets_cents.get()));
     assert_eq!(row(&report.lines, "TOTAL ASSETS")[1], Some(600_000));
 
     // The Profit and Loss budget report ignores the balance sheet amounts.
@@ -417,16 +417,16 @@ async fn cash_flow_sections_follow_the_company_mapping() {
     post(&pool, ymd(2026, 3, 1), checking, loan, 500_000).await;
     post(&pool, ymd(2026, 3, 2), equipment, checking, 200_000).await;
     let by_type = cash_flow(&pool, ymd(2026, 1, 1), ymd(2026, 12, 31)).await.unwrap();
-    assert_eq!(find(&by_type.lines, "Net cash provided by investing activities").amount_cents, Some(-200_000));
-    assert_eq!(find(&by_type.lines, "Net cash provided by financing activities").amount_cents, Some(500_000));
-    assert_eq!(find(&by_type.lines, "1500 Equipment").amount_cents, Some(-200_000));
+    assert_eq!(find(&by_type.lines, "Net cash provided by investing activities").amount_cents, Some(Cents(-200_000)));
+    assert_eq!(find(&by_type.lines, "Net cash provided by financing activities").amount_cents, Some(Cents(500_000)));
+    assert_eq!(find(&by_type.lines, "1500 Equipment").amount_cents, Some(Cents(-200_000)));
 
     // Moving the loan to operating moves its line, and the statement still ties to the bank.
     crate::preferences::set(&pool, CASH_FLOW_SECTIONS, &format!(r#"{{"{loan}":"OPERATING"}}"#)).await.unwrap();
     let moved = cash_flow(&pool, ymd(2026, 1, 1), ymd(2026, 12, 31)).await.unwrap();
     assert!(!moved.lines.iter().any(|l| l.label == "FINANCING ACTIVITIES"), "nothing left in financing");
-    assert_eq!(find(&moved.lines, "Net cash provided by operating activities").amount_cents, Some(500_000));
-    assert_eq!(moved.net_change_cents, 300_000);
+    assert_eq!(find(&moved.lines, "Net cash provided by operating activities").amount_cents, Some(Cents(500_000)));
+    assert_eq!(moved.net_change_cents, Cents(300_000));
 
     // Only balance sheet accounts other than cash can move, and only to a real section.
     let rent = account_id(&pool, "6300").await;
@@ -437,5 +437,5 @@ async fn cash_flow_sections_follow_the_company_mapping() {
     // Account numbers can be turned off in reports.
     crate::preferences::set(&pool, crate::preferences::SHOW_ACCOUNT_NUMBERS, "false").await.unwrap();
     let plain = cash_flow(&pool, ymd(2026, 1, 1), ymd(2026, 12, 31)).await.unwrap();
-    assert_eq!(find(&plain.lines, "Equipment").amount_cents, Some(-200_000));
+    assert_eq!(find(&plain.lines, "Equipment").amount_cents, Some(Cents(-200_000)));
 }

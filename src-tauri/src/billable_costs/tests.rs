@@ -62,7 +62,7 @@ async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
     let expense_before = balance(&pool, supplies).await;
     let invoice = bill_costs(&pool, bill(None)).await.unwrap();
     // $200 back, plus 15% markup ($30).
-    assert_eq!(invoice.total_cents, 23_000);
+    assert_eq!(invoice.total_cents, Cents(23_000));
     assert_eq!(balance(&pool, supplies).await, expense_before - 20_000, "the reimbursement reduces the expense");
     assert_eq!(balance(&pool, services).await, -3_000, "the markup is income");
     assert!(list_unbilled(&pool, Some(acme)).await.unwrap().is_empty(), "billed costs leave the list");
@@ -80,7 +80,7 @@ async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
             .map(|l| crate::invoices::InvoiceLineInput {
                 description: l.description.clone(),
                 quantity_e4: l.quantity_e4,
-                rate_cents: Cents(l.rate_cents),
+                rate_cents: l.rate_cents,
                 income_account_id: l.income_account_id,
                 product_service_id: None,
                 class_id: None,
@@ -107,7 +107,7 @@ async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
     assert!(crate::preferences::set(&pool, "reimbursed_income_account_id", &supplies.to_string()).await.unwrap_err().starts_with("PREF_BAD_INCOME_ACCOUNT"));
     let (supplies_before, income_before) = (balance(&pool, supplies).await, balance(&pool, reimbursed).await);
     let as_income = bill_costs(&pool, bill(Some("10"))).await.unwrap();
-    assert_eq!(as_income.total_cents, 22_000);
+    assert_eq!(as_income.total_cents, Cents(22_000));
     assert_eq!(balance(&pool, supplies).await, supplies_before, "the expense stays");
     assert_eq!(balance(&pool, reimbursed).await, income_before - 20_000);
     assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
@@ -268,10 +268,10 @@ async fn billable_time_is_invoiced_once_at_its_hours_and_rate() {
     // Time with no service item can't be billed: the item gives the invoice line its income account.
     assert!(bill_costs(&pool, bill(vec![time[1].id])).await.unwrap_err().starts_with("TIME_NO_ITEM"));
     let invoice = bill_costs(&pool, bill(vec![time[0].id])).await.unwrap();
-    assert_eq!(invoice.total_cents, 14_250);
+    assert_eq!(invoice.total_cents, Cents(14_250));
     assert_eq!(balance(&pool, services).await, -14_250, "the service item's income account");
     let lines = crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap().items;
-    assert_eq!((lines[0].quantity_e4, lines[0].rate_cents, lines[0].product_service_id), (15_000, 9_500, Some(design)));
+    assert_eq!((lines[0].quantity_e4, lines[0].rate_cents, lines[0].product_service_id), (15_000, Cents(9_500), Some(design)));
     assert_eq!(list_unbilled_time(&pool, Some(acme)).await.unwrap().len(), 1, "billed time leaves the list");
     assert!(bill_costs(&pool, bill(vec![time[0].id])).await.unwrap_err().starts_with("TIME_NOT_BILLABLE"), "never billed twice");
     let removed = sqlx::query("DELETE FROM billed_time").execute(&pool).await.unwrap_err().to_string();
@@ -313,7 +313,7 @@ async fn a_foreign_currency_cost_is_billed_at_its_home_amount() {
     )
     .await
     .unwrap();
-    assert_eq!(invoice.total_cents, 22_100);
+    assert_eq!(invoice.total_cents, Cents(22_100));
     assert_eq!(balance(&pool, supplies).await, expense_before - 22_100, "the expense is back to where it was");
     let line = &crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap().items[0];
     assert!(line.description.ends_with(", EUR 200.00)"), "{}", line.description);
@@ -430,10 +430,14 @@ async fn a_billable_card_charge_is_invoiced_from_the_invoice_form() {
     let expense_before = balance(&pool, supplies).await;
     let invoice = crate::print_queue::create_invoice(&pool, form("acme : kitchen"), &chosen, false, None).await.unwrap();
     // $500 for the form's own line, $120 back for the charge and 10% markup ($12).
-    assert_eq!(invoice.total_cents, 63_200);
+    assert_eq!(invoice.total_cents, Cents(63_200));
     assert_eq!(invoice.customer_name, "Acme:Kitchen");
     let lines = crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap().items;
-    assert_eq!(lines.iter().map(|l| l.rate_cents).collect::<Vec<_>>(), [50_000, 12_000, 1_200], "the form's lines first, then the cost and its markup");
+    assert_eq!(
+        lines.iter().map(|l| l.rate_cents).collect::<Vec<_>>(),
+        [Cents(50_000), Cents(12_000), Cents(1_200)],
+        "the form's lines first, then the cost and its markup"
+    );
     assert_eq!(balance(&pool, supplies).await, expense_before - 12_000, "the reimbursement reduces the expense, as Bill Costs does");
     assert!(list_unbilled(&pool, Some(job)).await.unwrap().is_empty(), "the charge is marked billed by the invoice");
     let billed: i64 =
@@ -447,4 +451,104 @@ async fn a_billable_card_charge_is_invoiced_from_the_invoice_form() {
     euro.currency = Some(crate::ledger::ForeignCurrency { code: "EUR".into(), exchange_rate_e6: 1_105_000 });
     let foreign = crate::print_queue::create_invoice(&pool, euro, &chosen, false, None).await.unwrap_err();
     assert!(foreign.starts_with("COST_FOREIGN_INVOICE"), "{foreign}");
+}
+
+/// Gap T84: freight added on a bill as a charge line can name the job and be billed on to it,
+/// like a split line; a check's charge too. A discount line can name a job but is never billed.
+#[tokio::test]
+async fn a_charge_line_on_a_bill_or_check_is_billed_on_to_its_job() {
+    let pool = test_pool().await;
+    let (checking, supplies, rent, freight) =
+        (account(&pool, "1010").await, account(&pool, "6250").await, account(&pool, "6300").await, account(&pool, "6400").await);
+    let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
+    let other = crate::sales::create_customer(&pool, "Other", None).await.unwrap().id;
+    let bill = |billable: serde_json::Value, discount_billable: serde_json::Value| -> crate::expenses::BillInput {
+        serde_json::from_value(serde_json::json!({
+            "vendorName": "Harbor Hardware", "billNumber": "B-84", "billDate": "2026-05-03", "dueDate": "2026-05-31", "memo": null, "totalCents": 22_000,
+            "lines": [{ "accountId": supplies, "amountCents": 20_000, "memo": "Lumber" }, { "accountId": rent, "amountCents": 1_000, "memo": "Pallet" }],
+            "formLines": [
+                { "afterLine": 1, "kind": "CHARGE", "amountCents": 1_500, "accountId": freight, "description": "Freight", "customerId": acme, "billable": billable },
+                { "afterLine": 2, "kind": "DISCOUNT", "amountCents": 500, "accountId": rent, "customerId": other, "billable": discount_billable }
+            ]
+        }))
+        .unwrap()
+    };
+    // A discount is never billable.
+    let err = crate::expenses::post_vendor_bill(&pool, bill(json_true(), json_true())).await.unwrap_err();
+    assert!(err.starts_with("BILL_FORM_LINE_BILLABLE"), "{err}");
+
+    let posted = crate::expenses::post_vendor_bill(&pool, bill(json_true(), serde_json::Value::Null)).await.unwrap();
+    let stored = crate::purchase_lines::lines_of(&pool, crate::purchase_lines::PurchaseDoc::Bill, posted.id).await.unwrap();
+    assert_eq!(
+        stored.iter().map(|l| (l.kind.as_str(), l.customer_id, l.billable)).collect::<Vec<_>>(),
+        [("CHARGE", Some(acme), true), ("DISCOUNT", Some(other), false)]
+    );
+    assert!(list_unbilled(&pool, Some(other)).await.unwrap().is_empty(), "the discount isn't a cost to bill");
+    let unbilled = list_unbilled(&pool, Some(acme)).await.unwrap();
+    assert_eq!(
+        unbilled.iter().map(|c| (c.source.as_str(), c.amount_cents, c.memo.as_deref(), c.account_id, c.vendor_name.as_deref())).collect::<Vec<_>>(),
+        [("CHARGE", 1_500, Some("Freight"), freight, Some("Harbor Hardware"))]
+    );
+
+    // Billed on an invoice like an expense line: the reimbursement takes it off the freight account.
+    let freight_before = balance(&pool, freight).await;
+    let billing = BillCostsInput {
+        customer_id: acme,
+        costs: vec![CostRef { source: "CHARGE".into(), line_id: unbilled[0].line_id }],
+        time: Vec::new(),
+        issue_date: d(10),
+        due_date: d(31),
+        markup_percent: Some("0".into()),
+        tax_rate_id: None,
+    };
+    let invoice = bill_costs(&pool, billing.clone()).await.unwrap();
+    assert_eq!(invoice.total_cents, Cents(1_500));
+    assert_eq!(balance(&pool, freight).await, freight_before - 1_500);
+    assert!(list_unbilled(&pool, Some(acme)).await.unwrap().is_empty());
+    assert!(bill_costs(&pool, billing.clone()).await.unwrap_err().starts_with("COST_NOT_BILLABLE"), "never billed twice");
+
+    // An edited bill keeps the charge billed; voiding the invoice frees the replacement's charge.
+    let edited = crate::edits::replace_bill(&pool, posted.id, bill(json_true(), serde_json::Value::Null)).await.unwrap();
+    assert!(list_unbilled(&pool, Some(acme)).await.unwrap().is_empty(), "the replacement's charge is still billed");
+    let entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM invoices WHERE id = ?1").bind(invoice.id).fetch_one(&pool).await.unwrap();
+    crate::ledger::void_transaction(&pool, entry).await.unwrap();
+    let freed = list_unbilled(&pool, Some(acme)).await.unwrap();
+    let edited_charge = crate::purchase_lines::lines_of(&pool, crate::purchase_lines::PurchaseDoc::Bill, edited).await.unwrap();
+    assert_eq!(freed.len(), 1);
+    let charge_id: i64 =
+        sqlx::query_scalar("SELECT id FROM purchase_form_lines WHERE bill_id = ?1 AND kind = 'CHARGE'").bind(edited).fetch_one(&pool).await.unwrap();
+    assert_eq!((freed[0].line_id, edited_charge[0].billable), (charge_id, true));
+
+    // Not marked billable: not on the list.
+    let unmarked: crate::expenses::BillInput = serde_json::from_value(serde_json::json!({
+        "vendorName": "Harbor Hardware", "billNumber": "B-85", "billDate": "2026-05-04", "dueDate": "2026-05-31", "memo": null, "totalCents": 20_500,
+        "lines": [{ "accountId": supplies, "amountCents": 20_000, "memo": null }],
+        "formLines": [{ "afterLine": 1, "kind": "CHARGE", "amountCents": 500, "accountId": freight, "customerId": acme, "billable": false }]
+    }))
+    .unwrap();
+    crate::expenses::post_vendor_bill(&pool, unmarked).await.unwrap();
+    assert_eq!(list_unbilled(&pool, Some(acme)).await.unwrap().len(), 1);
+
+    // A check's charge line, with the company default marking it billable.
+    crate::preferences::set(&pool, "expenses_billable_default", "true").await.unwrap();
+    let check: ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": "Harbor Hardware", "paymentAccountId": checking,
+        "expenseDate": "2026-05-05", "checkNumber": null, "paymentMethod": null, "memo": null,
+        "lines": [{ "accountId": rent, "amountCents": 5_000, "memo": null }],
+        "formLines": [{ "afterLine": 1, "kind": "CHARGE", "percentPpm": 100_000, "accountId": freight, "description": "Delivery", "customerId": acme }] }))
+    .unwrap();
+    crate::expenses::post_expense(&pool, check).await.unwrap();
+    let unbilled = list_unbilled(&pool, Some(acme)).await.unwrap();
+    assert_eq!(
+        unbilled.iter().map(|c| (c.source.as_str(), c.amount_cents, c.memo.as_deref())).collect::<Vec<_>>(),
+        [("CHARGE", 1_500, Some("Freight")), ("CHARGE", 500, Some("Delivery"))]
+    );
+    let costs = unbilled.iter().map(|c| CostRef { source: c.source.clone(), line_id: c.line_id }).collect();
+    let invoice = bill_costs(&pool, BillCostsInput { costs, ..billing }).await.unwrap();
+    assert_eq!(invoice.total_cents, Cents(2_000));
+    assert!(list_unbilled(&pool, None).await.unwrap().is_empty());
+    assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
+}
+
+fn json_true() -> serde_json::Value {
+    serde_json::Value::Bool(true)
 }

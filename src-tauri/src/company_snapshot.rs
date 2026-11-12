@@ -222,10 +222,17 @@ fn top(summary: &SummaryReport) -> (Vec<WidgetLine>, i64, i64) {
     let lines: Vec<WidgetLine> = rows
         .iter()
         .take(TOP)
-        .map(|r| WidgetLine { label: r.label.clone(), amount_cents: r.amount_cents, overdue_cents: None, account_id: None, previous_cents: None, date: None })
+        .map(|r| WidgetLine {
+            label: r.label.clone(),
+            amount_cents: r.amount_cents.get(),
+            overdue_cents: None,
+            account_id: None,
+            previous_cents: None,
+            date: None,
+        })
         .collect();
     let shown: i64 = lines.iter().map(|l| l.amount_cents).sum();
-    (lines, summary.total_cents - shown, summary.total_cents)
+    (lines, summary.total_cents.get() - shown, summary.total_cents.get())
 }
 
 async fn figures(
@@ -248,7 +255,7 @@ async fn figures(
                 .filter(|l| l.kind == LineKind::Account && l.account_id.is_some_and(|id| kinds.iter().any(|(k, _)| *k == id)))
                 .map(|l| WidgetLine {
                     label: l.label.clone(),
-                    amount_cents: l.amount_cents.unwrap_or(0),
+                    amount_cents: l.amount_cents.map_or(0, crate::money::Cents::get),
                     overdue_cents: None,
                     account_id: l.account_id,
                     previous_cents: None,
@@ -269,15 +276,15 @@ async fn figures(
                 .take(TOP)
                 .map(|r| WidgetLine {
                     label: r.party_name.clone(),
-                    amount_cents: r.total_cents,
-                    overdue_cents: Some(r.buckets_cents[1..].iter().sum()),
+                    amount_cents: r.total_cents.get(),
+                    overdue_cents: Some(r.buckets_cents[1..].iter().map(|c| c.get()).sum()),
                     account_id: None,
                     previous_cents: None,
                     date: None,
                 })
                 .collect();
             let shown: i64 = lines.iter().map(|l| l.amount_cents).sum();
-            (lines, aging.total_cents - shown, Vec::new(), aging.total_cents, if payable { "ap" } else { "ar" })
+            (lines, aging.total_cents.get() - shown, Vec::new(), aging.total_cents.get(), if payable { "ap" } else { "ar" })
         }
         WidgetKind::IncomeExpenseTrend => {
             let graph = crate::graphs::income_expense(pool, start, end, report_basis(pool).await?).await?;
@@ -286,12 +293,12 @@ async fn figures(
                 .iter()
                 .map(|p| TrendPoint {
                     month: p.month.month.clone(),
-                    income_cents: p.income_cents,
-                    expense_cents: p.expense_cents,
-                    net_cents: p.net_income_cents,
+                    income_cents: p.income_cents.get(),
+                    expense_cents: p.expense_cents.get(),
+                    net_cents: p.net_income_cents.get(),
                 })
                 .collect();
-            (Vec::new(), 0, trend, graph.net_income_cents, "pl")
+            (Vec::new(), 0, trend, graph.net_income_cents.get(), "pl")
         }
         WidgetKind::TopCustomers => {
             let (lines, others, total) = top(&crate::report_center::by_party(pool, false, start, end).await?);
@@ -341,7 +348,11 @@ async fn figures(
                 .lines
                 .iter()
                 .filter(|l| l.kind == LineKind::Account && l.account_id.is_some_and(|id| ids.contains(&id)))
-                .map(|l| crate::report_center::SummaryRow { label: l.label.clone(), quantity_e4: None, amount_cents: l.amount_cents.unwrap_or(0) })
+                .map(|l| crate::report_center::SummaryRow {
+                    label: l.label.clone(),
+                    quantity_e4: None,
+                    amount_cents: l.amount_cents.unwrap_or(crate::money::Cents::ZERO),
+                })
                 .collect();
             let total = if income { pl.total_revenue_cents } else { pl.total_expenses_cents };
             let summary = SummaryReport { start_date: start, end_date: end, rows, total_cents: total };
@@ -362,11 +373,11 @@ async fn figures(
                 date: None,
             };
             let lines = vec![
-                line("Income", now.total_revenue_cents, then.total_revenue_cents),
-                line("Expenses", now.total_expenses_cents, then.total_expenses_cents),
-                line("Net income", now.net_income_cents, then.net_income_cents),
+                line("Income", now.total_revenue_cents.get(), then.total_revenue_cents.get()),
+                line("Expenses", now.total_expenses_cents.get(), then.total_expenses_cents.get()),
+                line("Net income", now.net_income_cents.get(), then.net_income_cents.get()),
             ];
-            (lines, 0, Vec::new(), now.net_income_cents, "pl")
+            (lines, 0, Vec::new(), now.net_income_cents.get(), "pl")
         }
     })
 }

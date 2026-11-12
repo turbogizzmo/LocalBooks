@@ -40,7 +40,7 @@ async fn estimate_does_not_post_until_converted() {
     )
     .await
     .expect("estimate saves");
-    assert_eq!((estimate.estimate_number, estimate.status.as_str(), estimate.total_cents), (1001, "PENDING", 130_000));
+    assert_eq!((estimate.estimate_number, estimate.status.as_str(), estimate.total_cents), (1001, "PENDING", Cents(130_000)));
 
     let entries: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM journal_entries").fetch_one(&pool).await.unwrap();
     assert_eq!(entries, 0, "estimates are non-posting");
@@ -88,7 +88,7 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
     .await
     .unwrap();
     let detail = estimate_detail(&pool, estimate.id).await.unwrap();
-    assert_eq!((detail.lines.len(), detail.lines[0].quantity_e4, detail.lines[0].rate_cents), (1, 100_000, 12_500));
+    assert_eq!((detail.lines.len(), detail.lines[0].quantity_e4, detail.lines[0].rate_cents), (1, 100_000, Cents(12_500)));
 
     // The form's lines, edited before posting: 8 hours instead of 10.
     let form = |account: i64| InvoiceInput {
@@ -102,7 +102,7 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
             .map(|l| InvoiceLineInput {
                 description: l.description.clone(),
                 quantity_e4: 80_000,
-                rate_cents: Cents(l.rate_cents),
+                rate_cents: l.rate_cents,
                 income_account_id: account,
                 product_service_id: l.product_service_id,
                 class_id: None,
@@ -121,7 +121,7 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
     assert_eq!(get_estimate(&pool, estimate.id).await.unwrap().status, "PENDING");
 
     let invoice = invoice_from_estimate(&pool, estimate.id, form(services)).await.unwrap();
-    assert_eq!(invoice.total_cents, 100_000, "the edited quantity was posted");
+    assert_eq!(invoice.total_cents, Cents(100_000), "the edited quantity was posted");
     let closed = get_estimate(&pool, estimate.id).await.unwrap();
     assert_eq!((closed.status.as_str(), closed.invoice_number), ("CONVERTED", Some(invoice.invoice_number)));
     assert!(invoice_from_estimate(&pool, estimate.id, form(services)).await.unwrap_err().starts_with("EST_CONVERTED"));
@@ -155,7 +155,7 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
     // The converted estimate is kept exactly as quoted, linked to its invoice, and can't be removed.
     let kept = estimate_detail(&pool, estimate.id).await.unwrap();
     assert_eq!(kept.estimate.converted_to_invoice_id, Some(invoice.id));
-    assert_eq!((kept.estimate.total_cents, kept.lines[0].quantity_e4), (125_000, 100_000), "the quote, not the edited invoice");
+    assert_eq!((kept.estimate.total_cents, kept.lines[0].quantity_e4), (Cents(125_000), 100_000), "the quote, not the edited invoice");
     let err = |r: Result<sqlx::sqlite::SqliteQueryResult, sqlx::Error>| r.map_err(db_err).unwrap_err();
     assert!(err(sqlx::query("DELETE FROM estimate_lines WHERE estimate_id = ?1").bind(estimate.id).execute(&pool).await).starts_with("EST_CONVERTED"));
     assert!(err(sqlx::query("DELETE FROM estimates WHERE id = ?1").bind(estimate.id).execute(&pool).await).starts_with("EST_CONVERTED"));

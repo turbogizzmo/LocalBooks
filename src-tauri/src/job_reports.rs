@@ -31,6 +31,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::custom_reports::{type_label, ColumnHead, ColumnKind, RowKind};
 use crate::ledger::{db_err, mul_div_round, DISPLAY_SOURCE_TYPE};
+use crate::money::Cents;
 use crate::statements::ProfitAndLossByClass;
 
 /// Label of the row and column for lines with no customer or job.
@@ -145,15 +146,23 @@ fn row(kind: RowKind, depth: u32, cells: Vec<Value>) -> JobRow {
 
 /// `part` as a percentage of `whole`, to one decimal place; null when `whole` is zero.
 #[allow(clippy::float_arithmetic, reason = "a display percentage, not an amount")]
-fn percent(part: i64, whole: i64) -> Value {
-    if whole == 0 {
+fn percent(part: Cents, whole: Cents) -> Value {
+    if whole.is_zero() {
         return Value::Null;
     }
-    json!((part as f64 * 1000.0 / whole as f64).round() / 10.0)
+    json!((part.get() as f64 * 1000.0 / whole.get() as f64).round() / 10.0)
 }
 
-fn money(cents: i64) -> Value {
+fn money(cents: Cents) -> Value {
     json!(cents)
+}
+
+fn overflow() -> String {
+    "RPT_OVERFLOW: the report's amounts are too large to add up".to_string()
+}
+
+fn sub(a: Cents, b: Cents) -> Result<Cents, String> {
+    a.checked_sub(b).ok_or_else(overflow)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -261,8 +270,8 @@ struct RawLine {
     is_income: bool,
     type_sort: i64,
     class_id: Option<i64>,
-    debit_cents: i64,
-    credit_cents: i64,
+    debit_cents: Cents,
+    credit_cents: Cents,
 }
 
 /// An income or expense line (or a share of one) with its customer or job and product.
@@ -282,24 +291,29 @@ struct JobLine {
     job: Option<i64>,
     item: Option<i64>,
     /// Credits minus debits: revenue positive, cost negative.
-    amount: i64,
+    amount: Cents,
 }
 
 impl JobLine {
-    fn revenue(&self) -> i64 {
+    fn revenue(&self) -> Cents {
         if self.is_income {
             self.amount
         } else {
-            0
+            Cents::ZERO
         }
     }
 
-    fn cost(&self) -> i64 {
+    fn cost(&self) -> Result<Cents, String> {
         if self.is_income {
-            0
+            Ok(Cents::ZERO)
         } else {
-            -self.amount
+            self.amount.checked_neg().ok_or_else(overflow)
         }
+    }
+
+    /// Actual cost and actual revenue.
+    fn cost_revenue(&self) -> Result<[Cents; 2], String> {
+        Ok([self.cost()?, self.revenue()])
     }
 }
 
@@ -343,22 +357,22 @@ const DOC_CUSTOMERS: &str = "
     UNION ALL SELECT 'RECEIVE_PAYMENT', p.id, i.customer_id FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.customer_id IS NOT NULL";
 
 /// Shares `amount` in proportion to `weights` (by size); the shares add up to `amount` exactly.
-fn split(amount: i64, weights: &[i64]) -> Vec<i64> {
+fn split(amount: Cents, weights: &[i64]) -> Result<Vec<Cents>, String> {
     let mut sizes: Vec<i64> = weights.iter().map(|w| w.saturating_abs()).collect();
-    let mut total: i64 = sizes.iter().sum();
+    let mut total = sizes.iter().try_fold(0i64, |t, s| t.checked_add(*s)).ok_or_else(overflow)?;
     if total == 0 {
         sizes = vec![1; weights.len()];
         total = sizes.len() as i64;
     }
-    let (mut running, mut assigned) = (0, 0);
+    let (mut running, mut assigned) = (0i64, 0i64);
     sizes
         .iter()
         .map(|size| {
-            running += size;
-            let upto = mul_div_round(amount, running, total).expect("a share is within the line's amount");
-            let share = upto - assigned;
+            running = running.checked_add(*size).ok_or_else(overflow)?;
+            let upto = mul_div_round(amount.get(), running, total).ok_or_else(overflow)?;
+            let share = upto.checked_sub(assigned).ok_or_else(overflow)?;
             assigned = upto;
-            share
+            Ok(Cents(share))
         })
         .collect()
 }
@@ -394,7 +408,7 @@ async fn job_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate) 
          WHERE a.classification IN ('INCOME', 'EXPENSE')
          ORDER BY e.entry_date, e.entry_number, l.line_number"
     );
-    let raw: Vec<RawLine> = sqlx::query_as(&sql).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)?;
+    let raw: Vec<RawLine> = sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str())).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)?;
     if raw.is_empty() {
         return Ok(Vec::new());
     }
@@ -420,7 +434,7 @@ async fn job_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate) 
 
     let mut out = Vec::with_capacity(raw.len());
     for r in raw {
-        let amount = r.credit_cents - r.debit_cents;
+        let amount = sub(r.credit_cents, r.debit_cents)?;
         let doc = r.doc_id.map(|id| (r.doc_type.clone(), id));
         let default_job = doc.as_ref().and_then(|d| customers.get(d)).copied();
         // (job, item, weight) of the document lines this ledger line was posted from.
@@ -450,8 +464,8 @@ async fn job_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate) 
         }
         let weights: Vec<i64> = merged.iter().map(|(_, w)| *w).collect();
         let type_text = if r.is_reversal { "Void".to_string() } else { type_label(&r.source_type).to_string() };
-        for (((job, item), _), share) in merged.into_iter().zip(split(amount, &weights)) {
-            if share == 0 && amount != 0 {
+        for (((job, item), _), share) in merged.into_iter().zip(split(amount, &weights)?) {
+            if share.is_zero() && !amount.is_zero() {
                 continue;
             }
             out.push(JobLine {
@@ -524,7 +538,7 @@ impl Matcher {
 struct EstimateLine {
     customer_id: i64,
     item_id: Option<i64>,
-    amount_cents: i64,
+    amount_cents: Cents,
 }
 
 /// Lines of the estimates dated in the range that weren't rejected.
@@ -558,81 +572,92 @@ fn status_label(status: &str) -> &str {
 // Layout
 // ------------------------------------------------------------------------------------------------
 
-fn add(sums: &mut Vec<i64>, values: &[i64]) {
+/// Adds `values` to `sums` column by column (an empty `sums` starts at zero).
+fn add(sums: &mut Vec<Cents>, values: &[Cents]) -> Result<(), String> {
     if sums.is_empty() {
-        sums.resize(values.len(), 0);
+        sums.resize(values.len(), Cents::ZERO);
     }
     for (s, v) in sums.iter_mut().zip(values) {
-        *s += v;
+        *s = s.checked_add(*v).ok_or_else(overflow)?;
     }
+    Ok(())
 }
 
 /// Rows for customers and their jobs: a customer with job rows gets a heading, a row for its own
 /// amounts ("(other)") and a total. Returns the grand total.
+/// The amount cells of a row, from its sums.
+type Cells = dyn Fn(&[Cents]) -> Result<Vec<Value>, String>;
+
 struct Tree<'a> {
     customers: &'a Customers,
-    sums: &'a HashMap<Option<i64>, Vec<i64>>,
-    cells: &'a dyn Fn(&[i64]) -> Vec<Value>,
+    sums: &'a HashMap<Option<i64>, Vec<Cents>>,
+    cells: &'a Cells,
     /// The drill-down for a row covering these jobs (or, with `true`, the lines with no job).
     drill: &'a dyn Fn(Vec<i64>, bool) -> Option<JobDrill>,
 }
 
+/// The rows of a tree and their grand total.
+type TreeRows = (Vec<JobRow>, Vec<Cents>);
+/// A node's sums and the job ids under it.
+type NodeSums = (Vec<Cents>, Vec<i64>);
+
 impl Tree<'_> {
-    fn rows(&self, width: usize) -> (Vec<JobRow>, Vec<i64>) {
+    fn rows(&self, width: usize) -> Result<TreeRows, String> {
         let mut rows = Vec::new();
-        let mut total = vec![0; width];
+        let mut total = vec![Cents::ZERO; width];
         for root in self.customers.children(None) {
-            if let Some((sum, _)) = self.node(root, 0, &mut rows) {
-                add(&mut total, &sum);
+            if let Some((sum, _)) = self.node(root, 0, &mut rows)? {
+                add(&mut total, &sum)?;
             }
         }
         if let Some(none) = self.sums.get(&None) {
-            let mut r = row(RowKind::Detail, 0, self.labelled(NO_JOB, none));
+            let mut r = row(RowKind::Detail, 0, self.labelled(NO_JOB, none)?);
             r.drill = (self.drill)(Vec::new(), true);
             rows.push(r);
-            add(&mut total, none);
+            add(&mut total, none)?;
         }
-        (rows, total)
+        Ok((rows, total))
     }
 
-    fn labelled(&self, label: &str, sums: &[i64]) -> Vec<Value> {
+    fn labelled(&self, label: &str, sums: &[Cents]) -> Result<Vec<Value>, String> {
         let mut cells = vec![json!(label)];
-        cells.extend((self.cells)(sums));
-        cells
+        cells.extend((self.cells)(sums)?);
+        Ok(cells)
     }
 
-    fn node(&self, id: i64, depth: u32, rows: &mut Vec<JobRow>) -> Option<(Vec<i64>, Vec<i64>)> {
+    /// The rows for customer or job `id` and its jobs, with their sums and the job ids they cover.
+    fn node(&self, id: i64, depth: u32, rows: &mut Vec<JobRow>) -> Result<Option<NodeSums>, String> {
         let short = &self.customers.by_id[&id].short;
         let own = self.sums.get(&Some(id));
         let mut below = Vec::new();
-        let mut sum: Vec<i64> = Vec::new();
+        let mut sum: Vec<Cents> = Vec::new();
         let mut ids = Vec::new();
         for child in self.customers.children(Some(id)) {
-            if let Some((s, child_ids)) = self.node(child, depth + 1, &mut below) {
-                add(&mut sum, &s);
+            if let Some((s, child_ids)) = self.node(child, depth + 1, &mut below)? {
+                add(&mut sum, &s)?;
                 ids.extend(child_ids);
             }
         }
         if below.is_empty() {
-            let own = own?;
-            let mut r = row(RowKind::Detail, depth, self.labelled(short, own));
+            let Some(own) = own else { return Ok(None) };
+            let mut r = row(RowKind::Detail, depth, self.labelled(short, own)?);
             r.drill = (self.drill)(vec![id], false);
             rows.push(r);
-            return Some((own.clone(), vec![id]));
+            return Ok(Some((own.clone(), vec![id])));
         }
         rows.push(row(RowKind::Section, depth, vec![json!(short)]));
         if let Some(own) = own {
-            let mut r = row(RowKind::Detail, depth + 1, self.labelled(&format!("{short} (other)"), own));
+            let mut r = row(RowKind::Detail, depth + 1, self.labelled(&format!("{short} (other)"), own)?);
             r.drill = (self.drill)(vec![id], false);
             rows.push(r);
-            add(&mut sum, own);
+            add(&mut sum, own)?;
             ids.push(id);
         }
         rows.extend(below);
-        let mut r = row(RowKind::Subtotal, depth, self.labelled(&format!("Total {short}"), &sum));
+        let mut r = row(RowKind::Subtotal, depth, self.labelled(&format!("Total {short}"), &sum)?);
         r.drill = (self.drill)(ids.clone(), false);
         rows.push(r);
-        Some((sum, ids))
+        Ok(Some((sum, ids)))
     }
 }
 
@@ -653,8 +678,8 @@ async fn item_names(pool: &SqlitePool) -> Result<HashMap<i64, String>, String> {
 }
 
 /// Actual cost, revenue and difference.
-fn profit_cells(s: &[i64]) -> Vec<Value> {
-    vec![money(s[0]), money(s[1]), money(s[1] - s[0])]
+fn profit_cells(s: &[Cents]) -> Result<Vec<Value>, String> {
+    Ok(vec![money(s[0]), money(s[1]), money(sub(s[1], s[0])?)])
 }
 
 fn profit_columns(first: &str) -> Vec<ColumnHead> {
@@ -663,8 +688,9 @@ fn profit_columns(first: &str) -> Vec<ColumnHead> {
 
 /// Actual cost, then estimated and actual revenue with their difference (sums: estimate, actual
 /// revenue, actual cost).
-fn estimate_cells(s: &[i64]) -> Vec<Value> {
-    vec![money(s[2]), money(s[0]), money(s[1]), money(s[1] - s[0]), percent(s[1] - s[0], s[0])]
+fn estimate_cells(s: &[Cents]) -> Result<Vec<Value>, String> {
+    let diff = sub(s[1], s[0])?;
+    Ok(vec![money(s[2]), money(s[0]), money(s[1]), money(diff), percent(diff, s[0])])
 }
 
 fn estimate_columns(first: &str) -> Vec<ColumnHead> {
@@ -694,9 +720,9 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
     match kind {
         JobReportKind::JobProfitSummary => {
             let lines: Vec<JobLine> = job_lines(pool, start, end).await?.into_iter().filter(|l| matcher.line(l)).collect();
-            let mut sums: HashMap<Option<i64>, Vec<i64>> = HashMap::new();
+            let mut sums: HashMap<Option<i64>, Vec<Cents>> = HashMap::new();
             for l in &lines {
-                add(sums.entry(l.job).or_default(), &[l.cost(), l.revenue()]);
+                add(sums.entry(l.job).or_default(), &l.cost_revenue()?)?;
             }
             let drill = |ids: Vec<i64>, none: bool| {
                 Some(JobDrill {
@@ -705,10 +731,10 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
                 })
             };
             let tree = Tree { customers: &customers, sums: &sums, cells: &profit_cells, drill: &drill };
-            let (rows, total) = tree.rows(2);
+            let (rows, total) = tree.rows(2)?;
             report.columns = profit_columns("Customer:Job");
             report.rows = rows;
-            report.rows.push(row(RowKind::Total, 0, tree.labelled("TOTAL", &total)));
+            report.rows.push(row(RowKind::Total, 0, tree.labelled("TOTAL", &total)?));
             report.line_count = lines.len();
         }
         JobReportKind::JobProfitDetail | JobReportKind::JobTransactions => {
@@ -716,7 +742,7 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
             let names = item_names(pool).await?;
             report.line_count = lines.len();
             let by_job = group(&lines, |l| l.job);
-            let mut total = vec![0, 0];
+            let mut total = vec![Cents::ZERO; 2];
             report.columns = if kind == JobReportKind::JobTransactions {
                 vec![
                     col("Type", ColumnKind::Text),
@@ -733,22 +759,22 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
                 profit_columns(if params.by == Breakdown::Item { "Product/Service" } else { "Account" })
             };
             let width = report.columns.len();
-            let blank = |label: String, sums: &[i64]| {
+            let blank = |label: String, sums: &[Cents]| -> Result<Vec<Value>, String> {
                 let mut cells = vec![Value::Null; width];
                 cells[0] = json!(label);
                 if width == 4 {
-                    cells.splice(1.., profit_cells(sums));
+                    cells.splice(1.., profit_cells(sums)?);
                 } else {
                     cells[width - 2] = money(sums[0]);
                     cells[width - 1] = money(sums[1]);
                 }
-                cells
+                Ok(cells)
             };
             for job in customers.sorted(by_job.keys().copied()) {
                 let job_lines = &by_job[&job];
                 let label = customers.name(job);
                 report.rows.push(row(RowKind::Section, 0, vec![json!(label.clone())]));
-                let mut sum = vec![0, 0];
+                let mut sum = vec![Cents::ZERO; 2];
                 let job_filter = JobFilter { job_ids: job.into_iter().collect(), with_subjobs: false, no_job: job.is_none(), ..params.filter.clone() };
                 if kind == JobReportKind::JobTransactions {
                     for l in job_lines {
@@ -760,17 +786,17 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
                             json!(l.memo),
                             json!(l.account_name),
                             json!(item_label(l.item, &names)),
-                            if l.is_income { Value::Null } else { money(l.cost()) },
+                            if l.is_income { Value::Null } else { money(l.cost()?) },
                             if l.is_income { money(l.revenue()) } else { Value::Null },
                         ];
                         let mut r = row(RowKind::Detail, 1, cells);
                         r.journal_entry_id = Some(l.journal_entry_id);
                         report.rows.push(r);
-                        add(&mut sum, &[l.cost(), l.revenue()]);
+                        add(&mut sum, &l.cost_revenue()?)?;
                     }
                 } else {
                     // Rows by product (named ones by name, then none) or by account (chart order).
-                    type GroupValue = (String, Option<i64>, Option<i64>, Vec<i64>);
+                    type GroupValue = (String, Option<i64>, Option<i64>, Vec<Cents>);
                     let mut groups: BTreeMap<(i64, String, String, i64), GroupValue> = BTreeMap::new();
                     for l in job_lines {
                         let (key, label, item, account) = match params.by {
@@ -785,10 +811,10 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
                                 Some(l.account_id),
                             ),
                         };
-                        add(&mut groups.entry(key).or_insert_with(|| (label, item, account, Vec::new())).3, &[l.cost(), l.revenue()]);
+                        add(&mut groups.entry(key).or_insert_with(|| (label, item, account, Vec::new())).3, &l.cost_revenue()?)?;
                     }
                     for (label, item, account, sums) in groups.into_values() {
-                        let mut r = row(RowKind::Detail, 1, blank(label, &sums));
+                        let mut r = row(RowKind::Detail, 1, blank(label, &sums)?);
                         let mut filter = job_filter.clone();
                         match params.by {
                             Breakdown::Item => {
@@ -799,40 +825,40 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
                         }
                         r.drill = Some(JobDrill { report: JobReportKind::JobTransactions, filter });
                         report.rows.push(r);
-                        add(&mut sum, &sums);
+                        add(&mut sum, &sums)?;
                     }
                 }
-                let mut r = row(RowKind::Subtotal, 0, blank(format!("Total {label}"), &sum));
+                let mut r = row(RowKind::Subtotal, 0, blank(format!("Total {label}"), &sum)?);
                 if kind == JobReportKind::JobProfitDetail {
                     r.drill = Some(JobDrill { report: JobReportKind::JobTransactions, filter: job_filter });
                 }
                 report.rows.push(r);
-                add(&mut total, &sum);
+                add(&mut total, &sum)?;
             }
-            report.rows.push(row(RowKind::Total, 0, blank("TOTAL".into(), &total)));
+            report.rows.push(row(RowKind::Total, 0, blank("TOTAL".into(), &total)?));
         }
         JobReportKind::ItemProfit => {
             let lines: Vec<JobLine> = job_lines(pool, start, end).await?.into_iter().filter(|l| matcher.line(l)).collect();
             let names = item_names(pool).await?;
             report.line_count = lines.len();
             type SumKey = (bool, String, i64);
-            let mut sums: BTreeMap<SumKey, (Option<i64>, Vec<i64>)> = BTreeMap::new();
+            let mut sums: BTreeMap<SumKey, (Option<i64>, Vec<Cents>)> = BTreeMap::new();
             for l in &lines {
-                add(&mut sums.entry(item_key(l.item, &names)).or_insert_with(|| (l.item, Vec::new())).1, &[l.cost(), l.revenue()]);
+                add(&mut sums.entry(item_key(l.item, &names)).or_insert_with(|| (l.item, Vec::new())).1, &l.cost_revenue()?)?;
             }
             report.columns = profit_columns("Product/Service");
-            let mut total = vec![0, 0];
+            let mut total = vec![Cents::ZERO; 2];
             for (item, s) in sums.into_values() {
                 let mut cells = vec![json!(item_label(item, &names))];
-                cells.extend(profit_cells(&s));
+                cells.extend(profit_cells(&s)?);
                 let mut r = row(RowKind::Detail, 0, cells);
                 let filter = JobFilter { item_ids: item.into_iter().collect(), no_item: item.is_none(), ..params.filter.clone() };
                 r.drill = Some(JobDrill { report: JobReportKind::JobTransactions, filter });
                 report.rows.push(r);
-                add(&mut total, &s);
+                add(&mut total, &s)?;
             }
             let mut cells = vec![json!("TOTAL")];
-            cells.extend(profit_cells(&total));
+            cells.extend(profit_cells(&total)?);
             report.rows.push(row(RowKind::Total, 0, cells));
         }
         JobReportKind::JobEstimatesSummary | JobReportKind::JobEstimatesDetail | JobReportKind::ItemEstimates => {
@@ -842,19 +868,19 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
             let names = item_names(pool).await?;
             report.line_count = lines.len() + estimates.len();
             // (estimated revenue, actual revenue, actual cost) per (job, product).
-            let mut sums: HashMap<(Option<i64>, Option<i64>), Vec<i64>> = HashMap::new();
+            let mut sums: HashMap<(Option<i64>, Option<i64>), Vec<Cents>> = HashMap::new();
             for e in &estimates {
-                add(sums.entry((Some(e.customer_id), e.item_id)).or_default(), &[e.amount_cents, 0, 0]);
+                add(sums.entry((Some(e.customer_id), e.item_id)).or_default(), &[e.amount_cents, Cents::ZERO, Cents::ZERO])?;
             }
             // Account filters narrow the actuals only; estimates have no accounts.
             for l in &lines {
-                add(sums.entry((l.job, l.item)).or_default(), &[0, l.revenue(), l.cost()]);
+                add(sums.entry((l.job, l.item)).or_default(), &[Cents::ZERO, l.revenue(), l.cost()?])?;
             }
             match kind {
                 JobReportKind::JobEstimatesSummary => {
-                    let mut by_job: HashMap<Option<i64>, Vec<i64>> = HashMap::new();
+                    let mut by_job: HashMap<Option<i64>, Vec<Cents>> = HashMap::new();
                     for ((job, _), s) in &sums {
-                        add(by_job.entry(*job).or_default(), s);
+                        add(by_job.entry(*job).or_default(), s)?;
                     }
                     let drill = |ids: Vec<i64>, none: bool| {
                         Some(JobDrill {
@@ -863,23 +889,23 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
                         })
                     };
                     let tree = Tree { customers: &customers, sums: &by_job, cells: &estimate_cells, drill: &drill };
-                    let (rows, total) = tree.rows(3);
+                    let (rows, total) = tree.rows(3)?;
                     report.columns = estimate_columns("Customer:Job");
                     report.rows = rows;
-                    report.rows.push(row(RowKind::Total, 0, tree.labelled("TOTAL", &total)));
+                    report.rows.push(row(RowKind::Total, 0, tree.labelled("TOTAL", &total)?));
                 }
                 JobReportKind::JobEstimatesDetail => {
                     report.columns = estimate_columns("Product/Service");
-                    let mut total = vec![0; 3];
+                    let mut total = vec![Cents::ZERO; 3];
                     for job in customers.sorted(sums.keys().map(|(j, _)| *j)) {
                         let label = customers.name(job);
                         report.rows.push(row(RowKind::Section, 0, vec![json!(label.clone())]));
-                        let mut items: Vec<(Option<i64>, &Vec<i64>)> = sums.iter().filter(|((j, _), _)| *j == job).map(|((_, i), s)| (*i, s)).collect();
+                        let mut items: Vec<(Option<i64>, &Vec<Cents>)> = sums.iter().filter(|((j, _), _)| *j == job).map(|((_, i), s)| (*i, s)).collect();
                         items.sort_by_key(|(i, _)| item_key(*i, &names));
-                        let mut sum = vec![0; 3];
+                        let mut sum = vec![Cents::ZERO; 3];
                         for (item, s) in items {
                             let mut cells = vec![json!(item_label(item, &names))];
-                            cells.extend(estimate_cells(s));
+                            cells.extend(estimate_cells(s)?);
                             let mut r = row(RowKind::Detail, 1, cells);
                             let filter = JobFilter {
                                 job_ids: job.into_iter().collect(),
@@ -891,36 +917,36 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
                             };
                             r.drill = Some(JobDrill { report: JobReportKind::JobTransactions, filter });
                             report.rows.push(r);
-                            add(&mut sum, s);
+                            add(&mut sum, s)?;
                         }
                         let mut cells = vec![json!(format!("Total {label}"))];
-                        cells.extend(estimate_cells(&sum));
+                        cells.extend(estimate_cells(&sum)?);
                         report.rows.push(row(RowKind::Subtotal, 0, cells));
-                        add(&mut total, &sum);
+                        add(&mut total, &sum)?;
                     }
                     let mut cells = vec![json!("TOTAL")];
-                    cells.extend(estimate_cells(&total));
+                    cells.extend(estimate_cells(&total)?);
                     report.rows.push(row(RowKind::Total, 0, cells));
                 }
                 _ => {
                     type ItemKey = (bool, String, i64);
-                    let mut by_item: BTreeMap<ItemKey, (Option<i64>, Vec<i64>)> = BTreeMap::new();
+                    let mut by_item: BTreeMap<ItemKey, (Option<i64>, Vec<Cents>)> = BTreeMap::new();
                     for ((_, item), s) in &sums {
-                        add(&mut by_item.entry(item_key(*item, &names)).or_insert_with(|| (*item, Vec::new())).1, s);
+                        add(&mut by_item.entry(item_key(*item, &names)).or_insert_with(|| (*item, Vec::new())).1, s)?;
                     }
                     report.columns = estimate_columns("Product/Service");
-                    let mut total = vec![0; 3];
+                    let mut total = vec![Cents::ZERO; 3];
                     for (item, s) in by_item.into_values() {
                         let mut cells = vec![json!(item_label(item, &names))];
-                        cells.extend(estimate_cells(&s));
+                        cells.extend(estimate_cells(&s)?);
                         let mut r = row(RowKind::Detail, 0, cells);
                         let filter = JobFilter { item_ids: item.into_iter().collect(), no_item: item.is_none(), ..params.filter.clone() };
                         r.drill = Some(JobDrill { report: JobReportKind::JobTransactions, filter });
                         report.rows.push(r);
-                        add(&mut total, &s);
+                        add(&mut total, &s)?;
                     }
                     let mut cells = vec![json!("TOTAL")];
-                    cells.extend(estimate_cells(&total));
+                    cells.extend(estimate_cells(&total)?);
                     report.rows.push(row(RowKind::Total, 0, cells));
                 }
             }
@@ -941,7 +967,7 @@ struct EstimateRow {
     expiration_date: Option<NaiveDate>,
     status: String,
     memo: Option<String>,
-    total_cents: i64,
+    total_cents: Cents,
     invoice_id: Option<i64>,
 }
 
@@ -962,8 +988,8 @@ async fn estimates_report(pool: &SqlitePool, report: &mut JobReport, customers: 
 
     // The invoice an estimate became, following edits (an edit voids the invoice and posts a
     // replacement): (invoice number, total, live entry), or None once voided.
-    let invoices: HashMap<i64, (i64, i64, Option<i64>, bool)> =
-        sqlx::query_as::<_, (i64, i64, i64, Option<i64>, bool)>("SELECT id, invoice_number, total_cents, journal_entry_id, is_voided FROM invoices")
+    let invoices: HashMap<i64, (i64, Cents, Option<i64>, bool)> =
+        sqlx::query_as::<_, (i64, i64, Cents, Option<i64>, bool)>("SELECT id, invoice_number, total_cents, journal_entry_id, is_voided FROM invoices")
             .fetch_all(pool)
             .await
             .map_err(db_err)?
@@ -977,7 +1003,7 @@ async fn estimates_report(pool: &SqlitePool, report: &mut JobReport, customers: 
         .map_err(db_err)?
         .into_iter()
         .collect();
-    let live_invoice = |mut id: i64| -> Option<(i64, i64, i64)> {
+    let live_invoice = |mut id: i64| -> Option<(i64, Cents, i64)> {
         for _ in 0..64 {
             let (number, total, entry, voided) = *invoices.get(&id)?;
             if !voided {
@@ -1010,7 +1036,7 @@ async fn estimates_report(pool: &SqlitePool, report: &mut JobReport, customers: 
         ]
     };
     let width = report.columns.len();
-    let totals = |label: String, estimated: i64, invoiced: i64| {
+    let totals = |label: String, estimated: Cents, invoiced: Cents| {
         let mut cells = vec![Value::Null; width];
         cells[0] = json!(label);
         if progress {
@@ -1026,14 +1052,14 @@ async fn estimates_report(pool: &SqlitePool, report: &mut JobReport, customers: 
     for e in &estimates {
         by_job.entry(Some(e.customer_id)).or_default().push(e);
     }
-    let (mut all_estimated, mut all_invoiced) = (0, 0);
+    let (mut all_estimated, mut all_invoiced) = (Cents::ZERO, Cents::ZERO);
     for job in customers.sorted(by_job.keys().copied()) {
         let label = customers.name(job);
         report.rows.push(row(RowKind::Section, 0, vec![json!(label.clone())]));
-        let (mut estimated, mut invoiced) = (0, 0);
+        let (mut estimated, mut invoiced) = (Cents::ZERO, Cents::ZERO);
         for e in &by_job[&job] {
             let invoice = e.invoice_id.and_then(live_invoice);
-            let billed = invoice.map_or(0, |(_, total, _)| total);
+            let billed = invoice.map_or(Cents::ZERO, |(_, total, _)| total);
             let cells = if progress {
                 vec![
                     json!(e.estimate_date),
@@ -1060,12 +1086,12 @@ async fn estimates_report(pool: &SqlitePool, report: &mut JobReport, customers: 
                 r.journal_entry_id = invoice.map(|(_, _, entry)| entry);
             }
             report.rows.push(r);
-            estimated += e.total_cents;
-            invoiced += billed;
+            estimated = estimated.checked_add(e.total_cents).ok_or_else(overflow)?;
+            invoiced = invoiced.checked_add(billed).ok_or_else(overflow)?;
         }
         report.rows.push(row(RowKind::Subtotal, 0, totals(format!("Total {label}"), estimated, invoiced)));
-        all_estimated += estimated;
-        all_invoiced += invoiced;
+        all_estimated = all_estimated.checked_add(estimated).ok_or_else(overflow)?;
+        all_invoiced = all_invoiced.checked_add(invoiced).ok_or_else(overflow)?;
     }
     report.rows.push(row(RowKind::Total, 0, totals("TOTAL".into(), all_estimated, all_invoiced)));
     Ok(())
@@ -1086,7 +1112,11 @@ pub async fn profit_and_loss_by_job(pool: &SqlitePool, start_date: NaiveDate, en
         return Err("RPT_BAD_RANGE: the end date is before the start date".into());
     }
     let customers = Customers::load(pool).await?;
-    let rows: Vec<(Option<i64>, i64, i64)> = job_lines(pool, Some(start_date), end_date).await?.into_iter().map(|l| (l.job, l.account_id, -l.amount)).collect();
+    let rows: Vec<(Option<i64>, i64, i64)> = job_lines(pool, Some(start_date), end_date)
+        .await?
+        .into_iter()
+        .map(|l| Ok((l.job, l.account_id, l.amount.checked_neg().ok_or_else(overflow)?.get())))
+        .collect::<Result<_, String>>()?;
     crate::statements::profit_and_loss_by_columns(pool, start_date, end_date, rows, &customers.tree(), NO_JOB).await
 }
 

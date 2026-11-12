@@ -33,6 +33,8 @@ fn line(after: usize, kind: PurchaseLineKind, percent: Option<i64>, amount: Opti
         amount_cents: amount.map(Cents),
         account_id,
         class_id: None,
+        customer_id: None,
+        billable: None,
     }
 }
 
@@ -82,7 +84,7 @@ async fn a_bill_posts_its_discounts_and_charges_and_keeps_them() {
     // The total is the split lines less the discount plus the charge.
     assert_eq!(code(crate::expenses::post_vendor_bill(&pool, bill(15_000)).await.unwrap_err()), "BILL_SPLIT_MISMATCH");
     let posted = crate::expenses::post_vendor_bill(&pool, bill(14_500)).await.unwrap();
-    assert_eq!(posted.total_cents, 14_500);
+    assert_eq!(posted.total_cents, Cents(14_500));
     assert_eq!(payable(&pool).await, -14_500);
     assert_eq!(balance(&pool, rent).await, 10_000);
     assert_eq!(balance(&pool, utilities).await, 5_500, "the charge posts with the split lines");
@@ -90,7 +92,7 @@ async fn a_bill_posts_its_discounts_and_charges_and_keeps_them() {
 
     let stored = lines_of(&pool, PurchaseDoc::Bill, posted.id).await.unwrap();
     assert_eq!(
-        stored.iter().map(|l| (l.after_line, l.kind.as_str(), l.description.as_str(), l.amount_cents)).collect::<Vec<_>>(),
+        stored.iter().map(|l| (l.after_line, l.kind.as_str(), l.description.as_str(), l.amount_cents.get())).collect::<Vec<_>>(),
         [(1, "DISCOUNT", "Early payment", 1_000), (2, "CHARGE", "Charge", 500)]
     );
     assert_eq!(stored[0].percent_ppm, Some(100_000));
@@ -110,13 +112,13 @@ async fn checks_card_credits_and_vendor_credits_post_each_line_on_its_side() {
         .unwrap()
     };
     let check = crate::expenses::post_expense(&pool, expense("CHECK", checking)).await.unwrap();
-    assert_eq!(check.total_cents, 18_000);
+    assert_eq!(check.total_cents, Cents(18_000));
     assert_eq!((balance(&pool, checking).await, balance(&pool, rent).await, balance(&pool, services).await), (-18_000, 20_000, -2_000));
     assert_eq!(lines_of(&pool, PurchaseDoc::Expense, check.id).await.unwrap().len(), 1);
 
     // A card credit posts the other way round, its discount too.
     let credit = crate::expenses::post_expense(&pool, expense("CARD_CREDIT", card)).await.unwrap();
-    assert_eq!(credit.total_cents, 18_000);
+    assert_eq!(credit.total_cents, Cents(18_000));
     assert_eq!((balance(&pool, card).await, balance(&pool, rent).await, balance(&pool, services).await), (18_000, 0, 0));
 
     // A vendor credit with a 10% charge: A/P is debited the whole 110.00.
@@ -127,7 +129,7 @@ async fn checks_card_credits_and_vendor_credits_post_each_line_on_its_side() {
     }))
     .unwrap();
     let saved = crate::credits::create_vendor_credit(&pool, vc).await.unwrap();
-    assert_eq!(saved.total_cents, 11_000);
+    assert_eq!(saved.total_cents, Cents(11_000));
     assert_eq!(payable(&pool).await, 11_000);
     assert_eq!(balance(&pool, rent).await, -11_000);
 }
@@ -151,7 +153,7 @@ async fn a_queued_check_redated_when_printed_keeps_its_discount_and_charge_lines
     .unwrap();
     let queued = crate::print_queue::post_expense(&pool, input, true).await.unwrap();
     // 200.00 - 20.00 + 50.00 + 7.50.
-    assert_eq!(queued.total_cents, 23_750);
+    assert_eq!(queued.total_cents, Cents(23_750));
     let before = lines_of(&pool, PurchaseDoc::Expense, queued.id).await.unwrap();
     let printed = vec![crate::print_queue::PrintedCheck { expense_id: queued.id, check_number: "601".into(), bill_check_id: None }];
     crate::print_queue::mark_checks_printed_on(&pool, printed, NaiveDate::from_ymd_opt(2026, 3, 9).unwrap()).await.unwrap();
@@ -192,7 +194,7 @@ async fn a_purchase_orders_lines_carry_to_its_bill() {
     let d = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
     let bill_id = crate::workflows::bill_purchase_order(&pool, id, d, d, None).await.unwrap();
     let carried = lines_of(&pool, PurchaseDoc::Bill, bill_id).await.unwrap();
-    assert_eq!(carried.iter().map(|l| (l.description.as_str(), l.amount_cents, l.percent_ppm)).collect::<Vec<_>>(), [("Freight", 1_500, Some(50_000))]);
+    assert_eq!(carried.iter().map(|l| (l.description.as_str(), l.amount_cents.get(), l.percent_ppm)).collect::<Vec<_>>(), [("Freight", 1_500, Some(50_000))]);
     assert_eq!(payable(&pool).await, -31_500);
     assert_eq!(balance(&pool, utilities).await, 1_500);
 }
@@ -291,7 +293,7 @@ async fn editing_a_bill_reposts_its_discount_from_the_items_purchase_account_onc
     assert_eq!((payable(&pool).await, balance(&pool, rent).await, balance(&pool, office).await), (-28_500, 30_000, -1_500));
     let stored = lines_of(&pool, PurchaseDoc::Bill, edited).await.unwrap();
     assert_eq!(
-        stored.iter().map(|l| (l.kind.as_str(), l.product_service_id, l.percent_ppm, l.amount_cents)).collect::<Vec<_>>(),
+        stored.iter().map(|l| (l.kind.as_str(), l.product_service_id, l.percent_ppm, l.amount_cents.get())).collect::<Vec<_>>(),
         [("DISCOUNT", Some(rebate.id), Some(50_000), 1_500)]
     );
     assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);

@@ -130,7 +130,7 @@ async fn a_bounced_payment_reopens_the_invoice_takes_the_bank_down_and_charges_f
 
     // The invoice is open again; the bank is down by the check and the fee.
     let reopened = get_summary(&pool, invoice_id).await.unwrap();
-    assert_eq!((reopened.status.as_str(), reopened.balance_cents, reopened.home_balance_cents), ("UNPAID", 50_000, 50_000));
+    assert_eq!((reopened.status.as_str(), reopened.balance_cents, reopened.home_balance_cents), ("UNPAID", Cents(50_000), Cents(50_000)));
     assert_eq!(balance(&pool, checking).await, -2_500);
     assert_eq!(balance(&pool, bank_fees).await, 2_500);
     // A/R holds the reopened invoice plus the returned-check charge.
@@ -150,7 +150,7 @@ async fn a_bounced_payment_reopens_the_invoice_takes_the_bank_down_and_charges_f
     let before = crate::report_center::aging(&pool, false, d(9)).await.unwrap();
     assert!(before.items.iter().all(|i| i.number.as_deref() != Some(&reopened.invoice_number.to_string())));
     let after = crate::report_center::aging(&pool, false, d(10)).await.unwrap();
-    assert!(after.items.iter().any(|i| i.number.as_deref() == Some(&reopened.invoice_number.to_string()) && i.open_cents == 50_000));
+    assert!(after.items.iter().any(|i| i.number.as_deref() == Some(&reopened.invoice_number.to_string()) && i.open_cents == Cents(50_000)));
 
     // It can't bounce twice, and its payment, the invoice and the entry are protected while it stands.
     assert!(candidates(&pool).await.unwrap().is_empty());
@@ -466,7 +466,7 @@ async fn a_foreign_currency_payment_bounces_at_its_booked_rates() {
     assert_eq!(open_invoices(&pool).await, [(invoice_id, 108_000)], "the invoice is open again for its home A/R");
     assert_eq!(get_summary(&pool, invoice_id).await.unwrap().status, "UNPAID");
     let aging = crate::report_center::aging(&pool, false, d(20)).await.unwrap();
-    assert_eq!(aging.rows.iter().map(|r| r.total_cents).sum::<i64>(), 108_000, "aging agrees with A/R");
+    assert_eq!(aging.rows.iter().map(|r| r.total_cents.get()).sum::<i64>(), 108_000, "aging agrees with A/R");
     books_balance(&pool).await;
 }
 
@@ -519,7 +519,7 @@ async fn a_payment_that_took_a_discount_bounces_for_the_whole_invoice_and_revers
         "the bank and the discount go back; A/R is the whole invoice"
     );
     let reopened = get_summary(&pool, invoice_id).await.unwrap();
-    assert_eq!((reopened.status.as_str(), reopened.balance_cents), ("UNPAID", 50_000));
+    assert_eq!((reopened.status.as_str(), reopened.balance_cents), ("UNPAID", Cents(50_000)));
     books_balance(&pool).await;
 
     void(&pool, recorded.id, None).await.unwrap();

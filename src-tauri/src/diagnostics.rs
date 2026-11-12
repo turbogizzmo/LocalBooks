@@ -203,8 +203,10 @@ pub async fn bundle(
                 .await
                 .map_err(db_err)?;
             for table in tables {
-                let count: i64 =
-                    sqlx::query_scalar(&format!("SELECT COUNT(*) FROM \"{}\"", table.replace('"', "\"\""))).fetch_one(pool).await.map_err(db_err)?;
+                let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT COUNT(*) FROM \"{}\"", table.replace('"', "\"\""))))
+                    .fetch_one(pool)
+                    .await
+                    .map_err(db_err)?;
                 db.push_str(&format!("  {table}: {count}\n"));
             }
             files.push(("database.txt".to_string(), db));

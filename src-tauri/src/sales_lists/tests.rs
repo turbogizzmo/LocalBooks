@@ -194,9 +194,9 @@ async fn sales_by_rep_totals_invoices_and_receipts() {
     .await
     .unwrap();
     let report = crate::report_center::sales_by_rep(&pool, d(1), d(31)).await.unwrap();
-    let rows: Vec<(&str, i64)> = report.rows.iter().map(|r| (r.label.as_str(), r.amount_cents)).collect();
+    let rows: Vec<(&str, i64)> = report.rows.iter().map(|r| (r.label.as_str(), r.amount_cents.get())).collect();
     assert_eq!(rows, [("JS (Jane Smith)", 32_000), ("No rep", 5_000)]);
-    assert_eq!(report.total_cents, 37_000);
+    assert_eq!(report.total_cents, Cents(37_000));
 }
 
 #[tokio::test]

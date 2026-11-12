@@ -30,7 +30,7 @@ async fn tamper(pool: &SqlitePool, sql: &str) {
     ] {
         sqlx::query(s).execute(pool).await.unwrap();
     }
-    sqlx::query(sql).execute(pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(sql)).execute(pool).await.unwrap();
     sqlx::query("PRAGMA foreign_keys = ON").execute(pool).await.unwrap();
 }
 

@@ -82,9 +82,9 @@ pub struct BillSummary {
     pub bill_date: String,
     pub due_date: String,
     pub memo: Option<String>,
-    pub total_cents: i64,
-    pub amount_paid_cents: i64,
-    pub balance_cents: i64,
+    pub total_cents: Cents,
+    pub amount_paid_cents: Cents,
+    pub balance_cents: Cents,
     pub status: String,
     pub journal_entry_id: Option<i64>,
     pub last_payment_date: Option<String>,
@@ -100,7 +100,7 @@ pub struct BillSummary {
 }
 
 fn with_discount(mut bill: BillSummary) -> BillSummary {
-    bill.terms.fill(bill.total_cents);
+    bill.terms.fill(bill.total_cents.get());
     bill
 }
 
@@ -141,15 +141,22 @@ pub async fn create_vendor(pool: &SqlitePool, name: &str, email: Option<&str>) -
 }
 
 pub async fn list_bills(pool: &SqlitePool) -> Result<Vec<BillSummary>, String> {
-    sqlx::query_as::<_, BillSummary>(&format!("{BILL_SELECT} ORDER BY b.is_voided, CASE b.status WHEN 'PAID' THEN 1 ELSE 0 END, b.due_date, b.id"))
-        .fetch_all(pool)
-        .await
-        .map(|all| all.into_iter().map(with_discount).collect())
-        .map_err(db_err)
+    sqlx::query_as::<_, BillSummary>(sqlx::AssertSqlSafe(format!(
+        "{BILL_SELECT} ORDER BY b.is_voided, CASE b.status WHEN 'PAID' THEN 1 ELSE 0 END, b.due_date, b.id"
+    )))
+    .fetch_all(pool)
+    .await
+    .map(|all| all.into_iter().map(with_discount).collect())
+    .map_err(db_err)
 }
 
 async fn get_bill(pool: &SqlitePool, bill_id: i64) -> Result<BillSummary, String> {
-    sqlx::query_as::<_, BillSummary>(&format!("{BILL_SELECT} WHERE b.id = ?1")).bind(bill_id).fetch_one(pool).await.map(with_discount).map_err(db_err)
+    sqlx::query_as::<_, BillSummary>(sqlx::AssertSqlSafe(format!("{BILL_SELECT} WHERE b.id = ?1")))
+        .bind(bill_id)
+        .fetch_one(pool)
+        .await
+        .map(with_discount)
+        .map_err(db_err)
 }
 
 /// Pure validation; returns the bill total.
@@ -445,7 +452,7 @@ pub(crate) async fn group_queued_checks(tx: &mut Transaction<'_, Sqlite>, paymen
 pub struct BillPaymentView {
     pub id: i64,
     pub payment_date: String,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub payment_account_id: i64,
     pub reference: Option<String>,
     pub journal_entry_id: Option<i64>,
@@ -618,7 +625,7 @@ pub struct ExpenseView {
     pub payment_method: Option<String>,
     pub payment_method_id: Option<i64>,
     pub memo: Option<String>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
     pub line_count: i64,
     pub category_account_id: Option<i64>,
     pub journal_entry_id: Option<i64>,
@@ -626,7 +633,7 @@ pub struct ExpenseView {
     /// `None` for home-currency expenses; `total_cents` is then already home currency.
     pub currency_code: Option<String>,
     pub exchange_rate_e6: Option<i64>,
-    pub home_total_cents: i64,
+    pub home_total_cents: Cents,
     /// Waiting in File › Print Forms › Checks (a queued check has no number yet).
     pub to_be_printed: bool,
 }
@@ -650,7 +657,7 @@ pub async fn post_expense(pool: &SqlitePool, input: ExpenseInput) -> Result<Expe
         Err(err) => return Err(rollback(tx, err).await),
     };
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
-    sqlx::query_as::<_, ExpenseView>(&format!("{EXPENSE_SELECT} WHERE x.id = ?1")).bind(id).fetch_one(pool).await.map_err(db_err)
+    sqlx::query_as::<_, ExpenseView>(sqlx::AssertSqlSafe(format!("{EXPENSE_SELECT} WHERE x.id = ?1"))).bind(id).fetch_one(pool).await.map_err(db_err)
 }
 
 /// Writes and posts an expense inside the caller's transaction; returns (expense id, entry id).
@@ -784,15 +791,18 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
 }
 
 pub async fn list_expenses(pool: &SqlitePool) -> Result<Vec<ExpenseView>, String> {
-    sqlx::query_as::<_, ExpenseView>(&format!("{EXPENSE_SELECT} ORDER BY x.expense_date DESC, x.id DESC")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as::<_, ExpenseView>(sqlx::AssertSqlSafe(format!("{EXPENSE_SELECT} ORDER BY x.expense_date DESC, x.id DESC")))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Checks waiting in the print queue, oldest first; only those from `account_id` when given.
 pub(crate) async fn list_to_print(pool: &SqlitePool, account_id: Option<i64>) -> Result<Vec<ExpenseView>, String> {
-    sqlx::query_as::<_, ExpenseView>(&format!(
+    sqlx::query_as::<_, ExpenseView>(sqlx::AssertSqlSafe(format!(
         "{EXPENSE_SELECT} WHERE x.to_be_printed = 1 AND x.is_voided = 0 AND (?1 IS NULL OR x.payment_account_id = ?1)
          ORDER BY x.expense_date, x.id"
-    ))
+    )))
     .bind(account_id)
     .fetch_all(pool)
     .await

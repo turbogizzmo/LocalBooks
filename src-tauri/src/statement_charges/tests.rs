@@ -28,7 +28,7 @@ async fn a_statement_charge_posts_to_ar_shows_on_the_statement_ages_and_takes_a_
     with_qty.due_date = Some(d(4, 15));
     let second = create(&pool, with_qty).await.unwrap();
     assert!(first.is_statement_charge && second.is_statement_charge);
-    assert_eq!((first.total_cents, second.total_cents), (25_000, 12_000));
+    assert_eq!((first.total_cents, second.total_cents), (Cents(25_000), Cents(12_000)));
     assert_eq!(second.due_date, "2026-04-15");
 
     // Posted to A/R for the customer.
@@ -50,15 +50,15 @@ async fn a_statement_charge_posts_to_ar_shows_on_the_statement_ages_and_takes_a_
     // On the next statement, as statement charges with their descriptions and no invoice number.
     let statement = crate::workflows::customer_statement(&pool, customer, d(3, 1), d(3, 31)).await.unwrap();
     let rows: Vec<(&str, Option<&str>, Option<&str>, i64)> =
-        statement.rows.iter().map(|r| (r.source_type.as_str(), r.number.as_deref(), r.memo.as_deref(), r.amount_cents)).collect();
+        statement.rows.iter().map(|r| (r.source_type.as_str(), r.number.as_deref(), r.memo.as_deref(), r.amount_cents.get())).collect();
     assert_eq!(rows, [("STATEMENT_CHARGE", None, Some("Monthly retainer"), 25_000), ("STATEMENT_CHARGE", None, Some("Extra visits"), 12_000)]);
-    assert_eq!(statement.closing_balance_cents, 37_000);
+    assert_eq!(statement.closing_balance_cents, Cents(37_000));
     let doc = crate::forms::statement_doc(&pool, customer, crate::forms::Period { start_date: d(3, 1), end_date: d(3, 31) }, "$").await.unwrap();
     assert!(doc.statement.unwrap().rows.iter().any(|r| r[1] == "Statement Charge" && r.iter().any(|c| c == "Monthly retainer")));
 
     // In the aging, by due date.
     let aging = crate::invoices::ar_aging(&pool, d(4, 20)).await.unwrap();
-    assert_eq!(aging.total_cents, 37_000);
+    assert_eq!(aging.total_cents, Cents(37_000));
 
     // A payment applies to it like an invoice.
     crate::invoices::record_payment(
@@ -78,8 +78,8 @@ async fn a_statement_charge_posts_to_ar_shows_on_the_statement_ages_and_takes_a_
     .await
     .unwrap();
     let paid = crate::invoices::get_summary(&pool, first.id).await.unwrap();
-    assert_eq!(paid.balance_cents, 0);
-    assert_eq!(crate::invoices::ar_aging(&pool, d(4, 20)).await.unwrap().total_cents, 12_000);
+    assert_eq!(paid.balance_cents, Cents(0));
+    assert_eq!(crate::invoices::ar_aging(&pool, d(4, 20)).await.unwrap().total_cents, Cents(12_000));
 }
 
 #[tokio::test]

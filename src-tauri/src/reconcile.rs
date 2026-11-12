@@ -8,7 +8,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::ledger::{db_err, format_cents, rollback, EntrySource, JournalEntry, JournalLine, DISPLAY_SOURCE_TYPE};
+use crate::ledger::{db_err, rollback, EntrySource, JournalEntry, JournalLine, DISPLAY_SOURCE_TYPE};
 use crate::money::Cents;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -17,8 +17,8 @@ pub struct Reconciliation {
     pub id: i64,
     pub account_id: i64,
     pub statement_end_date: String,
-    pub statement_ending_balance_cents: i64,
-    pub beginning_balance_cents: i64,
+    pub statement_ending_balance_cents: Cents,
+    pub beginning_balance_cents: Cents,
     pub is_locked: bool,
     pub created_at: String,
     pub locked_at: Option<String>,
@@ -30,7 +30,7 @@ pub struct ReconcileAccountState {
     pub account_id: i64,
     pub normal_balance: String,
     /// Sum of every line already locked into a completed reconciliation.
-    pub reconciled_balance_cents: i64,
+    pub reconciled_balance_cents: Cents,
     pub last_statement_end_date: Option<String>,
     pub in_progress: Option<Reconciliation>,
 }
@@ -44,18 +44,18 @@ pub struct UnreconciledLine {
     pub entry_date: String,
     pub source_type: String,
     pub memo: Option<String>,
-    pub debit_cents: i64,
-    pub credit_cents: i64,
+    pub debit_cents: Cents,
+    pub credit_cents: Cents,
     /// Effect on the account's normal-side balance: positive increases it.
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub reconciliation_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReconcileProgress {
-    pub cleared_balance_cents: i64,
-    pub difference_cents: i64,
+    pub cleared_balance_cents: Cents,
+    pub difference_cents: Cents,
 }
 
 /// What a charge entered at the start of a reconciliation is.
@@ -94,14 +94,14 @@ async fn normal_balance(pool: &SqlitePool, account_id: i64) -> Result<String, St
         .ok_or_else(|| format!("REC_UNKNOWN_ACCOUNT: account {account_id} does not exist"))
 }
 
-async fn reconciled_balance<'e, E: sqlx::Executor<'e, Database = Sqlite>>(executor: E, account_id: i64) -> Result<i64, String> {
-    sqlx::query_scalar(&format!(
+async fn reconciled_balance<'e, E: sqlx::Executor<'e, Database = Sqlite>>(executor: E, account_id: i64) -> Result<Cents, String> {
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT COALESCE(SUM({NORMAL_SIGNED}), 0)
          FROM journal_lines l
          JOIN chart_of_accounts a ON a.id = l.account_id
          JOIN account_types t ON t.code = a.account_type
          WHERE l.account_id = ?1 AND l.reconciled_at IS NOT NULL"
-    ))
+    )))
     .bind(account_id)
     .fetch_one(executor)
     .await
@@ -109,7 +109,7 @@ async fn reconciled_balance<'e, E: sqlx::Executor<'e, Database = Sqlite>>(execut
 }
 
 async fn cleared_balance<'e, E: sqlx::Executor<'e, Database = Sqlite>>(executor: E, reconciliation_id: i64) -> Result<ReconcileProgress, String> {
-    let (beginning, ending, cleared): (i64, i64, i64) = sqlx::query_as(&format!(
+    let (beginning, ending, cleared): (Cents, Cents, Cents) = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT r.beginning_balance_cents, r.statement_ending_balance_cents,
                 COALESCE((SELECT SUM({NORMAL_SIGNED})
                           FROM journal_lines l
@@ -117,14 +117,16 @@ async fn cleared_balance<'e, E: sqlx::Executor<'e, Database = Sqlite>>(executor:
                           JOIN account_types t ON t.code = a.account_type
                           WHERE l.reconciliation_id = r.id), 0)
          FROM reconciliations r WHERE r.id = ?1"
-    ))
+    )))
     .bind(reconciliation_id)
     .fetch_optional(executor)
     .await
     .map_err(db_err)?
     .ok_or_else(|| format!("REC_NOT_FOUND: reconciliation {reconciliation_id} does not exist"))?;
-    let cleared_balance_cents = beginning + cleared;
-    Ok(ReconcileProgress { cleared_balance_cents, difference_cents: ending - cleared_balance_cents })
+    let overflow = || "REC_OVERFLOW: the cleared balance is too large to add up".to_string();
+    let cleared_balance_cents = beginning.checked_add(cleared).ok_or_else(overflow)?;
+    let difference_cents = ending.checked_sub(cleared_balance_cents).ok_or_else(overflow)?;
+    Ok(ReconcileProgress { cleared_balance_cents, difference_cents })
 }
 
 pub async fn account_state(pool: &SqlitePool, account_id: i64) -> Result<ReconcileAccountState, String> {
@@ -160,7 +162,7 @@ pub async fn list_reconciliations(pool: &SqlitePool, account_id: i64) -> Result<
 /// All posted lines on the account that are not yet part of a completed reconciliation.
 /// `reconciliation_id` is set on lines ticked in the reconciliation currently in progress.
 pub async fn unreconciled_lines(pool: &SqlitePool, account_id: i64) -> Result<Vec<UnreconciledLine>, String> {
-    sqlx::query_as::<_, UnreconciledLine>(&format!(
+    sqlx::query_as::<_, UnreconciledLine>(sqlx::AssertSqlSafe(format!(
         "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, {DISPLAY_SOURCE_TYPE} AS source_type,
                 COALESCE(l.memo, e.memo) AS memo, l.debit_cents, l.credit_cents,
                 {NORMAL_SIGNED} AS amount_cents, l.reconciliation_id
@@ -172,7 +174,7 @@ pub async fn unreconciled_lines(pool: &SqlitePool, account_id: i64) -> Result<Ve
            -- A voided entry and its reversal net to zero, so neither is offered for clearing.
            AND e.is_voided = 0 AND e.reverses_entry_id IS NULL
          ORDER BY e.entry_date, e.entry_number, l.line_number"
-    ))
+    )))
     .bind(account_id)
     .fetch_all(pool)
     .await
@@ -331,8 +333,8 @@ pub async fn lock(pool: &SqlitePool, reconciliation_id: i64) -> Result<Reconcili
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let progress = cleared_balance(&mut *tx, reconciliation_id).await?;
-        if progress.difference_cents != 0 {
-            return Err(format!("REC_NOT_BALANCED: difference is {}; it must be $0.00 to finish", format_cents(progress.difference_cents)));
+        if !progress.difference_cents.is_zero() {
+            return Err(format!("REC_NOT_BALANCED: difference is {}; it must be $0.00 to finish", progress.difference_cents));
         }
         sqlx::query("UPDATE journal_lines SET reconciled_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE reconciliation_id = ?1")
             .bind(reconciliation_id)
@@ -379,13 +381,13 @@ pub async fn undo_last(pool: &SqlitePool, reconciliation_id: i64, reason: Option
         .await
         .map_err(db_err)?
         .ok_or_else(|| format!("REC_NOT_FOUND: reconciliation {reconciliation_id} does not exist"))?;
-        let (count, total): (i64, i64) = sqlx::query_as(&format!(
+        let (count, total): (i64, i64) = sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT COUNT(*), COALESCE(SUM({NORMAL_SIGNED}), 0)
              FROM journal_lines l
              JOIN chart_of_accounts a ON a.id = l.account_id
              JOIN account_types t ON t.code = a.account_type
              WHERE l.reconciliation_id = ?1"
-        ))
+        )))
         .bind(reconciliation_id)
         .fetch_one(&mut *tx)
         .await
@@ -444,12 +446,18 @@ pub async fn cancel(pool: &SqlitePool, reconciliation_id: i64) -> Result<(), Str
             return Err(format!("REC_NOT_OPEN: reconciliation {reconciliation_id} is not in progress"));
         }
         let files = "record_kind = 'RECONCILIATION' AND record_id = ?1";
-        sqlx::query(&format!("UPDATE record_attachments SET deleted_at = COALESCE(deleted_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) WHERE {files}"))
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "UPDATE record_attachments SET deleted_at = COALESCE(deleted_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) WHERE {files}"
+        )))
+        .bind(reconciliation_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
+        sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM record_attachments WHERE {files}")))
             .bind(reconciliation_id)
             .execute(&mut *tx)
             .await
             .map_err(db_err)?;
-        sqlx::query(&format!("DELETE FROM record_attachments WHERE {files}")).bind(reconciliation_id).execute(&mut *tx).await.map_err(db_err)?;
         Ok(())
     }
     .await;

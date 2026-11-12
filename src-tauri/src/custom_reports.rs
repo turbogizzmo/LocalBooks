@@ -23,6 +23,7 @@ use serde_json::{json, Value};
 use sqlx::SqlitePool;
 
 use crate::ledger::{db_err, DISPLAY_SOURCE_TYPE};
+use crate::money::Cents;
 use crate::preferences::{fiscal_start_month, fiscal_year_bounds};
 use crate::report_center::{aging_bucket, AGING_LABELS};
 
@@ -244,8 +245,8 @@ pub struct Filters {
     pub paid_status: Option<PaidStatus>,
     pub cleared: Option<Cleared>,
     /// Bounds on the line's amount, whichever side it is on.
-    pub amount_min_cents: Option<i64>,
-    pub amount_max_cents: Option<i64>,
+    pub amount_min_cents: Option<Cents>,
+    pub amount_max_cents: Option<Cents>,
     /// Text the memo contains, ignoring case.
     pub memo: Option<String>,
     /// Leave out voided transactions and the entries that void them.
@@ -405,7 +406,7 @@ struct Line {
     is_1099: bool,
     num: Option<String>,
     due_date: Option<NaiveDate>,
-    open_cents: Option<i64>,
+    open_cents: Option<Cents>,
     rep_id: Option<i64>,
     rep_initials: Option<String>,
     rep_name: Option<String>,
@@ -425,12 +426,12 @@ struct Line {
     /// Every item behind the line, comma-separated (for the item filter).
     items: Option<String>,
     qty_e4: Option<i64>,
-    rate_cents: Option<i64>,
-    debit_cents: i64,
-    credit_cents: i64,
+    rate_cents: Option<Cents>,
+    debit_cents: Cents,
+    credit_cents: Cents,
     /// Items source: the line's signed amount.
-    item_amount_cents: Option<i64>,
-    entry_total_cents: i64,
+    item_amount_cents: Option<Cents>,
+    entry_total_cents: Cents,
     cleared: bool,
     reconciled: bool,
 }
@@ -446,11 +447,20 @@ impl Line {
     }
 
     /// The Amount column, by the settings' sign.
-    fn amount(&self, sign: Sign) -> i64 {
+    fn amount(&self, sign: Sign) -> Result<Cents, String> {
         if let Some(amount) = self.item_amount_cents {
-            return amount;
+            return Ok(amount);
         }
-        signed(self.debit_cents - self.credit_cents, self.debit_normal, sign)
+        signed(self.debit_cents.checked_sub(self.credit_cents).ok_or_else(overflow)?, self.debit_normal, sign)
+    }
+
+    /// The Amount column's figure: the whole transaction's, or the line's by the settings' sign.
+    fn shown_amount(&self, settings: &ReportSettings) -> Result<Cents, String> {
+        if settings.per_transaction {
+            Ok(self.entry_total_cents)
+        } else {
+            self.amount(settings.sign)
+        }
     }
 
     fn type_text(&self) -> &str {
@@ -471,20 +481,27 @@ impl Line {
 
     fn days_past_due(&self, as_of: NaiveDate) -> Option<i64> {
         match (self.due_date, self.open_cents) {
-            (Some(due), Some(open)) if open != 0 => Some((as_of - due).num_days()),
+            (Some(due), Some(open)) if !open.is_zero() => Some((as_of - due).num_days()),
             _ => None,
         }
     }
 }
 
 /// Debits minus credits (`net`) on the chosen side.
-fn signed(net: i64, debit_normal: bool, sign: Sign) -> i64 {
+fn signed(net: Cents, debit_normal: bool, sign: Sign) -> Result<Cents, String> {
     match sign {
-        Sign::Debit => net,
-        Sign::Credit => -net,
-        Sign::Natural if debit_normal => net,
-        Sign::Natural => -net,
+        Sign::Debit => Ok(net),
+        Sign::Natural if debit_normal => Ok(net),
+        Sign::Credit | Sign::Natural => net.checked_neg().ok_or_else(overflow),
     }
+}
+
+fn overflow() -> String {
+    "RPT_OVERFLOW: the report's amounts are too large to add up".to_string()
+}
+
+fn plus(a: Cents, b: Cents) -> Result<Cents, String> {
+    a.checked_add(b).ok_or_else(overflow)
 }
 
 /// The document behind each entry: name, number, due date, open balance as of `?2` and rep. Names
@@ -547,9 +564,12 @@ const ENTRY_COLUMNS: &str = "
     END AS open_cents,
     rep.id AS rep_id, rep.initials AS rep_initials, rep.name AS rep_name";
 
-/// The item lines of every posted sales and purchase document, with the entry that posted them.
-/// Amounts are in home currency (prorated as `report_center::sales_by_product` does) and negative
-/// for credits.
+/// The item lines of every posted sales and purchase document, with the entry that posted them,
+/// and their discount and charge lines (the sales forms' discounts, a purchase form's discounts
+/// and charges; a sales form's percent charge is already an item line). Amounts are in home
+/// currency (prorated as `report_center::sales_by_product` does) and negative for credits; a
+/// discount counts against its document. A purchase form's line takes the number of the split line
+/// it follows.
 const ITEM_LINES: &str = "
     SELECT i.journal_entry_id AS je, it.line_number, it.description AS memo, it.income_account_id AS account_id, it.class_id,
            it.product_service_id AS item_id, it.quantity_e4 AS qty_e4, it.rate_cents,
@@ -579,6 +599,35 @@ const ITEM_LINES: &str = "
     SELECT x.journal_entry_id, el.line_number, el.memo, el.account_id, el.class_id, NULL, NULL, NULL,
            CASE WHEN x.is_credit = 1 THEN -1 ELSE 1 END * el.amount_cents * COALESCE(x.home_total_cents, x.total_cents) / x.total_cents
     FROM expense_lines el JOIN expenses x ON x.id = el.expense_id
+    WHERE x.is_voided = 0 AND x.journal_entry_id IS NOT NULL
+    UNION ALL
+    SELECT i.journal_entry_id, f.line_number, f.description, f.account_id, f.class_id, f.product_service_id, NULL, NULL,
+           f.amount_cents * COALESCE(i.home_total_cents, i.total_cents) / i.total_cents
+    FROM invoice_form_lines f JOIN invoices i ON i.id = f.invoice_id
+    WHERE f.kind = 'DISCOUNT' AND i.is_voided = 0 AND i.journal_entry_id IS NOT NULL
+    UNION ALL
+    SELECT r.journal_entry_id, f.line_number, f.description, f.account_id, f.class_id, f.product_service_id, NULL, NULL, f.amount_cents
+    FROM sales_receipt_form_lines f JOIN sales_receipts r ON r.id = f.sales_receipt_id
+    WHERE f.kind = 'DISCOUNT' AND r.is_voided = 0 AND r.journal_entry_id IS NOT NULL
+    UNION ALL
+    SELECT m.journal_entry_id, f.line_number, f.description, f.account_id, f.class_id, f.product_service_id, NULL, NULL, -f.amount_cents
+    FROM credit_memo_form_lines f JOIN credit_memos m ON m.id = f.credit_memo_id
+    WHERE f.kind = 'DISCOUNT' AND m.is_voided = 0 AND m.journal_entry_id IS NOT NULL
+    UNION ALL
+    SELECT b.journal_entry_id, f.after_line, f.description, f.account_id, f.class_id, f.product_service_id, NULL, NULL,
+           CASE f.kind WHEN 'CHARGE' THEN 1 ELSE -1 END * f.amount_cents
+    FROM purchase_form_lines f JOIN bills b ON b.id = f.bill_id
+    WHERE b.is_voided = 0 AND b.journal_entry_id IS NOT NULL
+    UNION ALL
+    SELECT c.journal_entry_id, f.after_line, f.description, f.account_id, f.class_id, f.product_service_id, NULL, NULL,
+           CASE f.kind WHEN 'CHARGE' THEN -1 ELSE 1 END * f.amount_cents
+    FROM purchase_form_lines f JOIN vendor_credits c ON c.id = f.vendor_credit_id
+    WHERE c.is_voided = 0 AND c.journal_entry_id IS NOT NULL
+    UNION ALL
+    SELECT x.journal_entry_id, f.after_line, f.description, f.account_id, f.class_id, f.product_service_id, NULL, NULL,
+           CASE WHEN x.is_credit = 1 THEN -1 ELSE 1 END * CASE f.kind WHEN 'CHARGE' THEN 1 ELSE -1 END
+           * f.amount_cents * COALESCE(x.home_total_cents, x.total_cents) / x.total_cents
+    FROM purchase_form_lines f JOIN expenses x ON x.id = f.expense_id
     WHERE x.is_voided = 0 AND x.journal_entry_id IS NOT NULL";
 
 const ACCOUNT_COLUMNS: &str = "a.id AS account_id, a.full_name AS account_name, a.account_number, a.account_type, a.classification,
@@ -613,7 +662,7 @@ async fn ledger_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDat
          WHERE e.status = 'POSTED' AND (?1 IS NULL OR e.entry_date >= ?1) AND e.entry_date <= ?2
          ORDER BY e.entry_date, e.entry_number, l.line_number"
     );
-    sqlx::query_as(&sql).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str())).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)
 }
 
 async fn item_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate) -> Result<Vec<Line>, String> {
@@ -635,7 +684,7 @@ async fn item_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate)
          WHERE e.status = 'POSTED' AND (?1 IS NULL OR e.entry_date >= ?1) AND e.entry_date <= ?2
          ORDER BY e.entry_date, e.entry_number, d.line_number"
     );
-    sqlx::query_as(&sql).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str())).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)
 }
 
 /// The ids themselves and everything below them in `view` (`v_account_ancestry` or `v_class_ancestry`).
@@ -644,11 +693,12 @@ async fn with_descendants(pool: &SqlitePool, view: &str, column: &str, ids: &[i6
         return Ok(HashSet::new());
     }
     let json = serde_json::to_string(ids).map_err(|e| e.to_string())?;
-    let rows: Vec<i64> = sqlx::query_scalar(&format!("SELECT DISTINCT a.{column} FROM {view} a JOIN json_each(?1) j ON j.value = a.ancestor_id"))
-        .bind(json)
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?;
+    let rows: Vec<i64> =
+        sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT DISTINCT a.{column} FROM {view} a JOIN json_each(?1) j ON j.value = a.ancestor_id")))
+            .bind(json)
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
     Ok(rows.into_iter().chain(ids.iter().copied()).collect())
 }
 
@@ -709,8 +759,8 @@ impl LineFilter<'_> {
         match (f.paid_status, l.open_cents) {
             (None, _) => {}
             (Some(_), None) => return false,
-            (Some(PaidStatus::Open), Some(0)) => return false,
-            (Some(PaidStatus::Paid), Some(open)) if open != 0 => return false,
+            (Some(PaidStatus::Open), Some(open)) if open.is_zero() => return false,
+            (Some(PaidStatus::Paid), Some(open)) if !open.is_zero() => return false,
             _ => {}
         }
         match f.cleared {
@@ -719,7 +769,8 @@ impl LineFilter<'_> {
             Some(Cleared::Reconciled) if !l.reconciled => return false,
             _ => {}
         }
-        let size = l.item_amount_cents.map_or(l.debit_cents + l.credit_cents, i64::abs);
+        // A size too large to add up passes any lower bound and fails any upper one.
+        let size = l.item_amount_cents.map_or_else(|| l.debit_cents.checked_add(l.credit_cents), Cents::checked_abs).unwrap_or(Cents(i64::MAX));
         if f.amount_min_cents.is_some_and(|min| size < min) || f.amount_max_cents.is_some_and(|max| size > max) {
             return false;
         }
@@ -831,7 +882,7 @@ struct Group<'a> {
     label: String,
     lines: Vec<&'a Line>,
     /// Beginning balance (grouped by account with `opening_balances`).
-    opening: Option<i64>,
+    opening: Option<Cents>,
     account_id: Option<i64>,
 }
 
@@ -918,21 +969,21 @@ pub async fn run(pool: &SqlitePool, settings: &ReportSettings, today: NaiveDate)
         let group = groups.entry(key).or_insert_with(|| Group {
             label,
             lines: Vec::new(),
-            opening: openings.as_ref().map(|_| 0),
+            opening: openings.as_ref().map(|_| Cents::ZERO),
             account_id: (by == GroupBy::Account).then_some(l.account_id),
         });
         group.lines.push(l);
     }
     // As in the General Ledger: an account shows when it has activity or a beginning balance.
-    groups.retain(|_, g| !g.lines.is_empty() || g.opening.is_some_and(|o| o != 0));
+    groups.retain(|_, g| !g.lines.is_empty() || g.opening.is_some_and(|o| !o.is_zero()));
 
     let customers = match settings.column_by_name {
         Some(NameColumns::Customer | NameColumns::Job) => customer_names(pool).await?,
         _ => HashMap::new(),
     };
     let (columns, rows) = match settings.mode {
-        Mode::Detail => detail(settings, grouped, &groups, end),
-        Mode::Summary => summary(settings, by, &groups, &lines, end, &customers),
+        Mode::Detail => detail(settings, grouped, &groups, end)?,
+        Mode::Summary => summary(settings, by, &groups, &lines, end, &customers)?,
     };
     Ok(CustomReport { start_date: settings.start_date, end_date: end, columns, rows, line_count: lines.len() })
 }
@@ -941,7 +992,7 @@ struct Opening {
     key: GroupKey,
     label: String,
     account_id: i64,
-    cents: i64,
+    cents: Cents,
 }
 
 /// Each account's balance before `start` on the report's sign: balance sheet accounts from the
@@ -950,7 +1001,7 @@ struct Opening {
 async fn opening_balances(pool: &SqlitePool, filter: &LineFilter<'_>, start: Option<NaiveDate>, end: NaiveDate, sign: Sign) -> Result<Vec<Opening>, String> {
     let Some(start) = start else { return Ok(Vec::new()) };
     let (fiscal_start, _) = fiscal_year_bounds(start, fiscal_start_month(pool).await?);
-    type AccountRow = (i64, String, Option<String>, String, String, bool, i64, i64);
+    type AccountRow = (i64, String, Option<String>, String, String, bool, i64, Cents);
     let rows: Vec<AccountRow> = sqlx::query_as(
         "SELECT a.id, a.full_name, a.account_number, a.account_type, a.classification, a.normal_balance = 'DEBIT', a.type_sort_order,
                 COALESCE((SELECT SUM(p.debit_cents - p.credit_cents) FROM v_posted_lines p
@@ -964,19 +1015,15 @@ async fn opening_balances(pool: &SqlitePool, filter: &LineFilter<'_>, start: Opt
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    Ok(rows
-        .into_iter()
+    rows.into_iter()
         .filter(|(id, _, _, account_type, classification, ..)| filter.account_matches(*id, account_type, classification))
-        .map(|(id, name, number, _, _, debit_normal, sort, net)| Opening {
-            key: (sort, number.unwrap_or_default(), name.clone(), id),
-            label: name,
-            account_id: id,
-            cents: signed(net, debit_normal, sign),
+        .map(|(id, name, number, _, _, debit_normal, sort, net)| {
+            Ok(Opening { key: (sort, number.unwrap_or_default(), name.clone(), id), label: name, account_id: id, cents: signed(net, debit_normal, sign)? })
         })
-        .collect())
+        .collect()
 }
 
-fn money(cents: i64) -> Value {
+fn money(cents: Cents) -> Value {
     json!(cents)
 }
 
@@ -984,9 +1031,9 @@ fn opt<T: Into<Value>>(v: Option<T>) -> Value {
     v.map_or(Value::Null, Into::into)
 }
 
-fn cell(column: Column, l: &Line, settings: &ReportSettings, balance: i64, as_of: NaiveDate) -> Value {
-    let nonzero = |c: i64| if c == 0 { Value::Null } else { money(c) };
-    match column {
+fn cell(column: Column, l: &Line, settings: &ReportSettings, balance: Cents, as_of: NaiveDate) -> Result<Value, String> {
+    let nonzero = |c: Cents| if c.is_zero() { Value::Null } else { money(c) };
+    Ok(match column {
         Column::Type => json!(l.type_text()),
         Column::Date => json!(l.date.to_string()),
         Column::Num => opt(l.num.clone()),
@@ -997,47 +1044,50 @@ fn cell(column: Column, l: &Line, settings: &ReportSettings, balance: i64, as_of
         Column::Class => opt(l.class_name.clone()),
         Column::Item => opt(l.item_name.clone()),
         Column::Qty => opt(l.qty_e4),
-        Column::Rate => opt(l.rate_cents),
+        Column::Rate => opt(l.rate_cents.map(Cents::get)),
         Column::Debit => nonzero(l.debit_cents),
         Column::Credit => nonzero(l.credit_cents),
         Column::Amount if settings.per_transaction => money(l.entry_total_cents),
-        Column::Amount => money(l.amount(settings.sign)),
+        Column::Amount => money(l.amount(settings.sign)?),
         Column::Balance => money(balance),
-        Column::OpenBalance => opt(l.open_cents),
+        Column::OpenBalance => opt(l.open_cents.map(Cents::get)),
         Column::DueDate => opt(l.due_date.map(|d| d.to_string())),
         Column::Aging => opt(l.days_past_due(as_of).filter(|d| *d > 0)),
         Column::Rep => opt(l.rep_label()),
-    }
+    })
 }
 
 /// Sums for a subtotal or total row.
 #[derive(Default)]
 struct Sums {
-    debit: i64,
-    credit: i64,
-    amount: i64,
-    open: i64,
+    debit: Cents,
+    credit: Cents,
+    amount: Cents,
+    open: Cents,
     qty: i64,
 }
 
 impl Sums {
-    fn add(&mut self, l: &Line, settings: &ReportSettings) {
-        self.debit += l.debit_cents;
-        self.credit += l.credit_cents;
-        self.amount += if settings.per_transaction { l.entry_total_cents } else { l.amount(settings.sign) };
-        self.open += l.open_cents.unwrap_or(0);
-        self.qty += l.qty_e4.unwrap_or(0);
+    fn add(&mut self, l: &Line, settings: &ReportSettings) -> Result<(), String> {
+        self.merge(&Sums {
+            debit: l.debit_cents,
+            credit: l.credit_cents,
+            amount: l.shown_amount(settings)?,
+            open: l.open_cents.unwrap_or(Cents::ZERO),
+            qty: l.qty_e4.unwrap_or(0),
+        })
     }
 
-    fn merge(&mut self, other: &Sums) {
-        self.debit += other.debit;
-        self.credit += other.credit;
-        self.amount += other.amount;
-        self.open += other.open;
-        self.qty += other.qty;
+    fn merge(&mut self, other: &Sums) -> Result<(), String> {
+        self.debit = plus(self.debit, other.debit)?;
+        self.credit = plus(self.credit, other.credit)?;
+        self.amount = plus(self.amount, other.amount)?;
+        self.open = plus(self.open, other.open)?;
+        self.qty = self.qty.checked_add(other.qty).ok_or_else(overflow)?;
+        Ok(())
     }
 
-    fn cells(&self, label: String, columns: &[Column], balance: Option<i64>) -> Vec<Value> {
+    fn cells(&self, label: String, columns: &[Column], balance: Option<Cents>) -> Vec<Value> {
         let mut cells = vec![json!(label)];
         cells.extend(columns.iter().map(|c| match c {
             Column::Debit => money(self.debit),
@@ -1045,7 +1095,7 @@ impl Sums {
             Column::Amount => money(self.amount),
             Column::OpenBalance => money(self.open),
             Column::Qty => json!(self.qty),
-            Column::Balance => opt(balance),
+            Column::Balance => opt(balance.map(Cents::get)),
             _ => Value::Null,
         }));
         cells
@@ -1058,13 +1108,15 @@ fn blank_row(kind: RowKind, depth: u32, label: String, width: usize) -> ReportRo
     ReportRow { kind, depth, cells, journal_entry_id: None, account_id: None, drill: None }
 }
 
-fn detail(settings: &ReportSettings, grouped: bool, groups: &BTreeMap<GroupKey, Group<'_>>, as_of: NaiveDate) -> (Vec<ColumnHead>, Vec<ReportRow>) {
+type Layout = (Vec<ColumnHead>, Vec<ReportRow>);
+
+fn detail(settings: &ReportSettings, grouped: bool, groups: &BTreeMap<GroupKey, Group<'_>>, as_of: NaiveDate) -> Result<Layout, String> {
     let cols = &settings.columns;
     let mut heads = vec![ColumnHead { label: String::new(), kind: ColumnKind::Text }];
     heads.extend(cols.iter().map(|c| ColumnHead { label: c.label().into(), kind: c.kind() }));
     let mut rows = Vec::new();
     let mut total = Sums::default();
-    let mut last_balance = 0;
+    let mut last_balance = Cents::ZERO;
     let depth = u32::from(grouped);
     for group in groups.values() {
         if grouped {
@@ -1072,7 +1124,7 @@ fn detail(settings: &ReportSettings, grouped: bool, groups: &BTreeMap<GroupKey, 
             heading.account_id = group.account_id;
             rows.push(heading);
         }
-        let mut balance = group.opening.unwrap_or(0);
+        let mut balance = group.opening.unwrap_or(Cents::ZERO);
         if let Some(opening) = group.opening {
             let mut row = blank_row(RowKind::Detail, depth, "Beginning balance".into(), cols.len());
             if let Some(i) = cols.iter().position(|c| *c == Column::Balance) {
@@ -1082,10 +1134,12 @@ fn detail(settings: &ReportSettings, grouped: bool, groups: &BTreeMap<GroupKey, 
         }
         let mut sums = Sums::default();
         for l in &group.lines {
-            balance += if settings.per_transaction { l.entry_total_cents } else { l.amount(settings.sign) };
-            sums.add(l, settings);
+            balance = plus(balance, l.shown_amount(settings)?)?;
+            sums.add(l, settings)?;
             let mut cells = vec![Value::Null];
-            cells.extend(cols.iter().map(|c| cell(*c, l, settings, balance, as_of)));
+            for c in cols {
+                cells.push(cell(*c, l, settings, balance, as_of)?);
+            }
             rows.push(ReportRow { kind: RowKind::Detail, depth, cells, journal_entry_id: Some(l.journal_entry_id), account_id: None, drill: None });
         }
         if grouped {
@@ -1098,7 +1152,7 @@ fn detail(settings: &ReportSettings, grouped: bool, groups: &BTreeMap<GroupKey, 
                 drill: None,
             });
         }
-        total.merge(&sums);
+        total.merge(&sums)?;
         last_balance = balance;
     }
     // A running balance across groups means nothing, so the grand total shows one only ungrouped.
@@ -1111,7 +1165,7 @@ fn detail(settings: &ReportSettings, grouped: bool, groups: &BTreeMap<GroupKey, 
         account_id: None,
         drill: None,
     });
-    (heads, rows)
+    Ok((heads, rows))
 }
 
 /// Each customer's full name (`Customer:Job`, as a job's name is stored) and the name of the
@@ -1152,8 +1206,7 @@ fn summary(
     lines: &[Line],
     end: NaiveDate,
     customers: &HashMap<i64, (String, String)>,
-) -> (Vec<ColumnHead>, Vec<ReportRow>) {
-    let amount = |l: &Line| if settings.per_transaction { l.entry_total_cents } else { l.amount(settings.sign) };
+) -> Result<Layout, String> {
     let mut heads = vec![ColumnHead { label: by.label().into(), kind: ColumnKind::Text }];
     // Columns by name: every name the lines carry, in name order, those without one last.
     let names: Vec<((bool, String), String)> = match settings.column_by_name {
@@ -1186,27 +1239,28 @@ fn summary(
     heads.push(ColumnHead { label: if split == 0 { "Amount".into() } else { "Total".into() }, kind: ColumnKind::Money });
 
     let mut rows = Vec::new();
-    let mut totals = vec![0i64; split + 1];
+    let mut totals = vec![Cents::ZERO; split + 1];
     let mut total_qty = 0;
     for group in groups.values() {
-        let mut amounts = vec![0i64; split + 1];
-        let mut qty = 0;
+        let mut amounts = vec![Cents::ZERO; split + 1];
+        let mut qty: i64 = 0;
         for l in &group.lines {
-            let a = amount(l);
+            let a = l.shown_amount(settings)?;
             if let Some(n) = settings.column_by_name {
                 if let Some(i) = name_index.get(&name_column(n, l, customers).0) {
-                    amounts[*i] += a;
+                    amounts[*i] = plus(amounts[*i], a)?;
                 }
             } else if let Some(period) = settings.column_by {
                 let rank = period_key(l.date, period).0;
                 if let Some(i) = periods.iter().position(|(r, _)| *r == rank) {
-                    amounts[i] += a;
+                    amounts[i] = plus(amounts[i], a)?;
                 }
             }
-            *amounts.last_mut().expect("a total") += a;
-            qty += l.qty_e4.unwrap_or(0);
+            let total = amounts.last_mut().expect("a total");
+            *total = plus(*total, a)?;
+            qty = qty.checked_add(l.qty_e4.unwrap_or(0)).ok_or_else(overflow)?;
         }
-        if !settings.show_zero_rows && amounts.iter().all(|a| *a == 0) && (!show_qty || qty == 0) {
+        if !settings.show_zero_rows && amounts.iter().all(|a| a.is_zero()) && (!show_qty || qty == 0) {
             continue;
         }
         let mut cells = vec![json!(group.label)];
@@ -1215,9 +1269,9 @@ fn summary(
         }
         cells.extend(amounts.iter().map(|a| money(*a)));
         for (t, a) in totals.iter_mut().zip(&amounts) {
-            *t += a;
+            *t = plus(*t, *a)?;
         }
-        total_qty += qty;
+        total_qty = qty.checked_add(total_qty).ok_or_else(overflow)?;
         rows.push(ReportRow {
             kind: RowKind::Detail,
             depth: 0,
@@ -1233,7 +1287,7 @@ fn summary(
     }
     cells.extend(totals.iter().map(|a| money(*a)));
     rows.push(ReportRow { kind: RowKind::Total, depth: 0, cells, journal_entry_id: None, account_id: None, drill: None });
-    (heads, rows)
+    Ok((heads, rows))
 }
 
 // ------------------------------------------------------------------------------------------------

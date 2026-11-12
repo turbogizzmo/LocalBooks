@@ -61,7 +61,10 @@ const VEHICLE_SELECT: &str = "SELECT v.id, v.name, v.description, v.is_active,
   FROM vehicles v";
 
 pub async fn list_vehicles(pool: &SqlitePool) -> Result<Vec<VehicleView>, String> {
-    sqlx::query_as::<_, VehicleView>(&format!("{VEHICLE_SELECT} ORDER BY v.is_active DESC, v.name COLLATE NOCASE")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as::<_, VehicleView>(sqlx::AssertSqlSafe(format!("{VEHICLE_SELECT} ORDER BY v.is_active DESC, v.name COLLATE NOCASE")))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Adds a vehicle (`id` = None) or changes one: its name, description, or active status.
@@ -97,7 +100,7 @@ pub async fn save_vehicle(pool: &SqlitePool, id: Option<i64>, input: VehicleInpu
         sqlx::Error::RowNotFound => "MILE_UNKNOWN_VEHICLE: that vehicle does not exist".into(),
         other => db_err(other),
     })?;
-    sqlx::query_as::<_, VehicleView>(&format!("{VEHICLE_SELECT} WHERE v.id = ?1")).bind(id).fetch_one(pool).await.map_err(db_err)
+    sqlx::query_as::<_, VehicleView>(sqlx::AssertSqlSafe(format!("{VEHICLE_SELECT} WHERE v.id = ?1"))).bind(id).fetch_one(pool).await.map_err(db_err)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -303,7 +306,7 @@ async fn check_trip(pool: &SqlitePool, input: &TripInput) -> Result<i64, String>
 }
 
 pub async fn get_trip(pool: &SqlitePool, id: i64) -> Result<TripView, String> {
-    let trip = sqlx::query_as::<_, TripView>(&format!("{TRIP_SELECT} WHERE t.id = ?1"))
+    let trip = sqlx::query_as::<_, TripView>(sqlx::AssertSqlSafe(format!("{TRIP_SELECT} WHERE t.id = ?1")))
         .bind(id)
         .fetch_optional(pool)
         .await
@@ -368,21 +371,22 @@ pub async fn delete_trip(pool: &SqlitePool, id: i64) -> Result<(), String> {
 }
 
 pub async fn list_trips(pool: &SqlitePool, from: NaiveDate, to: NaiveDate) -> Result<Vec<TripView>, String> {
-    let trips = sqlx::query_as::<_, TripView>(&format!("{TRIP_SELECT} WHERE t.trip_date BETWEEN ?1 AND ?2 ORDER BY t.trip_date DESC, t.id DESC"))
-        .bind(from)
-        .bind(to)
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?;
+    let trips =
+        sqlx::query_as::<_, TripView>(sqlx::AssertSqlSafe(format!("{TRIP_SELECT} WHERE t.trip_date BETWEEN ?1 AND ?2 ORDER BY t.trip_date DESC, t.id DESC")))
+            .bind(from)
+            .bind(to)
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
     Ok(with_deductible(trips))
 }
 
 /// Billable trips not yet on a live invoice, oldest first; for one customer or job when given.
 pub async fn list_unbilled_trips(pool: &SqlitePool, customer_id: Option<i64>) -> Result<Vec<TripView>, String> {
-    let trips = sqlx::query_as::<_, TripView>(&format!(
+    let trips = sqlx::query_as::<_, TripView>(sqlx::AssertSqlSafe(format!(
         "{TRIP_SELECT} WHERE t.billable = 1 AND (t.invoice_id IS NULL OR i.is_voided = 1) AND (?1 IS NULL OR t.customer_id = ?1)
          ORDER BY c.name COLLATE NOCASE, t.trip_date, t.id"
-    ))
+    )))
     .bind(customer_id)
     .fetch_all(pool)
     .await
@@ -628,7 +632,7 @@ pub async fn mileage_report(pool: &SqlitePool, kind: MileageReportKind, params: 
         return Err("MILE_BAD_RANGE: the start date is after the end date".into());
     }
     // A customer filter takes in its jobs ("Customer:Job") too.
-    let trips = sqlx::query_as::<_, TripView>(&format!(
+    let trips = sqlx::query_as::<_, TripView>(sqlx::AssertSqlSafe(format!(
         "{TRIP_SELECT}
          LEFT JOIN customers p ON p.id = ?4
          WHERE (?1 IS NULL OR t.trip_date >= ?1) AND t.trip_date <= ?2
@@ -636,7 +640,7 @@ pub async fn mileage_report(pool: &SqlitePool, kind: MileageReportKind, params: 
            AND (?4 IS NULL OR t.customer_id = ?4 OR substr(c.name, 1, length(p.name) + 1) = p.name || ':')
            AND (?5 = 0 OR t.customer_id IS NULL)
          ORDER BY t.trip_date, t.id"
-    ))
+    )))
     .bind(start)
     .bind(end)
     .bind(params.vehicle_id)

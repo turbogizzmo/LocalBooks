@@ -63,7 +63,7 @@ async fn each_segment_ties_out_to_its_list_or_report() {
     assert_eq!((pos.cents, pos.count, pos.items[0].memo.as_deref()), (3_000, 1, Some("keep")));
     let cards = seg(&bills, "CARDS");
     let bs = crate::statements::balance_sheet(&pool, today).await.unwrap();
-    let card_line = bs.lines.iter().find(|l| l.account_id == Some(card)).and_then(|l| l.amount_cents).unwrap();
+    let card_line = bs.lines.iter().find(|l| l.account_id == Some(card)).and_then(|l| l.amount_cents).unwrap().get();
     assert_eq!((cards.cents, cards.count, cards.items[0].id), (card_line, 1, card));
     assert_eq!(card_line, 4_500);
 

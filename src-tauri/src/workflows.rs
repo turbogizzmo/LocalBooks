@@ -38,9 +38,9 @@ pub struct StatementRow {
     pub party_name: String,
     pub memo: Option<String>,
     /// Charges positive, payments and credits negative.
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     #[sqlx(skip)]
-    pub balance_cents: i64,
+    pub balance_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -52,11 +52,11 @@ pub struct CustomerStatement {
     pub billing_address: Option<String>,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
-    pub opening_balance_cents: i64,
+    pub opening_balance_cents: Cents,
     pub rows: Vec<StatementRow>,
-    pub closing_balance_cents: i64,
+    pub closing_balance_cents: Cents,
     /// Current, 1–30, 31–60, 61–90, 91+ days past due at the end date.
-    pub aging_cents: [i64; 5],
+    pub aging_cents: [Cents; 5],
 }
 
 /// A customer's statement for a period, including its jobs: the balance brought forward, each
@@ -73,13 +73,15 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
          JOIN v_chart_of_accounts a ON a.id = l.account_id AND a.account_type = 'ACCOUNTS_RECEIVABLE'
          JOIN v_entry_party p ON p.journal_entry_id = l.journal_entry_id
          JOIN journal_entries je ON je.id = l.journal_entry_id";
-    let opening: i64 = sqlx::query_scalar(&format!("SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) {ar_lines} WHERE {mine} AND l.entry_date < ?2"))
-        .bind(&name)
-        .bind(start_date)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
-    let mut rows: Vec<StatementRow> = sqlx::query_as(&format!(
+    let opening: Cents = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) {ar_lines} WHERE {mine} AND l.entry_date < ?2"
+    )))
+    .bind(&name)
+    .bind(start_date)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
+    let mut rows: Vec<StatementRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT l.entry_date AS date,
                 CASE WHEN je.reverses_entry_id IS NOT NULL THEN 'VOID'
                      WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM finance_charge_invoices WHERE invoice_id = l.source_id)
@@ -119,23 +121,24 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
          {ar_lines}
          WHERE {mine} AND l.entry_date BETWEEN ?2 AND ?3
          ORDER BY l.entry_date, l.entry_number, l.line_number"
-    ))
+    )))
     .bind(&name)
     .bind(start_date)
     .bind(end_date)
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
+    let overflow = || "STMT_OVERFLOW: the statement's amounts are too large to add up".to_string();
     let mut balance = opening;
     for row in &mut rows {
-        balance += row.amount_cents;
+        balance = balance.checked_add(row.amount_cents).ok_or_else(overflow)?;
         row.balance_cents = balance;
     }
     let aging = crate::report_center::aging(pool, false, end_date).await?;
-    let mut buckets = [0i64; 5];
+    let mut buckets = [Cents::ZERO; 5];
     for row in aging.rows.iter().filter(|r| r.party_name == name || r.party_name.starts_with(&format!("{name}:"))) {
         for (b, cents) in buckets.iter_mut().zip(row.buckets_cents) {
-            *b += cents;
+            *b = b.checked_add(cents).ok_or_else(overflow)?;
         }
     }
     Ok(CustomerStatement {
@@ -387,7 +390,7 @@ pub struct RecurringView {
     pub last_run_date: Option<String>,
     pub run_count: i64,
     #[sqlx(skip)]
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     #[sqlx(skip)]
     pub payee: Option<String>,
     #[serde(skip)]
@@ -455,19 +458,20 @@ fn dated(kind: &str, payload: &str, date: NaiveDate) -> Result<Dated, String> {
     })
 }
 
-fn summary(kind: &str, payload: &str) -> (i64, Option<String>) {
+fn summary(kind: &str, payload: &str) -> (Cents, Option<String>) {
     let today = NaiveDate::from_ymd_opt(2000, 1, 1).unwrap();
+    // A total that overflows shows as zero; posting the template reports the overflow.
     match dated(kind, payload, today) {
-        Ok(Dated::Journal(e)) => (e.lines.iter().map(|l| l.debit.get()).sum(), None),
-        Ok(Dated::Expense(e)) => (Cents::checked_sum(e.lines.iter().map(|l| l.amount_cents)).map_or(0, Cents::get), e.payee_name),
-        Ok(Dated::Bill(b)) => (b.total_cents.get(), Some(b.vendor_name)),
+        Ok(Dated::Journal(e)) => (Cents::checked_sum(e.lines.iter().map(|l| l.debit)).unwrap_or(Cents::ZERO), None),
+        Ok(Dated::Expense(e)) => (Cents::checked_sum(e.lines.iter().map(|l| l.amount_cents)).unwrap_or(Cents::ZERO), e.payee_name),
+        Ok(Dated::Bill(b)) => (b.total_cents, Some(b.vendor_name)),
         Ok(Dated::Invoice(i)) => (
             Cents::checked_sum(i.lines.iter().map(|l| Cents(crate::invoices::line_amount(l.quantity_e4, l.rate_cents.get()).unwrap_or(0))))
                 .and_then(|t| t.checked_sub(i.discount_cents))
-                .map_or(0, Cents::get),
+                .unwrap_or(Cents::ZERO),
             Some(i.customer_name),
         ),
-        Err(_) => (0, None),
+        Err(_) => (Cents::ZERO, None),
     }
 }
 
@@ -819,7 +823,10 @@ const PO_SELECT: &str = "SELECT o.id, o.po_number, o.vendor_id, v.name AS vendor
  FROM purchase_orders o JOIN vendors v ON v.id = o.vendor_id";
 
 pub async fn list_purchase_orders(pool: &SqlitePool) -> Result<Vec<PurchaseOrderView>, String> {
-    sqlx::query_as::<_, PurchaseOrderView>(&format!("{PO_SELECT} ORDER BY o.status = 'OPEN' DESC, o.po_number DESC")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as::<_, PurchaseOrderView>(sqlx::AssertSqlSafe(format!("{PO_SELECT} ORDER BY o.status = 'OPEN' DESC, o.po_number DESC")))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn purchase_order_lines(pool: &SqlitePool, id: i64) -> Result<Vec<PurchaseOrderLineView>, String> {
@@ -1125,7 +1132,7 @@ pub struct SearchHit {
     pub label: String,
     pub detail: Option<String>,
     pub date: Option<String>,
-    pub amount_cents: Option<i64>,
+    pub amount_cents: Option<Cents>,
     pub source_type: Option<String>,
 }
 
@@ -1140,7 +1147,7 @@ pub async fn search(pool: &SqlitePool, query: &str) -> Result<Vec<SearchHit>, St
     let amount = q.trim_start_matches('$').replace(',', "");
     let amount_cents = parse_amount(&amount);
     let number: Option<i64> = q.trim_start_matches('#').parse().ok();
-    sqlx::query_as::<_, SearchHit>(&format!(
+    sqlx::query_as::<_, SearchHit>(sqlx::AssertSqlSafe(format!(
         "SELECT * FROM (
             SELECT 'TRANSACTION' AS kind, e.id, COALESCE(p.party_name, e.memo, 'Journal entry') AS label, e.memo AS detail, e.entry_date AS date,
                    (SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = e.id) AS amount_cents, {DISPLAY_SOURCE_TYPE} AS source_type
@@ -1158,7 +1165,7 @@ pub async fn search(pool: &SqlitePool, query: &str) -> Result<Vec<SearchHit>, St
          UNION ALL SELECT * FROM (SELECT 'PRODUCT', id, name, description, NULL, rate_cents, NULL FROM products_services WHERE name LIKE ?1 ESCAPE '\\' LIMIT 6)
          UNION ALL SELECT * FROM (SELECT 'ACCOUNT', id, full_name, account_type_name, NULL, NULL, NULL FROM v_chart_of_accounts
                                   WHERE full_name LIKE ?1 ESCAPE '\\' OR account_number = ?4 LIMIT 6)"
-    ))
+    )))
     .bind(&like)
     .bind(amount_cents)
     .bind(number)

@@ -11,7 +11,7 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn id_of(pool: &SqlitePool, table: &str, name: &str) -> i64 {
-    sqlx::query_scalar(&format!("SELECT id FROM {table} WHERE name = ?1")).bind(name).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT id FROM {table} WHERE name = ?1"))).bind(name).fetch_one(pool).await.unwrap()
 }
 
 async fn invoice(pool: &SqlitePool, customer: &str, cents: i64, item: Option<i64>) -> i64 {
@@ -28,7 +28,7 @@ async fn journal(pool: &SqlitePool) -> Vec<(i64, i64, i64, i64, i64)> {
 }
 
 async fn ar_total(pool: &SqlitePool) -> i64 {
-    crate::invoices::ar_aging(pool, day()).await.unwrap().total_cents
+    crate::invoices::ar_aging(pool, day()).await.unwrap().total_cents.get()
 }
 
 #[tokio::test]
@@ -61,7 +61,7 @@ async fn merging_customers_moves_their_documents_and_leaves_the_journal_alone() 
         .unwrap();
     assert_eq!(moved, vec![(to, "Acme Co".to_string()), (to, "Acme Co".to_string())]);
     let statement = crate::workflows::customer_statement(&pool, to, "2026-01-01".parse().unwrap(), day()).await.unwrap();
-    assert_eq!(statement.closing_balance_cents, 65_000, "the kept customer's statement has both");
+    assert_eq!(statement.closing_balance_cents, Cents(65_000), "the kept customer's statement has both");
     let (active, merged_into): (bool, Option<i64>) =
         sqlx::query_as("SELECT is_active, merged_into_id FROM customers WHERE id = ?1").bind(from).fetch_one(&pool).await.unwrap();
     assert_eq!((active, merged_into), (false, Some(to)));

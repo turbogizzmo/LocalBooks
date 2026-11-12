@@ -25,7 +25,11 @@ async fn company() -> SqlitePool {
     let id = |table: &'static str, name: &'static str| {
         let p = p.clone();
         async move {
-            sqlx::query_scalar::<_, i64>(&format!("SELECT id FROM {table} WHERE name = ?1")).bind(name).fetch_one(&p).await.unwrap_or_else(|_| panic!("{name}"))
+            sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!("SELECT id FROM {table} WHERE name = ?1")))
+                .bind(name)
+                .fetch_one(&p)
+                .await
+                .unwrap_or_else(|_| panic!("{name}"))
         }
     };
     let cafe = id("customers", "Brightwater Cafe").await;
@@ -169,8 +173,8 @@ async fn company() -> SqlitePool {
     let budget = crate::statements::create_budget(p, "Plan 2025", d(2025, 6, 1)).await.unwrap().id;
     let rent = account(p, "6300").await;
     let amounts: Vec<crate::statements::BudgetAmount> = (1..=12)
-        .map(|period| crate::statements::BudgetAmount { account_id: sales, period, amount_cents: 1_000_000 })
-        .chain((1..=12).map(|period| crate::statements::BudgetAmount { account_id: rent, period, amount_cents: 250_000 }))
+        .map(|period| crate::statements::BudgetAmount { account_id: sales, period, amount_cents: Cents(1_000_000) })
+        .chain((1..=12).map(|period| crate::statements::BudgetAmount { account_id: rent, period, amount_cents: Cents(250_000) }))
         .collect();
     crate::statements::set_budget_amounts(p, budget, &amounts).await.unwrap();
     sqlx::query("INSERT INTO todos (title, note, due_date, customer_id) VALUES ('Call about the patio menu', 'Ask for the final copy', '2025-12-20', ?1)")
@@ -289,10 +293,10 @@ async fn statement_summaries_tie_out() {
     let folded: BTreeMap<String, i64> = details(&summary).map(|r| (text(&r.cells[0]), last(r))).collect();
     for line in bs.lines.iter().filter(|l| matches!(l.kind, crate::statements::LineKind::Total | crate::statements::LineKind::Net)) {
         let shown = totals.get(&line.label).or_else(|| folded.get(line.label.trim_start_matches("Total ")));
-        assert_eq!(shown, line.amount_cents.as_ref(), "{}", line.label);
+        assert_eq!(shown, line.amount_cents.map(crate::money::Cents::get).as_ref(), "{}", line.label);
     }
     let lines: i64 = details(&summary).map(last).sum();
-    assert_eq!(lines, bs.total_assets_cents + bs.total_liabilities_cents + bs.total_equity_cents);
+    assert_eq!(lines, bs.total_assets_cents.get() + bs.total_liabilities_cents.get() + bs.total_equity_cents.get());
     assert!(details(&summary).count() < bs.lines.iter().filter(|l| l.account_id.is_some()).count(), "accounts fold into groups");
 
     // Profit & Loss YTD Comparison: each column's net income is a Profit & Loss for its dates.
@@ -300,7 +304,7 @@ async fn statement_summaries_tie_out() {
     let net = ytd.report.rows.last().unwrap();
     let month = crate::statements::profit_and_loss(&pool, d(2025, 11, 1), d(2025, 11, 30)).await.unwrap();
     let year = crate::statements::profit_and_loss(&pool, d(2025, 1, 1), d(2025, 11, 30)).await.unwrap();
-    assert_eq!((cents(&net.cells[1]), cents(&net.cells[2])), (month.net_income_cents, year.net_income_cents));
+    assert_eq!((cents(&net.cells[1]), cents(&net.cells[2])), (month.net_income_cents.get(), year.net_income_cents.get()));
     assert_ne!(month.net_income_cents, year.net_income_cents);
 }
 
@@ -344,7 +348,7 @@ async fn customer_and_vendor_reports_tie_out() {
     // by its lines ($108.00, $30.00 and $20.00 of $158.00), the last job taking the rounding.
     let by_job = run(&pool, "unpaid-bills-job").await;
     let aging = crate::report_center::aging(&pool, true, today()).await.unwrap();
-    let bills: i64 = aging.items.iter().filter(|i| i.kind == "Bill").map(|i| i.open_cents).sum();
+    let bills: i64 = aging.items.iter().filter(|i| i.kind == "Bill").map(|i| i.open_cents.get()).sum();
     assert_eq!(last(total(&by_job)), bills);
     let shares: Vec<i64> = details(&by_job).filter(|r| text(&r.cells[3]) == "LC-310").map(last).collect();
     assert_eq!(shares, vec![2_051, 1_367, 7_382], "cafe, patio menu, then no job");
@@ -394,7 +398,7 @@ async fn time_inventory_and_lists_tie_out() {
     for line in bs.lines.iter().filter(|l| l.kind == crate::statements::LineKind::Account) {
         if let (Some(id), Some(amount)) = (line.account_id, line.amount_cents) {
             if let Some(Some(shown)) = listed.get(&id) {
-                assert_eq!(*shown, amount, "{}", line.label);
+                assert_eq!(*shown, amount.get(), "{}", line.label);
                 checked += 1;
             }
         }
@@ -562,13 +566,13 @@ async fn t49_reports_tie_out_to_the_ledger() {
     let ledger = |classification_or_type: &'static str, column: &'static str| {
         let p = p.clone();
         async move {
-            sqlx::query_scalar::<_, i64>(&format!(
+            sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!(
                 "SELECT COALESCE(SUM({}), 0) FROM journal_lines l
                  JOIN journal_entries e ON e.id = l.journal_entry_id JOIN v_chart_of_accounts a ON a.id = l.account_id
                  WHERE a.{column} = ?1 AND e.status = 'POSTED' AND e.entry_date BETWEEN '2025-01-01' AND '2025-12-31'
                    AND e.id IN (SELECT journal_entry_id FROM invoices WHERE is_voided = 0)",
                 if column == "classification" { "l.credit_cents - l.debit_cents" } else { "l.debit_cents - l.credit_cents" }
-            ))
+            )))
             .bind(classification_or_type)
             .fetch_one(&p)
             .await
@@ -592,7 +596,7 @@ async fn t49_reports_tie_out_to_the_ledger() {
     // stock ledger took out for sales.
     let turnover = run_on("inventory-turnover").await;
     let valuation = crate::report_center::inventory_valuation(p, end).await.unwrap();
-    assert_eq!(cents(&total(&turnover).cells[2]), valuation.total_asset_value_cents);
+    assert_eq!(cents(&total(&turnover).cells[2]), valuation.total_asset_value_cents.get());
     let sold: i64 = sqlx::query_scalar(
         "SELECT -COALESCE(SUM(s.value_change_cents), 0) FROM stock_ledger_entries s LEFT JOIN stock_ledger_entries r ON r.id = s.reverses_id
          WHERE s.movement_date BETWEEN '2025-01-01' AND '2025-12-31' AND (s.kind = 'SALE' OR (s.kind = 'VOID' AND r.kind = 'SALE'))",

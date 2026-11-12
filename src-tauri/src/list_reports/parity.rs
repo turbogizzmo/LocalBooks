@@ -13,6 +13,7 @@ use super::{done, head, labeled, plural, row, section, CUSTOMER_NAMES};
 use crate::accountant_reports::AccountantReport;
 use crate::custom_reports::{type_label, ColumnKind, RowKind};
 use crate::ledger::db_err;
+use crate::money::Cents;
 
 // ------------------------------------------------------------------------------------------------
 // Terms Listing
@@ -69,7 +70,7 @@ pub(super) async fn terms_listing(pool: &SqlitePool, today: NaiveDate) -> Result
 
 pub(super) async fn unbilled_costs_by_job(pool: &SqlitePool, today: NaiveDate) -> Result<AccountantReport, String> {
     let costs = crate::billable_costs::list_unbilled(pool, None).await?;
-    let names: BTreeMap<i64, String> = sqlx::query_as::<_, (i64, String)>(&format!("{CUSTOMER_NAMES} SELECT id, full_name FROM cn"))
+    let names: BTreeMap<i64, String> = sqlx::query_as::<_, (i64, String)>(sqlx::AssertSqlSafe(format!("{CUSTOMER_NAMES} SELECT id, full_name FROM cn")))
         .fetch_all(pool)
         .await
         .map_err(db_err)?
@@ -223,7 +224,7 @@ struct Exception {
     /// user who moved the closing date back).
     entered_by: Option<String>,
     closed_at: String,
-    amount_cents: i64,
+    amount_cents: Cents,
 }
 
 /// Entries dated on or before the closing date that were entered after their date was first
@@ -267,7 +268,7 @@ pub(super) async fn closing_date_exceptions(pool: &SqlitePool, start: NaiveDate,
     let w = columns.len();
     let shown = |t: &str| t.replace('T', " ").trim_end_matches('Z').chars().take(19).collect::<String>();
     let mut rows = Vec::new();
-    let mut total: i64 = 0;
+    let mut total = Cents::ZERO;
     for x in &found {
         total = total.checked_add(x.amount_cents).ok_or("RPT_OVERFLOW: exceptions")?;
         let mut r = row(

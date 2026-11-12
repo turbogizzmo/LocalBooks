@@ -25,7 +25,7 @@ async fn reconcile(pool: &SqlitePool, end: chrono::NaiveDate) -> i64 {
     let lines: Vec<_> = crate::reconcile::unreconciled_lines(pool, checking).await.unwrap().into_iter().filter(|l| l.entry_date <= end.to_string()).collect();
     let clear = &lines[..lines.len() - 1];
     let state = crate::reconcile::account_state(pool, checking).await.unwrap();
-    let ending = state.reconciled_balance_cents + clear.iter().map(|l| l.amount_cents).sum::<i64>();
+    let ending = state.reconciled_balance_cents.get() + clear.iter().map(|l| l.amount_cents.get()).sum::<i64>();
     let rec = crate::reconcile::start(pool, checking, end, ending).await.expect("start");
     crate::reconcile::set_lines_cleared(pool, rec.id, &clear.iter().map(|l| l.line_id).collect::<Vec<_>>(), true).await.expect("tick");
     crate::reconcile::lock(pool, rec.id).await.expect("lock");
@@ -90,7 +90,7 @@ async fn reconciliation_discrepancy() {
             .await
             .unwrap();
     for t in triggers {
-        sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP TRIGGER {t}"))).execute(&pool).await.unwrap();
     }
     let cleared: Vec<(i64, i64)> = sqlx::query_as("SELECT id, journal_entry_id FROM journal_lines WHERE reconciliation_id = ?1 ORDER BY id LIMIT 3")
         .bind(april)

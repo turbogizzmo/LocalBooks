@@ -419,18 +419,18 @@ pub async fn rebuild_pool(pool: &SqlitePool) -> Result<Vec<String>, String> {
     if !drift.recreate.is_empty() || !drift.extra_triggers.is_empty() {
         let mut tx = conn.begin().await.map_err(err)?;
         for name in &drift.extra_triggers {
-            sqlx::query(&format!("DROP TRIGGER {}", quote_ident(name))).execute(&mut *tx).await.map_err(err)?;
+            sqlx::query(sqlx::AssertSqlSafe(format!("DROP TRIGGER {}", quote_ident(name)))).execute(&mut *tx).await.map_err(err)?;
             actions.push(format!("Removed unknown trigger {name}"));
         }
         // Drop altered objects first (triggers before the views they may read), then create
         // everything in the order this build created it.
         for kind in ["trigger", "view", "index"] {
             for object in drift.recreate.iter().filter(|o| o.kind == kind && drift.altered.contains(&o.name)) {
-                sqlx::query(&format!("DROP {} {}", kind.to_uppercase(), quote_ident(&object.name))).execute(&mut *tx).await.map_err(err)?;
+                sqlx::query(sqlx::AssertSqlSafe(format!("DROP {} {}", kind.to_uppercase(), quote_ident(&object.name)))).execute(&mut *tx).await.map_err(err)?;
             }
         }
         for object in &drift.recreate {
-            sqlx::query(&object.sql)
+            sqlx::query(sqlx::AssertSqlSafe(object.sql.as_str()))
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| format!("REBUILD_RECREATE: could not restore {} {} ({e}); nothing was changed", object.kind, object.name))?;

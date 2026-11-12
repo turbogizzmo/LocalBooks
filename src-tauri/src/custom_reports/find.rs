@@ -9,6 +9,8 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
+use crate::money::Cents;
+
 use super::{ledger_lines, with_descendants, Filters, Line, LineFilter, NameKind};
 
 /// Rows returned when the query names no limit; the count and total still cover every match.
@@ -51,7 +53,7 @@ pub struct FoundTransaction {
     /// The first matching line's account and memo, so an account or memo filter shows why it matched.
     pub account: String,
     pub memo: Option<String>,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub is_voided: bool,
     pub is_reversal: bool,
 }
@@ -65,7 +67,7 @@ pub struct FindResult {
     /// Every match, though `rows` stops at the limit.
     pub match_count: usize,
     /// The total of every match.
-    pub total_cents: i64,
+    pub total_cents: Cents,
 }
 
 fn normalize_number(text: &str) -> String {
@@ -135,7 +137,7 @@ pub async fn find(pool: &SqlitePool, query: &FindQuery, today: NaiveDate) -> Res
         start_date: query.start_date,
         end_date: end,
         match_count: matches.len(),
-        total_cents: matches.iter().map(|l| l.entry_total_cents).sum(),
+        total_cents: Cents::checked_sum(matches.iter().map(|l| l.entry_total_cents)).ok_or("RPT_OVERFLOW: the matches are too large to add up")?,
         rows: matches.iter().take(query.limit.unwrap_or(DEFAULT_LIMIT)).map(|l| found(l)).collect(),
     })
 }

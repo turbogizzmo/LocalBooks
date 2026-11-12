@@ -79,7 +79,7 @@ pub struct ReceiptView {
     pub receipt_date: String,
     pub reference: Option<String>,
     pub memo: Option<String>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
     pub journal_entry_id: i64,
     pub is_voided: bool,
     /// The live bill entered for it, if any.
@@ -98,8 +98,8 @@ pub struct ReceiptLineView {
     pub product_name: Option<String>,
     pub description: String,
     pub quantity_e4: Option<i64>,
-    pub rate_cents: Option<i64>,
-    pub amount_cents: i64,
+    pub rate_cents: Option<Cents>,
+    pub amount_cents: Cents,
     pub class_id: Option<i64>,
     /// The customer or job its purchase order line is for; it carries to the bill.
     pub customer_id: Option<i64>,
@@ -117,13 +117,13 @@ pub struct OrderLineReceiving {
     pub product_name: Option<String>,
     pub description: Option<String>,
     pub quantity_e4: Option<i64>,
-    pub rate_cents: Option<i64>,
-    pub amount_cents: i64,
+    pub rate_cents: Option<Cents>,
+    pub amount_cents: Cents,
     pub class_id: Option<i64>,
     pub customer_id: Option<i64>,
     pub customer_name: Option<String>,
     pub received_quantity_e4: i64,
-    pub received_amount_cents: i64,
+    pub received_amount_cents: Cents,
 }
 
 const RECEIPT_SELECT: &str = "
@@ -342,12 +342,12 @@ async fn write_receipt(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptInput, t
 /// Whether every line of an order has been received in full (by quantity, or by amount for a line
 /// without one), on receipts that aren't voided. An order with no lines is not.
 pub(crate) async fn received_in_full(conn: &mut sqlx::SqliteConnection, order: i64) -> Result<bool, String> {
-    sqlx::query_scalar(&format!(
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT EXISTS (SELECT 1 FROM {RECEIPT_LINES_OF_ORDER}) AND NOT EXISTS (
              SELECT 1 FROM purchase_order_lines p LEFT JOIN ({RECEIVED_BY_LINE}) r ON r.po_line_id = p.id
              WHERE p.purchase_order_id = ?1
                AND (CASE WHEN p.quantity_e4 IS NOT NULL THEN COALESCE(r.qty, 0) < p.quantity_e4 ELSE COALESCE(r.amount, 0) < p.amount_cents END))"
-    ))
+    )))
     .bind(order)
     .fetch_one(conn)
     .await
@@ -361,13 +361,13 @@ const RECEIPT_LINES_OF_ORDER: &str = "item_receipt_lines l JOIN item_receipts r 
 /// Closes an open order once every line has been received in full (by quantity, or by amount for a
 /// line without one).
 async fn close_if_received(tx: &mut Transaction<'_, Sqlite>, order: i64) -> Result<(), String> {
-    sqlx::query(&format!(
+    sqlx::query(sqlx::AssertSqlSafe(format!(
         "UPDATE purchase_orders SET status = 'CLOSED'
          WHERE id = ?1 AND status = 'OPEN' AND NOT EXISTS (
              SELECT 1 FROM purchase_order_lines p LEFT JOIN ({RECEIVED_BY_LINE}) r ON r.po_line_id = p.id
              WHERE p.purchase_order_id = ?1
                AND (CASE WHEN p.quantity_e4 IS NOT NULL THEN COALESCE(r.qty, 0) < p.quantity_e4 ELSE COALESCE(r.amount, 0) < p.amount_cents END))"
-    ))
+    )))
     .bind(order)
     .execute(&mut **tx)
     .await
@@ -405,7 +405,7 @@ pub(crate) async fn before_void(tx: &mut Transaction<'_, Sqlite>, journal_entry_
 
 /// One receipt.
 pub async fn receipt(pool: &SqlitePool, id: i64) -> Result<ReceiptView, String> {
-    sqlx::query_as(&format!("{RECEIPT_SELECT} WHERE r.id = ?1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{RECEIPT_SELECT} WHERE r.id = ?1")))
         .bind(id)
         .fetch_optional(pool)
         .await
@@ -415,9 +415,9 @@ pub async fn receipt(pool: &SqlitePool, id: i64) -> Result<ReceiptView, String> 
 
 /// Receipts, newest first: every one, or only those still waiting for their bill (`open_only`).
 pub async fn list_receipts(pool: &SqlitePool, open_only: bool) -> Result<Vec<ReceiptView>, String> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT * FROM ({RECEIPT_SELECT}) WHERE NOT ?1 OR (is_voided = 0 AND bill_id IS NULL) ORDER BY receipt_date DESC, receipt_number DESC"
-    ))
+    )))
     .bind(open_only)
     .fetch_all(pool)
     .await
@@ -440,14 +440,14 @@ pub async fn receipt_lines(pool: &SqlitePool, id: i64) -> Result<Vec<ReceiptLine
 
 /// A purchase order's lines with what has been received of each.
 pub async fn order_receiving(pool: &SqlitePool, purchase_order_id: i64) -> Result<Vec<OrderLineReceiving>, String> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT p.id, p.line_number, p.account_id, p.product_service_id, ps.name AS product_name, p.description, p.quantity_e4, p.rate_cents, p.amount_cents,
                 p.class_id, p.customer_id, c.name AS customer_name, COALESCE(r.qty, 0) AS received_quantity_e4, COALESCE(r.amount, 0) AS received_amount_cents
          FROM purchase_order_lines p LEFT JOIN products_services ps ON ps.id = p.product_service_id
          LEFT JOIN customers c ON c.id = p.customer_id
          LEFT JOIN ({RECEIVED_BY_LINE}) r ON r.po_line_id = p.id
          WHERE p.purchase_order_id = ?1 ORDER BY p.line_number"
-    ))
+    )))
     .bind(purchase_order_id)
     .fetch_all(pool)
     .await
@@ -673,14 +673,7 @@ async fn carried_form_lines(
     po_lines: &[Option<i64>],
 ) -> Result<Vec<crate::purchase_lines::CarriedLine>, String> {
     let Some(order) = order else { return Ok(Vec::new()) };
-    let views: Vec<crate::purchase_lines::PurchaseFormLineView> = sqlx::query_as(
-        "SELECT after_line, kind, description, product_service_id, percent_ppm, amount_cents, account_id, class_id
-         FROM purchase_form_lines WHERE purchase_order_id = ?1 ORDER BY after_line",
-    )
-    .bind(order)
-    .fetch_all(&mut **tx)
-    .await
-    .map_err(db_err)?;
+    let views = crate::purchase_lines::lines_of(&mut **tx, crate::purchase_lines::PurchaseDoc::PurchaseOrder, order).await?;
     if views.is_empty() {
         return Ok(Vec::new());
     }
@@ -689,7 +682,10 @@ async fn carried_form_lines(
         .fetch_all(&mut **tx)
         .await
         .map_err(db_err)?;
-    let inputs = crate::purchase_lines::inputs_of(&views);
+    // The order's customer carries over; whether it is billable on the bill follows Preferences, as
+    // the receipt's split lines do.
+    let inputs: Vec<_> =
+        crate::purchase_lines::inputs_of(&views).into_iter().map(|i| crate::purchase_lines::PurchaseFormLineInput { billable: None, ..i }).collect();
     let mut out = Vec::new();
     for (i, po_line) in po_lines.iter().enumerate() {
         let Some(po_line) = *po_line else { continue };

@@ -83,8 +83,55 @@ order inputs and views (`PurchaseOrderLineInput.rate_cents` and `amount_cents`,
 `PurchaseOrderView.total_cents`, `PurchaseOrderLineView.rate_cents` and `amount_cents`); a bill made
 from an order now copies the line amounts as they are. That finishes step 1 for the modules it
 lists; 27 `Deserialize` cents fields in other modules (bounced checks, statement charges, mileage,
-vouchers, register entry, cleanup and others) wait for step 4. Next: step 2,
-the document views of invoices, sales, bills and expenses, then step 3 (reports).
+vouchers, register entry, cleanup and others) wait for step 4.
+
+Step 2, the document views, goes in stages named "A7 step 2a" onward. Step 2a: the invoice views
+(`InvoiceSummary`, `PaymentView`, `InvoiceItemView`); the printed invoice reads them with `.get()`
+where it formats money. The A/R aging buckets in `invoices` are a report and wait for step 3.
+Step 2b: the sales, estimate and credit views (`PartyView`, `ProductView`, `SalesReceiptSummary`,
+`SalesTransaction`, `EstimateSummary`, `EstimateLineView`, `CreditMemoSummary`,
+`CreditApplicationView`, `AppliedCredits`, `CustomerCredit`, `VendorCreditSummary`); applying open
+credits to an invoice adds them up with `checked_add` on `Cents`.
+Step 2c: the purchase views (`BillSummary`, `BillPaymentView`, `ExpenseView`, `ReceiptView`,
+`ReceiptLineView`, `OrderLineReceiving`, `PurchaseFormLineView`, `RecurringView`, `SearchHit`); a memorized transaction's
+amount is now a checked sum, shown as zero if it overflows.
+Step 2d: the bank, deposit, reconcile and sales order views (`BankTransactionView`,
+`UndepositedItem`, `BankingActivity`, `Reconciliation`, `ReconcileAccountState`,
+`UnreconciledLine`, `ReconcileProgress`, `SalesOrderSummary` and `SalesOrderLine`); the cleared
+balance and difference of a reconciliation are now checked. `BankRow` and `BalanceCheck` are read
+from a bank file and wait for step 4; the open sales order reports wait for step 3.
+Step 2e: `FormLineView` (a document's subtotal, discount, charge and group lines), with
+`Cents::checked_neg` for loading a fixed discount back into its form. That finishes step 2. The
+form-line layout engine (`item_types::lay_out`, `Layout`, `ChargeRow`) works on bounded amounts
+as the form is entered and waits for step 4.
+
+Step 3, the reports, goes in stages "A7 step 3a" onward. Step 3a: the chart of accounts, trial
+balance and dashboard (`reports`), and the A/R aging buckets (`invoices::ar_aging`). The trial
+balance and the dashboard's month-end series were unchecked `+=`; they are now checked, with a
+`REPORT_OVERFLOW` error.
+Step 3b: the General Ledger, A/R and A/P aging, sales and expense summaries (`report_center`)
+and the cash flow forecast (`cash_forecast`). Their totals were unchecked `+=` and `.sum()`; they
+are now checked, with an `RPT_OVERFLOW` error. Readers in `graphs`, `company_snapshot` and the
+customer statement take `.get()` until their own stages.
+Step 3c: the rest of `report_center` (Inventory Valuation summary and detail, Missing Checks), the
+customer statement (`workflows::customer_statement`) and the open sales order and Pending Sales
+reports (`sales_orders`). The valuation totals, the running stock value and the statement's running
+balance and aging were unchecked; they are now checked. The 1099 summary in `workflows` already used
+checked sums and waits for step 4.
+Step 3d: the financial statements (`statements`): Profit & Loss, Balance Sheet, trial balance as of a
+date, Statement of Cash Flows and budgets. The statement builder now works on `Cents` per account and
+every subtotal, total and column is a checked sum (`RPT_OVERFLOW`); they were unchecked `+`, `-`
+and `.sum()`. `ReportLine.amount_cents` is `Option<Cents>`. The multi-column reports
+(`ClassReportLine.amounts_cents`) stay `i64`, because their `percent` columns hold basis points,
+not cents. `Cents::checked_abs` is new, for the rows a multi-column report shows.
+Step 3e: the graphs (`graphs`): income and expense, net worth, aging, sales and budget vs actual.
+The "Other" slice, net worth and the budget figures are now checked sums; they were unchecked.
+Step 3f: the list reports (`list_reports`): unpaid bills by job, open purchase orders (detail and by
+job), average days to pay, contact and item listings, and the audit exceptions. Their subtotals and
+totals were unchecked `+=`; they are now checked. Step 3g: the job reports (`job_reports`) and the
+custom report engine (`custom_reports`, with Find). Their sum helpers (`add`, `Sums`, the summary
+columns, running balances, `split`) were unchecked `i64`; they are now `Cents` with checked sums, and
+the drill-down ids stay separate `i64` vectors. That finishes step 3, and A7. Step 4 is gaps row A22.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:

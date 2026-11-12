@@ -209,7 +209,7 @@ pub async fn users_enabled(pool: &SqlitePool) -> Result<bool, String> {
 }
 
 async fn row_by_id(conn: &mut sqlx::SqliteConnection, id: i64) -> Result<UserRow, String> {
-    sqlx::query_as(&format!("SELECT {USER_COLUMNS} FROM users WHERE id = ?1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {USER_COLUMNS} FROM users WHERE id = ?1")))
         .bind(id)
         .fetch_optional(&mut *conn)
         .await
@@ -218,7 +218,11 @@ async fn row_by_id(conn: &mut sqlx::SqliteConnection, id: i64) -> Result<UserRow
 }
 
 async fn row_by_name(conn: &mut sqlx::SqliteConnection, username: &str) -> Result<Option<UserRow>, String> {
-    sqlx::query_as(&format!("SELECT {USER_COLUMNS} FROM users WHERE username = ?1")).bind(username.trim()).fetch_optional(&mut *conn).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {USER_COLUMNS} FROM users WHERE username = ?1")))
+        .bind(username.trim())
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(db_err)
 }
 
 async fn mark_signed_in(conn: &mut sqlx::SqliteConnection, id: i64) -> Result<(), String> {
@@ -285,8 +289,10 @@ pub async fn sign_in(pool: &SqlitePool, username: &str, password: &str) -> Resul
 }
 
 pub async fn list(pool: &SqlitePool) -> Result<Vec<UserView>, String> {
-    let rows: Vec<UserRow> =
-        sqlx::query_as(&format!("SELECT {USER_COLUMNS} FROM users ORDER BY is_active DESC, username")).fetch_all(pool).await.map_err(db_err)?;
+    let rows: Vec<UserRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {USER_COLUMNS} FROM users ORDER BY is_active DESC, username")))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
     rows.iter().map(UserRow::view).collect()
 }
 
