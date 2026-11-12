@@ -948,7 +948,7 @@ pub async fn purchase_order_doc(pool: &SqlitePool, order_id: i64, symbol: &str) 
         })
         .collect();
     for f in crate::purchase_lines::lines_of(pool, crate::purchase_lines::PurchaseDoc::PurchaseOrder, order_id).await? {
-        let amount = if f.kind == "DISCOUNT" { f.amount_cents.saturating_neg() } else { f.amount_cents };
+        let amount = if f.kind == "DISCOUNT" { f.amount_cents.get().saturating_neg() } else { f.amount_cents.get() };
         let line = FormLine {
             description: f.description.clone(),
             quantity: String::new(),

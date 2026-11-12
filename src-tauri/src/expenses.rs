@@ -82,9 +82,9 @@ pub struct BillSummary {
     pub bill_date: String,
     pub due_date: String,
     pub memo: Option<String>,
-    pub total_cents: i64,
-    pub amount_paid_cents: i64,
-    pub balance_cents: i64,
+    pub total_cents: Cents,
+    pub amount_paid_cents: Cents,
+    pub balance_cents: Cents,
     pub status: String,
     pub journal_entry_id: Option<i64>,
     pub last_payment_date: Option<String>,
@@ -100,7 +100,7 @@ pub struct BillSummary {
 }
 
 fn with_discount(mut bill: BillSummary) -> BillSummary {
-    bill.terms.fill(bill.total_cents);
+    bill.terms.fill(bill.total_cents.get());
     bill
 }
 
@@ -445,7 +445,7 @@ pub(crate) async fn group_queued_checks(tx: &mut Transaction<'_, Sqlite>, paymen
 pub struct BillPaymentView {
     pub id: i64,
     pub payment_date: String,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub payment_account_id: i64,
     pub reference: Option<String>,
     pub journal_entry_id: Option<i64>,
@@ -618,7 +618,7 @@ pub struct ExpenseView {
     pub payment_method: Option<String>,
     pub payment_method_id: Option<i64>,
     pub memo: Option<String>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
     pub line_count: i64,
     pub category_account_id: Option<i64>,
     pub journal_entry_id: Option<i64>,
@@ -626,7 +626,7 @@ pub struct ExpenseView {
     /// `None` for home-currency expenses; `total_cents` is then already home currency.
     pub currency_code: Option<String>,
     pub exchange_rate_e6: Option<i64>,
-    pub home_total_cents: i64,
+    pub home_total_cents: Cents,
     /// Waiting in File › Print Forms › Checks (a queued check has no number yet).
     pub to_be_printed: bool,
 }
