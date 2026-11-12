@@ -17,6 +17,10 @@ updates:
       default-days: 7
     open-pull-requests-limit: 5
     groups:
+      # The Windows Hello bindings (src/platform_auth/windows_bindings.rs) are generated for one
+      # windows-core and windows-future version, so the two arrive in one PR.
+      windows-bindings:
+        patterns: [windows-core, windows-future]
       rust-minor-and-patch:
         update-types: [minor, patch]
     ignore:
@@ -26,8 +30,6 @@ updates:
       - dependency-name: sha2
       - dependency-name: hmac
       - dependency-name: sha1
-      # Moves with the windows crates; update together by hand (gap A21).
-      - dependency-name: windows-future
       # Major versions that need porting work (gap A21): the build fails on them as they are.
       - dependency-name: aes
         update-types: [version-update:semver-major]
