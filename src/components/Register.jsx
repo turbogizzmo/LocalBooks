@@ -389,7 +389,7 @@ export default function Register({ accounts, intent }) {
 
   return (
     // Ctrl+Q, Ctrl+H and Ctrl+Y work anywhere in the register's window.
-    <div ref={rootRef} className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
+    <div ref={rootRef} className="flex h-full flex-col gap-2 p-2 outline-hidden" tabIndex={-1} onKeyDown={onKeyDown}>
       {printing && data && (
         <PrintPortal>
           <TableDocument company={company} title={registerTitle} subtitle={exportRange} columns={registerColumns} rows={registerRows()} />

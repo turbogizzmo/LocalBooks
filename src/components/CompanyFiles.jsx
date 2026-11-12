@@ -566,7 +566,7 @@ export default function NoCompanyOpen() {
   };
 
   const error = openError ?? actions.error ?? loadError;
-  const tile = 'flex h-[84px] w-[150px] flex-col items-center justify-center gap-1 rounded-xs border border-qb-border-strong bg-white px-2 text-center text-sm font-semibold leading-tight shadow-sm hover:bg-qb-row-hover disabled:opacity-50';
+  const tile = 'flex h-[84px] w-[150px] flex-col items-center justify-center gap-1 rounded-xs border border-qb-border-strong bg-white px-2 text-center text-sm font-semibold leading-tight shadow-xs hover:bg-qb-row-hover disabled:opacity-50';
 
   return (
     <div className="flex h-full items-center justify-center bg-qb-canvas p-4">

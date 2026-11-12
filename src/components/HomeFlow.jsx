@@ -26,7 +26,7 @@ function Step({ step, count, onOpen, style, wide }) {
       }`}
     >
       <span
-        className="relative grid flex-none place-items-center rounded-md border border-qb-border-strong bg-white text-qb-green-active shadow-sm group-hover:border-qb-green group-hover:bg-qb-green-tint"
+        className="relative grid flex-none place-items-center rounded-md border border-qb-border-strong bg-white text-qb-green-active shadow-xs group-hover:border-qb-green group-hover:bg-qb-green-tint"
         style={{ width: wide ? 28 : TILE, height: wide ? 28 : TILE }}
       >
         <Icon name={step.icon} size={wide ? 16 : 22} />

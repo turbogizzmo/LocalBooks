@@ -173,7 +173,7 @@ export default function HelpCenter({ view, onClose, onNavigate }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search all help (e.g. undo, close the year)"
-            className="h-row-lg min-w-0 flex-1 bg-transparent text-sm outline-none"
+            className="h-row-lg min-w-0 flex-1 bg-transparent text-sm outline-hidden"
             aria-label="Search help"
           />
         </label>

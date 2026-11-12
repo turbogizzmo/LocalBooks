@@ -1,6 +1,59 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind 4, with the theme and components still in tailwind.config.js (the qb-* tokens and
+   Spruce & Brass). Classes are found only where version 3 looked: the config's `content`. */
+@import 'tailwindcss' source(none);
+
+@config '../tailwind.config.js';
+
+/*
+  Tailwind 4's base styles differ from version 3's in a few places the screens rely on. These rules
+  keep the version 3 look (gap A21), checked by comparing every class's computed style under both:
+  - borders default to gray-200, not the text color;
+  - fields keep the browser's white background, upright type and proportional digits (they don't
+    inherit italic or tabular-nums from the row around them), and placeholders stay gray-400;
+  - buttons show the pointer cursor;
+  - table cells keep the browser's 1px padding, and a <dialog> stays centered.
+  Utilities still override all of these, since they come later in the cascade.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: #e5e7eb;
+  }
+  input,
+  select,
+  textarea {
+    background-color: Field;
+  }
+  button,
+  input,
+  optgroup,
+  select,
+  textarea {
+    font-style: normal;
+    font-variant-numeric: normal;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: #9ca3af;
+  }
+  button,
+  [role='button'] {
+    cursor: pointer;
+  }
+  :disabled {
+    cursor: default;
+  }
+  td,
+  th {
+    padding: 1px;
+  }
+  dialog {
+    margin: auto;
+  }
+}
 
 html,
 body,

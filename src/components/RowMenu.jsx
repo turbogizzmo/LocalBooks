@@ -102,7 +102,7 @@ export default function RowMenu({ items, label = 'Actions', text = null }) {
               disabled={item.disabled}
               title={item.hint}
               onClick={() => choose(item)}
-              className={`block w-full whitespace-nowrap px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover focus:bg-qb-row-hover focus:outline-none disabled:cursor-not-allowed disabled:text-qb-ink-faint ${item.danger ? 'text-qb-negative' : ''}`}
+              className={`block w-full whitespace-nowrap px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover focus:bg-qb-row-hover focus:outline-hidden disabled:cursor-not-allowed disabled:text-qb-ink-faint ${item.danger ? 'text-qb-negative' : ''}`}
             >
               {item.label}
             </button>

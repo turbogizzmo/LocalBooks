@@ -420,7 +420,7 @@ jobs:
           uploadWorkflowArtifacts: false
           retryAttempts: 1
           # The frontend was built above without secrets; skip beforeBuildCommand (npm run build) so
-          # Vite, PostCSS and Tailwind do not run again with the signing key in the environment.
+          # Vite and Tailwind do not run again with the signing key in the environment.
           args: ${{ matrix.args }} --verbose --config '{"build":{"beforeBuildCommand":""}}'
 
       - name: Check latest.json kept every platform
