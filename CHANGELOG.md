@@ -17,6 +17,13 @@ becomes its release notes on GitHub and in the app's update window (see
   SQLite 3.54.1, which fixes a flaw where a specially made company file and its `-wal` log could
   make SQLite read back leftover memory (RUSTSEC-2026-0459). Tillhouse already refused such files;
   now the engine itself is fixed too. Your company files open as before, encrypted ones included.
+- **QuickBooks Desktop files come in more completely.** The reader now decodes rows it used to
+  miss, so on the sample files most of the transactions and item quantities that used to be held
+  back for entry by hand now import, and their account balances match the file. In particular:
+  inventory adjustments and inventory costs that came in unbalanced, bills and checks in files
+  whose table definitions were damaged, and item quantities on hand. When some of a file's data
+  pages can't be decoded, the import now says so and that transactions on them may be missing,
+  instead of only counting the pages it read.
 
 ## [0.16.2]
 

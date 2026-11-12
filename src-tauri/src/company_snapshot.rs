@@ -222,10 +222,17 @@ fn top(summary: &SummaryReport) -> (Vec<WidgetLine>, i64, i64) {
     let lines: Vec<WidgetLine> = rows
         .iter()
         .take(TOP)
-        .map(|r| WidgetLine { label: r.label.clone(), amount_cents: r.amount_cents, overdue_cents: None, account_id: None, previous_cents: None, date: None })
+        .map(|r| WidgetLine {
+            label: r.label.clone(),
+            amount_cents: r.amount_cents.get(),
+            overdue_cents: None,
+            account_id: None,
+            previous_cents: None,
+            date: None,
+        })
         .collect();
     let shown: i64 = lines.iter().map(|l| l.amount_cents).sum();
-    (lines, summary.total_cents - shown, summary.total_cents)
+    (lines, summary.total_cents.get() - shown, summary.total_cents.get())
 }
 
 async fn figures(
@@ -269,15 +276,15 @@ async fn figures(
                 .take(TOP)
                 .map(|r| WidgetLine {
                     label: r.party_name.clone(),
-                    amount_cents: r.total_cents,
-                    overdue_cents: Some(r.buckets_cents[1..].iter().sum()),
+                    amount_cents: r.total_cents.get(),
+                    overdue_cents: Some(r.buckets_cents[1..].iter().map(|c| c.get()).sum()),
                     account_id: None,
                     previous_cents: None,
                     date: None,
                 })
                 .collect();
             let shown: i64 = lines.iter().map(|l| l.amount_cents).sum();
-            (lines, aging.total_cents - shown, Vec::new(), aging.total_cents, if payable { "ap" } else { "ar" })
+            (lines, aging.total_cents.get() - shown, Vec::new(), aging.total_cents.get(), if payable { "ap" } else { "ar" })
         }
         WidgetKind::IncomeExpenseTrend => {
             let graph = crate::graphs::income_expense(pool, start, end, report_basis(pool).await?).await?;
@@ -341,10 +348,14 @@ async fn figures(
                 .lines
                 .iter()
                 .filter(|l| l.kind == LineKind::Account && l.account_id.is_some_and(|id| ids.contains(&id)))
-                .map(|l| crate::report_center::SummaryRow { label: l.label.clone(), quantity_e4: None, amount_cents: l.amount_cents.unwrap_or(0) })
+                .map(|l| crate::report_center::SummaryRow {
+                    label: l.label.clone(),
+                    quantity_e4: None,
+                    amount_cents: crate::money::Cents(l.amount_cents.unwrap_or(0)),
+                })
                 .collect();
             let total = if income { pl.total_revenue_cents } else { pl.total_expenses_cents };
-            let summary = SummaryReport { start_date: start, end_date: end, rows, total_cents: total };
+            let summary = SummaryReport { start_date: start, end_date: end, rows, total_cents: crate::money::Cents(total) };
             let (lines, others, total) = top(&summary);
             (lines, others, Vec::new(), total, "pl")
         }

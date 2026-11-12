@@ -114,7 +114,7 @@ pub struct PurchaseFormLineView {
     pub product_service_id: Option<i64>,
     pub percent_ppm: Option<i64>,
     /// What the line came to (always positive).
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub account_id: i64,
     pub class_id: Option<i64>,
     pub customer_id: Option<i64>,
@@ -344,7 +344,7 @@ pub fn inputs_of(views: &[PurchaseFormLineView]) -> Vec<PurchaseFormLineInput> {
             description: v.description.clone(),
             product_service_id: v.product_service_id,
             percent_ppm: v.percent_ppm,
-            amount_cents: if v.percent_ppm.is_some() { None } else { Some(Cents(v.amount_cents)) },
+            amount_cents: if v.percent_ppm.is_some() { None } else { Some(v.amount_cents) },
             account_id: v.account_id,
             class_id: v.class_id,
             customer_id: v.customer_id,

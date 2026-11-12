@@ -208,7 +208,7 @@ ENDTRNS\r
     assert!(batch_summary(&pool, batch).await.unwrap().fallbacks.is_empty());
 
     let credit = crate::expenses::list_expenses(&pool).await.unwrap().into_iter().find(|x| x.kind == "CARD_CREDIT").unwrap();
-    assert_eq!((credit.total_cents, credit.line_count, credit.memo.as_deref()), (2_550, 2, Some("Returned toner")));
+    assert_eq!((credit.total_cents, credit.line_count, credit.memo.as_deref()), (crate::money::Cents(2_550), 2, Some("Returned toner")));
     let net = |name: &'static str| {
         let pool = pool.clone();
         async move {

@@ -747,7 +747,7 @@ async fn posts_a_real_company_file() {
         println!(
             "waiting to be deposited: {} items, {}; Undeposited Funds balance {}",
             waiting.len(),
-            crate::ledger::format_cents(waiting.iter().map(|w| w.amount_cents).sum()),
+            crate::ledger::format_cents(waiting.iter().map(|w| w.amount_cents.get()).sum()),
             crate::ledger::format_cents(uf)
         );
         // Item quantities: each tracked item against the file's own quantity and value.

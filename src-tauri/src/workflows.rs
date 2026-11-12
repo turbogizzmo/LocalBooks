@@ -137,7 +137,7 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
     let mut buckets = [0i64; 5];
     for row in aging.rows.iter().filter(|r| r.party_name == name || r.party_name.starts_with(&format!("{name}:"))) {
         for (b, cents) in buckets.iter_mut().zip(row.buckets_cents) {
-            *b += cents;
+            *b += cents.get();
         }
     }
     Ok(CustomerStatement {
@@ -389,7 +389,7 @@ pub struct RecurringView {
     pub last_run_date: Option<String>,
     pub run_count: i64,
     #[sqlx(skip)]
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     #[sqlx(skip)]
     pub payee: Option<String>,
     #[serde(skip)]
@@ -457,19 +457,20 @@ fn dated(kind: &str, payload: &str, date: NaiveDate) -> Result<Dated, String> {
     })
 }
 
-fn summary(kind: &str, payload: &str) -> (i64, Option<String>) {
+fn summary(kind: &str, payload: &str) -> (Cents, Option<String>) {
     let today = NaiveDate::from_ymd_opt(2000, 1, 1).unwrap();
+    // A total that overflows shows as zero; posting the template reports the overflow.
     match dated(kind, payload, today) {
-        Ok(Dated::Journal(e)) => (e.lines.iter().map(|l| l.debit.get()).sum(), None),
-        Ok(Dated::Expense(e)) => (Cents::checked_sum(e.lines.iter().map(|l| l.amount_cents)).map_or(0, Cents::get), e.payee_name),
-        Ok(Dated::Bill(b)) => (b.total_cents.get(), Some(b.vendor_name)),
+        Ok(Dated::Journal(e)) => (Cents::checked_sum(e.lines.iter().map(|l| l.debit)).unwrap_or(Cents::ZERO), None),
+        Ok(Dated::Expense(e)) => (Cents::checked_sum(e.lines.iter().map(|l| l.amount_cents)).unwrap_or(Cents::ZERO), e.payee_name),
+        Ok(Dated::Bill(b)) => (b.total_cents, Some(b.vendor_name)),
         Ok(Dated::Invoice(i)) => (
             Cents::checked_sum(i.lines.iter().map(|l| Cents(crate::invoices::line_amount(l.quantity_e4, l.rate_cents.get()).unwrap_or(0))))
                 .and_then(|t| t.checked_sub(i.discount_cents))
-                .map_or(0, Cents::get),
+                .unwrap_or(Cents::ZERO),
             Some(i.customer_name),
         ),
-        Err(_) => (0, None),
+        Err(_) => (Cents::ZERO, None),
     }
 }
 
@@ -1130,7 +1131,7 @@ pub struct SearchHit {
     pub label: String,
     pub detail: Option<String>,
     pub date: Option<String>,
-    pub amount_cents: Option<i64>,
+    pub amount_cents: Option<Cents>,
     pub source_type: Option<String>,
 }
 

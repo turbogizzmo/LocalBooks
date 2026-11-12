@@ -50,7 +50,7 @@ pub struct BankTransactionView {
     pub bank_account_id: i64,
     pub date: String,
     pub description: String,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub suggestion: Option<CategorySuggestion>,
     /// The payee (money out only): from a renaming rule, else learned from similar past expenses.
     pub payee: Option<String>,
@@ -1051,7 +1051,17 @@ pub async fn list_pending(pool: &SqlitePool, suggester: &Suggester, file: &str) 
             let renamed = payee_rules::rename(&renames, &description).filter(|_| amount_cents < 0);
             let payee_origin = if renamed.is_some() { Some("RULE") } else { learned.as_ref().map(|_| "MODEL") };
             let payee = renamed.or(learned);
-            BankTransactionView { suggestion, payee, payee_origin, suggested_match, id, bank_account_id, date: date.to_string(), description, amount_cents }
+            BankTransactionView {
+                suggestion,
+                payee,
+                payee_origin,
+                suggested_match,
+                id,
+                bank_account_id,
+                date: date.to_string(),
+                description,
+                amount_cents: Cents(amount_cents),
+            }
         })
         .collect())
 }

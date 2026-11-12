@@ -128,7 +128,7 @@ async fn control_and_aging(pool: &SqlitePool, payable: bool) -> (i64, i64) {
         .await
         .unwrap();
     let aging = crate::report_center::aging(pool, payable, date(30)).await.unwrap();
-    (if payable { -gl } else { gl }, aging.total_cents)
+    (if payable { -gl } else { gl }, aging.total_cents.get())
 }
 
 async fn books_balance(pool: &SqlitePool) {

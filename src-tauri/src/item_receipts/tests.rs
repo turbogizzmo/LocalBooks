@@ -130,7 +130,7 @@ async fn a_receipt_raises_stock_against_the_clearing_account_not_payables() {
         class_id: None,
     };
     let r = receive_items(&s.pool, receive(&s, Some(po), d(5), vec![widgets(&s, Some(lines[0].id), 4), freight])).await.unwrap();
-    assert_eq!((r.receipt_number, r.total_cents, r.po_number.is_some(), r.bill_id, r.is_voided), (1, 6_000, true, None, false));
+    assert_eq!((r.receipt_number, r.total_cents, r.po_number.is_some(), r.bill_id, r.is_voided), (1, Cents(6_000), true, None, false));
 
     let clearing: i64 =
         sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Items Received Not Billed' AND is_system = 1").fetch_one(&s.pool).await.unwrap();
@@ -143,7 +143,7 @@ async fn a_receipt_raises_stock_against_the_clearing_account_not_payables() {
 
     // Partly received: the order stays open, and shows what came in.
     let progress = order_receiving(&s.pool, po).await.unwrap();
-    assert_eq!(progress.iter().map(|l| (l.received_quantity_e4, l.received_amount_cents)).collect::<Vec<_>>(), [(40_000, 4_000), (0, 2_000)]);
+    assert_eq!(progress.iter().map(|l| (l.received_quantity_e4, l.received_amount_cents.get())).collect::<Vec<_>>(), [(40_000, 4_000), (0, 2_000)]);
     let status = || sqlx::query_scalar::<_, String>("SELECT status FROM purchase_orders WHERE id = ?1").bind(po).fetch_one(&s.pool);
     assert_eq!(status().await.unwrap(), "OPEN");
     assert!(crate::workflows::bill_purchase_order(&s.pool, po, d(6), d(30), None).await.unwrap_err().starts_with("PO_HAS_RECEIPTS"));
@@ -281,7 +281,7 @@ async fn receipts_and_their_bills_are_checked() {
     )
     .await
     .unwrap();
-    assert_eq!(r.total_cents, 14_000);
+    assert_eq!(r.total_cents, Cents(14_000));
     let receipt_line = receipt_lines(&s.pool, r.id).await.unwrap();
     // The bill names every receipt line once, with an amount above zero, dated no later than due.
     let bill = |lines: Vec<ReceiptBillLine>, due: NaiveDate| {
@@ -422,7 +422,7 @@ async fn a_receipts_bill_takes_the_orders_discounts_and_charges_once() {
     assert_eq!(preview.iter().map(|f| (f.line.after_line, f.line.description.as_str())).collect::<Vec<_>>(), [(1, "Volume discount"), (2, "Handling")]);
     let bill = bill_for(&s, &first, &[4_000, 1_000]).await.unwrap();
     let carried = crate::purchase_lines::lines_of(&s.pool, crate::purchase_lines::PurchaseDoc::Bill, bill).await.unwrap();
-    assert_eq!(carried.iter().map(|f| (f.after_line, f.amount_cents)).collect::<Vec<_>>(), [(1, 400), (2, 500)]);
+    assert_eq!(carried.iter().map(|f| (f.after_line, f.amount_cents.get())).collect::<Vec<_>>(), [(1, 400), (2, 500)]);
     let total: i64 = sqlx::query_scalar("SELECT total_cents FROM bills WHERE id = ?1").bind(bill).fetch_one(&s.pool).await.unwrap();
     assert_eq!(total, 4_000 + 1_000 - 400 + 500);
     assert_eq!(gl(&s.pool, s.ap).await, -5_100);
@@ -433,7 +433,7 @@ async fn a_receipts_bill_takes_the_orders_discounts_and_charges_once() {
     assert_eq!(receipt_bill_form_lines(&s.pool, second.id).await.unwrap().len(), 1);
     let bill2 = bill_for(&s, &second, &[6_000, 1_000]).await.unwrap();
     let carried = crate::purchase_lines::lines_of(&s.pool, crate::purchase_lines::PurchaseDoc::Bill, bill2).await.unwrap();
-    assert_eq!(carried.iter().map(|f| (f.kind.as_str(), f.amount_cents)).collect::<Vec<_>>(), [("DISCOUNT", 600)]);
+    assert_eq!(carried.iter().map(|f| (f.kind.as_str(), f.amount_cents.get())).collect::<Vec<_>>(), [("DISCOUNT", 600)]);
     assert_eq!(gl(&s.pool, s.ap).await, -5_100 - 6_400);
 
     // A receipt not against an order takes nothing.
@@ -459,7 +459,7 @@ async fn a_fixed_discount_goes_after_the_receipt_line_that_can_take_it() {
     assert_eq!(receipt_bill_form_lines(&s.pool, r.id).await.unwrap().iter().map(|f| (f.line.after_line, f.source)).collect::<Vec<_>>(), [(1, 0), (2, 0)]);
     let bill = bill_for(&s, &r, &[2_000, 8_000]).await.unwrap();
     let carried = crate::purchase_lines::lines_of(&s.pool, crate::purchase_lines::PurchaseDoc::Bill, bill).await.unwrap();
-    assert_eq!(carried.iter().map(|f| (f.after_line, f.amount_cents)).collect::<Vec<_>>(), [(2, 2_500)]);
+    assert_eq!(carried.iter().map(|f| (f.after_line, f.amount_cents.get())).collect::<Vec<_>>(), [(2, 2_500)]);
     let total: i64 = sqlx::query_scalar("SELECT total_cents FROM bills WHERE id = ?1").bind(bill).fetch_one(&s.pool).await.unwrap();
     assert_eq!(total, 10_000 - 2_500);
 }

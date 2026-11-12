@@ -92,7 +92,7 @@ async fn an_overpayment_is_kept_as_credit_deposited_and_used_on_a_later_invoice(
 
     // Both parts wait in Undeposited Funds and go to the bank in one deposit.
     let waiting = list_undeposited(&pool).await.unwrap();
-    let kinds: Vec<(&str, i64)> = waiting.iter().map(|i| (i.kind.as_str(), i.amount_cents)).collect();
+    let kinds: Vec<(&str, i64)> = waiting.iter().map(|i| (i.kind.as_str(), i.amount_cents.get())).collect();
     assert_eq!(kinds, vec![("CREDIT", 10_000), ("PAYMENT", 50_000)]);
     let items = waiting.iter().map(|i| DepositItemRef { kind: i.kind.clone(), id: i.id }).collect();
     post_bank_deposit(

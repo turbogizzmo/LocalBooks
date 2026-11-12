@@ -64,18 +64,18 @@ async fn bill_accrues_payable_and_payments_relieve_it() {
     );
 
     let posted = post_vendor_bill(&pool, bill("Landlord LLC", vec![(rent, 150_000), (utilities, 12_345)])).await.expect("bill posts");
-    assert_eq!((posted.status.as_str(), posted.total_cents, posted.line_count), ("UNPAID", 162_345, 2));
+    assert_eq!((posted.status.as_str(), posted.total_cents, posted.line_count), ("UNPAID", Cents(162_345), 2));
     assert_eq!(balance(&pool, ap).await, 162_345);
     assert_eq!(balance(&pool, rent).await, 150_000);
     assert_eq!(balance(&pool, utilities).await, 12_345);
 
     let partial = pay_vendor_bill(&pool, pay(posted.id, checking, 100_000)).await.expect("partial payment");
-    assert_eq!((partial.status.as_str(), partial.balance_cents), ("PARTIAL", 62_345));
+    assert_eq!((partial.status.as_str(), partial.balance_cents), ("PARTIAL", Cents(62_345)));
     let err = pay_vendor_bill(&pool, pay(posted.id, checking, 62_346)).await.expect_err("overpayment");
     assert!(err.starts_with("BILL_OVERPAYMENT"), "{err}");
 
     let paid = pay_vendor_bill(&pool, pay(posted.id, card, 62_345)).await.expect("final payment by card");
-    assert_eq!((paid.status.as_str(), paid.balance_cents), ("PAID", 0));
+    assert_eq!((paid.status.as_str(), paid.balance_cents), ("PAID", Cents(0)));
     assert_eq!(balance(&pool, ap).await, 0);
     assert_eq!(balance(&pool, checking).await, -100_000);
     assert_eq!(balance(&pool, card).await, 62_345);
@@ -94,7 +94,7 @@ async fn a_bill_can_be_paid_before_its_date() {
     let posted = post_vendor_bill(&pool, later).await.expect("bill posts");
 
     let paid = pay_vendor_bill(&pool, pay(posted.id, checking, 90_000)).await.expect("a payment dated the 10th pays a bill dated the 15th");
-    assert_eq!((paid.status.as_str(), paid.balance_cents), ("PAID", 0));
+    assert_eq!((paid.status.as_str(), paid.balance_cents), ("PAID", Cents(0)));
     assert_eq!(balance(&pool, ap).await, 0);
     assert_eq!(balance(&pool, checking).await, -90_000);
 }
@@ -195,7 +195,7 @@ async fn expenses_and_checks_credit_the_payment_account() {
     };
 
     let check = post_expense(&pool, input("CHECK", checking, vec![(rent, 90_000), (fuel, 4_000)])).await.expect("check posts");
-    assert_eq!((check.kind.as_str(), check.check_number.as_deref(), check.total_cents), ("CHECK", Some("1042"), 94_000));
+    assert_eq!((check.kind.as_str(), check.check_number.as_deref(), check.total_cents), ("CHECK", Some("1042"), Cents(94_000)));
     let card_expense = post_expense(&pool, input("EXPENSE", card, vec![(fuel, 6_000)])).await.expect("card expense posts");
     assert_eq!(card_expense.check_number, None);
 
@@ -269,13 +269,13 @@ async fn foreign_expense_credits_the_bank_in_home_currency() {
     )
     .await
     .expect("foreign expense posts");
-    assert_eq!((posted.currency_code.as_deref(), posted.total_cents), (Some("JPY"), 3_650_050));
+    assert_eq!((posted.currency_code.as_deref(), posted.total_cents), (Some("JPY"), Cents(3_650_050)));
     let (t, m, c) = (balance(&pool, travel).await, balance(&pool, meals).await, balance(&pool, checking).await);
     // ¥3,200,000 → $213.344 and ¥450,050 → $30.0048 round to $243.34, but the ¥3,650,050 total
     // converts to $243.35; the $0.01 difference lands on the largest debit (travel).
     assert_eq!((t, m), (21_335, 3_000));
     assert_eq!(c, -(t + m), "the bank credit equals the converted debits");
-    assert_eq!(posted.home_total_cents, t + m);
+    assert_eq!(posted.home_total_cents, Cents(t + m));
 }
 
 #[tokio::test]
@@ -336,7 +336,7 @@ async fn card_credits_debit_the_card_and_credit_the_splits() {
     };
     post_expense(&pool, input("EXPENSE", card, vec![(office, 20_000), (fuel, 5_000)])).await.unwrap();
     let credit = post_expense(&pool, input("CARD_CREDIT", card, vec![(office, 12_000), (fuel, 500)])).await.expect("card credit posts");
-    assert_eq!((credit.kind.as_str(), credit.total_cents, credit.check_number.as_deref(), credit.line_count), ("CARD_CREDIT", 12_500, None, 2));
+    assert_eq!((credit.kind.as_str(), credit.total_cents, credit.check_number.as_deref(), credit.line_count), ("CARD_CREDIT", Cents(12_500), None, 2));
     assert_eq!(balance(&pool, card).await, 12_500, "the credit brings the card balance down");
     assert_eq!((balance(&pool, office).await, balance(&pool, fuel).await), (8_000, 4_500));
 
@@ -364,7 +364,7 @@ async fn card_credits_debit_the_card_and_credit_the_splits() {
     assert_eq!(balance(&pool, card).await, 22_000);
     assert_eq!((balance(&pool, office).await, balance(&pool, fuel).await), (17_000, 5_000));
     let edited = list_expenses(&pool).await.unwrap().into_iter().find(|x| x.id == new_id).unwrap();
-    assert_eq!((edited.kind.as_str(), edited.total_cents, edited.is_voided), ("CARD_CREDIT", 3_000, false));
+    assert_eq!((edited.kind.as_str(), edited.total_cents, edited.is_voided), ("CARD_CREDIT", Cents(3_000), false));
 
     // Void: the card goes back up by the credit.
     crate::ledger::void_transaction(&pool, edited.journal_entry_id.unwrap()).await.expect("void");
@@ -459,7 +459,7 @@ async fn foreign_card_credit_debits_the_card_in_home_currency() {
     )
     .await
     .expect("foreign card credit posts");
-    assert_eq!((posted.kind.as_str(), posted.home_total_cents), ("CARD_CREDIT", 10_001));
+    assert_eq!((posted.kind.as_str(), posted.home_total_cents), ("CARD_CREDIT", Cents(10_001)));
     assert_eq!((balance(&pool, card).await, balance(&pool, travel).await), (-10_001, -10_001));
 }
 

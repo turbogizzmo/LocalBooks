@@ -16,7 +16,7 @@ async fn open_balances_match_the_aging_reports_for_every_name() {
         let mut checked = 0;
         for p in &names {
             let summary = party_summary(&pool, kind, p.id).await.unwrap();
-            let report = aging.rows.iter().find(|r| r.party_name == p.name).map_or(0, |r| r.total_cents);
+            let report = aging.rows.iter().find(|r| r.party_name == p.name).map_or(0, |r| r.total_cents.get());
             assert_eq!(summary.open_balance_cents, report, "{kind} {}: panel vs aging report", p.name);
             checked += usize::from(report != 0);
         }
