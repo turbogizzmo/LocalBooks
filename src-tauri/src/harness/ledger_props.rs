@@ -1124,7 +1124,7 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
     // Undeposited Funds holds exactly the payments waiting to be deposited.
     let waiting: i64 = m.waiting_for_deposit().iter().map(|p| m.payments[p].home).sum();
     ensure_eq!(m.balances.get(&a.undeposited).copied().unwrap_or(0), waiting, "Undeposited Funds in the model");
-    let listed: i64 = crate::banking::list_undeposited(pool).await?.iter().map(|i| i.amount_cents).sum();
+    let listed: i64 = crate::banking::list_undeposited(pool).await?.iter().map(|i| i.amount_cents.get()).sum();
     ensure_eq!(listed, waiting, "payments listed as undeposited");
     Ok(())
 }

@@ -568,7 +568,7 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
 
     // Only the money reaches Undeposited Funds and the bank deposit.
     let waiting = crate::banking::list_undeposited(&pool).await.unwrap();
-    let item = waiting.iter().find(|w| w.amount_cents == 49_000).expect("the discounted payment waits to be deposited for 490.00");
+    let item = waiting.iter().find(|w| w.amount_cents == Cents(49_000)).expect("the discounted payment waits to be deposited for 490.00");
     let deposit = crate::banking::DepositInput {
         bank_account_id: bank,
         deposit_date: d(10, 12),

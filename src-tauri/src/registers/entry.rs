@@ -157,8 +157,8 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
                 .into_iter()
                 .filter(|w| w.undeposited_account_id == *undeposited && on_or_before(&w.date))
                 .collect();
-            let together = waiting.iter().try_fold(0i64, |sum, w| sum.checked_add(w.amount_cents));
-            let chosen: Vec<_> = match waiting.iter().find(|w| w.amount_cents == amount) {
+            let together = waiting.iter().try_fold(0i64, |sum, w| sum.checked_add(w.amount_cents.get()));
+            let chosen: Vec<_> = match waiting.iter().find(|w| w.amount_cents.get() == amount) {
                 Some(one) => vec![one],
                 None if together == Some(amount) => waiting.iter().collect(),
                 None => {
