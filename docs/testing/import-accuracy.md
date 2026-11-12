@@ -149,7 +149,7 @@ zero, which showed false differences on two chapter files.
 
 Every remaining difference comes from data the reader can't decode, not from how a decoded
 transaction is imported; each one is listed in step 2 of the import (unreadable lines for entry
-by hand, accounts that differ). Gap R3d tracks them.
+by hand, accounts that differ). Gap R3d tracks them; most are fixed in the R3d section below.
 
 - **Damaged line rows** (most files above): a few rows per file don't decode, or decode with a
   value that fails the checks (unknown account, a date out of range). Their transactions don't
@@ -222,7 +222,8 @@ items) and 18 textbook chapter and appendix files (6 items each).
 | Textbook sample company | 4 / 12 | Seven items are on transactions that can't be posted (damaged lines); one has a sale whose cost rows don't decode |
 
 Every difference comes from a row the reader can't decode, the same faults gap R3d tracks; none
-comes from how a decoded change is imported. Each differing item is listed in step 2 of the
+comes from how a decoded change is imported. After R3d (below) every item on every one of these
+files matches. Each differing item is listed in step 2 of the
 import, before and after posting, with the file's quantity and value, what was imported and the
 reason when the import knows it.
 
@@ -242,3 +243,96 @@ Regression tests on synthetic data: `qbw_stock_import::tests` (a full import wit
 sale, a build and an adjustment; voiding an imported entry puts its stock back; the carry rule),
 `qbw_stock::tests` (pending builds, line signs) and
 `qbw_company::tests::sold_stock_moves_with_its_cost_rows`.
+
+## Undecoded rows, 2026-11-12 (R3d)
+
+Each row the R3 and R3c sign-offs listed was traced to its bytes on the sample files. Five faults
+explained nearly all of them; four are fixed, with synthetic regression tests, and what is left
+is described below with the reason it can't be read.
+
+### Fixed
+
+- **Sector 7 when its trailer slot overlaps the stored trailer.** When the last sector's rotation
+  puts the 16-byte trailer slot within 16 bytes of the sector boundary, some data bytes land on the
+  stored trailer. Each such byte moves on by the rotation again, to where the trailer byte it
+  displaced went, until it lands below the trailer, sometimes in several steps. The reader
+  placed them in order instead, so a few bytes at the start of sector 7 came out in the wrong
+  order. That explained the inventory adjustment "on an account the file no longer lists" (bank
+  accounts chapter): its offset line read account 0 and transaction 65546 for account 1 and
+  transaction 10. Regression test: `qbw_pages::tests::sector7_mapping_handles_rotations_next_to_the_sector_boundary`.
+- **Estimated sector-7 correction rows.** A rotation that no page shows with an all-zero sector 7
+  has its correction row estimated by votes, position by position. Every exact row on the sample
+  files repeats with the rotation as its period (below half a sector, after the first byte), so
+  the votes one period apart are now added together. On the memorizing chapter, unchained rows in
+  sector 7 of such pages went from 99 to 23. This fixed the item's stored quantity row, the
+  inventory cost rows that didn't decode (reports, invoicing for services, the textbook sample,
+  the construction sample) and most damaged line rows. Regression test:
+  `qbw_pages::tests::estimated_correction_rows_pool_votes_one_period_apart`.
+- **Catalog damage of three more kinds** (setting up inventory, other accounts):
+  - a column definition whose type byte is one no column has (`company_id` of the check line table
+    stored as type 122): it keeps its name and takes its type from its width;
+  - a column lost after the last defined one, which leaves no gap in the ids (`snh_expenses` of the
+    bill line table): a row that stores it sets its bit in the null bitmap past the defined
+    columns' bits, so the reader adds that many columns and tries each as an id, an amount or a
+    code, only after every reading without them has failed;
+  - lost definitions whose rows read but can't be placed (`transaction_id` and `account_id` of an
+    invoice line table, `item_id` and `quantity_qnty` of a bill line table): the definition comes
+    from another table of the same file that has the same neighbouring columns, up to three on
+    each side, at the same distances (a run can start at another id: check lines number theirs one
+    lower than bill lines). A definition repeated under a damaged id past the table's last column
+    (`open_qnty` as column 93 instead of 48) is dropped with the placeholders before it.
+
+  Regression tests: `qbw_records::tests::a_column_with_a_damaged_type_reads_by_its_width`,
+  `a_trailing_column_the_catalog_lost_is_found_by_its_bitmap_bit`,
+  `a_lost_column_borrows_its_definition_from_tables_that_agree_around_it` and
+  `a_lost_column_is_found_where_another_table_numbers_the_run_differently`.
+
+### Results
+
+Same 31 files and real backup as the R3 sign-off, code of this change. "Before" is the R3 sign-off.
+
+| File | Read: stored balances matched (before → after) | Full import: matching / differing (before → after) | Items matching (R3c → after) |
+|---|---|---|---|
+| Real backup (`.qbb`) | 112 of 112 | 77 / 0 | none tracked |
+| Textbook, estimating appendix | 83 of 85 → 85 of 85 | 14 / 3 → 17 / 0 | 6 of 6 |
+| Textbook, letters appendix | 84 of 85 → 85 of 85 | 15 / 2 → 17 / 0 | 6 of 6 |
+| Textbook, memorizing transactions | 82 of 82 → 85 of 85 | 18 / 0 → 20 / 0 | 5 → 6 of 6 |
+| Textbook, other accounts | 95 of 95 | 25 / 0 | 3 → 6 of 6 |
+| Textbook, reports | 82 of 84 → 85 of 85 | 18 / 2 → 21 / 0 | 3 → 6 of 6 |
+| Textbook, setting up inventory | 71 of 86 → 84 of 86 | 2 / 3 → 13 / 3 | 2 → 6 of 6 |
+| Textbook, invoicing for services | 83 of 85 → 85 of 85 | 16 / 2 → 18 / 0 | 5 → 6 of 6 |
+| Textbook, bank accounts | 86 of 87 → 87 of 87 | 17 / 2 → 19 / 0 | 5 → 6 of 6 |
+| Textbook, customizing forms | 77 of 85 → 84 of 85 | 9 / 2 → 15 / 2 | 5 → 6 of 6 |
+| Textbook, getting started | 83 of 85 | 19 / 2 | 6 of 6 |
+| Textbook sample company | 104 of 111 → 112 of 113 | 63 / 14 → 71 / 8 | 4 → 12 of 12 |
+| Construction sample | 114 of 115 → 115 of 115 | 76 / 2 → 78 / 0 | 12 of 12 |
+| Contractor, chapters 7 and 8 | 65 of 68, 58 of 65 → 68 of 68 each | 7 / 5, 5 / 5 → 12 / 0 each | none tracked |
+| Contractor, chapters 10, 11, 12 | 54–55 of 60 → 69 of 70 | 6–8 / 3–5 → 12 / 2 | none tracked |
+| Contractor, chapter 4 | 63 of 65 → 64 of 65 | 2 / 1 → 2 / 2 | none tracked |
+| The other 13 files | all | all match | all |
+
+Contractor chapter 4 shows one more differing account only because its checking account's stored
+balance now reads: the account was not compared before, and the difference is the missing deposit
+below. The textbook sample's 8 accounts are all one invoice, kept out of posting by its unread line.
+
+### What is left, and why it can't be read
+
+Each of these shows in step 2 of the import: a transaction with an unread line under "could not
+be read completely", for entry by hand; the accounts it leaves short under the balances that
+differ from the file; and, for pages that could not be decoded, their count, with a note that any
+transactions on them are missing.
+
+- **Sector 7 that can't be solved** (setting up inventory: check #2, $156.33; textbook sample:
+  invoice 1054, one $600 line). No candidate correction reproduces the lengths of the rows the
+  page's directory gives for its last sector, so its bytes are unknown.
+- **Sector 7 solved only by estimate** (customizing forms: a $15,000 deposit line; contractor
+  chapters 10 to 12: a $10,000 credit memo line). Their rotations (223 and 71) have no all-zero page
+  in those files, and the pooled estimate still misreads a few bytes of these rows. Correction rows
+  differ from file to file (none of 69 exact rows is the same in two files), so one file can't lend
+  another its rows.
+- **A run of pages with no anchor** (contractor chapter 4: the $5,500 opening-balance deposit to
+  checking). 102 pages, 3135 to 3261, are not decoded. Under no cipher base and step does a page's
+  sector 0 contain its own page number, which is what every other page is anchored by, so these
+  pages were written some other way that the reader does not know.
+- **An invoice line in no decoded row** (getting started: $35). No unread row and no header without
+  lines accounts for it, so it is most likely on one of the file's few undecoded pages.
