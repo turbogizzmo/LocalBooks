@@ -2124,9 +2124,8 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
     // Footer and page numbers on every page.
     let footer = fill_placeholders(&tpl.footer, doc, company);
     let count = l.pages.len();
-    for n in 0..count {
+    for (n, page) in l.pages.iter_mut().enumerate() {
         let base = height - MARGIN + 6.0;
-        let page = &mut l.pages[n];
         let mut add = |x: f32, text: String, align: Align| {
             let text = pdf::sanitize(&text);
             if !text.trim().is_empty() {
