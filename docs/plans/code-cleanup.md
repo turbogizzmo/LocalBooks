@@ -118,6 +118,20 @@ customer statement (`workflows::customer_statement`) and the open sales order an
 reports (`sales_orders`). The valuation totals, the running stock value and the statement's running
 balance and aging were unchecked; they are now checked. The 1099 summary in `workflows` already used
 checked sums and waits for step 4.
+Step 3d: the financial statements (`statements`): Profit & Loss, Balance Sheet, trial balance as of a
+date, Statement of Cash Flows and budgets. The statement builder now works on `Cents` per account and
+every subtotal, total and column is a checked sum (`RPT_OVERFLOW`); they were unchecked `+`, `-`
+and `.sum()`. `ReportLine.amount_cents` is `Option<Cents>`. The multi-column reports
+(`ClassReportLine.amounts_cents`) stay `i64`, because their `percent` columns hold basis points,
+not cents. `Cents::checked_abs` is new, for the rows a multi-column report shows.
+Step 3e: the graphs (`graphs`): income and expense, net worth, aging, sales and budget vs actual.
+The "Other" slice, net worth and the budget figures are now checked sums; they were unchecked.
+Step 3f: the list reports (`list_reports`): unpaid bills by job, open purchase orders (detail and by
+job), average days to pay, contact and item listings, and the audit exceptions. Their subtotals and
+totals were unchecked `+=`; they are now checked. Step 3g: the job reports (`job_reports`) and the
+custom report engine (`custom_reports`, with Find). Their sum helpers (`add`, `Sums`, the summary
+columns, running balances, `split`) were unchecked `i64`; they are now `Cents` with checked sums, and
+the drill-down ids stay separate `i64` vectors. That finishes step 3, and A7. Step 4 is gaps row A22.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:

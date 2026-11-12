@@ -75,7 +75,10 @@ async fn every_widget_ties_out_to_its_report() {
     let bs = crate::statements::balance_sheet(&pool, today).await.unwrap();
     let bank = widget(WidgetKind::AccountBalances);
     let checking_line = bank.lines.iter().find(|l| l.account_id == Some(checking)).unwrap();
-    assert_eq!(Some(checking_line.amount_cents), bs.lines.iter().find(|l| l.account_id == Some(checking)).and_then(|l| l.amount_cents));
+    assert_eq!(
+        Some(checking_line.amount_cents),
+        bs.lines.iter().find(|l| l.account_id == Some(checking)).and_then(|l| l.amount_cents.map(crate::money::Cents::get))
+    );
     assert_eq!(bank.total_cents, 1_000_000 - 230_000);
     assert_eq!(bank.report, "bs");
 
@@ -92,8 +95,8 @@ async fn every_widget_ties_out_to_its_report() {
     let trend = widget(WidgetKind::IncomeExpenseTrend);
     assert_eq!(trend.trend.len(), 12);
     let pl = crate::statements::profit_and_loss_basis(&pool, trend.start_date, trend.end_date, None, Basis::Accrual).await.unwrap();
-    assert_eq!(trend.total_cents, pl.net_income_cents);
-    assert_eq!(trend.trend.iter().map(|p| p.net_cents).sum::<i64>(), pl.net_income_cents);
+    assert_eq!(trend.total_cents, pl.net_income_cents.get());
+    assert_eq!(trend.trend.iter().map(|p| p.net_cents).sum::<i64>(), pl.net_income_cents.get());
     assert_eq!(trend.trend.iter().find(|p| p.month == "2026-03").unwrap().income_cents, 280_000);
 
     // Top customers, vendors and items: the summaries for the fiscal year.
@@ -203,21 +206,21 @@ async fn the_newer_widgets_tie_out_to_the_profit_and_loss_and_the_to_dos() {
     // Breakdowns: the Profit and Loss for the fiscal year, account by account, top five and the rest.
     let pl = crate::statements::profit_and_loss_basis(&pool, d(2026, 1, 1), d(2026, 12, 31), None, Basis::Accrual).await.unwrap();
     let income = widget(WidgetKind::IncomeBreakdown);
-    assert_eq!(income.total_cents, pl.total_revenue_cents);
-    assert_eq!(income.lines.iter().map(|l| l.amount_cents).sum::<i64>() + income.others_cents, pl.total_revenue_cents);
+    assert_eq!(income.total_cents, pl.total_revenue_cents.get());
+    assert_eq!(income.lines.iter().map(|l| l.amount_cents).sum::<i64>() + income.others_cents, pl.total_revenue_cents.get());
     let expense = widget(WidgetKind::ExpenseBreakdown);
-    assert_eq!(expense.total_cents, pl.total_expenses_cents);
-    assert_eq!(expense.lines.iter().map(|l| l.amount_cents).sum::<i64>() + expense.others_cents, pl.total_expenses_cents);
+    assert_eq!(expense.total_cents, pl.total_expenses_cents.get());
+    assert_eq!(expense.lines.iter().map(|l| l.amount_cents).sum::<i64>() + expense.others_cents, pl.total_expenses_cents.get());
     assert_eq!(expense.lines[0].amount_cents, 150_000, "the largest account first");
 
     // Year over year: this fiscal year against the one before, each its own Profit and Loss.
     let before = crate::statements::profit_and_loss_basis(&pool, d(2025, 1, 1), d(2025, 12, 31), None, Basis::Accrual).await.unwrap();
     let yoy = widget(WidgetKind::YearOverYear);
     let figure = |label: &str| yoy.lines.iter().find(|l| l.label == label).map(|l| (l.amount_cents, l.previous_cents)).unwrap();
-    assert_eq!(figure("Income"), (pl.total_revenue_cents, Some(before.total_revenue_cents)));
-    assert_eq!(figure("Expenses"), (pl.total_expenses_cents, Some(before.total_expenses_cents)));
-    assert_eq!(figure("Net income"), (pl.net_income_cents, Some(before.net_income_cents)));
-    assert_eq!(before.total_revenue_cents, 70_000, "Gum, last March");
+    assert_eq!(figure("Income"), (pl.total_revenue_cents.get(), Some(before.total_revenue_cents.get())));
+    assert_eq!(figure("Expenses"), (pl.total_expenses_cents.get(), Some(before.total_expenses_cents.get())));
+    assert_eq!(figure("Net income"), (pl.net_income_cents.get(), Some(before.net_income_cents.get())));
+    assert_eq!(before.total_revenue_cents, crate::money::Cents(70_000), "Gum, last March");
 }
 
 /// The to-dos widget lists the signed-in user's own and unassigned to-dos, as reminders do.

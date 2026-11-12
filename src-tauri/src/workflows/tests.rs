@@ -213,8 +213,8 @@ async fn recurring_purchase_orders_search_attachments_and_budgets() {
     let amounts: Vec<crate::statements::BudgetAmount> = (1..=3)
         .flat_map(|m| {
             [
-                crate::statements::BudgetAmount { account_id: rent, period: m, amount_cents: 100_000 },
-                crate::statements::BudgetAmount { account_id: services, period: m, amount_cents: 50_000 },
+                crate::statements::BudgetAmount { account_id: rent, period: m, amount_cents: Cents(100_000) },
+                crate::statements::BudgetAmount { account_id: services, period: m, amount_cents: Cents(50_000) },
             ]
         })
         .collect();

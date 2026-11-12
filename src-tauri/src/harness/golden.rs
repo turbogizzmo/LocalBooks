@@ -27,7 +27,7 @@ fn row(out: &mut String, depth: u32, label: &str, amount: Option<i64>) {
 
 fn lines(out: &mut String, lines: &[ReportLine]) {
     for line in lines {
-        row(out, line.depth, &line.label, line.amount_cents);
+        row(out, line.depth, &line.label, line.amount_cents.map(Cents::get));
     }
 }
 
@@ -42,10 +42,10 @@ async fn profit_and_loss() {
     let mut out = format!("Profit & Loss, {} to {}\n\n", pl.start_date, pl.end_date);
     lines(&mut out, &pl.lines);
     writeln!(out).unwrap();
-    row(&mut out, 0, "Total revenue", Some(pl.total_revenue_cents));
-    row(&mut out, 0, "Total expenses", Some(pl.total_expenses_cents));
-    row(&mut out, 0, "Gross profit", Some(pl.gross_profit_cents));
-    row(&mut out, 0, "Net income", Some(pl.net_income_cents));
+    row(&mut out, 0, "Total revenue", Some(pl.total_revenue_cents.get()));
+    row(&mut out, 0, "Total expenses", Some(pl.total_expenses_cents.get()));
+    row(&mut out, 0, "Gross profit", Some(pl.gross_profit_cents.get()));
+    row(&mut out, 0, "Net income", Some(pl.net_income_cents.get()));
     insta::assert_snapshot!(out);
 }
 
@@ -59,11 +59,11 @@ async fn balance_sheet() {
         writeln!(out, "Balance Sheet as of {} (fiscal year from {})\n", bs.as_of, bs.fiscal_year_start).unwrap();
         lines(&mut out, &bs.lines);
         writeln!(out).unwrap();
-        row(&mut out, 0, "Total assets", Some(bs.total_assets_cents));
-        row(&mut out, 0, "Total liabilities", Some(bs.total_liabilities_cents));
-        row(&mut out, 0, "Total equity", Some(bs.total_equity_cents));
-        row(&mut out, 0, "Net income", Some(bs.net_income_cents));
-        writeln!(out, "Balanced: {} (difference {})\n", bs.is_balanced, money(bs.difference_cents)).unwrap();
+        row(&mut out, 0, "Total assets", Some(bs.total_assets_cents.get()));
+        row(&mut out, 0, "Total liabilities", Some(bs.total_liabilities_cents.get()));
+        row(&mut out, 0, "Total equity", Some(bs.total_equity_cents.get()));
+        row(&mut out, 0, "Net income", Some(bs.net_income_cents.get()));
+        writeln!(out, "Balanced: {} (difference {})\n", bs.is_balanced, money(bs.difference_cents.get())).unwrap();
     }
     insta::assert_snapshot!(out);
 }
@@ -79,7 +79,7 @@ async fn trial_balance() {
         let side = |c: i64| if c == 0 { String::new() } else { money(c) };
         writeln!(out, "{name:<44}{:<24}{:>16}{:>16}", r.account_type_name, side(r.debit_cents.get()), side(r.credit_cents.get())).unwrap();
     }
-    writeln!(out, "{:<68}{:>16}{:>16}", "Total", money(tb.total_debit_cents), money(tb.total_credit_cents)).unwrap();
+    writeln!(out, "{:<68}{:>16}{:>16}", "Total", money(tb.total_debit_cents.get()), money(tb.total_credit_cents.get())).unwrap();
     insta::assert_snapshot!(out);
 }
 
@@ -249,7 +249,13 @@ async fn budget_vs_actual() {
     let mut amounts = Vec::new();
     for period in 1..=12 {
         let a = |account_id, amount_cents| crate::statements::BudgetAmount { account_id, period, amount_cents };
-        amounts.extend([a(services, 1_500_000), a(rent, 240_000), a(office, 30_000), a(checking, 4_000_000 + period * 100_000), a(card, 50_000)]);
+        amounts.extend([
+            a(services, Cents(1_500_000)),
+            a(rent, Cents(240_000)),
+            a(office, Cents(30_000)),
+            a(checking, Cents(4_000_000 + period * 100_000)),
+            a(card, Cents(50_000)),
+        ]);
     }
     crate::statements::set_budget_amounts(&pool, budget.id, &amounts).await.unwrap();
     let mut out = String::from("Profit & Loss Budget vs. Actual, Q1 2025\n\n");

@@ -38,6 +38,10 @@ impl Cents {
         self.0.checked_neg().map(Cents)
     }
 
+    pub fn checked_abs(self) -> Option<Cents> {
+        self.0.checked_abs().map(Cents)
+    }
+
     pub const fn is_zero(self) -> bool {
         self.0 == 0
     }
@@ -78,6 +82,8 @@ mod tests {
         assert_eq!(Cents::checked_sum([]), Some(Cents::ZERO));
         assert_eq!(Cents(250).checked_neg(), Some(Cents(-250)));
         assert_eq!(Cents(i64::MIN).checked_neg(), None);
+        assert_eq!(Cents(-250).checked_abs(), Some(Cents(250)));
+        assert_eq!(Cents(i64::MIN).checked_abs(), None);
     }
 
     #[test]
