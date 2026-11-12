@@ -14,6 +14,7 @@ const COMPANIES = {
   'seeded-users': 'Edge Cases.localbooks',
   'taxed-invoice-edit': 'Edge Cases.localbooks',
   'windows-inside': 'No Users.localbooks',
+  'dashboard-insights': 'No Users.localbooks',
   accessibility: 'Edge Cases.localbooks',
 };
 

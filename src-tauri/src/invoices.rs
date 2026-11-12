@@ -226,8 +226,12 @@ pub struct AgingBucket {
 #[serde(rename_all = "camelCase")]
 pub struct ArAging {
     pub as_of: NaiveDate,
+    /// Open invoices by age. A bucket's amount is net of unused credit dated in it; its count is
+    /// invoices only, so a credit is never counted as an invoice.
     pub buckets: Vec<AgingBucket>,
     pub total_cents: i64,
+    /// Credit not yet used (credit memos with something left), already netted into the buckets.
+    pub unused_credit_cents: i64,
 }
 
 /// round_half_up(quantity_e4 × rate / 10,000), rejecting zero, overflow and the per-line ceiling.
@@ -857,7 +861,9 @@ pub async fn ar_aging(pool: &SqlitePool, as_of: NaiveDate) -> Result<ArAging, St
         AgingBucket { key: "days31To60", label: "31–60 days", invoice_count: 0, amount_cents: 0 },
         AgingBucket { key: "days61Plus", label: "61+ days", invoice_count: 0, amount_cents: 0 },
     ];
-    let mut total_cents = 0;
+    let overflow = || "AGING_OVERFLOW: open receivables are too large to add up".to_string();
+    let mut total_cents: i64 = 0;
+    let mut unused_credit_cents: i64 = 0;
     for (due, balance) in open {
         let days_overdue = (as_of - due).num_days();
         let idx = match days_overdue {
@@ -866,11 +872,15 @@ pub async fn ar_aging(pool: &SqlitePool, as_of: NaiveDate) -> Result<ArAging, St
             31..=60 => 2,
             _ => 3,
         };
-        buckets[idx].invoice_count += 1;
-        buckets[idx].amount_cents += balance;
-        total_cents += balance;
+        if balance > 0 {
+            buckets[idx].invoice_count += 1;
+        } else {
+            unused_credit_cents = unused_credit_cents.checked_sub(balance).ok_or_else(overflow)?;
+        }
+        buckets[idx].amount_cents = buckets[idx].amount_cents.checked_add(balance).ok_or_else(overflow)?;
+        total_cents = total_cents.checked_add(balance).ok_or_else(overflow)?;
     }
-    Ok(ArAging { as_of, buckets, total_cents })
+    Ok(ArAging { as_of, buckets, total_cents, unused_credit_cents })
 }
 
 async fn system_account(tx: &mut Transaction<'_, Sqlite>, account_type: &str) -> Result<i64, String> {
