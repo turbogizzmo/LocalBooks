@@ -219,7 +219,7 @@ pub struct AgingBucket {
     pub key: &'static str,
     pub label: &'static str,
     pub invoice_count: i64,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -229,9 +229,9 @@ pub struct ArAging {
     /// Open invoices by age. A bucket's amount is net of unused credit dated in it; its count is
     /// invoices only, so a credit is never counted as an invoice.
     pub buckets: Vec<AgingBucket>,
-    pub total_cents: i64,
+    pub total_cents: Cents,
     /// Credit not yet used (credit memos with something left), already netted into the buckets.
-    pub unused_credit_cents: i64,
+    pub unused_credit_cents: Cents,
 }
 
 /// round_half_up(quantity_e4 × rate / 10,000), rejecting zero, overflow and the per-line ceiling.
@@ -843,7 +843,7 @@ pub async fn invoice_detail(pool: &SqlitePool, invoice_id: i64) -> Result<Invoic
 /// Groups open invoice balances (home currency, i.e. the A/R still on the books) by days past due.
 pub async fn ar_aging(pool: &SqlitePool, as_of: NaiveDate) -> Result<ArAging, String> {
     // Open invoices by due date, and credit not yet used (negative) by the credit memo's date.
-    let open: Vec<(NaiveDate, i64)> = sqlx::query_as(
+    let open: Vec<(NaiveDate, Cents)> = sqlx::query_as(
         "SELECT i.due_date, b.home_open_cents FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
          WHERE i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0
          UNION ALL
@@ -855,14 +855,14 @@ pub async fn ar_aging(pool: &SqlitePool, as_of: NaiveDate) -> Result<ArAging, St
     .map_err(db_err)?;
 
     let mut buckets = vec![
-        AgingBucket { key: "current", label: "Current", invoice_count: 0, amount_cents: 0 },
-        AgingBucket { key: "days1To30", label: "1–30 days", invoice_count: 0, amount_cents: 0 },
-        AgingBucket { key: "days31To60", label: "31–60 days", invoice_count: 0, amount_cents: 0 },
-        AgingBucket { key: "days61Plus", label: "61+ days", invoice_count: 0, amount_cents: 0 },
+        AgingBucket { key: "current", label: "Current", invoice_count: 0, amount_cents: Cents::ZERO },
+        AgingBucket { key: "days1To30", label: "1–30 days", invoice_count: 0, amount_cents: Cents::ZERO },
+        AgingBucket { key: "days31To60", label: "31–60 days", invoice_count: 0, amount_cents: Cents::ZERO },
+        AgingBucket { key: "days61Plus", label: "61+ days", invoice_count: 0, amount_cents: Cents::ZERO },
     ];
     let overflow = || "AGING_OVERFLOW: open receivables are too large to add up".to_string();
-    let mut total_cents: i64 = 0;
-    let mut unused_credit_cents: i64 = 0;
+    let mut total_cents = Cents::ZERO;
+    let mut unused_credit_cents = Cents::ZERO;
     for (due, balance) in open {
         let days_overdue = (as_of - due).num_days();
         let idx = match days_overdue {
@@ -871,7 +871,7 @@ pub async fn ar_aging(pool: &SqlitePool, as_of: NaiveDate) -> Result<ArAging, St
             31..=60 => 2,
             _ => 3,
         };
-        if balance > 0 {
+        if balance.is_positive() {
             buckets[idx].invoice_count += 1;
         } else {
             unused_credit_cents = unused_credit_cents.checked_sub(balance).ok_or_else(overflow)?;

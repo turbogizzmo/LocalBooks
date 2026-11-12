@@ -1033,7 +1033,7 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
 
     let tb = crate::reports::trial_balance(pool).await?;
     ensure_eq!(tb.total_debit_cents, tb.total_credit_cents, "trial balance totals");
-    ensure_eq!(tb.total_debit_cents, expected.values().filter(|b| **b > 0).sum::<i64>(), "trial balance debits");
+    ensure_eq!(tb.total_debit_cents.get(), expected.values().filter(|b| **b > 0).sum::<i64>(), "trial balance debits");
 
     // Statements at several dates, across the fiscal year boundary.
     let sum_of = |class: &str| -> i64 { expected.iter().filter(|(id, _)| a.of(**id).0 == class).map(|(_, b)| *b).sum() };

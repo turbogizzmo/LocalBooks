@@ -75,8 +75,8 @@ async fn aging_nets_unused_credit_but_counts_only_invoices() {
     // on September 30, but the bucket holds two invoices, not three.
     let aging = crate::invoices::ar_aging(&pool, NaiveDate::from_ymd_opt(2026, 9, 30).unwrap()).await.unwrap();
     let late = aging.buckets.iter().find(|b| b.key == "days61Plus").unwrap();
-    assert_eq!((late.invoice_count, late.amount_cents), (2, 40_000));
-    assert_eq!((aging.total_cents, aging.unused_credit_cents), (40_000, 20_000));
+    assert_eq!((late.invoice_count, late.amount_cents), (2, Cents(40_000)));
+    assert_eq!((aging.total_cents, aging.unused_credit_cents), (Cents(40_000), Cents(20_000)));
     assert_eq!(aging.buckets.iter().map(|b| b.invoice_count).sum::<i64>(), 2);
 }
 

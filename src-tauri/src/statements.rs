@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
 use crate::ledger::{db_err, format_money, mul_div_round};
+use crate::money::Cents;
 use crate::preferences::{currency_symbol, fiscal_start_month, fiscal_year_bounds};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -635,7 +636,14 @@ pub async fn trial_balance_as_of(pool: &SqlitePool, as_of: NaiveDate) -> Result<
         let (debit_cents, credit_cents) = if net > 0 { (net, 0) } else { (0, -net) };
         tb.total_debit_cents += debit_cents;
         tb.total_credit_cents += credit_cents;
-        tb.rows.push(crate::reports::TrialBalanceRow { account_id, account_number, full_name, account_type_name, debit_cents, credit_cents });
+        tb.rows.push(crate::reports::TrialBalanceRow {
+            account_id,
+            account_number,
+            full_name,
+            account_type_name,
+            debit_cents: Cents(debit_cents),
+            credit_cents: Cents(credit_cents),
+        });
     }
     Ok(tb)
 }

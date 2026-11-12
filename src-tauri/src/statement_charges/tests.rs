@@ -58,7 +58,7 @@ async fn a_statement_charge_posts_to_ar_shows_on_the_statement_ages_and_takes_a_
 
     // In the aging, by due date.
     let aging = crate::invoices::ar_aging(&pool, d(4, 20)).await.unwrap();
-    assert_eq!(aging.total_cents, 37_000);
+    assert_eq!(aging.total_cents, Cents(37_000));
 
     // A payment applies to it like an invoice.
     crate::invoices::record_payment(
@@ -79,7 +79,7 @@ async fn a_statement_charge_posts_to_ar_shows_on_the_statement_ages_and_takes_a_
     .unwrap();
     let paid = crate::invoices::get_summary(&pool, first.id).await.unwrap();
     assert_eq!(paid.balance_cents, Cents(0));
-    assert_eq!(crate::invoices::ar_aging(&pool, d(4, 20)).await.unwrap().total_cents, 12_000);
+    assert_eq!(crate::invoices::ar_aging(&pool, d(4, 20)).await.unwrap().total_cents, Cents(12_000));
 }
 
 #[tokio::test]

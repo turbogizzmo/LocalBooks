@@ -454,7 +454,7 @@ async fn assert_receivables_tie(pool: &SqlitePool, customer_id: i64, expected: i
     .unwrap();
     let open: i64 =
         sqlx::query_scalar("SELECT COALESCE(SUM(total_cents - amount_paid_cents), 0) FROM invoices WHERE is_voided = 0").fetch_one(pool).await.unwrap();
-    let aging = crate::invoices::ar_aging(pool, d(12, 31)).await.unwrap().total_cents;
+    let aging = crate::invoices::ar_aging(pool, d(12, 31)).await.unwrap().total_cents.get();
     // A voided payment's reversing entry has no customer on the statement yet (see docs/gaps.md),
     // so after a void the statement is left out.
     let statement = match customer_id {
