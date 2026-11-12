@@ -38,7 +38,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 sha2 = "=0.10.9"
 # TOTP codes (RFC 6238) use HMAC-SHA-1, the only hash every authenticator app supports.
-sha1 = "=0.10.7"
+sha1 = "=0.11.0"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "chrono", "migrate", "macros", "derive"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
