@@ -13,7 +13,7 @@ async fn audit_rows(pool: &SqlitePool) -> i64 {
 }
 
 async fn recipient(pool: &SqlitePool, id: i64, use_: &str) -> Option<String> {
-    sqlx::query_scalar(&format!("SELECT {} FROM customers c WHERE c.id = ?1", recipient_sql(use_))).bind(id).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT {} FROM customers c WHERE c.id = ?1", recipient_sql(use_)))).bind(id).fetch_one(pool).await.unwrap()
 }
 
 #[tokio::test]

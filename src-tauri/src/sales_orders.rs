@@ -144,11 +144,11 @@ const SUMMARY_SELECT: &str = "
 /// Every sales order, newest first; `open_only` leaves out closed ones.
 pub async fn list(pool: &SqlitePool, open_only: bool) -> Result<Vec<SalesOrderSummary>, String> {
     let filter = if open_only { "WHERE status <> 'CLOSED'" } else { "" };
-    sqlx::query_as(&format!("SELECT * FROM ({SUMMARY_SELECT}) {filter} ORDER BY order_number DESC")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT * FROM ({SUMMARY_SELECT}) {filter} ORDER BY order_number DESC"))).fetch_all(pool).await.map_err(db_err)
 }
 
 async fn summary(conn: &mut sqlx::SqliteConnection, id: i64) -> Result<SalesOrderSummary, String> {
-    sqlx::query_as(&format!("{SUMMARY_SELECT} WHERE o.id = ?1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{SUMMARY_SELECT} WHERE o.id = ?1")))
         .bind(id)
         .fetch_optional(conn)
         .await

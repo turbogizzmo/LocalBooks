@@ -149,10 +149,13 @@ pub(crate) async fn resolve(
 /// `table` is `invoices`, `sales_receipts`, `estimates` or `credit_memos`.
 pub(crate) async fn write(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64, header: &SalesHeader) -> Result<(), String> {
     debug_assert!(matches!(table, "invoices" | "sales_receipts" | "estimates" | "credit_memos" | "sales_orders"));
-    let customer_id: Option<i64> =
-        sqlx::query_scalar(&format!("SELECT customer_id FROM {table} WHERE id = ?1")).bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
+    let customer_id: Option<i64> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT customer_id FROM {table} WHERE id = ?1")))
+        .bind(id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)?;
     let (bill_to, ship_to, po_number, fob) = resolve(tx, customer_id, header).await?;
-    sqlx::query(&format!("UPDATE {table} SET bill_to = ?1, ship_to = ?2, po_number = ?3, fob = ?4 WHERE id = ?5"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {table} SET bill_to = ?1, ship_to = ?2, po_number = ?3, fob = ?4 WHERE id = ?5")))
         .bind(bill_to)
         .bind(ship_to)
         .bind(po_number)
@@ -169,7 +172,7 @@ pub(crate) async fn write(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64
 pub async fn read<'e, E: sqlx::SqliteExecutor<'e>>(executor: E, table: &str, id: i64) -> Result<SalesHeader, String> {
     debug_assert!(matches!(table, "invoices" | "sales_receipts" | "estimates" | "credit_memos" | "sales_orders"));
     type AddressRow = (Option<String>, Option<String>, Option<String>, Option<String>);
-    let row: Option<AddressRow> = sqlx::query_as(&format!("SELECT bill_to, ship_to, po_number, fob FROM {table} WHERE id = ?1"))
+    let row: Option<AddressRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT bill_to, ship_to, po_number, fob FROM {table} WHERE id = ?1")))
         .bind(id)
         .fetch_optional(executor)
         .await

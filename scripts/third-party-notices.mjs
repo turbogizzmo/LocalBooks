@@ -38,18 +38,21 @@ const SHIPPED_SUBFOLDERS = {
 
 /**
  * Licenses of code a crate compiles in from a subfolder rather than its top level: libsqlite3-sys
- * builds SQLCipher from `sqlcipher/`, whose BSD license asks binaries to reproduce it.
+ * builds SQLCipher from sqlcipher-src's `sqlcipher/`, whose BSD license asks binaries to reproduce
+ * it. (The libtomcrypt copy beside it is only for builds without a system crypto library; the app
+ * uses CommonCrypto or OpenSSL, so it is not compiled in.)
  */
 const BUNDLED_LICENSES = {
-  'libsqlite3-sys': [['sqlcipher/LICENSE', 'SQLCipher']],
+  'sqlcipher-src': [['sqlcipher/LICENSE-sqlcipher', 'SQLCipher']],
   'openssl-src': [['openssl/LICENSE.txt', 'OpenSSL']],
 };
 
 /**
- * Build dependencies whose C code ends up inside the app: openssl-src compiles the OpenSSL that the
- * Windows build of SQLCipher links (Cargo.toml).
+ * Build dependencies whose C code ends up inside the app: sqlcipher-src carries the SQLCipher (and
+ * SQLite) source that libsqlite3-sys compiles, and openssl-src compiles the OpenSSL that the Windows
+ * build of SQLCipher links (Cargo.toml).
  */
-const COMPILED_IN = new Set(['openssl-src']);
+const COMPILED_IN = new Set(['sqlcipher-src', 'openssl-src']);
 
 /**
  * License and NOTICE files at the top of a package directory, in name order, plus any file in

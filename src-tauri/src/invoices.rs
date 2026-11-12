@@ -283,7 +283,7 @@ pub fn validate_invoice(input: &InvoiceInput) -> Result<i64, String> {
 }
 
 pub async fn list_invoices(pool: &SqlitePool) -> Result<Vec<InvoiceSummary>, String> {
-    sqlx::query_as::<_, InvoiceSummary>(&format!("{SUMMARY_SELECT} ORDER BY i.is_voided, i.invoice_number DESC"))
+    sqlx::query_as::<_, InvoiceSummary>(sqlx::AssertSqlSafe(format!("{SUMMARY_SELECT} ORDER BY i.is_voided, i.invoice_number DESC")))
         .fetch_all(pool)
         .await
         .map(|all| all.into_iter().map(with_discount).collect())
@@ -292,20 +292,22 @@ pub async fn list_invoices(pool: &SqlitePool) -> Result<Vec<InvoiceSummary>, Str
 
 /// Invoices waiting in the print queue, lowest number first.
 pub(crate) async fn list_to_print(pool: &SqlitePool) -> Result<Vec<InvoiceSummary>, String> {
-    sqlx::query_as::<_, InvoiceSummary>(&format!("{SUMMARY_SELECT} WHERE i.to_be_printed = 1 AND i.is_voided = 0 ORDER BY i.invoice_number"))
-        .fetch_all(pool)
-        .await
-        .map(|all| all.into_iter().map(with_discount).collect())
-        .map_err(db_err)
+    sqlx::query_as::<_, InvoiceSummary>(sqlx::AssertSqlSafe(format!(
+        "{SUMMARY_SELECT} WHERE i.to_be_printed = 1 AND i.is_voided = 0 ORDER BY i.invoice_number"
+    )))
+    .fetch_all(pool)
+    .await
+    .map(|all| all.into_iter().map(with_discount).collect())
+    .map_err(db_err)
 }
 
 /// A customer's (and their jobs') statement charges, oldest first, in one query.
 pub(crate) async fn statement_charge_summaries(pool: &SqlitePool, customer_id: i64) -> Result<Vec<InvoiceSummary>, String> {
-    sqlx::query_as::<_, InvoiceSummary>(&format!(
+    sqlx::query_as::<_, InvoiceSummary>(sqlx::AssertSqlSafe(format!(
         "{SUMMARY_SELECT} WHERE i.id IN (SELECT invoice_id FROM statement_charge_invoices)
            AND (i.customer_id = ?1 OR i.customer_id IN (SELECT id FROM customers WHERE parent_id = ?1))
          ORDER BY i.issue_date, i.id"
-    ))
+    )))
     .bind(customer_id)
     .fetch_all(pool)
     .await
@@ -314,7 +316,12 @@ pub(crate) async fn statement_charge_summaries(pool: &SqlitePool, customer_id: i
 }
 
 pub(crate) async fn get_summary(pool: &SqlitePool, invoice_id: i64) -> Result<InvoiceSummary, String> {
-    sqlx::query_as::<_, InvoiceSummary>(&format!("{SUMMARY_SELECT} WHERE i.id = ?1")).bind(invoice_id).fetch_one(pool).await.map(with_discount).map_err(db_err)
+    sqlx::query_as::<_, InvoiceSummary>(sqlx::AssertSqlSafe(format!("{SUMMARY_SELECT} WHERE i.id = ?1")))
+        .bind(invoice_id)
+        .fetch_one(pool)
+        .await
+        .map(with_discount)
+        .map_err(db_err)
 }
 
 /// Creates the invoice and posts it to the ledger atomically; the invoice comes back UNPAID.

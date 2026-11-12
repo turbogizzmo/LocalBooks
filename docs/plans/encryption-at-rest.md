@@ -247,8 +247,10 @@ Phase 1 measures it on the test companies before anything ships.
 
 - RUSTSEC-2026-0459 affects SQLite before 3.54. Plain SQLite 3.46.0 and SQLCipher 4.5.7 (SQLite
   3.45.3) are both affected; switching to SQLCipher neither fixes nor worsens it. Both come from the
-  same `libsqlite3-sys` pin, so the upgrade R24 waits for (a sqlx release that allows
-  `libsqlite3-sys` 0.39 or later) brings a newer SQLCipher too. Nothing extra to wait for.
+  same `libsqlite3-sys` pin. R24 (done) moved to sqlx 0.9 and `libsqlite3-sys` 0.40.0, whose
+  `bundled-sqlcipher` builds SQLCipher 4.20.0 on SQLite 3.54.1 from the `sqlcipher-src` crate
+  (0.39 still built SQLCipher on SQLite 3.53.4). `sqlx-sqlite` is vendored with a wider
+  `libsqlite3-sys` range until a release accepts 0.40 (`src-tauri/vendor/README.md`).
 - `wal_guard` reads the page size from the database header at offset 16. An encrypted file has the
   LocalBooks header there instead, and SQLCipher's own first page is encrypted, so the guard must
   take the page size from the LocalBooks header for encrypted files. The WAL's header stays

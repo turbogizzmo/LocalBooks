@@ -1,7 +1,7 @@
 use super::*;
 
 async fn names(pool: &SqlitePool, sql: &str) -> Vec<String> {
-    let mut v: Vec<String> = sqlx::query_scalar(sql).fetch_all(pool).await.unwrap();
+    let mut v: Vec<String> = sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).fetch_all(pool).await.unwrap();
     v.sort_by_key(|n| n.to_lowercase());
     v
 }

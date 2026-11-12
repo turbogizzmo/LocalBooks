@@ -119,10 +119,10 @@ fn terms_fields(input: &TermsInput) -> Result<(String, i64, Option<i64>), String
 }
 
 pub async fn list_terms(pool: &SqlitePool) -> Result<Vec<TermsView>, String> {
-    sqlx::query_as::<_, TermsView>(&format!(
+    sqlx::query_as::<_, TermsView>(sqlx::AssertSqlSafe(format!(
         "SELECT t.id, t.name, t.net_days, t.discount_ppm, t.discount_days, t.is_active, ({TERMS_USED}) AS is_used FROM terms t
          ORDER BY t.net_days, t.discount_ppm, t.name COLLATE NOCASE"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
@@ -165,7 +165,7 @@ pub async fn update_terms(pool: &SqlitePool, id: i64, input: TermsInput) -> Resu
         }
         // Records with the term keep their days in step.
         for table in ["customers", "vendors"] {
-            sqlx::query(&format!("UPDATE {table} SET terms_days = ?1 WHERE terms_id = ?2 AND terms_days IS NOT ?1"))
+            sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {table} SET terms_days = ?1 WHERE terms_id = ?2 AND terms_days IS NOT ?1")))
                 .bind(input.net_days)
                 .bind(id)
                 .execute(&mut *tx)
@@ -263,9 +263,9 @@ fn method_fields(input: &PaymentMethodInput) -> Result<(String, &'static str), S
 }
 
 pub async fn list_payment_methods(pool: &SqlitePool) -> Result<Vec<PaymentMethodView>, String> {
-    sqlx::query_as::<_, PaymentMethodView>(&format!(
+    sqlx::query_as::<_, PaymentMethodView>(sqlx::AssertSqlSafe(format!(
         "SELECT m.id, m.name, m.kind, m.is_active, ({METHOD_USED}) AS is_used FROM payment_methods m ORDER BY m.name COLLATE NOCASE"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)
@@ -403,9 +403,9 @@ const ENTRY_USED: &str = "EXISTS (SELECT 1 FROM customers WHERE customer_type_id
 
 /// Every type and message, by list and name.
 pub async fn list_profile_entries(pool: &SqlitePool) -> Result<Vec<ProfileEntryView>, String> {
-    sqlx::query_as::<_, ProfileEntryView>(&format!(
+    sqlx::query_as::<_, ProfileEntryView>(sqlx::AssertSqlSafe(format!(
         "SELECT p.id, p.list, p.name, p.is_active, ({ENTRY_USED}) AS is_used FROM profile_entries p ORDER BY p.list, p.name COLLATE NOCASE"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)

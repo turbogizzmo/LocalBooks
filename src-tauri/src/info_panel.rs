@@ -188,7 +188,7 @@ pub async fn set_notes(pool: &SqlitePool, kind: &str, id: i64, notes: &str) -> R
         return Err(format!("PARTY_NOTES_LONG: keep notes to {NOTES_MAX} characters"));
     }
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
-    let result = sqlx::query(&format!("UPDATE {table} SET notes = ?1 WHERE id = ?2"))
+    let result = sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {table} SET notes = ?1 WHERE id = ?2")))
         .bind((!notes.is_empty()).then_some(notes))
         .bind(id)
         .execute(&mut *tx)

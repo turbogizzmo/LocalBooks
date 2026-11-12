@@ -304,11 +304,11 @@ const FEED_SELECT: &str =
     "SELECT id, processor, name, secret_key, account_ref, bank_account_id, sales_account_id, fee_account_id, refund_account_id, chargeback_account_id, last_fetched_at, auto_fetch_hours, last_auto_result, last_auto_at FROM payout_feeds";
 
 pub async fn feeds(pool: &SqlitePool) -> Result<Vec<PayoutFeed>, String> {
-    sqlx::query_as(&format!("{FEED_SELECT} ORDER BY name")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{FEED_SELECT} ORDER BY name"))).fetch_all(pool).await.map_err(db_err)
 }
 
 pub(crate) async fn feed(pool: &SqlitePool, id: i64) -> Result<PayoutFeed, String> {
-    sqlx::query_as(&format!("{FEED_SELECT} WHERE id = ?1"))
+    sqlx::query_as(sqlx::AssertSqlSafe(format!("{FEED_SELECT} WHERE id = ?1")))
         .bind(id)
         .fetch_optional(pool)
         .await

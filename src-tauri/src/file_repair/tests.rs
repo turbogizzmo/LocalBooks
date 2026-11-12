@@ -49,9 +49,9 @@ async fn rebuild_restores_a_dropped_safeguard_trigger_and_a_changed_index() {
             .fetch_one(&pool)
             .await
             .unwrap();
-    sqlx::query(&format!("DROP TRIGGER {}", quote_ident(&trigger))).execute(&pool).await.unwrap();
-    sqlx::query(&format!("DROP INDEX {}", quote_ident(&index))).execute(&pool).await.unwrap();
-    sqlx::query(&format!("CREATE INDEX {} ON {} (id)", quote_ident(&index), quote_ident(&table))).execute(&pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!("DROP TRIGGER {}", quote_ident(&trigger)))).execute(&pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!("DROP INDEX {}", quote_ident(&index)))).execute(&pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE INDEX {} ON {} (id)", quote_ident(&index), quote_ident(&table)))).execute(&pool).await.unwrap();
     sqlx::query("CREATE TRIGGER sneaky AFTER INSERT ON journal_entries BEGIN SELECT 1; END").execute(&pool).await.unwrap();
 
     let before = checkup(&pool, 0).await.unwrap();
@@ -94,11 +94,11 @@ async fn edit_behind_safeguards(pool: &SqlitePool, table: &str, sql: &str, bind:
     let triggers: Vec<(String, String)> =
         sqlx::query_as("SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' AND tbl_name = ?1").bind(table).fetch_all(pool).await.unwrap();
     for (name, _) in &triggers {
-        sqlx::query(&format!("DROP TRIGGER {}", quote_ident(name))).execute(pool).await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP TRIGGER {}", quote_ident(name)))).execute(pool).await.unwrap();
     }
-    sqlx::query(sql).bind(bind).execute(pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(sql)).bind(bind).execute(pool).await.unwrap();
     for (_, sql) in &triggers {
-        sqlx::query(sql).execute(pool).await.unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(sql.as_str())).execute(pool).await.unwrap();
     }
 }
 

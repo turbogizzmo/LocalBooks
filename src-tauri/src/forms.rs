@@ -427,7 +427,11 @@ pub async fn delete_style(pool: &SqlitePool, id: i64) -> Result<(), String> {
     sqlx::query("UPDATE customers SET form_style_id = NULL WHERE form_style_id = ?1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
     // Documents that picked it print with their customer's style again.
     for table in ["invoices", "sales_receipts", "estimates"] {
-        sqlx::query(&format!("UPDATE {table} SET form_style_id = NULL WHERE form_style_id = ?1")).bind(id).execute(&mut *tx).await.map_err(db_err)?;
+        sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE {table} SET form_style_id = NULL WHERE form_style_id = ?1")))
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
     }
     sqlx::query("DELETE FROM form_templates WHERE style_id = ?1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
     sqlx::query("DELETE FROM form_styles WHERE id = ?1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
@@ -701,16 +705,18 @@ async fn customer(pool: &SqlitePool, id: Option<i64>, name: &str, statement: boo
     type AddressRow = (Option<String>, Option<String>, Option<String>, Option<String>);
     let row: Option<AddressRow> = match id {
         Some(id) => {
-            sqlx::query_as(&format!("SELECT c.company_name, c.billing_address, {recipient}, {contact} FROM customers c WHERE c.id = ?1"))
+            sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT c.company_name, c.billing_address, {recipient}, {contact} FROM customers c WHERE c.id = ?1")))
                 .bind(id)
                 .fetch_optional(pool)
                 .await
         }
         None => {
-            sqlx::query_as(&format!("SELECT c.company_name, c.billing_address, {recipient}, {contact} FROM customers c WHERE c.name = ?1 COLLATE NOCASE"))
-                .bind(name)
-                .fetch_optional(pool)
-                .await
+            sqlx::query_as(sqlx::AssertSqlSafe(format!(
+                "SELECT c.company_name, c.billing_address, {recipient}, {contact} FROM customers c WHERE c.name = ?1 COLLATE NOCASE"
+            )))
+            .bind(name)
+            .fetch_optional(pool)
+            .await
         }
     }
     .map_err(db_err)?;
@@ -1204,7 +1210,11 @@ fn mark_taxable(mut lines: Vec<(i64, FormLine)>, taxable: &[bool], mark: bool) -
 }
 
 async fn taxable_flags(pool: &SqlitePool, table: &str, parent: &str, id: i64) -> Result<Vec<bool>, String> {
-    sqlx::query_scalar(&format!("SELECT is_taxable FROM {table} WHERE {parent} = ?1 ORDER BY line_number")).bind(id).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT is_taxable FROM {table} WHERE {parent} = ?1 ORDER BY line_number")))
+        .bind(id)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Estimate and sales receipt lines: (description, quantity, rate, amount, product).

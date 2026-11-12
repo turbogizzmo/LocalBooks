@@ -38,7 +38,7 @@ fn num(row: &SqliteRow, prefix: &str) -> Num {
 }
 
 async fn all(conn: &mut SqliteConnection, table: &str) -> Result<Vec<SqliteRow>, String> {
-    sqlx::query(&format!("SELECT * FROM {table}")).fetch_all(conn).await.map_err(|e| format!("GNUCASH_PARSE_FAILED: table {table}: {e}"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("SELECT * FROM {table}"))).fetch_all(conn).await.map_err(|e| format!("GNUCASH_PARSE_FAILED: table {table}: {e}"))
 }
 
 /// A business table, which a book that never used the feature may not have.

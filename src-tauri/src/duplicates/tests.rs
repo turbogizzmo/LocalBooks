@@ -3,7 +3,7 @@ use crate::money::Cents;
 use serde_json::json;
 
 async fn count(pool: &SqlitePool, sql: &str, id: i64) -> usize {
-    sqlx::query_scalar::<_, i64>(sql).bind(id).fetch_one(pool).await.unwrap() as usize
+    sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(sql)).bind(id).fetch_one(pool).await.unwrap() as usize
 }
 
 /// One of each kind, written through the forms' own save paths.

@@ -266,7 +266,7 @@ fn summary(start_date: NaiveDate, end_date: NaiveDate, rows: Vec<SummaryRow>) ->
 /// Income (net of credits and voids) by customer, or expenses by vendor, for the period.
 pub async fn by_party(pool: &SqlitePool, expenses: bool, start_date: NaiveDate, end_date: NaiveDate) -> Result<SummaryReport, String> {
     let (classification, sign) = if expenses { ("EXPENSE", "l.debit_cents - l.credit_cents") } else { ("INCOME", "l.credit_cents - l.debit_cents") };
-    let rows: Vec<(Option<String>, i64)> = sqlx::query_as(&format!(
+    let rows: Vec<(Option<String>, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT p.party_name, SUM({sign})
          FROM v_posted_lines l
          JOIN v_chart_of_accounts a ON a.id = l.account_id
@@ -275,7 +275,7 @@ pub async fn by_party(pool: &SqlitePool, expenses: bool, start_date: NaiveDate, 
          GROUP BY p.party_name COLLATE NOCASE
          HAVING SUM({sign}) <> 0
          ORDER BY p.party_name IS NULL, p.party_name COLLATE NOCASE"
-    ))
+    )))
     .bind(classification)
     .bind(start_date)
     .bind(end_date)

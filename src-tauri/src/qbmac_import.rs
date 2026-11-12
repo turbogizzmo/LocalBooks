@@ -325,8 +325,10 @@ pub fn cents(raw: Option<&str>) -> Result<Option<i64>, ()> {
 
 /// The columns a table has, so a file whose model lacks one still reads (it reads as empty).
 async fn columns(conn: &mut SqliteConnection, table: &str) -> Result<HashSet<String>, String> {
-    let rows =
-        sqlx::query(&format!("PRAGMA table_info({table})")).fetch_all(&mut *conn).await.map_err(|e| format!("QBMAC_PARSE_FAILED: table {table}: {e}"))?;
+    let rows = sqlx::query(sqlx::AssertSqlSafe(format!("PRAGMA table_info({table})")))
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| format!("QBMAC_PARSE_FAILED: table {table}: {e}"))?;
     Ok(rows.iter().filter_map(|r| r.try_get::<String, _>("name").ok()).map(|c| c.to_ascii_uppercase()).collect())
 }
 
@@ -338,7 +340,10 @@ async fn rows(conn: &mut SqliteConnection, table: &str, wanted: &[&str]) -> Resu
         return Ok(Vec::new());
     }
     let list: Vec<String> = wanted.iter().map(|c| if have.contains(*c) { format!("CAST({c} AS TEXT) AS {c}") } else { format!("NULL AS {c}") }).collect();
-    sqlx::query(&format!("SELECT {} FROM {table}", list.join(", "))).fetch_all(&mut *conn).await.map_err(|e| format!("QBMAC_PARSE_FAILED: table {table}: {e}"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("SELECT {} FROM {table}", list.join(", "))))
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| format!("QBMAC_PARSE_FAILED: table {table}: {e}"))
 }
 
 fn text(row: &SqliteRow, column: &str) -> Option<String> {

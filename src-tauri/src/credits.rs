@@ -110,14 +110,14 @@ const CREDIT_MEMO_SELECT: &str = "SELECT m.id, m.credit_number, m.customer_id, c
  FROM credit_memos m JOIN customers c ON c.id = m.customer_id JOIN v_credit_memo_balances b ON b.credit_memo_id = m.id";
 
 pub async fn list_credit_memos(pool: &SqlitePool) -> Result<Vec<CreditMemoSummary>, String> {
-    sqlx::query_as::<_, CreditMemoSummary>(&format!("{CREDIT_MEMO_SELECT} ORDER BY m.credit_date DESC, m.credit_number DESC"))
+    sqlx::query_as::<_, CreditMemoSummary>(sqlx::AssertSqlSafe(format!("{CREDIT_MEMO_SELECT} ORDER BY m.credit_date DESC, m.credit_number DESC")))
         .fetch_all(pool)
         .await
         .map_err(db_err)
 }
 
 pub(crate) async fn credit_memo(pool: &SqlitePool, id: i64) -> Result<CreditMemoSummary, String> {
-    sqlx::query_as::<_, CreditMemoSummary>(&format!("{CREDIT_MEMO_SELECT} WHERE m.id = ?1"))
+    sqlx::query_as::<_, CreditMemoSummary>(sqlx::AssertSqlSafe(format!("{CREDIT_MEMO_SELECT} WHERE m.id = ?1")))
         .bind(id)
         .fetch_optional(pool)
         .await
@@ -707,11 +707,14 @@ const VENDOR_CREDIT_SELECT: &str = "SELECT c.id, c.vendor_id, v.name AS vendor_n
  FROM vendor_credits c JOIN vendors v ON v.id = c.vendor_id JOIN v_vendor_credit_balances b ON b.vendor_credit_id = c.id";
 
 pub async fn list_vendor_credits(pool: &SqlitePool) -> Result<Vec<VendorCreditSummary>, String> {
-    sqlx::query_as::<_, VendorCreditSummary>(&format!("{VENDOR_CREDIT_SELECT} ORDER BY c.credit_date DESC, c.id DESC")).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as::<_, VendorCreditSummary>(sqlx::AssertSqlSafe(format!("{VENDOR_CREDIT_SELECT} ORDER BY c.credit_date DESC, c.id DESC")))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 async fn vendor_credit(pool: &SqlitePool, id: i64) -> Result<VendorCreditSummary, String> {
-    sqlx::query_as::<_, VendorCreditSummary>(&format!("{VENDOR_CREDIT_SELECT} WHERE c.id = ?1"))
+    sqlx::query_as::<_, VendorCreditSummary>(sqlx::AssertSqlSafe(format!("{VENDOR_CREDIT_SELECT} WHERE c.id = ?1")))
         .bind(id)
         .fetch_optional(pool)
         .await

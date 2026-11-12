@@ -294,7 +294,7 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
                 1, 1, 0, 0
          FROM credit_memos m WHERE m.is_voided = 0 AND m.journal_entry_id IS NOT NULL AND m.tax_rate_id IS NOT NULL AND m.credit_date BETWEEN ?1 AND ?2"
     );
-    let docs: Vec<TaxedDoc> = sqlx::query_as(&sql).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)?;
+    let docs: Vec<TaxedDoc> = sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str())).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)?;
     // Each combined-rate entry's split, by entry.
     let mut parts: std::collections::HashMap<i64, Vec<(i64, i64)>> = std::collections::HashMap::new();
     for (entry, rate_id, cents) in

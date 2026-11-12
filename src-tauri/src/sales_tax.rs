@@ -55,13 +55,14 @@ const RATE_SELECT: &str = "SELECT r.id, r.name, r.rate_ppm, r.agency_vendor_id, 
  FROM tax_rates r LEFT JOIN vendors v ON v.id = r.agency_vendor_id JOIN v_chart_of_accounts a ON a.id = r.liability_account_id";
 
 pub async fn list_tax_rates(pool: &SqlitePool) -> Result<Vec<TaxRateView>, String> {
-    let mut rates = sqlx::query_as::<_, TaxRateView>(&format!("{RATE_SELECT} ORDER BY r.name COLLATE NOCASE")).fetch_all(pool).await.map_err(db_err)?;
+    let mut rates =
+        sqlx::query_as::<_, TaxRateView>(sqlx::AssertSqlSafe(format!("{RATE_SELECT} ORDER BY r.name COLLATE NOCASE"))).fetch_all(pool).await.map_err(db_err)?;
     combined::fill_components(pool, &mut rates).await?;
     Ok(rates)
 }
 
 async fn get_rate(pool: &SqlitePool, id: i64) -> Result<TaxRateView, String> {
-    let rate = sqlx::query_as::<_, TaxRateView>(&format!("{RATE_SELECT} WHERE r.id = ?1"))
+    let rate = sqlx::query_as::<_, TaxRateView>(sqlx::AssertSqlSafe(format!("{RATE_SELECT} WHERE r.id = ?1")))
         .bind(id)
         .fetch_optional(pool)
         .await

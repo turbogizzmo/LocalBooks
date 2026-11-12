@@ -613,7 +613,7 @@ async fn ledger_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDat
          WHERE e.status = 'POSTED' AND (?1 IS NULL OR e.entry_date >= ?1) AND e.entry_date <= ?2
          ORDER BY e.entry_date, e.entry_number, l.line_number"
     );
-    sqlx::query_as(&sql).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str())).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)
 }
 
 async fn item_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate) -> Result<Vec<Line>, String> {
@@ -635,7 +635,7 @@ async fn item_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate)
          WHERE e.status = 'POSTED' AND (?1 IS NULL OR e.entry_date >= ?1) AND e.entry_date <= ?2
          ORDER BY e.entry_date, e.entry_number, d.line_number"
     );
-    sqlx::query_as(&sql).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str())).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)
 }
 
 /// The ids themselves and everything below them in `view` (`v_account_ancestry` or `v_class_ancestry`).
@@ -644,11 +644,12 @@ async fn with_descendants(pool: &SqlitePool, view: &str, column: &str, ids: &[i6
         return Ok(HashSet::new());
     }
     let json = serde_json::to_string(ids).map_err(|e| e.to_string())?;
-    let rows: Vec<i64> = sqlx::query_scalar(&format!("SELECT DISTINCT a.{column} FROM {view} a JOIN json_each(?1) j ON j.value = a.ancestor_id"))
-        .bind(json)
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?;
+    let rows: Vec<i64> =
+        sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT DISTINCT a.{column} FROM {view} a JOIN json_each(?1) j ON j.value = a.ancestor_id")))
+            .bind(json)
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
     Ok(rows.into_iter().chain(ids.iter().copied()).collect())
 }
 

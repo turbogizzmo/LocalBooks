@@ -238,7 +238,7 @@ async fn parties(pool: &SqlitePool, kind: NameKind) -> Result<Vec<Party>, String
                             FROM other_names WHERE is_active = 1 ORDER BY name COLLATE NOCASE, id"
             .to_string(),
     };
-    sqlx::query_as(&sql).fetch_all(pool).await.map_err(db_err)
+    sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str())).fetch_all(pool).await.map_err(db_err)
 }
 
 fn noun(kind: NameKind) -> (&'static str, &'static str) {
@@ -525,7 +525,7 @@ struct Settlement {
 /// to zero is dated in the range), the days from the invoice date to that day; averaged by customer.
 async fn average_days_to_pay(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Result<AccountantReport, String> {
     // Payments and credits applied, in date order, with the same arithmetic as the A/R aging.
-    let events: Vec<Settlement> = sqlx::query_as(&format!(
+    let events: Vec<Settlement> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{CUSTOMER_NAMES}
          SELECT i.id AS invoice_id, i.customer_id, cn.full_name AS customer, i.issue_date, COALESCE(i.home_total_cents, i.total_cents) AS total_cents, s.date, s.amount_cents
          FROM invoices i JOIN cn ON cn.id = i.customer_id
@@ -534,7 +534,7 @@ async fn average_days_to_pay(pool: &SqlitePool, start: NaiveDate, end: NaiveDate
            ON s.invoice_id = i.id
          WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND s.date <= ?1
          ORDER BY cn.full_name COLLATE NOCASE, i.customer_id, i.id, s.date, s.seq"
-    ))
+    )))
     .bind(end)
     .fetch_all(pool)
     .await
@@ -619,11 +619,11 @@ async fn unpaid_bills_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<Acco
     .await
     .map_err(db_err)?;
     // bill → [(job id, job name, line amount)] in line order.
-    let lines: Vec<(i64, Option<i64>, Option<String>, i64)> = sqlx::query_as(&format!(
+    let lines: Vec<(i64, Option<i64>, Option<String>, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{CUSTOMER_NAMES}
          SELECT l.bill_id, l.customer_id, cn.full_name, SUM(l.amount_cents) FROM bill_lines l LEFT JOIN cn ON cn.id = l.customer_id
          GROUP BY l.bill_id, l.customer_id ORDER BY l.bill_id, MIN(l.line_number)"
-    ))
+    )))
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
@@ -782,7 +782,7 @@ struct PoJobLine {
 /// line (lines for no one under "No customer or job", last). Its total is Open Purchase Orders
 /// Detail's: the same lines, grouped another way.
 async fn open_po_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<AccountantReport, String> {
-    let lines: Vec<PoJobLine> = sqlx::query_as(&format!(
+    let lines: Vec<PoJobLine> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{CUSTOMER_NAMES}
          SELECT l.customer_id, cn.full_name AS job, v.name AS vendor, p.po_number, p.po_date, p.expected_date, ps.name AS item, l.description, l.amount_cents
          FROM purchase_orders p JOIN vendors v ON v.id = p.vendor_id
@@ -791,7 +791,7 @@ async fn open_po_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<Accountan
          LEFT JOIN cn ON cn.id = l.customer_id
          WHERE p.status = 'OPEN' AND p.po_date <= ?1
          ORDER BY l.customer_id IS NULL, cn.full_name COLLATE NOCASE, l.customer_id, p.po_date, p.po_number, l.line_number"
-    ))
+    )))
     .bind(as_of)
     .fetch_all(pool)
     .await
@@ -862,7 +862,7 @@ struct TimeRow {
 }
 
 async fn time_rows(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Result<Vec<TimeRow>, String> {
-    sqlx::query_as(&format!(
+    sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "{CUSTOMER_NAMES}
          SELECT t.activity_date AS date, t.employee_id, e.name AS employee, t.customer_id AS job_id, cn.full_name AS job,
                 t.product_service_id AS item_id, ps.name AS item, t.description, t.minutes, t.billable
@@ -871,7 +871,7 @@ async fn time_rows(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Resul
          LEFT JOIN products_services ps ON ps.id = t.product_service_id
          WHERE t.activity_date BETWEEN ?1 AND ?2
          ORDER BY t.activity_date, t.id"
-    ))
+    )))
     .bind(start)
     .bind(end)
     .fetch_all(pool)
