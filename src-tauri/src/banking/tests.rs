@@ -153,7 +153,7 @@ async fn cash_back_comes_out_of_what_the_bank_gets() {
     assert_eq!(stored, (50_000, 7_500, Some("Float".into())));
     // The register lists what the bank got.
     let row = list_banking_activity(&pool).await.unwrap().into_iter().find(|r| r.kind == "DEPOSIT" && r.id == id).unwrap();
-    assert_eq!(row.amount_cents, 42_500);
+    assert_eq!(row.amount_cents, Cents(42_500));
     // A zero amount is no cash back at all.
     post_bank_deposit(&pool, input(back(supplies, Cents::ZERO))).await.unwrap();
     assert_eq!(balance(&pool, checking).await, 92_500);

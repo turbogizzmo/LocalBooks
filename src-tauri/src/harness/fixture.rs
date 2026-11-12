@@ -491,11 +491,11 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
     // Reconcile checking for the first quarter against the bank statement.
     let lines: Vec<_> =
         crate::reconcile::unreconciled_lines(p, c.checking).await.unwrap().into_iter().filter(|l| l.entry_date.as_str() <= "2025-03-31").collect();
-    let ending: i64 = lines.iter().map(|l| l.amount_cents).sum();
+    let ending: i64 = lines.iter().map(|l| l.amount_cents.get()).sum();
     let rec = crate::reconcile::start(p, c.checking, d(2025, 3, 31), ending).await.expect("start reconciliation");
     let ids: Vec<i64> = lines.iter().map(|l| l.line_id).collect();
     let progress = crate::reconcile::set_lines_cleared(p, rec.id, &ids, true).await.expect("tick lines");
-    assert_eq!(progress.difference_cents, 0, "the statement balances");
+    assert_eq!(progress.difference_cents, Cents::ZERO, "the statement balances");
     crate::reconcile::lock(p, rec.id).await.expect("finish reconciliation");
 
     // The contractor is a 1099 vendor.

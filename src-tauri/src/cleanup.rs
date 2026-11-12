@@ -381,7 +381,7 @@ pub async fn undeposited(pool: &SqlitePool) -> Result<UndepositedReview, String>
     let customers = by_customer
         .iter()
         .map(|(name, payments)| {
-            let smallest = payments.iter().map(|p| p.amount_cents).min().unwrap_or(0);
+            let smallest = payments.iter().map(|p| p.amount_cents.get()).min().unwrap_or(0);
             let named = lines.iter().filter(|l| name.as_deref().is_some_and(|n| mentions(l, n)));
             let candidates = named
                 .map(|l| DepositCandidate { names_customer: true, ..l.clone() })
@@ -390,7 +390,7 @@ pub async fn undeposited(pool: &SqlitePool) -> Result<UndepositedReview, String>
                 .collect();
             UndepositedCustomer {
                 customer_name: name.clone(),
-                total_cents: payments.iter().map(|p| p.amount_cents).sum(),
+                total_cents: payments.iter().map(|p| p.amount_cents.get()).sum(),
                 payments: payments.clone(),
                 candidates,
             }
