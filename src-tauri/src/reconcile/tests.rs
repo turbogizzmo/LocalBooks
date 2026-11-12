@@ -35,13 +35,13 @@ async fn reconcile_balances_locks_and_freezes() {
     post(&pool, d(10, 3), rent, checking, 7_500).await; // after statement date
 
     let rec = start(&pool, checking, d(9, 30), 380_000).await.expect("starts");
-    assert_eq!(rec.beginning_balance_cents, 0);
+    assert_eq!(rec.beginning_balance_cents, Cents(0));
 
     let lines = unreconciled_lines(&pool, checking).await.unwrap();
-    assert_eq!(lines.iter().map(|l| l.amount_cents).collect::<Vec<_>>(), vec![500_000, -120_000, -5_000, -7_500]);
+    assert_eq!(lines.iter().map(|l| l.amount_cents.get()).collect::<Vec<_>>(), vec![500_000, -120_000, -5_000, -7_500]);
 
     let progress = set_lines_cleared(&pool, rec.id, &[lines[0].line_id, lines[1].line_id], true).await.unwrap();
-    assert_eq!(progress, ReconcileProgress { cleared_balance_cents: 380_000, difference_cents: 0 });
+    assert_eq!(progress, ReconcileProgress { cleared_balance_cents: Cents(380_000), difference_cents: Cents(0) });
 
     let err = set_lines_cleared(&pool, rec.id, &[lines[3].line_id], true).await.expect_err("after statement");
     assert!(err.starts_with("REC_AFTER_STATEMENT"), "{err}");
@@ -51,7 +51,7 @@ async fn reconcile_balances_locks_and_freezes() {
     let err = lock(&pool, rec.id).await.expect_err("out of balance");
     assert!(err.starts_with("REC_NOT_BALANCED: difference is $50.00"), "{err}");
     let progress = set_lines_cleared(&pool, rec.id, &[lines[2].line_id], false).await.unwrap();
-    assert_eq!(progress.difference_cents, 0);
+    assert_eq!(progress.difference_cents, Cents(0));
 
     let locked = lock(&pool, rec.id).await.expect("locks");
     assert!(locked.is_locked);
@@ -59,7 +59,7 @@ async fn reconcile_balances_locks_and_freezes() {
     let remaining = unreconciled_lines(&pool, checking).await.unwrap();
     assert_eq!(remaining.len(), 2);
     let state = account_state(&pool, checking).await.unwrap();
-    assert_eq!(state.reconciled_balance_cents, 380_000);
+    assert_eq!(state.reconciled_balance_cents, Cents(380_000));
     assert_eq!(state.last_statement_end_date.as_deref(), Some("2026-09-30"));
     assert!(state.in_progress.is_none());
 
@@ -77,10 +77,10 @@ async fn reconcile_balances_locks_and_freezes() {
     assert!(err.starts_with("REC_DATE_NOT_AFTER_LAST"), "{err}");
 
     let next = start(&pool, checking, d(10, 31), 367_500).await.expect("next statement");
-    assert_eq!(next.beginning_balance_cents, 380_000);
+    assert_eq!(next.beginning_balance_cents, Cents(380_000));
     let ids: Vec<i64> = remaining.iter().map(|l| l.line_id).collect();
     let progress = set_lines_cleared(&pool, next.id, &ids, true).await.unwrap();
-    assert_eq!(progress.difference_cents, 0);
+    assert_eq!(progress.difference_cents, Cents(0));
 
     cancel(&pool, next.id).await.expect("cancels");
     assert!(unreconciled_lines(&pool, checking).await.unwrap().iter().all(|l| l.reconciliation_id.is_none()));
@@ -96,7 +96,7 @@ async fn credit_card_balances_on_the_credit_side() {
     let rec = start(&pool, card, d(9, 30), 3_500).await.unwrap();
     let ids: Vec<i64> = unreconciled_lines(&pool, card).await.unwrap().iter().map(|l| l.line_id).collect();
     let progress = set_lines_cleared(&pool, rec.id, &ids, true).await.unwrap();
-    assert_eq!(progress, ReconcileProgress { cleared_balance_cents: 3_500, difference_cents: 0 });
+    assert_eq!(progress, ReconcileProgress { cleared_balance_cents: Cents(3_500), difference_cents: Cents(0) });
     lock(&pool, rec.id).await.expect("locks");
 }
 
@@ -123,16 +123,19 @@ async fn service_charge_and_interest_post_with_the_reconciliation_and_balance() 
 
     // Both posted through the ledger, their bank lines already cleared into this reconciliation.
     let lines = unreconciled_lines(&pool, checking).await.unwrap();
-    let cleared: Vec<i64> = lines.iter().filter(|l| l.reconciliation_id == Some(rec.id)).map(|l| l.amount_cents).collect();
+    let cleared: Vec<i64> = lines.iter().filter(|l| l.reconciliation_id == Some(rec.id)).map(|l| l.amount_cents.get()).collect();
     assert_eq!(cleared, vec![-1_250, 125]);
-    assert!(lines.iter().filter(|l| l.amount_cents != 500_000).all(|l| l.memo.as_deref().is_some_and(|m| m == "Service charge" || m == "Interest earned")));
+    assert!(lines
+        .iter()
+        .filter(|l| l.amount_cents != Cents(500_000))
+        .all(|l| l.memo.as_deref().is_some_and(|m| m == "Service charge" || m == "Interest earned")));
     let fee_on_rent: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) FROM journal_lines WHERE account_id = ?1").bind(rent).fetch_one(&pool).await.unwrap();
     assert_eq!(fee_on_rent, 1_250);
 
     // Tick the deposit and it balances.
-    let deposit = lines.iter().find(|l| l.amount_cents == 500_000).unwrap().line_id;
+    let deposit = lines.iter().find(|l| l.amount_cents == Cents(500_000)).unwrap().line_id;
     let progress = set_lines_cleared(&pool, rec.id, &[deposit], true).await.unwrap();
-    assert_eq!(progress.difference_cents, 0);
+    assert_eq!(progress.difference_cents, Cents(0));
     lock(&pool, rec.id).await.expect("locks");
 }
 
@@ -188,7 +191,7 @@ async fn undo_last_reconciliation_releases_its_lines_with_an_audit_row() {
     let still_locked: bool = sqlx::query_scalar("SELECT is_locked FROM reconciliations WHERE id = ?1").bind(september.id).fetch_one(&pool).await.unwrap();
     assert!(still_locked);
     let state = account_state(&pool, checking).await.unwrap();
-    assert_eq!((state.reconciled_balance_cents, state.last_statement_end_date.as_deref()), (100_000, Some("2026-08-31")));
+    assert_eq!((state.reconciled_balance_cents, state.last_statement_end_date.as_deref()), (Cents(100_000), Some("2026-08-31")));
     assert_eq!(list_reconciliations(&pool, checking).await.unwrap().iter().map(|r| r.id).collect::<Vec<_>>(), vec![august.id]);
 
     // Audited in the Audit Log and sealed on the ledger audit trail.

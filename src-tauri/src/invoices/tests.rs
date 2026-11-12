@@ -511,7 +511,7 @@ async fn foreign_payment_deposits_its_home_amount() {
     .await
     .unwrap();
     let waiting = crate::banking::list_undeposited(&pool).await.unwrap();
-    assert_eq!(waiting[0].amount_cents, 63_500, "GBP 500 at the invoice rate 1.27");
+    assert_eq!(waiting[0].amount_cents, Cents(63_500), "GBP 500 at the invoice rate 1.27");
     crate::banking::post_bank_deposit(
         &pool,
         crate::banking::DepositInput {

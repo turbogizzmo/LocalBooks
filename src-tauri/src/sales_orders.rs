@@ -73,9 +73,9 @@ pub struct SalesOrderSummary {
     /// `OPEN` (nothing invoiced), `PARTLY_INVOICED` or `CLOSED` (nothing left to invoice).
     pub status: String,
     /// Ordered amount, before tax.
-    pub total_cents: i64,
+    pub total_cents: Cents,
     /// What is left to invoice, at the order's rates.
-    pub open_cents: i64,
+    pub open_cents: Cents,
     pub line_count: i64,
     /// Invoices were made from it (voided ones too), so it can be closed but not deleted.
     pub has_invoices: bool,
@@ -90,8 +90,8 @@ pub struct SalesOrderLine {
     pub item_name: Option<String>,
     pub description: String,
     pub quantity_e4: i64,
-    pub rate_cents: i64,
-    pub amount_cents: i64,
+    pub rate_cents: Cents,
+    pub amount_cents: Cents,
     pub income_account_id: i64,
     pub class_id: Option<i64>,
     pub is_taxable: bool,

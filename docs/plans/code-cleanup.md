@@ -95,6 +95,11 @@ credits to an invoice adds them up with `checked_add` on `Cents`.
 Step 2c: the purchase views (`BillSummary`, `BillPaymentView`, `ExpenseView`, `ReceiptView`,
 `ReceiptLineView`, `OrderLineReceiving`, `PurchaseFormLineView`, `RecurringView`, `SearchHit`); a memorized transaction's
 amount is now a checked sum, shown as zero if it overflows.
+Step 2d: the bank, deposit, reconcile and sales order views (`BankTransactionView`,
+`UndepositedItem`, `BankingActivity`, `Reconciliation`, `ReconcileAccountState`,
+`UnreconciledLine`, `ReconcileProgress`, `SalesOrderSummary` and `SalesOrderLine`); the cleared
+balance and difference of a reconciliation are now checked. `BankRow` and `BalanceCheck` are read
+from a bank file and wait for step 4; the open sales order reports wait for step 3.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:

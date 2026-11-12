@@ -28,7 +28,7 @@ pub struct UndepositedItem {
     /// The Payment Method list entry's name, when the payment has one.
     pub payment_method_name: Option<String>,
     pub reference: Option<String>,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub undeposited_account_id: i64,
 }
 
@@ -115,7 +115,7 @@ pub struct BankingActivity {
     pub other_account_id: Option<i64>,
     pub memo: Option<String>,
     pub line_count: i64,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub journal_entry_id: Option<i64>,
     pub is_voided: bool,
 }
