@@ -127,7 +127,7 @@ async fn customers_vendors_and_products_can_be_edited_and_inactivated() {
     )
     .await
     .unwrap();
-    assert_eq!((edited.name.as_str(), edited.rate_cents), ("Widget Pro", 250));
+    assert_eq!((edited.name.as_str(), edited.rate_cents), ("Widget Pro", Cents(250)));
     let err = update_product(
         &pool,
         widget.id,

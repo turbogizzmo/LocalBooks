@@ -109,9 +109,9 @@ pub struct InvoiceSummary {
     pub customer_name: String,
     pub issue_date: String,
     pub due_date: String,
-    pub total_cents: i64,
-    pub amount_paid_cents: i64,
-    pub balance_cents: i64,
+    pub total_cents: Cents,
+    pub amount_paid_cents: Cents,
+    pub balance_cents: Cents,
     pub status: String,
     pub journal_entry_id: Option<i64>,
     pub last_payment_date: Option<String>,
@@ -121,13 +121,13 @@ pub struct InvoiceSummary {
     pub currency_code: Option<String>,
     pub exchange_rate_e6: Option<i64>,
     /// A/R booked in home currency, and the home-currency A/R still open.
-    pub home_total_cents: i64,
-    pub home_balance_cents: i64,
-    pub tax_cents: i64,
+    pub home_total_cents: Cents,
+    pub home_balance_cents: Cents,
+    pub tax_cents: Cents,
     pub tax_rate_name: Option<String>,
-    pub discount_cents: i64,
+    pub discount_cents: Cents,
     /// Credit memos applied to this invoice (included in amount paid).
-    pub credits_applied_cents: i64,
+    pub credits_applied_cents: Cents,
     /// Written by Assess Finance Charges.
     pub is_finance_charge: bool,
     /// Entered as a statement charge (billed on the next statement, never printed on its own).
@@ -162,7 +162,7 @@ const SUMMARY_SELECT: &str = "
     LEFT JOIN tax_rates t ON t.id = i.tax_rate_id LEFT JOIN terms tm ON tm.id = i.terms_id";
 
 fn with_discount(mut invoice: InvoiceSummary) -> InvoiceSummary {
-    invoice.terms.fill(invoice.total_cents);
+    invoice.terms.fill(invoice.total_cents.get());
     invoice
 }
 
@@ -196,7 +196,7 @@ pub struct PaymentInput {
 pub struct PaymentView {
     pub id: i64,
     pub payment_date: String,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub payment_method: String,
     /// The Payment Method list entry's name ("Visa"), when the payment has one.
     pub payment_method_name: Option<String>,
@@ -206,10 +206,10 @@ pub struct PaymentView {
     pub is_voided: bool,
     pub exchange_rate_e6: Option<i64>,
     /// Home-currency cash received and A/R relieved (`None` for home-currency payments).
-    pub home_amount_cents: Option<i64>,
-    pub ar_relief_cents: Option<i64>,
+    pub home_amount_cents: Option<Cents>,
+    pub ar_relief_cents: Option<Cents>,
     /// The part of `amount_cents` taken as an early-payment discount rather than received.
-    pub discount_cents: i64,
+    pub discount_cents: Cents,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -807,8 +807,8 @@ pub struct InvoiceItemView {
     pub line_number: i64,
     pub description: String,
     pub quantity_e4: i64,
-    pub rate_cents: i64,
-    pub amount_cents: i64,
+    pub rate_cents: Cents,
+    pub amount_cents: Cents,
     pub income_account_id: i64,
     pub product_service_id: Option<i64>,
     pub class_id: Option<i64>,

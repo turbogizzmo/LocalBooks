@@ -195,7 +195,7 @@ async fn voiding_reverses_unwinds_documents_and_audits() {
     let payment_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM invoice_payments").fetch_one(&fx.pool).await.unwrap();
     void_transaction(&fx.pool, payment_entry).await.expect("payment voids");
     let reopened = list_invoices(&fx.pool).await.unwrap().remove(0);
-    assert_eq!((reopened.status.as_str(), reopened.balance_cents), ("UNPAID", 50_000));
+    assert_eq!((reopened.status.as_str(), reopened.balance_cents), ("UNPAID", Cents(50_000)));
     assert_eq!((bal(fx.checking).await, bal(ar).await), (0, 50_000));
 
     void_transaction(&fx.pool, invoice.journal_entry_id.unwrap()).await.expect("invoice voids");

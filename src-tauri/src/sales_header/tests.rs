@@ -284,7 +284,7 @@ async fn a_paid_invoice_resaved_keeps_its_own_header() {
     let edited = crate::edits::replace_invoice(&pool, original, invoice("Acme", services, 12_000, loaded)).await.unwrap();
     let detail = invoice_detail(&pool, edited).await.unwrap();
     assert_eq!(detail.details.header, typed);
-    assert_eq!(detail.invoice.amount_paid_cents, 4_000, "the payment stays applied");
+    assert_eq!(detail.invoice.amount_paid_cents, Cents(4_000), "the payment stays applied");
 
     // Re-saved by a caller that leaves the addresses out: the edited invoice still keeps the
     // original's copy, not the customer's new address. P.O. and FOB are sent as they are.

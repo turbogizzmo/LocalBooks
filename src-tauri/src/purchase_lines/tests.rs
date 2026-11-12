@@ -127,7 +127,7 @@ async fn checks_card_credits_and_vendor_credits_post_each_line_on_its_side() {
     }))
     .unwrap();
     let saved = crate::credits::create_vendor_credit(&pool, vc).await.unwrap();
-    assert_eq!(saved.total_cents, 11_000);
+    assert_eq!(saved.total_cents, Cents(11_000));
     assert_eq!(payable(&pool).await, 11_000);
     assert_eq!(balance(&pool, rent).await, -11_000);
 }

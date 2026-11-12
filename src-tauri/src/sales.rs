@@ -128,7 +128,7 @@ pub struct PartyView {
     pub name: String,
     pub email: Option<String>,
     pub is_active: bool,
-    pub open_balance_cents: i64,
+    pub open_balance_cents: Cents,
     /// Customers: default sales tax rate and exemption; default terms (customers and vendors).
     #[sqlx(default)]
     pub tax_rate_id: Option<i64>,
@@ -157,7 +157,7 @@ pub struct ProductView {
     pub id: i64,
     pub name: String,
     pub description: Option<String>,
-    pub rate_cents: i64,
+    pub rate_cents: Cents,
     pub income_account_id: i64,
     pub is_active: bool,
     pub is_taxable: bool,
@@ -174,7 +174,7 @@ pub struct ProductView {
     #[sqlx(default)]
     pub purchase_description: Option<String>,
     #[sqlx(default)]
-    pub purchase_cost_cents: Option<i64>,
+    pub purchase_cost_cents: Option<Cents>,
     /// An Other Charge or Discount item's account on purchase forms (`purchase_lines`).
     #[sqlx(default)]
     pub expense_account_id: Option<i64>,
@@ -305,7 +305,7 @@ pub struct SalesReceiptSummary {
     pub receipt_number: i64,
     pub customer_name: Option<String>,
     pub receipt_date: String,
-    pub total_cents: i64,
+    pub total_cents: Cents,
     pub journal_entry_id: Option<i64>,
 }
 
@@ -320,16 +320,16 @@ pub struct SalesTransaction {
     pub date: String,
     pub customer_name: String,
     pub due_date: Option<String>,
-    pub balance_cents: i64,
-    pub total_cents: i64,
+    pub balance_cents: Cents,
+    pub total_cents: Cents,
     pub status: String,
     pub journal_entry_id: Option<i64>,
     pub is_voided: bool,
     /// Document currency (`None` = home). Totals above are in this currency.
     pub currency_code: Option<String>,
     /// Home-currency equivalents, for totals across documents in different currencies.
-    pub home_total_cents: i64,
-    pub home_balance_cents: i64,
+    pub home_total_cents: Cents,
+    pub home_balance_cents: Cents,
 }
 
 fn clean(text: Option<&str>) -> Option<&str> {

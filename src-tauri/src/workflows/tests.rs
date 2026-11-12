@@ -36,7 +36,7 @@ async fn discounts_statements_and_1099s() {
                   { "description": "Labor", "quantityE4": 10_000, "rateCents": 10_000, "incomeAccountId": services, "isTaxable": false }] }))
     .unwrap();
     let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
-    assert_eq!((inv.total_cents, inv.tax_cents, inv.discount_cents), (28_800, 1_800, 3_000));
+    assert_eq!((inv.total_cents, inv.tax_cents, inv.discount_cents), (Cents(28_800), Cents(1_800), Cents(3_000)));
     assert_eq!(inv.customer_name, "Acme:Kitchen");
     let discounts: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Discounts Given'").fetch_one(&pool).await.unwrap();
     assert_eq!(balance(&pool, discounts).await, 3_000);

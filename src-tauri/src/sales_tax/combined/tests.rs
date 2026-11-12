@@ -88,7 +88,7 @@ async fn a_combined_rate_posts_by_agency_and_files_a_return_per_agency() {
     }))
     .unwrap();
     let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
-    assert_eq!(inv.total_cents, 108_500);
+    assert_eq!(inv.total_cents, Cents(108_500));
     assert_eq!((owed(&pool, state_payable).await, owed(&pool, local_payable).await), (6_000, 2_500));
 
     // The state's rate goes up later: the combined rate follows, the posted invoice doesn't.

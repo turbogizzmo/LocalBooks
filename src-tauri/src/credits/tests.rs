@@ -103,14 +103,14 @@ async fn credit_memos_reduce_receivables_apply_to_invoices_and_refund() {
     )
     .await
     .unwrap();
-    assert_eq!((memo.customer_name.as_str(), memo.remaining_cents), ("Acme", 20_000));
+    assert_eq!((memo.customer_name.as_str(), memo.remaining_cents), ("Acme", Cents(20_000)));
     assert_eq!(balance(&pool, ar).await, 40_000, "A/R: 50,000 + 10,000 invoiced less 20,000 credit");
     assert_eq!(balance(&pool, services).await, -40_000);
 
     let apply = |doc, cents| apply_customer_credit(&pool, ApplyCreditInput { credit_id: memo.id, document_id: doc, amount_cents: cents, applied_date: d(6) });
     assert!(apply(other, Cents(1_000)).await.unwrap_err().starts_with("CM_OTHER_CUSTOMER"));
     assert!(apply(inv, Cents(25_000)).await.unwrap_err().starts_with("CM_BAD_AMOUNT"));
-    assert_eq!(apply(inv, Cents(15_000)).await.unwrap().remaining_cents, 5_000);
+    assert_eq!(apply(inv, Cents(15_000)).await.unwrap().remaining_cents, Cents(5_000));
     assert_eq!(invoice_state(&pool, inv).await, (15_000, "PARTIAL".into(), 35_000));
     assert_eq!(balance(&pool, ar).await, 40_000, "applying a credit posts nothing");
 
@@ -140,11 +140,11 @@ async fn credit_memos_reduce_receivables_apply_to_invoices_and_refund() {
     )
     .await
     .unwrap();
-    assert_eq!(refunded.remaining_cents, 0);
+    assert_eq!(refunded.remaining_cents, Cents(0));
     assert_eq!(balance(&pool, ar).await, 10_000, "only the other customer's invoice is still owed");
     let refund_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM credit_refunds").fetch_one(&pool).await.unwrap();
     crate::ledger::void_transaction(&pool, refund_entry).await.unwrap();
-    assert_eq!(credit_memo(&pool, memo.id).await.unwrap().remaining_cents, 5_000);
+    assert_eq!(credit_memo(&pool, memo.id).await.unwrap().remaining_cents, Cents(5_000));
 
     let applications = list_customer_credit_applications(&pool, memo.id).await.unwrap();
     assert_eq!(applications.len(), 1);
@@ -180,7 +180,7 @@ async fn removing_a_credit_reopens_the_invoice_and_refund_receipts_credit_the_ba
     let app = list_customer_credit_applications(&pool, memo.id).await.unwrap()[0].id;
     remove_customer_credit(&pool, app).await.unwrap();
     assert_eq!(invoice_state(&pool, inv).await, (0, "UNPAID".into(), 30_000));
-    assert_eq!(credit_memo(&pool, memo.id).await.unwrap().remaining_cents, 30_000);
+    assert_eq!(credit_memo(&pool, memo.id).await.unwrap().remaining_cents, Cents(30_000));
 
     // A refund receipt pays the customer back at once: no credit is left to apply.
     let before = balance(&pool, checking).await;
@@ -200,7 +200,7 @@ async fn removing_a_credit_reopens_the_invoice_and_refund_receipts_credit_the_ba
     )
     .await
     .unwrap();
-    assert_eq!((receipt.remaining_cents, balance(&pool, checking).await - before), (0, -4_500));
+    assert_eq!((receipt.remaining_cents, balance(&pool, checking).await - before), (Cents(0), -4_500));
     assert_eq!(balance(&pool, ar).await, 0, "invoice 30,000 less the 30,000 credit memo; the refund receipt never touches A/R");
     let err = apply_customer_credit(&pool, ApplyCreditInput { credit_id: receipt.id, document_id: inv, amount_cents: Cents(100), applied_date: d(9) })
         .await
@@ -246,7 +246,7 @@ async fn vendor_credits_reduce_payables_and_apply_to_bills() {
     let applied = apply_vendor_credit(&pool, ApplyCreditInput { credit_id: credit.id, document_id: bill, amount_cents: Cents(10_000), applied_date: d(4) })
         .await
         .unwrap();
-    assert_eq!(applied.remaining_cents, 2_000);
+    assert_eq!(applied.remaining_cents, Cents(2_000));
     let (paid, status): (i64, String) = sqlx::query_as("SELECT amount_paid_cents, status FROM bills WHERE id = ?1").bind(bill).fetch_one(&pool).await.unwrap();
     assert_eq!((paid, status.as_str()), (10_000, "PARTIAL"));
 
@@ -256,7 +256,7 @@ async fn vendor_credits_reduce_payables_and_apply_to_bills() {
     )
     .await
     .unwrap();
-    assert_eq!(refunded.remaining_cents, 0);
+    assert_eq!(refunded.remaining_cents, Cents(0));
     assert_eq!(balance(&pool, ap).await, -30_000, "bill 40,000 less the credit's 10,000 applied; the 2,000 refunded came back to the bank");
     assert_eq!(balance(&pool, checking).await, 2_000);
     let app = list_vendor_credit_applications(&pool, credit.id).await.unwrap()[0].id;
@@ -308,17 +308,17 @@ async fn an_invoice_takes_the_customers_open_credits_oldest_first() {
 
     let inv = invoice(&pool, "Acme", services, 25_000).await;
     let used = apply_open_credits_to_invoice(&pool, inv, d(6)).await.unwrap();
-    assert_eq!((used.count, used.applied_cents), (2, 25_000));
+    assert_eq!((used.count, used.applied_cents), (2, Cents(25_000)));
     assert_eq!(invoice_state(&pool, inv).await, (25_000, "PAID".into(), 0));
-    assert_eq!(credit_memo(&pool, older.id).await.unwrap().remaining_cents, 0, "the oldest credit goes first");
-    assert_eq!(credit_memo(&pool, newer.id).await.unwrap().remaining_cents, 15_000);
+    assert_eq!(credit_memo(&pool, older.id).await.unwrap().remaining_cents, Cents(0), "the oldest credit goes first");
+    assert_eq!(credit_memo(&pool, newer.id).await.unwrap().remaining_cents, Cents(15_000));
     assert_eq!(balance(&pool, ar).await, ar_before + 25_000, "applying credits posts nothing");
 
     // Nothing left to pay, or no credit left: nothing is applied.
     assert_eq!(apply_open_credits_to_invoice(&pool, inv, d(6)).await.unwrap().count, 0);
     let second = invoice(&pool, "Other Co", services, 1_000).await;
     let used = apply_open_credits_to_invoice(&pool, second, d(6)).await.unwrap();
-    assert_eq!((used.count, used.applied_cents), (1, 1_000));
+    assert_eq!((used.count, used.applied_cents), (1, Cents(1_000)));
 }
 
 #[test]
