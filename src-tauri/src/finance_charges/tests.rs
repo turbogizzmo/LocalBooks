@@ -200,7 +200,7 @@ async fn assessing_posts_an_invoice_to_ar_and_income_and_shows_in_aging_and_stat
 
     // In A/R aging (current on its own due date) and on Acme's statement.
     let aging = crate::invoices::ar_aging(&pool, d(10, 1)).await.unwrap();
-    assert_eq!(aging.total_cents, 100_000 + 50_000 + 20_000 + 1_500);
+    assert_eq!(aging.total_cents, Cents(100_000 + 50_000 + 20_000 + 1_500));
     let customer_id = fc.customer_id.unwrap();
     let doc = crate::forms::statement_doc(&pool, customer_id, crate::forms::Period { start_date: d(9, 1), end_date: d(10, 31) }, "$").await.unwrap();
     let rows = doc.statement.unwrap().rows;
