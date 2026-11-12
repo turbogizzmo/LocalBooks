@@ -35,10 +35,16 @@ fn sector7_mapping_handles_rotations_next_to_the_sector_boundary() {
     assert_eq!(s7_source(0, 8), 8);
     assert_eq!(s7_source(487, 8), 495);
     assert_eq!((488..S7_LEN).map(|x| s7_source(x, 8)).collect::<Vec<_>>(), (0..8).collect::<Vec<_>>());
-    // r7 = 505: the first 7 logical bytes are displaced to just below the trailer.
-    assert_eq!((0..7).map(|x| s7_source(x, 505)).collect::<Vec<_>>(), (489..496).collect::<Vec<_>>());
+    // r7 = 505: the first 7 logical bytes land on the stored trailer. Each moves on by the
+    // rotation, to where the trailer byte it displaced went, until it is below the trailer: the
+    // first five in two steps, the last two in three (gap R3d).
+    assert_eq!((0..7).map(|x| s7_source(x, 505)).collect::<Vec<_>>(), [491, 492, 493, 494, 495, 489, 490]);
     assert_eq!(s7_source(7, 505), 0);
     assert_eq!(s7_source(495, 505), 488);
+    // r7 = 509, as on a textbook file's inventory adjustment line: logical byte 2 (the low byte
+    // of the account id) is stored at 493, before bytes 0 and 1. Read in order, the line had its
+    // transaction id and account wrong and the adjustment did not balance.
+    assert_eq!((0..3).map(|x| s7_source(x, 509)).collect::<Vec<_>>(), [494, 495, 493]);
 }
 
 /// Why named pages (LOCALBOOKS_QBW_PAGES_PROBE) fail to decode: anchor hits in the model's
@@ -314,4 +320,55 @@ fn sector7_with_its_own_cipher_base_is_solved_from_the_row_lengths() {
     let fixed = refine_sector7(&p, &c_rows, &page, &chained).expect("a better sector 7");
     assert_eq!(chained(&fixed), ROW_STARTS.len());
     assert_eq!(fixed.bytes, l[..ROW_AREA_END]);
+}
+
+/// How the learned sector-7 correction rows relate: for each estimated row, the exact row and
+/// shift that agree with it most, and between exact rows, the shifts that make them equal.
+#[test]
+#[ignore]
+fn compares_correction_rows() {
+    let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
+    let mut dec = PageDecoder::open(std::path::Path::new(&path)).unwrap();
+    let _ = dec.decode_all();
+    let mut exact: Vec<(usize, Vec<u8>)> = dec.c_rows.iter().filter(|(_, (_, e))| *e).map(|(r, (row, _))| (*r, row.clone())).collect();
+    exact.sort();
+    let estimated: Vec<(usize, Vec<u8>)> = dec.c_rows.iter().filter(|(_, (_, e))| !*e).map(|(r, (row, _))| (*r, row.clone())).collect();
+    println!("exact rotations {:?}", exact.iter().map(|e| e.0).collect::<Vec<_>>());
+    println!("estimated rotations {:?}", estimated.iter().map(|e| e.0).collect::<Vec<_>>());
+    for (r, row) in exact.iter() {
+        println!("exact r7 {r}: {}", row.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(","));
+    }
+    for (r, row) in estimated.iter() {
+        println!("estimated r7 {r}: {}", row.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(","));
+    }
+    // Do two exact rows agree under a shift?
+    for w in exact.windows(2) {
+        let ((ra, a), (rb, b)) = (&w[0], &w[1]);
+        let best = (0..S7_LEN).map(|k| ((0..S7_LEN - k).filter(|&i| a[i + k] == b[i]).count(), k)).max().unwrap();
+        let best_neg = (0..S7_LEN).map(|k| ((0..S7_LEN - k).filter(|&i| a[i] == b[i + k]).count(), k)).max().unwrap();
+        println!("r7 {ra} vs {rb}: best a[i+k]==b[i] {best:?}; a[i]==b[i+k] {best_neg:?}");
+    }
+}
+
+/// Votes for an estimated correction row are pooled over positions one rotation apart: a value
+/// seen once at each of several positions of the same phase beats a stray value seen twice at one
+/// position (gap R3d: rows in sector 7 of such pages read with wrong bytes).
+#[test]
+fn estimated_correction_rows_pool_votes_one_period_apart() {
+    let mut votes = vec![[0u16; (C_MAX + 1) as usize]; S7_LEN];
+    votes[0][16] = 1;
+    // Rotation 5: positions 3, 8, 13 share a phase. Each saw 7 once; position 8 saw 2 twice.
+    for i in [3, 13] {
+        votes[i][7] = 1;
+    }
+    votes[8][7] = 1;
+    votes[8][2] = 2;
+    let pooled = pool_periodic_votes(votes.clone(), 5);
+    let best = |v: &[u16; (C_MAX + 1) as usize]| v.iter().enumerate().max_by_key(|(_, n)| **n).map(|(c, _)| c);
+    assert_eq!(best(&votes[8]), Some(2));
+    assert_eq!(best(&pooled[8]), Some(7));
+    assert_eq!((pooled[3], pooled[13]), (pooled[8], pooled[8]));
+    assert_eq!(pooled[0], votes[0], "the first position keeps its own votes");
+    // From half a sector up, rows have no such period: the votes are left alone.
+    assert_eq!(pool_periodic_votes(votes.clone(), 300), votes);
 }

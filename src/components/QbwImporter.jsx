@@ -838,6 +838,8 @@ function LedgerReview({ summary, accounts, busy, run }) {
           {summary.sourceFormat === 'QBW'
             ? `Read from ${summary.decodedPages.toLocaleString()} of ${summary.rowPages.toLocaleString()} data pages`
             : `Read from the ${FORMAT_NAMES[summary.sourceFormat]}`}
+          {summary.sourceFormat === 'QBW' && summary.rowPages > summary.decodedPages &&
+            `; ${(summary.rowPages - summary.decodedPages).toLocaleString()} could not be decoded, so any transactions on them are missing (balances that differ from the file are listed below)`}
           {summary.unreadableLines > 0 && `; ${summary.unreadableLines.toLocaleString()} lines could not be read in full (listed below)`}
           {summary.sourceFormat === 'QIF' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} investment transactions were skipped (Tillhouse does not track securities)`}
           {summary.sourceFormat === 'GNUCASH' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} transactions were not imported (investments, amounts that are not whole cents, or another currency with no home-currency amount; their lines are listed below with the reason)`}
