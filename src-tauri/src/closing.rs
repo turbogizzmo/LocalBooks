@@ -6,7 +6,7 @@
 //! latest row is in force; moving or removing the closing date requires the current passcode.
 
 use chrono::NaiveDate;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use sqlx::{Sqlite, SqlitePool, Transaction};

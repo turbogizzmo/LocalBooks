@@ -6,9 +6,9 @@
 //! reader types (U and UE), and under a random owner password nobody knows (O and OE), so the file
 //! can only be opened with the password. Opening it grants every permission (print, copy).
 
-use aes::cipher::{BlockEncrypt, KeyInit};
+use aes::cipher::{BlockCipherEncrypt, KeyInit};
 use cbc::cipher::block_padding::{NoPadding, Pkcs7};
-use cbc::cipher::{BlockEncryptMut, KeyIvInit};
+use cbc::cipher::{BlockModeEncrypt, KeyIvInit};
 use sha2::{Digest, Sha256, Sha384, Sha512};
 
 /// Every permission: bits 1–2 must be 0, the rest set (ISO 32000-2, Table 22).
@@ -35,7 +35,7 @@ fn hash(password: &[u8], salt: &[u8], user_key: &[u8]) -> [u8; 32] {
             k1.extend_from_slice(&k);
             k1.extend_from_slice(user_key);
         }
-        let e = cbc::Encryptor::<aes::Aes128>::new_from_slices(&k[..16], &k[16..32]).expect("16-byte key and IV").encrypt_padded_vec_mut::<NoPadding>(&k1);
+        let e = cbc::Encryptor::<aes::Aes128>::new_from_slices(&k[..16], &k[16..32]).expect("16-byte key and IV").encrypt_padded_vec::<NoPadding>(&k1);
         // The first 16 bytes as a number, mod 3: 256 ≡ 1 (mod 3), so the byte sum mod 3.
         let pick = e[..16].iter().map(|&b| u32::from(b)).sum::<u32>() % 3;
         k = match pick {
@@ -53,7 +53,7 @@ fn hash(password: &[u8], salt: &[u8], user_key: &[u8]) -> [u8; 32] {
 
 /// AES-256-CBC with a zero IV and no padding: how UE and OE wrap the 32-byte file key.
 fn wrap_key(key: &[u8; 32], file_key: &[u8; 32]) -> Vec<u8> {
-    cbc::Encryptor::<aes::Aes256>::new_from_slices(key, &[0u8; 16]).expect("32-byte key").encrypt_padded_vec_mut::<NoPadding>(file_key)
+    cbc::Encryptor::<aes::Aes256>::new_from_slices(key, &[0u8; 16]).expect("32-byte key").encrypt_padded_vec::<NoPadding>(file_key)
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -116,7 +116,7 @@ impl Protection {
         perms[4..8].copy_from_slice(&[0xFF; 4]);
         perms[8..12].copy_from_slice(b"Tadb");
         perms[12..].copy_from_slice(&tail);
-        let mut block = aes::cipher::generic_array::GenericArray::clone_from_slice(&perms);
+        let mut block = aes::Block::from(perms);
         aes::Aes256::new_from_slice(&file_key).expect("32-byte key").encrypt_block(&mut block);
 
         let dictionary = format!(
@@ -144,9 +144,7 @@ impl Protection {
             iv
         });
         let mut out = iv.to_vec();
-        out.extend(
-            cbc::Encryptor::<aes::Aes256>::new_from_slices(&self.file_key, &iv).expect("32-byte key and 16-byte IV").encrypt_padded_vec_mut::<Pkcs7>(data),
-        );
+        out.extend(cbc::Encryptor::<aes::Aes256>::new_from_slices(&self.file_key, &iv).expect("32-byte key and 16-byte IV").encrypt_padded_vec::<Pkcs7>(data));
         out
     }
 
@@ -185,5 +183,58 @@ mod tests {
         // Each string gets its own IV.
         assert_ne!(p.encrypt(b"same"), p.encrypt(b"same"));
         assert_eq!(p.encrypt(b"0123456789abcdef").len(), 16 + 32, "IV, then a full block of padding");
+    }
+
+    fn unhex(s: &str) -> Vec<u8> {
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    }
+
+    // Known-answer tests: the published vectors for each primitive the method is built on, so a
+    // change of cipher or hash crate that alters any output fails here.
+
+    #[test]
+    fn aes_256_matches_fips_197() {
+        // FIPS 197, Appendix C.3.
+        let key = unhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+        let mut block = aes::Block::try_from(&unhex("00112233445566778899aabbccddeeff")[..]).unwrap();
+        aes::Aes256::new_from_slice(&key).unwrap().encrypt_block(&mut block);
+        assert_eq!(block.to_vec(), unhex("8ea2b7ca516745bfeafc49904b496089"));
+    }
+
+    #[test]
+    fn aes_cbc_matches_nist_sp_800_38a() {
+        // SP 800-38A, F.2.1 (CBC-AES128) and F.2.5 (CBC-AES256), the first two blocks of each.
+        let iv = unhex("000102030405060708090a0b0c0d0e0f");
+        let plain = unhex("6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e51");
+        let key128 = unhex("2b7e151628aed2a6abf7158809cf4f3c");
+        let e = cbc::Encryptor::<aes::Aes128>::new_from_slices(&key128, &iv).unwrap().encrypt_padded_vec::<NoPadding>(&plain);
+        assert_eq!(e, unhex("7649abac8119b246cee98e9b12e9197d5086cb9b507219ee95db113a917678b2"));
+        let key256 = unhex("603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4");
+        let e = cbc::Encryptor::<aes::Aes256>::new_from_slices(&key256, &iv).unwrap().encrypt_padded_vec::<NoPadding>(&plain);
+        assert_eq!(e, unhex("f58c4c04d6e5f1ba779eabfb5f7bfbd69cfc4e967edb808d679f777bc6702c7d"));
+        // PKCS#7 on a whole block: the same first block, then one more block of padding.
+        let e = cbc::Encryptor::<aes::Aes256>::new_from_slices(&key256, &iv).unwrap().encrypt_padded_vec::<Pkcs7>(&plain[..16]);
+        assert_eq!((e.len(), &e[..16]), (32, &unhex("f58c4c04d6e5f1ba779eabfb5f7bfbd6")[..]));
+    }
+
+    #[test]
+    fn the_key_wrap_is_cbc_with_a_zero_iv() {
+        // With a zero IV the first block is plain AES: SP 800-38A, F.1.5 (ECB-AES256), block 1.
+        let key: [u8; 32] = unhex("603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4").try_into().unwrap();
+        let mut file_key = [0u8; 32];
+        file_key[..16].copy_from_slice(&unhex("6bc1bee22e409f96e93d7e117393172a"));
+        let wrapped = wrap_key(&key, &file_key);
+        assert_eq!((wrapped.len(), &wrapped[..16]), (32, &unhex("f3eed1bdb5d2a03c064b5a7e3db181f8")[..]));
+    }
+
+    #[test]
+    fn sha_2_matches_fips_180_4() {
+        // The "abc" examples from FIPS 180-4's published example values.
+        assert_eq!(Sha256::digest(b"abc").to_vec(), unhex("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"));
+        assert_eq!(Sha384::digest(b"abc").to_vec(), unhex("cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7"));
+        assert_eq!(
+            Sha512::digest(b"abc").to_vec(),
+            unhex("ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f")
+        );
     }
 }
