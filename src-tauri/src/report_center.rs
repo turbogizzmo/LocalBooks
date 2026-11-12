@@ -355,9 +355,9 @@ pub async fn sales_by_product(pool: &SqlitePool, start_date: NaiveDate, end_date
 
 /// Average cost per unit of `value_cents` over `qty_e4` units, rounded to the cent; `None` unless
 /// there are units on hand.
-fn unit_cost(value_cents: i64, qty_e4: i64) -> Option<i64> {
+fn unit_cost(value_cents: Cents, qty_e4: i64) -> Option<Cents> {
     if qty_e4 > 0 {
-        mul_div_round(value_cents, QUANTITY_SCALE, qty_e4)
+        mul_div_round(value_cents.get(), QUANTITY_SCALE, qty_e4).map(Cents)
     } else {
         None
     }
@@ -371,11 +371,11 @@ pub struct InventoryValuationRow {
     pub sku: Option<String>,
     pub description: Option<String>,
     pub qty_on_hand_e4: i64,
-    pub average_cost_cents: Option<i64>,
-    pub asset_value_cents: i64,
-    pub sales_price_cents: i64,
+    pub average_cost_cents: Option<Cents>,
+    pub asset_value_cents: Cents,
+    pub sales_price_cents: Cents,
     /// On hand at the sales price.
-    pub retail_value_cents: i64,
+    pub retail_value_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -383,8 +383,8 @@ pub struct InventoryValuationRow {
 pub struct InventoryValuation {
     pub as_of: NaiveDate,
     pub rows: Vec<InventoryValuationRow>,
-    pub total_asset_value_cents: i64,
-    pub total_retail_value_cents: i64,
+    pub total_asset_value_cents: Cents,
+    pub total_retail_value_cents: Cents,
 }
 
 /// Quantity and value (moving average cost) of every tracked item as of a date: the stock movements
@@ -392,7 +392,7 @@ pub struct InventoryValuation {
 /// Inactive items are left out unless they still have stock or value.
 pub async fn inventory_valuation(pool: &SqlitePool, as_of: NaiveDate) -> Result<InventoryValuation, String> {
     let names = crate::preferences::ItemNames::load(pool).await?;
-    type ItemRow = (i64, String, Option<String>, Option<String>, i64, bool, i64, i64);
+    type ItemRow = (i64, String, Option<String>, Option<String>, Cents, bool, i64, Cents);
     let items: Vec<ItemRow> = sqlx::query_as(
         "SELECT i.id, p.name, i.sku, p.description, p.rate_cents, p.is_active,
                 COALESCE(SUM(s.qty_change_e4), 0), COALESCE(SUM(s.value_change_cents), 0)
@@ -406,10 +406,10 @@ pub async fn inventory_valuation(pool: &SqlitePool, as_of: NaiveDate) -> Result<
     .map_err(db_err)?;
     let mut rows = Vec::with_capacity(items.len());
     for (item_id, name, sku, description, sales_price_cents, is_active, qty, value) in items {
-        if !is_active && qty == 0 && value == 0 {
+        if !is_active && qty == 0 && value.is_zero() {
             continue;
         }
-        let retail_value_cents = mul_div_round(sales_price_cents, qty, QUANTITY_SCALE).ok_or("RPT_OVERFLOW: amount out of range")?;
+        let retail_value_cents = Cents(mul_div_round(sales_price_cents.get(), qty, QUANTITY_SCALE).ok_or("RPT_OVERFLOW: amount out of range")?);
         rows.push(InventoryValuationRow {
             item_id,
             name: names.label(&name, description.as_deref()),
@@ -424,8 +424,8 @@ pub async fn inventory_valuation(pool: &SqlitePool, as_of: NaiveDate) -> Result<
     }
     Ok(InventoryValuation {
         as_of,
-        total_asset_value_cents: rows.iter().map(|r| r.asset_value_cents).sum(),
-        total_retail_value_cents: rows.iter().map(|r| r.retail_value_cents).sum(),
+        total_asset_value_cents: Cents::checked_sum(rows.iter().map(|r| r.asset_value_cents)).ok_or_else(overflow)?,
+        total_retail_value_cents: Cents::checked_sum(rows.iter().map(|r| r.retail_value_cents)).ok_or_else(overflow)?,
         rows,
     })
 }
@@ -442,13 +442,13 @@ pub struct InventoryMovementRow {
     pub source_type: String,
     pub party_name: Option<String>,
     pub qty_change_e4: i64,
-    pub value_change_cents: i64,
+    pub value_change_cents: Cents,
     #[sqlx(skip)]
     pub qty_on_hand_e4: i64,
     #[sqlx(skip)]
-    pub asset_value_cents: i64,
+    pub asset_value_cents: Cents,
     #[sqlx(skip)]
-    pub average_cost_cents: Option<i64>,
+    pub average_cost_cents: Option<Cents>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -457,10 +457,10 @@ pub struct InventoryItemDetail {
     pub item_id: i64,
     pub name: String,
     pub opening_qty_e4: i64,
-    pub opening_value_cents: i64,
+    pub opening_value_cents: Cents,
     pub rows: Vec<InventoryMovementRow>,
     pub closing_qty_e4: i64,
-    pub closing_value_cents: i64,
+    pub closing_value_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -469,7 +469,7 @@ pub struct InventoryValuationDetail {
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
     pub items: Vec<InventoryItemDetail>,
-    pub total_value_cents: i64,
+    pub total_value_cents: Cents,
 }
 
 /// Every stock movement in the period per tracked item, from its quantity and value on the start
@@ -479,7 +479,7 @@ pub async fn inventory_valuation_detail(pool: &SqlitePool, start_date: NaiveDate
     if end_date < start_date {
         return Err("RPT_BAD_RANGE: the end date is before the start date".into());
     }
-    let items: Vec<(i64, String, i64, i64)> = sqlx::query_as(
+    let items: Vec<(i64, String, i64, Cents)> = sqlx::query_as(
         "SELECT i.id, p.name, COALESCE(SUM(s.qty_change_e4), 0), COALESCE(SUM(s.value_change_cents), 0)
          FROM inventory_items i JOIN products_services p ON p.id = i.product_id
          LEFT JOIN stock_ledger_entries s ON s.item_id = i.id AND s.movement_date < ?1
@@ -506,13 +506,13 @@ pub async fn inventory_valuation_detail(pool: &SqlitePool, start_date: NaiveDate
         .fetch_all(pool)
         .await
         .map_err(db_err)?;
-        if rows.is_empty() && opening_qty == 0 && opening_value == 0 {
+        if rows.is_empty() && opening_qty == 0 && opening_value.is_zero() {
             continue;
         }
         let (mut qty, mut value) = (opening_qty, opening_value);
         for r in &mut rows {
-            qty += r.qty_change_e4;
-            value += r.value_change_cents;
+            qty = qty.checked_add(r.qty_change_e4).ok_or_else(overflow)?;
+            value = value.checked_add(r.value_change_cents).ok_or_else(overflow)?;
             r.qty_on_hand_e4 = qty;
             r.asset_value_cents = value;
             r.average_cost_cents = unit_cost(value, qty);
@@ -527,7 +527,8 @@ pub async fn inventory_valuation_detail(pool: &SqlitePool, start_date: NaiveDate
             closing_value_cents: value,
         });
     }
-    Ok(InventoryValuationDetail { start_date, end_date, total_value_cents: out.iter().map(|i| i.closing_value_cents).sum(), items: out })
+    let total_value_cents = Cents::checked_sum(out.iter().map(|i| i.closing_value_cents)).ok_or_else(overflow)?;
+    Ok(InventoryValuationDetail { start_date, end_date, total_value_cents, items: out })
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -625,7 +626,7 @@ pub struct CheckRow {
     pub kind: String,
     pub party_name: Option<String>,
     pub memo: Option<String>,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub is_voided: bool,
     pub journal_entry_id: Option<i64>,
     /// Another check from the account has the same number.

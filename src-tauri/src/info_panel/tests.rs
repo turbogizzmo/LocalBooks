@@ -100,7 +100,7 @@ async fn item_figures_match_inventory_valuation_and_stock_status() {
     assert!(summary.tracked);
     assert_eq!(
         (summary.qty_on_hand_e4, summary.average_cost_cents, summary.asset_value_cents),
-        (row.qty_on_hand_e4, row.average_cost_cents, row.asset_value_cents)
+        (row.qty_on_hand_e4, row.average_cost_cents.map(crate::money::Cents::get), row.asset_value_cents.get())
     );
     assert!(summary.qty_on_hand_e4 > 0);
     let status = crate::report_center::stock_status(&pool, today, today).await.unwrap();

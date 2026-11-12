@@ -61,8 +61,8 @@ async fn discounts_statements_and_1099s() {
     let statement = customer_statement(&pool, acme, d(3, 1), d(4, 30)).await.unwrap();
     assert_eq!(statement.rows.len(), 2, "the job's invoice and payment appear on the customer's statement");
     assert_eq!((statement.rows[0].po_number.as_deref(), statement.rows[1].po_number.as_deref()), (Some("PO-77"), None), "the invoice's P.O. number");
-    assert_eq!((statement.opening_balance_cents, statement.closing_balance_cents), (0, 18_800));
-    assert_eq!(statement.aging_cents, [0, 18_800, 0, 0, 0]);
+    assert_eq!((statement.opening_balance_cents, statement.closing_balance_cents), (Cents(0), Cents(18_800)));
+    assert_eq!(statement.aging_cents, [0, 18_800, 0, 0, 0].map(Cents));
     assert_eq!(balance(&pool, ar).await, 18_800);
     let listed = statement_customers(&pool, d(3, 1), d(4, 30)).await.unwrap();
     assert_eq!(listed.iter().map(|c| c.1.as_str()).collect::<Vec<_>>(), ["Acme"]);
@@ -108,7 +108,7 @@ async fn a_voided_payment_comes_off_the_customers_statement() {
     .await
     .unwrap();
     let birch: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Birch'").fetch_one(&pool).await.unwrap();
-    assert_eq!(customer_statement(&pool, birch, d(3, 1), d(3, 31)).await.unwrap().closing_balance_cents, 30_000);
+    assert_eq!(customer_statement(&pool, birch, d(3, 1), d(3, 31)).await.unwrap().closing_balance_cents, Cents(30_000));
 
     let payment_entry: i64 = sqlx::query_scalar(
         "SELECT e.id FROM journal_entries e JOIN invoice_payments p ON p.id = e.source_id WHERE e.source_type = 'RECEIVE_PAYMENT' AND p.invoice_id = ?1",
@@ -120,8 +120,8 @@ async fn a_voided_payment_comes_off_the_customers_statement() {
     crate::ledger::void_transaction(&pool, payment_entry).await.unwrap();
 
     let statement = customer_statement(&pool, birch, d(3, 1), d(3, 31)).await.unwrap();
-    assert_eq!(statement.closing_balance_cents, 50_000, "the whole invoice is owed again, as A/R and the invoice say");
-    let kinds: Vec<(&str, i64)> = statement.rows.iter().map(|r| (r.source_type.as_str(), r.amount_cents)).collect();
+    assert_eq!(statement.closing_balance_cents, Cents(50_000), "the whole invoice is owed again, as A/R and the invoice say");
+    let kinds: Vec<(&str, i64)> = statement.rows.iter().map(|r| (r.source_type.as_str(), r.amount_cents.get())).collect();
     assert_eq!(kinds, [("INVOICE", 50_000), ("RECEIVE_PAYMENT", -20_000), ("VOID", 20_000)]);
     // The reversal carries the customer's name everywhere names come from.
     let named: Option<String> =

@@ -287,7 +287,7 @@ async fn missing_checks() {
             r.date,
             r.kind,
             r.party_name.as_deref().unwrap_or("-"),
-            money(r.amount_cents),
+            money(r.amount_cents.get()),
             if r.is_voided { "  VOID" } else { "" },
             if r.is_duplicate { "  DUPLICATE" } else { "" }
         )
@@ -357,19 +357,19 @@ async fn inventory_reports() {
             "{:<16}{:>10}{:>12}{:>14}{:>12}{:>14}",
             r.name,
             qty(r.qty_on_hand_e4),
-            cost(r.average_cost_cents),
-            money(r.asset_value_cents),
-            money(r.sales_price_cents),
-            money(r.retail_value_cents)
+            cost(r.average_cost_cents.map(Cents::get)),
+            money(r.asset_value_cents.get()),
+            money(r.sales_price_cents.get()),
+            money(r.retail_value_cents.get())
         )
         .unwrap();
     }
-    writeln!(out, "{:<50}{:>14}{:>26}", "Total", money(v.total_asset_value_cents), money(v.total_retail_value_cents)).unwrap();
+    writeln!(out, "{:<50}{:>14}{:>26}", "Total", money(v.total_asset_value_cents.get()), money(v.total_retail_value_cents.get())).unwrap();
 
     let detail = crate::report_center::inventory_valuation_detail(p, d(2025, 11, 15), d(2025, 12, 31)).await.unwrap();
     writeln!(out, "\nInventory Valuation Detail, {} to {}\n", detail.start_date, detail.end_date).unwrap();
     for item in &detail.items {
-        writeln!(out, "{}  (opening {} worth {})", item.name, qty(item.opening_qty_e4), money(item.opening_value_cents)).unwrap();
+        writeln!(out, "{}  (opening {} worth {})", item.name, qty(item.opening_qty_e4), money(item.opening_value_cents.get())).unwrap();
         for r in &item.rows {
             writeln!(
                 out,
@@ -378,15 +378,15 @@ async fn inventory_reports() {
                 r.kind,
                 r.party_name.as_deref().unwrap_or("-"),
                 qty(r.qty_change_e4),
-                money(r.value_change_cents),
+                money(r.value_change_cents.get()),
                 qty(r.qty_on_hand_e4),
-                cost(r.average_cost_cents),
-                money(r.asset_value_cents)
+                cost(r.average_cost_cents.map(Cents::get)),
+                money(r.asset_value_cents.get())
             )
             .unwrap();
         }
     }
-    writeln!(out, "Total value {}", money(detail.total_value_cents)).unwrap();
+    writeln!(out, "Total value {}", money(detail.total_value_cents.get())).unwrap();
 
     let status = crate::report_center::stock_status(p, d(2025, 11, 1), d(2025, 12, 31)).await.unwrap();
     writeln!(out, "\nInventory Stock Status by Item, {} to {}\n", status.start_date, status.end_date).unwrap();

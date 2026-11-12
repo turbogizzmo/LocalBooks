@@ -50,9 +50,9 @@ async fn a_statement_charge_posts_to_ar_shows_on_the_statement_ages_and_takes_a_
     // On the next statement, as statement charges with their descriptions and no invoice number.
     let statement = crate::workflows::customer_statement(&pool, customer, d(3, 1), d(3, 31)).await.unwrap();
     let rows: Vec<(&str, Option<&str>, Option<&str>, i64)> =
-        statement.rows.iter().map(|r| (r.source_type.as_str(), r.number.as_deref(), r.memo.as_deref(), r.amount_cents)).collect();
+        statement.rows.iter().map(|r| (r.source_type.as_str(), r.number.as_deref(), r.memo.as_deref(), r.amount_cents.get())).collect();
     assert_eq!(rows, [("STATEMENT_CHARGE", None, Some("Monthly retainer"), 25_000), ("STATEMENT_CHARGE", None, Some("Extra visits"), 12_000)]);
-    assert_eq!(statement.closing_balance_cents, 37_000);
+    assert_eq!(statement.closing_balance_cents, Cents(37_000));
     let doc = crate::forms::statement_doc(&pool, customer, crate::forms::Period { start_date: d(3, 1), end_date: d(3, 31) }, "$").await.unwrap();
     assert!(doc.statement.unwrap().rows.iter().any(|r| r[1] == "Statement Charge" && r.iter().any(|c| c == "Monthly retainer")));
 

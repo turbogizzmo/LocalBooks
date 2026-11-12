@@ -38,9 +38,9 @@ pub struct StatementRow {
     pub party_name: String,
     pub memo: Option<String>,
     /// Charges positive, payments and credits negative.
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     #[sqlx(skip)]
-    pub balance_cents: i64,
+    pub balance_cents: Cents,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -52,11 +52,11 @@ pub struct CustomerStatement {
     pub billing_address: Option<String>,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
-    pub opening_balance_cents: i64,
+    pub opening_balance_cents: Cents,
     pub rows: Vec<StatementRow>,
-    pub closing_balance_cents: i64,
+    pub closing_balance_cents: Cents,
     /// Current, 1–30, 31–60, 61–90, 91+ days past due at the end date.
-    pub aging_cents: [i64; 5],
+    pub aging_cents: [Cents; 5],
 }
 
 /// A customer's statement for a period, including its jobs: the balance brought forward, each
@@ -73,7 +73,7 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
          JOIN v_chart_of_accounts a ON a.id = l.account_id AND a.account_type = 'ACCOUNTS_RECEIVABLE'
          JOIN v_entry_party p ON p.journal_entry_id = l.journal_entry_id
          JOIN journal_entries je ON je.id = l.journal_entry_id";
-    let opening: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+    let opening: Cents = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) {ar_lines} WHERE {mine} AND l.entry_date < ?2"
     )))
     .bind(&name)
@@ -128,16 +128,17 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
+    let overflow = || "STMT_OVERFLOW: the statement's amounts are too large to add up".to_string();
     let mut balance = opening;
     for row in &mut rows {
-        balance += row.amount_cents;
+        balance = balance.checked_add(row.amount_cents).ok_or_else(overflow)?;
         row.balance_cents = balance;
     }
     let aging = crate::report_center::aging(pool, false, end_date).await?;
-    let mut buckets = [0i64; 5];
+    let mut buckets = [Cents::ZERO; 5];
     for row in aging.rows.iter().filter(|r| r.party_name == name || r.party_name.starts_with(&format!("{name}:"))) {
         for (b, cents) in buckets.iter_mut().zip(row.buckets_cents) {
-            *b += cents.get();
+            *b = b.checked_add(cents).ok_or_else(overflow)?;
         }
     }
     Ok(CustomerStatement {

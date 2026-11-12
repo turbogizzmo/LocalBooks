@@ -113,6 +113,11 @@ Step 3b: the General Ledger, A/R and A/P aging, sales and expense summaries (`re
 and the cash flow forecast (`cash_forecast`). Their totals were unchecked `+=` and `.sum()`; they
 are now checked, with an `RPT_OVERFLOW` error. Readers in `graphs`, `company_snapshot` and the
 customer statement take `.get()` until their own stages.
+Step 3c: the rest of `report_center` (Inventory Valuation summary and detail, Missing Checks), the
+customer statement (`workflows::customer_statement`) and the open sales order and Pending Sales
+reports (`sales_orders`). The valuation totals, the running stock value and the statement's running
+balance and aging were unchecked; they are now checked. The 1099 summary in `workflows` already used
+checked sums and waits for step 4.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:

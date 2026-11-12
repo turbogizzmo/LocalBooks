@@ -1309,7 +1309,7 @@ pub async fn statement_doc(pool: &SqlitePool, customer_id: i64, period: Period, 
         String::new(),
         String::new(),
         String::new(),
-        money(s.opening_balance_cents),
+        money(s.opening_balance_cents.get()),
     ]];
     for r in &s.rows {
         let transaction = match r.number.as_deref().filter(|n| !n.is_empty()) {
@@ -1321,9 +1321,16 @@ pub async fn statement_doc(pool: &SqlitePool, customer_id: i64, period: Period, 
             Some(job) => job.to_string(),
             None => r.memo.clone().unwrap_or_default(),
         };
-        rows.push([format_date(&iso(r.date)), transaction, r.po_number.clone().unwrap_or_default(), details, money(r.amount_cents), money(r.balance_cents)]);
+        rows.push([
+            format_date(&iso(r.date)),
+            transaction,
+            r.po_number.clone().unwrap_or_default(),
+            details,
+            money(r.amount_cents.get()),
+            money(r.balance_cents.get()),
+        ]);
     }
-    let due = money(s.closing_balance_cents);
+    let due = money(s.closing_balance_cents.get());
     let end = format_date(&iso(period.end_date));
     Ok(FormDoc {
         kind: FormKind::Statement,
@@ -1342,7 +1349,7 @@ pub async fn statement_doc(pool: &SqlitePool, customer_id: i64, period: Period, 
         due_date: String::new(),
         total: due.clone(),
         balance: due,
-        statement: Some(StatementTable { rows, aging: s.aging_cents.map(money) }),
+        statement: Some(StatementTable { rows, aging: s.aging_cents.map(|c| money(c.get())) }),
         sales: FormSales::default(),
         form_style_id: None,
     })

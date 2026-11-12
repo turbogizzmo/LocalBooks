@@ -459,7 +459,7 @@ async fn assert_receivables_tie(pool: &SqlitePool, customer_id: i64, expected: i
     // so after a void the statement is left out.
     let statement = match customer_id {
         0 => expected,
-        id => crate::workflows::customer_statement(pool, id, d(1, 1), d(12, 31)).await.unwrap().closing_balance_cents,
+        id => crate::workflows::customer_statement(pool, id, d(1, 1), d(12, 31)).await.unwrap().closing_balance_cents.get(),
     };
     assert_eq!((ledger, open, aging, statement), (expected, expected, expected, expected), "A/R, open invoices, aging and the statement tie out");
 }
