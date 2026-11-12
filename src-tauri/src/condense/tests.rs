@@ -68,10 +68,10 @@ async fn reconcile(pool: &SqlitePool, account_id: i64, through: NaiveDate) {
         return;
     }
     let cleared = crate::reconcile::account_state(pool, account_id).await.unwrap().reconciled_balance_cents;
-    let ending = cleared + lines.iter().map(|l| l.amount_cents).sum::<i64>();
+    let ending = cleared.get() + lines.iter().map(|l| l.amount_cents.get()).sum::<i64>();
     let rec = crate::reconcile::start(pool, account_id, through, ending).await.unwrap();
     let ids: Vec<i64> = lines.iter().map(|l| l.line_id).collect();
-    assert_eq!(crate::reconcile::set_lines_cleared(pool, rec.id, &ids, true).await.unwrap().difference_cents, 0);
+    assert_eq!(crate::reconcile::set_lines_cleared(pool, rec.id, &ids, true).await.unwrap().difference_cents, Cents(0));
     crate::reconcile::lock(pool, rec.id).await.unwrap();
 }
 

@@ -123,7 +123,7 @@ async fn an_invoice_with_subtotals_posts_balanced_and_reads_back_in_order() {
 
     let detail = invoice_detail(&pool, inv.id).await.unwrap();
     assert_eq!(detail.items.iter().map(|i| i.line_number).collect::<Vec<_>>(), vec![1, 2, 4]);
-    let form: Vec<(i64, &str, i64)> = detail.form_lines.iter().map(|f| (f.line_number, f.description.as_str(), f.amount_cents)).collect();
+    let form: Vec<(i64, &str, i64)> = detail.form_lines.iter().map(|f| (f.line_number, f.description.as_str(), f.amount_cents.get())).collect();
     assert_eq!(form, vec![(3, "Subtotal", 15_000), (5, "Parts subtotal", 2_500)]);
 }
 
@@ -203,7 +203,7 @@ async fn an_estimate_carries_its_subtotals_to_its_invoice() {
     assert_eq!(estimate.total_cents, Cents(50_000));
     let converted = crate::estimates::convert_to_invoice(&pool, estimate.id, d(5), d(30)).await.unwrap();
     let detail = invoice_detail(&pool, converted.converted_to_invoice_id.unwrap()).await.unwrap();
-    assert_eq!(detail.form_lines.iter().map(|f| (f.line_number, f.amount_cents)).collect::<Vec<_>>(), vec![(2, 30_000), (4, 20_000)]);
+    assert_eq!(detail.form_lines.iter().map(|f| (f.line_number, f.amount_cents.get())).collect::<Vec<_>>(), vec![(2, 30_000), (4, 20_000)]);
     assert_posts(&pool, detail.invoice.journal_entry_id.unwrap(), ar, 50_000).await;
 }
 
@@ -372,13 +372,13 @@ async fn an_invoice_with_discounts_and_tax_posts_balanced_and_taxes_the_discount
     assert_eq!(to_discounts, 1_000 + 500 + 200);
 
     let form: Vec<(i64, String, i64, Option<i64>)> =
-        invoice_detail(&pool, inv.id).await.unwrap().form_lines.into_iter().map(|f| (f.line_number, f.kind, f.amount_cents, f.percent_ppm)).collect();
+        invoice_detail(&pool, inv.id).await.unwrap().form_lines.into_iter().map(|f| (f.line_number, f.kind, f.amount_cents.get(), f.percent_ppm)).collect();
     assert_eq!(form, vec![(2, "DISCOUNT".into(), -1_000, Some(100_000)), (4, "SUBTOTAL".into(), 14_000, None), (5, "DISCOUNT".into(), -500, None)]);
 
     // The discount item is its own row in Sales by Product/Service.
     let report = crate::report_center::sales_by_product(&pool, d(1), d(31)).await.unwrap();
     let row = report.rows.iter().find(|r| r.label == "Loyalty 10%").expect("discount row");
-    assert_eq!(row.amount_cents, -1_000);
+    assert_eq!(row.amount_cents, Cents(-1_000));
 }
 
 #[tokio::test]
@@ -548,7 +548,7 @@ async fn fixed_and_percent_charges_post_balanced_and_carry_from_an_estimate() {
     let inv = invoice_detail(&pool, converted.converted_to_invoice_id.unwrap()).await.unwrap();
     assert_eq!(inv.invoice.total_cents, Cents(14_215));
     assert_eq!(inv.items.iter().map(|i| (i.line_number, i.percent_ppm)).collect::<Vec<_>>(), vec![(1, None), (2, Some(30_000)), (3, None)]);
-    assert_eq!(inv.form_lines.iter().map(|f| (f.line_number, f.amount_cents)).collect::<Vec<_>>(), vec![(4, 14_215)]);
+    assert_eq!(inv.form_lines.iter().map(|f| (f.line_number, f.amount_cents.get())).collect::<Vec<_>>(), vec![(4, 14_215)]);
     assert_posts(&pool, inv.invoice.journal_entry_id.unwrap(), ar, 14_215).await;
 }
 
@@ -731,7 +731,7 @@ async fn editing_a_part_paid_invoice_with_a_group_discount_and_subtotal_keeps_it
     assert_eq!(detail.invoice.total_cents, Cents(12_000));
     assert_eq!(detail.invoice.amount_paid_cents, Cents(4_000), "the payment stays applied to the edited invoice");
     assert_eq!(detail.invoice.balance_cents, Cents(8_000));
-    let form: Vec<(i64, &str, i64)> = detail.form_lines.iter().map(|f| (f.line_number, f.kind.as_str(), f.amount_cents)).collect();
+    let form: Vec<(i64, &str, i64)> = detail.form_lines.iter().map(|f| (f.line_number, f.kind.as_str(), f.amount_cents.get())).collect();
     assert_eq!(form, vec![(1, "GROUP", 10_000), (4, "DISCOUNT", -1_000), (5, "SUBTOTAL", 9_000)]);
     assert_posts(&pool, detail.invoice.journal_entry_id.unwrap(), ar, 12_000).await;
 }

@@ -188,10 +188,10 @@ async fn aging_buckets_open_balances_by_days_overdue() {
     record_payment(&pool, payment(settled.id, checking, 1, 70_000)).await.unwrap();
 
     let aging = ar_aging(&pool, as_of).await.unwrap();
-    let summary: Vec<(&str, i64, i64)> = aging.buckets.iter().map(|b| (b.key, b.invoice_count, b.amount_cents)).collect();
+    let summary: Vec<(&str, i64, i64)> = aging.buckets.iter().map(|b| (b.key, b.invoice_count, b.amount_cents.get())).collect();
     assert_eq!(summary, vec![("current", 2, 30_000), ("days1To30", 2, 55_000), ("days31To60", 1, 50_000), ("days61Plus", 1, 60_000)]);
-    assert_eq!(aging.total_cents, 195_000);
-    assert_eq!(balance(&pool, account_id(&pool, "1200").await).await, aging.total_cents);
+    assert_eq!(aging.total_cents, Cents(195_000));
+    assert_eq!(balance(&pool, account_id(&pool, "1200").await).await, aging.total_cents.get());
 }
 
 #[tokio::test]
@@ -380,7 +380,7 @@ async fn foreign_invoice_books_home_ar_and_payments_realize_fx() {
     let paid = record_payment(&pool, pay(20, Cents(60_000), 1_050_000)).await.unwrap();
     assert_eq!((paid.status.as_str(), paid.home_balance_cents), ("PAID", Cents(0)));
     assert_eq!((balance(&pool, ar).await, balance(&pool, checking).await, balance(&pool, fx_account).await), (0, 107_000, 1_000));
-    assert_eq!(ar_aging(&pool, d(31)).await.unwrap().total_cents, 0);
+    assert_eq!(ar_aging(&pool, d(31)).await.unwrap().total_cents, Cents(0));
 
     // Voiding the last payment reverses its home-currency effect and reopens the invoice.
     let last = list_payments(&pool, invoice.id).await.unwrap().pop().unwrap();
@@ -511,7 +511,7 @@ async fn foreign_payment_deposits_its_home_amount() {
     .await
     .unwrap();
     let waiting = crate::banking::list_undeposited(&pool).await.unwrap();
-    assert_eq!(waiting[0].amount_cents, 63_500, "GBP 500 at the invoice rate 1.27");
+    assert_eq!(waiting[0].amount_cents, Cents(63_500), "GBP 500 at the invoice rate 1.27");
     crate::banking::post_bank_deposit(
         &pool,
         crate::banking::DepositInput {

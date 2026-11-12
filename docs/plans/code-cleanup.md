@@ -92,6 +92,27 @@ Step 2b: the sales, estimate and credit views (`PartyView`, `ProductView`, `Sale
 `SalesTransaction`, `EstimateSummary`, `EstimateLineView`, `CreditMemoSummary`,
 `CreditApplicationView`, `AppliedCredits`, `CustomerCredit`, `VendorCreditSummary`); applying open
 credits to an invoice adds them up with `checked_add` on `Cents`.
+Step 2c: the purchase views (`BillSummary`, `BillPaymentView`, `ExpenseView`, `ReceiptView`,
+`ReceiptLineView`, `OrderLineReceiving`, `PurchaseFormLineView`, `RecurringView`, `SearchHit`); a memorized transaction's
+amount is now a checked sum, shown as zero if it overflows.
+Step 2d: the bank, deposit, reconcile and sales order views (`BankTransactionView`,
+`UndepositedItem`, `BankingActivity`, `Reconciliation`, `ReconcileAccountState`,
+`UnreconciledLine`, `ReconcileProgress`, `SalesOrderSummary` and `SalesOrderLine`); the cleared
+balance and difference of a reconciliation are now checked. `BankRow` and `BalanceCheck` are read
+from a bank file and wait for step 4; the open sales order reports wait for step 3.
+Step 2e: `FormLineView` (a document's subtotal, discount, charge and group lines), with
+`Cents::checked_neg` for loading a fixed discount back into its form. That finishes step 2. The
+form-line layout engine (`item_types::lay_out`, `Layout`, `ChargeRow`) works on bounded amounts
+as the form is entered and waits for step 4.
+
+Step 3, the reports, goes in stages "A7 step 3a" onward. Step 3a: the chart of accounts, trial
+balance and dashboard (`reports`), and the A/R aging buckets (`invoices::ar_aging`). The trial
+balance and the dashboard's month-end series were unchecked `+=`; they are now checked, with a
+`REPORT_OVERFLOW` error.
+Step 3b: the General Ledger, A/R and A/P aging, sales and expense summaries (`report_center`)
+and the cash flow forecast (`cash_forecast`). Their totals were unchecked `+=` and `.sum()`; they
+are now checked, with an `RPT_OVERFLOW` error. Readers in `graphs`, `company_snapshot` and the
+customer statement take `.get()` until their own stages.
 
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:

@@ -268,7 +268,7 @@ async fn general_ledger_agrees() {
             .iter()
             .map(|a| {
                 let lines = a.rows.iter().map(|r| (r.journal_entry_id, r.debit_cents, r.credit_cents, r.balance_cents)).collect::<Vec<_>>();
-                (a.account_id, a.opening_balance_cents, lines, a.total_debit_cents, a.total_credit_cents, a.ending_balance_cents)
+                (a.account_id, a.opening_balance_cents.get(), lines, a.total_debit_cents.get(), a.total_credit_cents.get(), a.ending_balance_cents.get())
             })
             .collect();
         assert!(!expected.is_empty());
@@ -289,12 +289,12 @@ async fn aging_detail_agrees() {
             let (num, open, aging_col) = (column(&report, "Num"), column(&report, "Open Balance"), column(&report, "Aging"));
             let mut got: Vec<(String, i64, i64)> = details(&report).map(|r| (text(&r.cells[num]), cents(&r.cells[open]), cents(&r.cells[aging_col]))).collect();
             let mut want: Vec<(String, i64, i64)> =
-                aging.items.iter().map(|i| (i.number.clone().unwrap_or_default(), i.open_cents, i.days_past_due.max(0))).collect();
+                aging.items.iter().map(|i| (i.number.clone().unwrap_or_default(), i.open_cents.get(), i.days_past_due.max(0))).collect();
             got.sort();
             want.sort();
             assert_eq!(got, want, "{preset} as of {as_of}");
             let total = report.rows.last().unwrap();
-            assert_eq!(cents(&total.cells[open]), aging.total_cents, "{preset} total as of {as_of}");
+            assert_eq!(cents(&total.cells[open]), aging.total_cents.get(), "{preset} total as of {as_of}");
         }
     }
 }
@@ -366,10 +366,10 @@ async fn sales_and_expense_summaries_agree() {
                 (label, cents(r.cells.last().unwrap()), qty)
             })
             .collect();
-        let want: Vec<(String, i64, Option<i64>)> = existing.rows.iter().map(|r| (r.label.clone(), r.amount_cents, r.quantity_e4)).collect();
+        let want: Vec<(String, i64, Option<i64>)> = existing.rows.iter().map(|r| (r.label.clone(), r.amount_cents.get(), r.quantity_e4)).collect();
         assert!(!want.is_empty());
         assert_eq!(got, want, "{:?} by {:?}", settings.source, settings.group_by);
-        assert_eq!(cents(report.rows.last().unwrap().cells.last().unwrap()), existing.total_cents);
+        assert_eq!(cents(report.rows.last().unwrap().cells.last().unwrap()), existing.total_cents.get());
     }
 }
 
@@ -397,7 +397,7 @@ async fn customer_balances_agree_with_receivables() {
     let aging = crate::report_center::aging(&pool, false, today()).await.unwrap();
     let got = summary_rows(&report);
     for row in &aging.rows {
-        assert_eq!(got.get(&row.party_name).map(|v| v.0), Some(row.total_cents), "{}", row.party_name);
+        assert_eq!(got.get(&row.party_name).map(|v| v.0), Some(row.total_cents.get()), "{}", row.party_name);
     }
     let receivable: i64 =
         sqlx::query_scalar("SELECT SUM(balance_cents) FROM v_account_balances WHERE account_type = 'ACCOUNTS_RECEIVABLE'").fetch_one(&pool).await.unwrap();
@@ -751,11 +751,11 @@ async fn net_income_and_rep_details_tie_out() {
     let amount = column(&report, "Amount");
     let summary = crate::report_center::sales_by_rep(&pool, d(2025, 1, 1), d(2025, 12, 31)).await.unwrap();
     let mut got: Vec<i64> = report.rows.iter().filter(|r| r.kind == RowKind::Subtotal).map(|r| cents(&r.cells[amount])).collect();
-    let mut want: Vec<i64> = summary.rows.iter().map(|r| r.amount_cents).collect();
+    let mut want: Vec<i64> = summary.rows.iter().map(|r| r.amount_cents.get()).collect();
     got.sort();
     want.sort();
     assert_eq!(got, want);
-    assert_eq!(cents(&report.rows.last().unwrap().cells[amount]), summary.total_cents);
+    assert_eq!(cents(&report.rows.last().unwrap().cells[amount]), summary.total_cents.get());
 }
 
 /// Columns by name (gap T9): a summary's columns can be classes, customers, jobs or vendors. Each

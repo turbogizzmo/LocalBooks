@@ -1031,7 +1031,7 @@ async fn reconcile_state(pool: &SqlitePool) -> Result<BTreeMap<i64, (i64, Vec<i6
     .map_err(db_err)?;
     let mut state = BTreeMap::new();
     for account in accounts {
-        let cleared = crate::reconcile::account_state(pool, account).await?.reconciled_balance_cents;
+        let cleared = crate::reconcile::account_state(pool, account).await?.reconciled_balance_cents.get();
         let open = crate::reconcile::unreconciled_lines(pool, account).await?.into_iter().map(|l| l.line_id).collect();
         state.insert(account, (cleared, open));
     }

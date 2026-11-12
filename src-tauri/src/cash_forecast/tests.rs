@@ -64,8 +64,8 @@ async fn money_due_in_and_out_lands_in_its_week_and_ties_out_to_the_agings() {
     bill(&pool, "Power Co", 9_000, "2026-11-23").await; // week 3
 
     let f = forecast(&pool, d("2026-11-09"), 4).await.unwrap();
-    assert_eq!((f.bank_cents, f.undeposited_cents, f.starting_cash_cents), (510_000, 0, 510_000));
-    let cols: Vec<(&str, i64, i64)> = f.periods.iter().map(|p| (p.label.as_str(), p.money_in_cents, p.money_out_cents)).collect();
+    assert_eq!((f.bank_cents, f.undeposited_cents, f.starting_cash_cents), (Cents(510_000), Cents(0), Cents(510_000)));
+    let cols: Vec<(&str, i64, i64)> = f.periods.iter().map(|p| (p.label.as_str(), p.money_in_cents.get(), p.money_out_cents.get())).collect();
     assert_eq!(
         cols,
         vec![
@@ -77,15 +77,15 @@ async fn money_due_in_and_out_lands_in_its_week_and_ties_out_to_the_agings() {
             ("Later", 7_000, 0),
         ]
     );
-    assert_eq!(f.periods.last().unwrap().ending_cash_cents, 510_000 + 167_000 - 129_000);
+    assert_eq!(f.periods.last().unwrap().ending_cash_cents, Cents(510_000 + 167_000 - 129_000));
     assert_eq!(f.ending_cash_cents, f.periods.last().unwrap().ending_cash_cents);
 
     // It ties out: every dollar in is A/R, every dollar out is A/P, as the agings say.
-    let ar = crate::report_center::aging(&pool, false, d("2026-11-09")).await.unwrap().total_cents;
-    let ap = crate::report_center::aging(&pool, true, d("2026-11-09")).await.unwrap().total_cents;
-    assert_eq!((f.receivable_cents, f.payable_cents), (ar, ap));
-    assert_eq!(f.periods.iter().map(|p| p.money_in_cents).sum::<i64>(), ar);
-    assert_eq!(f.periods.iter().map(|p| p.money_out_cents).sum::<i64>(), ap);
+    let ar = crate::report_center::aging(&pool, false, d("2026-11-09")).await.unwrap().total_cents.get();
+    let ap = crate::report_center::aging(&pool, true, d("2026-11-09")).await.unwrap().total_cents.get();
+    assert_eq!((f.receivable_cents, f.payable_cents), (Cents(ar), Cents(ap)));
+    assert_eq!(f.periods.iter().map(|p| p.money_in_cents.get()).sum::<i64>(), ar);
+    assert_eq!(f.periods.iter().map(|p| p.money_out_cents.get()).sum::<i64>(), ap);
     assert_eq!(f.periods[1].items.iter().map(|i| (i.direction, i.party_name.as_str())).collect::<Vec<_>>(), [("IN", "Globex"), ("OUT", "Landlord")]);
 
     assert!(forecast(&pool, d("2026-11-09"), 0).await.unwrap_err().starts_with("FORECAST_WEEKS"));

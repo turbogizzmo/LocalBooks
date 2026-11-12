@@ -612,7 +612,7 @@ pub async fn recurring_due(pool: &SqlitePool, as_of: NaiveDate, days: i64) -> Re
                     None => kind.to_string(),
                 },
                 date: Some(t.next_date.to_string()),
-                amount_cents: (t.amount_cents != 0).then_some(t.amount_cents),
+                amount_cents: (!t.amount_cents.is_zero()).then_some(t.amount_cents.get()),
                 entry_id: None,
             }
         })

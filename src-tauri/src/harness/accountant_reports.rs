@@ -25,7 +25,7 @@ async fn reconcile(pool: &SqlitePool, end: chrono::NaiveDate) -> i64 {
     let lines: Vec<_> = crate::reconcile::unreconciled_lines(pool, checking).await.unwrap().into_iter().filter(|l| l.entry_date <= end.to_string()).collect();
     let clear = &lines[..lines.len() - 1];
     let state = crate::reconcile::account_state(pool, checking).await.unwrap();
-    let ending = state.reconciled_balance_cents + clear.iter().map(|l| l.amount_cents).sum::<i64>();
+    let ending = state.reconciled_balance_cents.get() + clear.iter().map(|l| l.amount_cents.get()).sum::<i64>();
     let rec = crate::reconcile::start(pool, checking, end, ending).await.expect("start");
     crate::reconcile::set_lines_cleared(pool, rec.id, &clear.iter().map(|l| l.line_id).collect::<Vec<_>>(), true).await.expect("tick");
     crate::reconcile::lock(pool, rec.id).await.expect("lock");
