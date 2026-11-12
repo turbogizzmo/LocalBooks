@@ -20,7 +20,8 @@ updates:
       rust-minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      # Pinned deliberately (exact versions in Cargo.toml): update by hand after review.
+      # Pinned deliberately (exact versions in Cargo.toml): update by hand after review. sha1, sha2
+      # and hmac share the digest traits, so they move together in one change.
       - dependency-name: openqbw
       - dependency-name: opensqlany
       - dependency-name: sha2
@@ -28,11 +29,6 @@ updates:
       - dependency-name: sha1
       # Moves with the windows crates; update together by hand (gap A21).
       - dependency-name: windows-future
-      # Major versions that need porting work (gap A21): the build fails on them as they are.
-      - dependency-name: aes
-        update-types: [version-update:semver-major]
-      - dependency-name: cbc
-        update-types: [version-update:semver-major]
 
   - package-ecosystem: npm
     directory: /
