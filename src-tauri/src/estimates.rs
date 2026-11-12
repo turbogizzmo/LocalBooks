@@ -61,18 +61,11 @@ const SUMMARY_SELECT: &str = "
     LEFT JOIN invoices i ON i.id = e.converted_to_invoice_id";
 
 pub async fn list_estimates(pool: &SqlitePool) -> Result<Vec<EstimateSummary>, String> {
-    sqlx::query_as::<_, EstimateSummary>(&format!("{SUMMARY_SELECT} ORDER BY e.estimate_number DESC"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as::<_, EstimateSummary>(&format!("{SUMMARY_SELECT} ORDER BY e.estimate_number DESC")).fetch_all(pool).await.map_err(db_err)
 }
 
 async fn get_estimate(pool: &SqlitePool, id: i64) -> Result<EstimateSummary, String> {
-    sqlx::query_as::<_, EstimateSummary>(&format!("{SUMMARY_SELECT} WHERE e.id = ?1"))
-        .bind(id)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as::<_, EstimateSummary>(&format!("{SUMMARY_SELECT} WHERE e.id = ?1")).bind(id).fetch_one(pool).await.map_err(db_err)
 }
 
 pub async fn create_estimate(pool: &SqlitePool, input: EstimateInput) -> Result<EstimateSummary, String> {
@@ -147,13 +140,12 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
     .map_err(db_err)?;
 
     for (idx, (line, amount)) in input.lines.iter().zip(amounts).enumerate() {
-        let classification: Option<String> = sqlx::query_scalar(
-            "SELECT t.classification FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
-        )
-        .bind(line.income_account_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
+        let classification: Option<String> =
+            sqlx::query_scalar("SELECT t.classification FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1")
+                .bind(line.income_account_id)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(db_err)?;
         if classification.as_deref() != Some("INCOME") {
             return Err(format!("EST_NOT_INCOME_ACCOUNT: line {} must use an Income account", idx + 1));
         }
@@ -179,7 +171,8 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
         .await
         .map_err(db_err)?;
     }
-    crate::item_types::write_charges(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, &crate::item_types::charge_rows(form, &layout), tax.is_some()).await?;
+    crate::item_types::write_charges(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, &crate::item_types::charge_rows(form, &layout), tax.is_some())
+        .await?;
     crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, form, &layout, tax.is_some()).await?;
     crate::sales_lists::write_details(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, &input.details).await?;
     Ok(estimate_id)
@@ -191,7 +184,8 @@ pub async fn set_estimate_status(pool: &SqlitePool, estimate_id: i64, status: &s
         return Err(format!("EST_BAD_STATUS: '{status}' is not a status you can set; convert to invoice to close"));
     }
     // An estimate that became a sales order goes on through the order; its status stays.
-    let ordered: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM sales_orders WHERE estimate_id = ?1)").bind(estimate_id).fetch_one(pool).await.map_err(db_err)?;
+    let ordered: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM sales_orders WHERE estimate_id = ?1)").bind(estimate_id).fetch_one(pool).await.map_err(db_err)?;
     if ordered {
         return Err("EST_ORDERED: this estimate became a sales order; its status no longer changes".into());
     }
@@ -208,12 +202,7 @@ pub async fn set_estimate_status(pool: &SqlitePool, estimate_id: i64, status: &s
 }
 
 /// Creates and posts an invoice from the estimate's lines and closes the estimate, atomically.
-pub async fn convert_to_invoice(
-    pool: &SqlitePool,
-    estimate_id: i64,
-    issue_date: NaiveDate,
-    due_date: NaiveDate,
-) -> Result<EstimateSummary, String> {
+pub async fn convert_to_invoice(pool: &SqlitePool, estimate_id: i64, issue_date: NaiveDate, due_date: NaiveDate) -> Result<EstimateSummary, String> {
     // Zero-amount lines (headings, optional extras priced at nothing) can stay off the invoice.
     let drop_zero = crate::sales_prefs::drop_zero_lines(pool).await?;
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
@@ -338,15 +327,14 @@ pub async fn estimate_detail(pool: &SqlitePool, estimate_id: i64) -> Result<Esti
 
 /// Refuses converting an estimate that is already invoiced or was rejected.
 async fn check_convertible(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64) -> Result<String, String> {
-    let header: Option<(String, String)> = sqlx::query_as(
-        "SELECT c.name, e.status FROM estimates e JOIN customers c ON c.id = e.customer_id WHERE e.id = ?1",
-    )
-    .bind(estimate_id)
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(db_err)?;
+    let header: Option<(String, String)> = sqlx::query_as("SELECT c.name, e.status FROM estimates e JOIN customers c ON c.id = e.customer_id WHERE e.id = ?1")
+        .bind(estimate_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)?;
     let (customer_name, status) = header.ok_or_else(|| format!("EST_NOT_FOUND: estimate {estimate_id} does not exist"))?;
-    let ordered: Option<i64> = sqlx::query_scalar("SELECT order_number FROM sales_orders WHERE estimate_id = ?1").bind(estimate_id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let ordered: Option<i64> =
+        sqlx::query_scalar("SELECT order_number FROM sales_orders WHERE estimate_id = ?1").bind(estimate_id).fetch_optional(&mut **tx).await.map_err(db_err)?;
     if let Some(number) = ordered {
         return Err(format!("EST_ORDERED: this estimate became sales order #{number}; invoice the order instead"));
     }

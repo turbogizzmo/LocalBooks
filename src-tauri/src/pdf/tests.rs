@@ -33,7 +33,16 @@ fn writes_a_well_formed_file() {
         width: 612.0,
         height: 792.0,
         ops: vec![
-            Op::Text { x: 50.0, y: 60.0, text: "Invoice (No. 1) \\ é".into(), family: FontFamily::Helvetica, bold: true, size: 12.0, color: Rgb(0, 0, 0), align: Align::Left },
+            Op::Text {
+                x: 50.0,
+                y: 60.0,
+                text: "Invoice (No. 1) \\ é".into(),
+                family: FontFamily::Helvetica,
+                bold: true,
+                size: 12.0,
+                color: Rgb(0, 0, 0),
+                align: Align::Left,
+            },
             Op::Rect { x: 50.0, y: 70.0, w: 100.0, h: 20.0, fill: Some(Rgb(10, 20, 30)), stroke: None, line_width: 0.0 },
             Op::Line { x1: 50.0, y1: 100.0, x2: 500.0, y2: 100.0, color: Rgb(0, 0, 0), width: 1.0 },
             Op::Image { x: 400.0, y: 40.0, w: 80.0, h: 40.0 },
@@ -71,7 +80,16 @@ fn a_protected_pdf_opens_only_with_its_password() {
     let page = Page {
         width: 612.0,
         height: 792.0,
-        ops: vec![Op::Text { x: 50.0, y: 60.0, text: "Profit and Loss 2026".into(), family: FontFamily::Helvetica, bold: false, size: 12.0, color: Rgb(0, 0, 0), align: Align::Left }],
+        ops: vec![Op::Text {
+            x: 50.0,
+            y: 60.0,
+            text: "Profit and Loss 2026".into(),
+            family: FontFamily::Helvetica,
+            bold: false,
+            size: 12.0,
+            color: Rgb(0, 0, 0),
+            align: Align::Left,
+        }],
     };
     let plain = write_protected_pdf(std::slice::from_ref(&page), None, "Profit and Loss", None).unwrap();
     assert_eq!(plain, write_pdf(std::slice::from_ref(&page), None, "Profit and Loss"), "no password: the usual file");

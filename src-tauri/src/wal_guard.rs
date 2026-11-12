@@ -104,7 +104,8 @@ mod tests {
         // The process, a counter and the time: unique even for tests started in the same instant.
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("lb-wal-guard-{}-{n}-{}", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
+        let dir =
+            std::env::temp_dir().join(format!("lb-wal-guard-{}-{n}-{}", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }

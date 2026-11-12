@@ -78,16 +78,27 @@ async fn catalog() -> Catalog {
         async move { sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_one(&pool).await.unwrap() }
     };
     let (sales, services, obe) = (account("4000").await, account("4100").await, account("3000").await);
-    let product = |name: &str, rate_cents, income_account_id| ProductInput { name: name.into(), description: None, rate_cents, income_account_id, is_taxable: true };
+    let product =
+        |name: &str, rate_cents, income_account_id| ProductInput { name: name.into(), description: None, rate_cents, income_account_id, is_taxable: true };
     let consulting = create_product(&pool, product("Consulting", Cents(15_000), services)).await.unwrap().id;
     let widget = create_product(&pool, product("Widget", Cents(2_500), sales)).await.unwrap().id;
     let gadget = create_product(&pool, product("Gadget", Cents(999), sales)).await.unwrap().id;
     let track = |product_id| TrackInput { product_id, sku: None, asset_account_id: None, cogs_account_id: None };
     let item = track_product(&pool, &track(widget)).await.unwrap().id;
     track_product(&pool, &track(gadget)).await.unwrap();
-    adjust(&pool, &AdjustInput { item_id: item, date: "2026-10-01".parse().unwrap(), qty_change_e4: 100_000, total_cost_cents: Some(5_250), offset_account_id: obe, memo: None })
-        .await
-        .unwrap();
+    adjust(
+        &pool,
+        &AdjustInput {
+            item_id: item,
+            date: "2026-10-01".parse().unwrap(),
+            qty_change_e4: 100_000,
+            total_cost_cents: Some(5_250),
+            offset_account_id: obe,
+            memo: None,
+        },
+    )
+    .await
+    .unwrap();
     Catalog { pool, consulting, widget, gadget }
 }
 
@@ -104,12 +115,8 @@ async fn items_list_their_type_price_and_unit_cost() {
 #[tokio::test]
 async fn preview_explains_the_items_it_leaves_alone() {
     let c = catalog().await;
-    let input = PriceChangeInput {
-        product_ids: vec![c.consulting, c.widget, c.gadget],
-        basis: Basis::Cost,
-        adjustment: PCT(100_000),
-        rounding: Rounding::EndIn99,
-    };
+    let input =
+        PriceChangeInput { product_ids: vec![c.consulting, c.widget, c.gadget], basis: Basis::Cost, adjustment: PCT(100_000), rounding: Rounding::EndIn99 };
     let preview = preview(&c.pool, &input).await.unwrap();
     // Widget: 5.25 × 2 = 10.50 → 10.99. The others have no cost.
     assert_eq!(preview[1].new_cents, Some(1_099));
@@ -145,7 +152,8 @@ async fn applying_sets_prices_records_the_audit_trail_and_leaves_documents_alone
                 income_account_id: services,
                 product_service_id: Some(c.consulting),
                 class_id: None,
-                is_taxable: false, service_date: None,
+                is_taxable: false,
+                service_date: None,
             }],
             currency: None,
             tax_rate_id: None,
@@ -163,10 +171,13 @@ async fn applying_sets_prices_records_the_audit_trail_and_leaves_documents_alone
         rounding: Rounding::Nearest { step_cents: 100 },
     };
     let applied = apply(&c.pool, &input).await.unwrap();
-    assert_eq!(applied.changed.iter().map(|p| (p.product_id, p.current_cents, p.new_cents)).collect::<Vec<_>>(), vec![
-        (c.consulting, 15_000, Some(16_500)),
-        (c.widget, 2_500, Some(2_800)), // 27.50 rounds up to 28.00
-    ]);
+    assert_eq!(
+        applied.changed.iter().map(|p| (p.product_id, p.current_cents, p.new_cents)).collect::<Vec<_>>(),
+        vec![
+            (c.consulting, 15_000, Some(16_500)),
+            (c.widget, 2_500, Some(2_800)), // 27.50 rounds up to 28.00
+        ]
+    );
     let prices: Vec<(i64, i64)> = sqlx::query_as("SELECT id, rate_cents FROM products_services ORDER BY id").fetch_all(&c.pool).await.unwrap();
     assert_eq!(prices, vec![(c.consulting, 16_500), (c.widget, 2_800), (c.gadget, 999)]);
 
@@ -198,6 +209,7 @@ async fn applying_nothing_changes_nothing() {
     assert!(apply(&c.pool, &no_cost).await.unwrap_err().starts_with("PRICE_NOTHING_TO_CHANGE"));
     let records: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'PRICE_CHANGE'").fetch_one(&c.pool).await.unwrap();
     assert_eq!(records, 0);
-    let bad = PriceChangeInput { product_ids: vec![c.consulting], basis: Basis::CurrentPrice, adjustment: PCT(5_000), rounding: Rounding::Up { step_cents: 0 } };
+    let bad =
+        PriceChangeInput { product_ids: vec![c.consulting], basis: Basis::CurrentPrice, adjustment: PCT(5_000), rounding: Rounding::Up { step_cents: 0 } };
     assert!(apply(&c.pool, &bad).await.unwrap_err().starts_with("PRICE_BAD_ROUNDING"));
 }

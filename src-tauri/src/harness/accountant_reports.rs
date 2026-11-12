@@ -37,12 +37,22 @@ async fn company() -> (SqlitePool, i64, i64) {
     let april = reconcile(&pool, d(2025, 4, 30)).await;
     let may = reconcile(&pool, d(2025, 5, 31)).await;
     let office = account(&pool, "6250").await;
-    let po = |vendor: &str, date, amount| crate::workflows::PurchaseOrderInput { form_lines: Vec::new(),
+    let po = |vendor: &str, date, amount| crate::workflows::PurchaseOrderInput {
+        form_lines: Vec::new(),
         vendor_name: vendor.into(),
         po_date: date,
         expected_date: Some(d(2026, 1, 15)),
         memo: Some("Paper and toner".into()),
-        lines: vec![crate::workflows::PurchaseOrderLineInput { account_id: office, product_service_id: None, description: None, quantity_e4: None, rate_cents: None, amount_cents: crate::money::Cents(amount), class_id: None, customer_id: None }],
+        lines: vec![crate::workflows::PurchaseOrderLineInput {
+            account_id: office,
+            product_service_id: None,
+            description: None,
+            quantity_e4: None,
+            rate_cents: None,
+            amount_cents: crate::money::Cents(amount),
+            class_id: None,
+            customer_id: None,
+        }],
     };
     crate::workflows::create_purchase_order(&pool, po("Pacific Office Outfitters", d(2025, 12, 18), 64_000)).await.expect("po");
     crate::workflows::create_purchase_order(&pool, po("Riverside Print Shop", d(2025, 12, 22), 23_500)).await.expect("po");
@@ -74,14 +84,19 @@ async fn reconciliation_discrepancy() {
     let clean = ar::discrepancy(&pool, None, d(2025, 12, 31)).await.unwrap();
     assert_eq!(clean.report.line_count, 0, "nothing changed after reconciling");
     // The company file is edited outside LocalBooks, past the schema's guards.
-    let triggers: Vec<String> = sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name IN ('journal_lines', 'journal_entries')")
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+    let triggers: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name IN ('journal_lines', 'journal_entries')")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     for t in triggers {
         sqlx::query(&format!("DROP TRIGGER {t}")).execute(&pool).await.unwrap();
     }
-    let cleared: Vec<(i64, i64)> = sqlx::query_as("SELECT id, journal_entry_id FROM journal_lines WHERE reconciliation_id = ?1 ORDER BY id LIMIT 3").bind(april).fetch_all(&pool).await.unwrap();
+    let cleared: Vec<(i64, i64)> = sqlx::query_as("SELECT id, journal_entry_id FROM journal_lines WHERE reconciliation_id = ?1 ORDER BY id LIMIT 3")
+        .bind(april)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
     sqlx::query("UPDATE journal_lines SET debit_cents = CASE WHEN debit_cents > 0 THEN debit_cents + 10000 ELSE 0 END, credit_cents = CASE WHEN credit_cents > 0 THEN credit_cents + 10000 ELSE 0 END WHERE id = ?1").bind(cleared[0].0).execute(&pool).await.unwrap();
     sqlx::query("UPDATE journal_entries SET is_voided = 1 WHERE id = ?1").bind(cleared[1].1).execute(&pool).await.unwrap();
     sqlx::query("DELETE FROM journal_lines WHERE id = ?1").bind(cleared[2].0).execute(&pool).await.unwrap();

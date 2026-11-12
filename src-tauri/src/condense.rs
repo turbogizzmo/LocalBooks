@@ -402,11 +402,8 @@ async fn all_tables(conn: &mut SqliteConnection) -> Result<Vec<String>, String> 
 /// Fails when the file has a table this build does not know how to condense, so a new table is
 /// never silently treated as a list or a transaction.
 async fn check_tables_known(conn: &mut SqliteConnection) -> Result<(), String> {
-    let unknown: Vec<String> = all_tables(conn)
-        .await?
-        .into_iter()
-        .filter(|t| !KEPT_TABLES.contains(&t.as_str()) && !TRANSACTION_TABLES.iter().any(|(name, _)| name == t))
-        .collect();
+    let unknown: Vec<String> =
+        all_tables(conn).await?.into_iter().filter(|t| !KEPT_TABLES.contains(&t.as_str()) && !TRANSACTION_TABLES.iter().any(|(name, _)| name == t)).collect();
     if unknown.is_empty() {
         Ok(())
     } else {
@@ -455,10 +452,11 @@ async fn plan(conn: &mut SqliteConnection, cutoff: NaiveDate) -> Result<Plan, St
                 std::collections::hash_map::Entry::Occupied(known) => known.into_mut(),
                 std::collections::hash_map::Entry::Vacant(slot) => {
                     let (parent, to) = slot.key();
-                    let pairs: Vec<(i64, i64)> = sqlx::query_as(&format!("SELECT {}, rowid FROM {} WHERE {0} IS NOT NULL", quote_ident(to), quote_ident(parent)))
-                        .fetch_all(&mut *conn)
-                        .await
-                        .map_err(db_err)?;
+                    let pairs: Vec<(i64, i64)> =
+                        sqlx::query_as(&format!("SELECT {}, rowid FROM {} WHERE {0} IS NOT NULL", quote_ident(to), quote_ident(parent)))
+                            .fetch_all(&mut *conn)
+                            .await
+                            .map_err(db_err)?;
                     slot.insert(pairs.into_iter().collect())
                 }
             };
@@ -479,11 +477,15 @@ async fn plan(conn: &mut SqliteConnection, cutoff: NaiveDate) -> Result<Plan, St
         }
     }
     for (table, kind_column, id_column) in FORM_LINKS {
-        let links: Vec<(i64, String, i64)> =
-            sqlx::query_as(&format!("SELECT rowid, {0}, {1} FROM {2} WHERE {0} IS NOT NULL AND {1} IS NOT NULL", quote_ident(kind_column), quote_ident(id_column), quote_ident(table)))
-                .fetch_all(&mut *conn)
-                .await
-                .map_err(db_err)?;
+        let links: Vec<(i64, String, i64)> = sqlx::query_as(&format!(
+            "SELECT rowid, {0}, {1} FROM {2} WHERE {0} IS NOT NULL AND {1} IS NOT NULL",
+            quote_ident(kind_column),
+            quote_ident(id_column),
+            quote_ident(table)
+        ))
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(db_err)?;
         let from = nodes.table(table);
         for (rowid, kind, id) in links {
             let Some(target) = form_table(&kind).and_then(|t| nodes.table(t)).and_then(|t| nodes.node(t, id)) else { continue };
@@ -648,7 +650,8 @@ async fn plan(conn: &mut SqliteConnection, cutoff: NaiveDate) -> Result<Plan, St
     // Each item's summarized movements (the first ones recorded) become one, dated with the last.
     let mut stock = Vec::new();
     for (item, moves) in &by_item {
-        let summarized: Vec<_> = moves.iter().map(|(_, m)| *m).filter(|m| removed_nodes.contains(&nodes.node(stock_table, m.0).unwrap_or(usize::MAX))).collect();
+        let summarized: Vec<_> =
+            moves.iter().map(|(_, m)| *m).filter(|m| removed_nodes.contains(&nodes.node(stock_table, m.0).unwrap_or(usize::MAX))).collect();
         let (qty_e4, value_cents) = summarized.iter().fold((0, 0), |(q, v), m| (q + m.3, v + m.4));
         if let Some(last) = summarized.last() {
             if qty_e4 != 0 || value_cents != 0 {
@@ -768,7 +771,10 @@ async fn condense_copy(conn: &mut SqliteConnection, plan: &Plan, archive: &Archi
         sqlx::query(&format!("DROP TRIGGER {}", quote_ident(name))).execute(&mut *tx).await.map_err(db_err)?;
     }
 
-    sqlx::query("CREATE TEMP TABLE condense_removed (tbl TEXT NOT NULL, rid INTEGER NOT NULL, PRIMARY KEY (tbl, rid))").execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("CREATE TEMP TABLE condense_removed (tbl TEXT NOT NULL, rid INTEGER NOT NULL, PRIMARY KEY (tbl, rid))")
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     for (table, rowids) in &plan.removed {
         for rowid in rowids {
             sqlx::query("INSERT INTO temp.condense_removed (tbl, rid) VALUES (?1, ?2)").bind(table).bind(rowid).execute(&mut *tx).await.map_err(db_err)?;
@@ -806,11 +812,8 @@ async fn condense_copy(conn: &mut SqliteConnection, plan: &Plan, archive: &Archi
         }
         let id = next_id;
         next_id += 1;
-        let memo = format!(
-            "Condensed: {} transactions in {} (the detail is in the archive {archive_name})",
-            summary.entries.len(),
-            summary.date.format("%B %Y")
-        );
+        let memo =
+            format!("Condensed: {} transactions in {} (the detail is in the archive {archive_name})", summary.entries.len(), summary.date.format("%B %Y"));
         sqlx::query("INSERT INTO journal_entries (id, entry_number, entry_date, memo, source_type, status) VALUES (?1, ?2, ?3, ?4, 'JOURNAL', 'DRAFT')")
             .bind(id)
             .bind(next_number)
@@ -885,7 +888,8 @@ async fn condense_copy(conn: &mut SqliteConnection, plan: &Plan, archive: &Archi
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;
-        recorded_stock.push(serde_json::json!({ "movementId": stock.movement_id, "itemId": stock.item_id, "qtyE4": stock.qty_e4, "valueCents": stock.value_cents }));
+        recorded_stock
+            .push(serde_json::json!({ "movementId": stock.movement_id, "itemId": stock.item_id, "qtyE4": stock.qty_e4, "valueCents": stock.value_cents }));
     }
 
     // A new audit-trail identity: the archive keeps the old one, and this computer's record of it.
@@ -1042,9 +1046,11 @@ async fn kept_tables_digest(pool: &SqlitePool) -> Result<BTreeMap<String, String
 }
 
 async fn table_digest(conn: &mut SqliteConnection, table: &str) -> Result<String, String> {
-    let columns: Vec<String> = sqlx::query_scalar("SELECT name FROM pragma_table_info(?1) ORDER BY cid").bind(table).fetch_all(&mut *conn).await.map_err(db_err)?;
+    let columns: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM pragma_table_info(?1) ORDER BY cid").bind(table).fetch_all(&mut *conn).await.map_err(db_err)?;
     let row = columns.iter().map(|c| format!("quote({})", quote_ident(c))).collect::<Vec<_>>().join(" || ',' || ");
-    let rows: Vec<String> = sqlx::query_scalar(&format!("SELECT {row} FROM {} ORDER BY rowid", quote_ident(table))).fetch_all(&mut *conn).await.map_err(db_err)?;
+    let rows: Vec<String> =
+        sqlx::query_scalar(&format!("SELECT {row} FROM {} ORDER BY rowid", quote_ident(table))).fetch_all(&mut *conn).await.map_err(db_err)?;
     let mut hash = Sha256::new();
     for r in rows {
         hash.update(r.as_bytes());
@@ -1065,7 +1071,13 @@ pub async fn content_digest(pool: &SqlitePool) -> Result<String, String> {
 }
 
 /// Compares the condensed copy with the archive it was made from.
-pub async fn verify(archive: &SqlitePool, condensed: &SqlitePool, condensed_size: u64, cutoff: NaiveDate, today: NaiveDate) -> Result<CondenseVerification, String> {
+pub async fn verify(
+    archive: &SqlitePool,
+    condensed: &SqlitePool,
+    condensed_size: u64,
+    cutoff: NaiveDate,
+    today: NaiveDate,
+) -> Result<CondenseVerification, String> {
     let mut checks = Vec::new();
 
     let report = file_repair::checkup(condensed, condensed_size).await?;

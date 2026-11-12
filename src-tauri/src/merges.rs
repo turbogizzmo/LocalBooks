@@ -147,11 +147,7 @@ pub async fn merge_target(pool: &SqlitePool, kind: MergeKind, except: i64, name:
 }
 
 async fn exists(tx: &mut Transaction<'_, Sqlite>, table: &str) -> Result<bool, String> {
-    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)")
-        .bind(table)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(db_err)
+    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)").bind(table).fetch_one(&mut **tx).await.map_err(db_err)
 }
 
 async fn repoint(tx: &mut Transaction<'_, Sqlite>, columns: &[(&str, &str)], from: i64, to: i64) -> Result<i64, String> {
@@ -160,12 +156,8 @@ async fn repoint(tx: &mut Transaction<'_, Sqlite>, columns: &[(&str, &str)], fro
         if !exists(tx, table).await? {
             continue;
         }
-        let done = sqlx::query(&format!("UPDATE {table} SET {column} = ?2 WHERE {column} = ?1"))
-            .bind(from)
-            .bind(to)
-            .execute(&mut **tx)
-            .await
-            .map_err(db_err)?;
+        let done =
+            sqlx::query(&format!("UPDATE {table} SET {column} = ?2 WHERE {column} = ?1")).bind(from).bind(to).execute(&mut **tx).await.map_err(db_err)?;
         moved += i64::try_from(done.rows_affected()).unwrap_or(i64::MAX);
     }
     Ok(moved)
@@ -249,7 +241,8 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, kind: MergeKind, from_id: i64, 
 
     match kind {
         MergeKind::Customer => {
-            let jobs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM customers WHERE parent_id = ?1").bind(from_id).fetch_one(&mut **tx).await.map_err(db_err)?;
+            let jobs: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM customers WHERE parent_id = ?1").bind(from_id).fetch_one(&mut **tx).await.map_err(db_err)?;
             if jobs > 0 {
                 return Err(format!("MERGE_HAS_JOBS: {from_name} has jobs; merge or move its jobs first"));
             }
@@ -324,18 +317,17 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, kind: MergeKind, from_id: i64, 
         }
     }
 
-    let merge_id: i64 = sqlx::query_scalar(
-        "INSERT INTO name_merges (kind, from_id, to_id, from_name, to_name, journal_entry_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
-    )
-    .bind(kind.key())
-    .bind(from_id)
-    .bind(to_id)
-    .bind(&from_name)
-    .bind(&to_name)
-    .bind(entry)
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(db_err)?;
+    let merge_id: i64 =
+        sqlx::query_scalar("INSERT INTO name_merges (kind, from_id, to_id, from_name, to_name, journal_entry_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id")
+            .bind(kind.key())
+            .bind(from_id)
+            .bind(to_id)
+            .bind(&from_name)
+            .bind(&to_name)
+            .bind(entry)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(db_err)?;
 
     let mut moved = 0;
     match kind {
@@ -351,23 +343,27 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, kind: MergeKind, from_id: i64, 
             moved += i64::try_from(done.rows_affected()).unwrap_or(i64::MAX);
             moved += repoint(tx, CUSTOMER_COLUMNS, from_id, to_id).await?;
             // Customer groups: the kept customer joins each group the merged one was in.
-            sqlx::query("INSERT OR IGNORE INTO customer_group_members (group_id, customer_id) SELECT group_id, ?2 FROM customer_group_members WHERE customer_id = ?1")
-                .bind(from_id)
-                .bind(to_id)
-                .execute(&mut **tx)
-                .await
-                .map_err(db_err)?;
+            sqlx::query(
+                "INSERT OR IGNORE INTO customer_group_members (group_id, customer_id) SELECT group_id, ?2 FROM customer_group_members WHERE customer_id = ?1",
+            )
+            .bind(from_id)
+            .bind(to_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
             sqlx::query("DELETE FROM customer_group_members WHERE customer_id = ?1").bind(from_id).execute(&mut **tx).await.map_err(db_err)?;
         }
         MergeKind::Vendor => {
             moved += repoint(tx, VENDOR_COLUMNS, from_id, to_id).await?;
             // ACH bank details: the vendor kept keeps its own; it takes the merged one's otherwise.
-            sqlx::query("UPDATE vendor_bank_accounts SET vendor_id = ?2 WHERE vendor_id = ?1 AND NOT EXISTS (SELECT 1 FROM vendor_bank_accounts WHERE vendor_id = ?2)")
-                .bind(from_id)
-                .bind(to_id)
-                .execute(&mut **tx)
-                .await
-                .map_err(db_err)?;
+            sqlx::query(
+                "UPDATE vendor_bank_accounts SET vendor_id = ?2 WHERE vendor_id = ?1 AND NOT EXISTS (SELECT 1 FROM vendor_bank_accounts WHERE vendor_id = ?2)",
+            )
+            .bind(from_id)
+            .bind(to_id)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
         }
         MergeKind::Item => {
             moved += repoint(tx, ITEM_COLUMNS, from_id, to_id).await?;

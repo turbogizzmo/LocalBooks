@@ -42,10 +42,7 @@ fn released_migrations_are_never_edited() {
         .collect();
     released.sort();
     assert!(released.len() > 40, "found the pins in {}", dir.display());
-    let actual: Vec<(i64, String)> = MIGRATOR
-        .iter()
-        .map(|m| (m.version, m.checksum.iter().take(12).map(|b| format!("{b:02x}")).collect()))
-        .collect();
+    let actual: Vec<(i64, String)> = MIGRATOR.iter().map(|m| (m.version, m.checksum.iter().take(12).map(|b| format!("{b:02x}")).collect())).collect();
     for (version, pinned) in &released {
         let found = actual.iter().find(|(v, _)| v == version).unwrap_or_else(|| panic!("migration {version} was removed"));
         assert_eq!(&found.1, pinned, "migration {version} was edited after release; add a new migration instead");
@@ -82,9 +79,8 @@ async fn upgrades_a_copy_of_a_real_company_file() {
 async fn every_migration_is_recorded_once_in_the_audit_trail() {
     let pool = test_pool().await;
     let applied: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE success = 1").fetch_one(&pool).await.unwrap();
-    let logged = || async {
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'MIGRATION'").fetch_one(&pool).await.unwrap()
-    };
+    let logged =
+        || async { sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'MIGRATION'").fetch_one(&pool).await.unwrap() };
     assert_eq!(logged().await, applied);
     migrate(&pool).await.unwrap();
     assert_eq!(logged().await, applied, "re-running migrations adds no duplicate events");

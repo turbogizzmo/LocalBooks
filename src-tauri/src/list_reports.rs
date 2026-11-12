@@ -308,7 +308,8 @@ async fn contact_list(pool: &SqlitePool, kind: NameKind, today: NaiveDate) -> Re
     for p in &list {
         let b = balance.get(&p.id).copied().unwrap_or(0);
         total += b;
-        let mut cells = vec![json!(p.name), json!(p.company_name), json!(one_line(p.address.as_deref())), json!(p.phone), json!(p.email), json!(terms_text(p.terms_days))];
+        let mut cells =
+            vec![json!(p.name), json!(p.company_name), json!(one_line(p.address.as_deref())), json!(p.phone), json!(p.email), json!(terms_text(p.terms_days))];
         if kind == NameKind::Vendor {
             cells.push(json!(if p.is_1099 { "Yes" } else { "No" }));
         }
@@ -354,7 +355,11 @@ async fn item_listing(pool: &SqlitePool, today: NaiveDate) -> Result<AccountantR
         .iter()
         .map(|i| {
             let kind = if i.is_inventory { "Inventory" } else { "Service or non-stock" };
-            row(RowKind::Detail, 0, vec![json!(i.name), json!(i.description), json!(kind), json!(i.sku), json!(i.account), json!(i.rate_cents), json!(i.qty_on_hand_e4)])
+            row(
+                RowKind::Detail,
+                0,
+                vec![json!(i.name), json!(i.description), json!(kind), json!(i.sku), json!(i.account), json!(i.rate_cents), json!(i.qty_on_hand_e4)],
+            )
         })
         .collect();
     let notes = vec![format!("{}; On Hand is today's quantity of tracked items.", plural(items.len(), "active item", "active items"))];
@@ -386,7 +391,12 @@ async fn account_listing(pool: &SqlitePool, today: NaiveDate) -> Result<Accounta
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let columns = vec![head("Account", ColumnKind::Text), head("Type", ColumnKind::Text), head("Balance Total", ColumnKind::Money), head("Description", ColumnKind::Text)];
+    let columns = vec![
+        head("Account", ColumnKind::Text),
+        head("Type", ColumnKind::Text),
+        head("Balance Total", ColumnKind::Money),
+        head("Description", ColumnKind::Text),
+    ];
     let rows = accounts
         .iter()
         .map(|a| {
@@ -434,7 +444,11 @@ async fn balance_sheet_summary(pool: &SqlitePool, as_of: NaiveDate) -> Result<Ac
             // The heading's own total: the first line at its depth or above that is not an account
             // (a parent account's subtotal sits deeper). Fold it when no heading is in between.
             let close = (i + 1..lines.len()).find(|&j| lines[j].depth <= l.depth && lines[j].kind != LineKind::Account);
-            let folds = |j: usize| matches!(lines[j].kind, LineKind::Total | LineKind::Subtotal) && lines[j].depth == l.depth && lines[i + 1..j].iter().all(|x| x.kind != LineKind::Section);
+            let folds = |j: usize| {
+                matches!(lines[j].kind, LineKind::Total | LineKind::Subtotal)
+                    && lines[j].depth == l.depth
+                    && lines[i + 1..j].iter().all(|x| x.kind != LineKind::Section)
+            };
             if let Some(j) = close.filter(|&j| folds(j)) {
                 rows.push(labeled(RowKind::Detail, l.depth, 2, &l.label, &[json!(lines[j].amount_cents)]));
                 i = j + 1;
@@ -450,7 +464,11 @@ async fn balance_sheet_summary(pool: &SqlitePool, as_of: NaiveDate) -> Result<Ac
         i += 1;
     }
     let count = rows.iter().filter(|r| r.kind == RowKind::Detail).count();
-    let notes = vec![if bs.is_balanced { "Accrual basis.".to_string() } else { format!("Accrual basis. Out of balance by {}.", crate::ledger::format_money(bs.difference_cents, "")) }];
+    let notes = vec![if bs.is_balanced {
+        "Accrual basis.".to_string()
+    } else {
+        format!("Accrual basis. Out of balance by {}.", crate::ledger::format_money(bs.difference_cents, ""))
+    }];
     Ok(done(None, as_of, columns, rows, count, notes))
 }
 
@@ -647,7 +665,11 @@ async fn unpaid_bills_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<Acco
         let mut sub = 0;
         for (b, share) in items {
             let aging = (as_of - b.due_date).num_days().max(0);
-            let mut r = row(RowKind::Detail, 1, vec![Value::Null, json!("Bill"), json!(b.date), json!(b.number), json!(b.vendor), json!(b.due_date), json!(aging), json!(share)]);
+            let mut r = row(
+                RowKind::Detail,
+                1,
+                vec![Value::Null, json!("Bill"), json!(b.date), json!(b.number), json!(b.vendor), json!(b.due_date), json!(aging), json!(share)],
+            );
             r.journal_entry_id = Some(b.journal_entry_id);
             rows.push(r);
             sub += share;
@@ -720,7 +742,17 @@ async fn open_po_detail(pool: &SqlitePool, as_of: NaiveDate) -> Result<Accountan
             rows.push(row(
                 RowKind::Detail,
                 1,
-                vec![Value::Null, json!(l.po_date), json!(l.po_number.to_string()), json!(l.item), json!(l.description), json!(l.quantity_e4), json!(l.rate_cents), json!(l.expected_date), json!(l.amount_cents)],
+                vec![
+                    Value::Null,
+                    json!(l.po_date),
+                    json!(l.po_number.to_string()),
+                    json!(l.item),
+                    json!(l.description),
+                    json!(l.quantity_e4),
+                    json!(l.rate_cents),
+                    json!(l.expected_date),
+                    json!(l.amount_cents),
+                ],
             ));
             sub += l.amount_cents;
             i += 1;
@@ -789,7 +821,16 @@ async fn open_po_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<Accountan
             rows.push(row(
                 RowKind::Detail,
                 1,
-                vec![Value::Null, json!(l.po_date), json!(l.po_number.to_string()), json!(l.vendor), json!(l.item), json!(l.description), json!(l.expected_date), json!(l.amount_cents)],
+                vec![
+                    Value::Null,
+                    json!(l.po_date),
+                    json!(l.po_number.to_string()),
+                    json!(l.vendor),
+                    json!(l.item),
+                    json!(l.description),
+                    json!(l.expected_date),
+                    json!(l.amount_cents),
+                ],
             ));
             sub = sub.checked_add(l.amount_cents).ok_or("RPT_OVERFLOW: open purchase orders")?;
             i += 1;
@@ -914,7 +955,15 @@ async fn time_by_job_detail(pool: &SqlitePool, start: NaiveDate, end: NaiveDate)
             rows.push(row(
                 RowKind::Detail,
                 1,
-                vec![Value::Null, json!(t.date), json!(t.employee), json!(t.item), json!(t.description), json!(if t.billable { "Yes" } else { "No" }), json!(hours_e4(t.minutes))],
+                vec![
+                    Value::Null,
+                    json!(t.date),
+                    json!(t.employee),
+                    json!(t.item),
+                    json!(t.description),
+                    json!(if t.billable { "Yes" } else { "No" }),
+                    json!(hours_e4(t.minutes)),
+                ],
             ));
             sub += t.minutes;
         }

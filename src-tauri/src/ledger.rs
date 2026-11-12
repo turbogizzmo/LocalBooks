@@ -241,10 +241,7 @@ pub fn format_money(cents: i64, symbol: &str) -> String {
 /// Pure, database-free validation. Returns the entry's totals when it is postable.
 pub fn validate_entry(entry: &JournalEntry) -> Result<EntryTotals, String> {
     if entry.lines.len() < 2 {
-        return Err(format!(
-            "JE_TOO_FEW_LINES: a journal entry requires at least two lines (got {})",
-            entry.lines.len()
-        ));
+        return Err(format!("JE_TOO_FEW_LINES: a journal entry requires at least two lines (got {})", entry.lines.len()));
     }
 
     let mut debits = Cents::ZERO;
@@ -253,31 +250,19 @@ pub fn validate_entry(entry: &JournalEntry) -> Result<EntryTotals, String> {
     for (idx, line) in entry.lines.iter().enumerate() {
         let n = idx + 1;
         if line.debit.is_negative() || line.credit.is_negative() {
-            return Err(format!(
-                "JE_NEGATIVE_AMOUNT: line {n} has a negative amount; enter it on the opposite side instead"
-            ));
+            return Err(format!("JE_NEGATIVE_AMOUNT: line {n} has a negative amount; enter it on the opposite side instead"));
         }
         if !line.debit.is_zero() && !line.credit.is_zero() {
-            return Err(format!(
-                "JE_LINE_BOTH_SIDES: line {n} has both a debit ({}) and a credit ({}); one must be zero",
-                line.debit, line.credit
-            ));
+            return Err(format!("JE_LINE_BOTH_SIDES: line {n} has both a debit ({}) and a credit ({}); one must be zero", line.debit, line.credit));
         }
         if line.debit.is_zero() && line.credit.is_zero() {
             return Err(format!("JE_LINE_EMPTY: line {n} has neither a debit nor a credit"));
         }
         if line.debit.get() > MAX_LINE_CENTS || line.credit.get() > MAX_LINE_CENTS {
-            return Err(format!(
-                "JE_AMOUNT_TOO_LARGE: line {n} exceeds the per-line maximum of {}",
-                format_cents(MAX_LINE_CENTS)
-            ));
+            return Err(format!("JE_AMOUNT_TOO_LARGE: line {n} exceeds the per-line maximum of {}", format_cents(MAX_LINE_CENTS)));
         }
-        debits = debits
-            .checked_add(line.debit)
-            .ok_or_else(|| "JE_OVERFLOW: total debits exceed the representable range".to_string())?;
-        credits = credits
-            .checked_add(line.credit)
-            .ok_or_else(|| "JE_OVERFLOW: total credits exceed the representable range".to_string())?;
+        debits = debits.checked_add(line.debit).ok_or_else(|| "JE_OVERFLOW: total debits exceed the representable range".to_string())?;
+        credits = credits.checked_add(line.credit).ok_or_else(|| "JE_OVERFLOW: total credits exceed the representable range".to_string())?;
     }
 
     if debits != credits {
@@ -359,21 +344,12 @@ pub(crate) async fn rollback(tx: Transaction<'_, Sqlite>, err: String) -> String
 
 /// Validates and posts `entry` inside the caller's transaction, so a source document (invoice,
 /// bank line) and its ledger entry commit or roll back together. Returns the new entry id.
-pub async fn post_entry_in_tx(
-    tx: &mut Transaction<'_, Sqlite>,
-    entry: &JournalEntry,
-    source: EntrySource,
-) -> Result<i64, String> {
+pub async fn post_entry_in_tx(tx: &mut Transaction<'_, Sqlite>, entry: &JournalEntry, source: EntrySource) -> Result<i64, String> {
     post_entry_in_tx_flagged(tx, entry, source, false).await
 }
 
 /// [`post_entry_in_tx`], with the entry marked as an adjusting entry when `adjusting` is set.
-pub async fn post_entry_in_tx_flagged(
-    tx: &mut Transaction<'_, Sqlite>,
-    entry: &JournalEntry,
-    source: EntrySource,
-    adjusting: bool,
-) -> Result<i64, String> {
+pub async fn post_entry_in_tx_flagged(tx: &mut Transaction<'_, Sqlite>, entry: &JournalEntry, source: EntrySource, adjusting: bool) -> Result<i64, String> {
     validate_entry(entry)?;
     crate::closing::check_open(tx, entry.date).await?;
     if let Some(currency) = &entry.currency {
@@ -390,12 +366,7 @@ pub async fn post_entry_in_tx_flagged(
     write_entry(tx, entry, source, adjusting).await
 }
 
-async fn write_entry(
-    tx: &mut Transaction<'_, Sqlite>,
-    entry: &JournalEntry,
-    source: EntrySource,
-    adjusting: bool,
-) -> Result<i64, String> {
+async fn write_entry(tx: &mut Transaction<'_, Sqlite>, entry: &JournalEntry, source: EntrySource, adjusting: bool) -> Result<i64, String> {
     let memo = Some(entry.description.trim()).filter(|s| !s.is_empty());
 
     // Callers open the transaction with `begin_write`, so the write lock is already held here.
@@ -429,25 +400,14 @@ async fn write_entry(
     for (idx, line) in entry.lines.iter().enumerate() {
         let n = idx + 1;
         if checked.insert(line.account_id) {
-            let is_active: Option<i64> =
-                sqlx::query_scalar("SELECT is_active FROM chart_of_accounts WHERE id = ?1")
-                    .bind(line.account_id)
-                    .fetch_optional(&mut **tx)
-                    .await
-                    .map_err(db_err)?;
+            let is_active: Option<i64> = sqlx::query_scalar("SELECT is_active FROM chart_of_accounts WHERE id = ?1")
+                .bind(line.account_id)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(db_err)?;
             match is_active {
-                None => {
-                    return Err(format!(
-                        "JE_UNKNOWN_ACCOUNT: line {n} references account {} which does not exist",
-                        line.account_id
-                    ))
-                }
-                Some(0) => {
-                    return Err(format!(
-                        "JE_INACTIVE_ACCOUNT: line {n} references inactive account {}",
-                        line.account_id
-                    ))
-                }
+                None => return Err(format!("JE_UNKNOWN_ACCOUNT: line {n} references account {} which does not exist", line.account_id)),
+                Some(0) => return Err(format!("JE_INACTIVE_ACCOUNT: line {n} references inactive account {}", line.account_id)),
                 Some(_) => {}
             }
         }
@@ -496,7 +456,6 @@ async fn write_entry(
     Ok(entry_id)
 }
 
-
 // ------------------------------------------------------------------------------------------------
 // Voiding
 // ------------------------------------------------------------------------------------------------
@@ -540,7 +499,13 @@ pub(crate) async fn recompute_paid(
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
-    let status = if paid == 0 { "UNPAID" } else if paid < total { "PARTIAL" } else { "PAID" };
+    let status = if paid == 0 {
+        "UNPAID"
+    } else if paid < total {
+        "PARTIAL"
+    } else {
+        "PAID"
+    };
     sqlx::query(&format!("UPDATE {document_table} SET amount_paid_cents = ?1, status = ?2 WHERE id = ?3"))
         .bind(paid)
         .bind(status)
@@ -575,19 +540,19 @@ pub(crate) struct Relinked {
 /// credits never name the document they pay.
 pub(crate) async fn relink_applied(tx: &mut Transaction<'_, Sqlite>, to: AppliedTo, old_id: i64, new_id: i64) -> Result<Vec<Relinked>, String> {
     let tables: &[(&'static str, &str, &str)] = match to {
-        AppliedTo::Invoice => &[("PAYMENT", "invoice_payments", "invoice_id"), ("CREDIT", "credit_applications", "invoice_id"), ("BOUNCED_CHECK", "bounced_checks", "invoice_id")],
+        AppliedTo::Invoice => {
+            &[("PAYMENT", "invoice_payments", "invoice_id"), ("CREDIT", "credit_applications", "invoice_id"), ("BOUNCED_CHECK", "bounced_checks", "invoice_id")]
+        }
         AppliedTo::Bill => &[("BILL_PAYMENT", "bill_payments", "bill_id"), ("VENDOR_CREDIT", "vendor_credit_applications", "bill_id")],
     };
     let mut moved = Vec::new();
     for (kind, table, fk) in tables {
-        let mut rows: Vec<(i64, i64)> = sqlx::query_as(&format!(
-            "UPDATE {table} SET {fk} = ?2 WHERE {fk} = ?1 AND is_voided = 0 RETURNING id, amount_cents"
-        ))
-        .bind(old_id)
-        .bind(new_id)
-        .fetch_all(&mut **tx)
-        .await
-        .map_err(db_err)?;
+        let mut rows: Vec<(i64, i64)> = sqlx::query_as(&format!("UPDATE {table} SET {fk} = ?2 WHERE {fk} = ?1 AND is_voided = 0 RETURNING id, amount_cents"))
+            .bind(old_id)
+            .bind(new_id)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(db_err)?;
         rows.sort_unstable();
         moved.extend(rows.into_iter().map(|(id, amount_cents)| Relinked { kind, id, amount_cents }));
     }
@@ -645,14 +610,10 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
     .await
     .map_err(db_err)?;
     if reconciled > 0 {
-        return Err(format!(
-            "VOID_RECONCILED: entry #{number} is part of a completed reconciliation; voiding it would change a reconciled balance"
-        ));
+        return Err(format!("VOID_RECONCILED: entry #{number} is part of a completed reconciliation; voiding it would change a reconciled balance"));
     }
     if ticked > 0 {
-        return Err(format!(
-            "VOID_CLEARED: entry #{number} is ticked in the reconciliation in progress; untick it there first"
-        ));
+        return Err(format!("VOID_CLEARED: entry #{number} is ticked in the reconciliation in progress; untick it there first"));
     }
 
     let doc = source_id.unwrap_or_default();
@@ -759,9 +720,7 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
     .await
     .map_err(db_err)?;
     if let Some(reclass_number) = reclassified_by {
-        return Err(format!(
-            "VOID_RECLASSIFIED: entry #{number} has lines moved to another class by entry #{reclass_number}; void that entry first"
-        ));
+        return Err(format!("VOID_RECLASSIFIED: entry #{number} has lines moved to another class by entry #{reclass_number}; void that entry first"));
     }
     // A reclassifying entry is undone newest first: a later move of the same lines builds on it.
     let later: Option<i64> = sqlx::query_scalar(
@@ -780,13 +739,12 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
     }
 
     type LineRow = (i64, Cents, Cents, Option<String>, Option<i64>);
-    let lines: Vec<LineRow> = sqlx::query_as(
-        "SELECT account_id, debit_cents, credit_cents, memo, class_id FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number",
-    )
-    .bind(journal_entry_id)
-    .fetch_all(&mut **tx)
-    .await
-    .map_err(db_err)?;
+    let lines: Vec<LineRow> =
+        sqlx::query_as("SELECT account_id, debit_cents, credit_cents, memo, class_id FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number")
+            .bind(journal_entry_id)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(db_err)?;
     // The reversal swaps the posted home-currency amounts exactly, so the void nets to zero even
     // for entries that were converted from a foreign currency.
     let reversal = JournalEntry {
@@ -803,11 +761,7 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
     // Stock that moved with this entry moves back (refused if later sales already used it).
     crate::inventory::reverse_for_entry(tx, journal_entry_id, reversal_id, date).await?;
 
-    sqlx::query("UPDATE journal_entries SET is_voided = 1 WHERE id = ?1")
-        .bind(journal_entry_id)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    sqlx::query("UPDATE journal_entries SET is_voided = 1 WHERE id = ?1").bind(journal_entry_id).execute(&mut **tx).await.map_err(db_err)?;
 
     let flag = |table: &'static str| format!("UPDATE {table} SET is_voided = 1 WHERE id = ?1");
     match source_type.as_str() {
@@ -835,28 +789,17 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
         }
         "DEPOSIT" => {
             sqlx::query(&flag("deposits")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
-            sqlx::query("UPDATE deposit_lines SET is_voided = 1 WHERE deposit_id = ?1")
-                .bind(doc)
-                .execute(&mut **tx)
-                .await
-                .map_err(db_err)?;
+            sqlx::query("UPDATE deposit_lines SET is_voided = 1 WHERE deposit_id = ?1").bind(doc).execute(&mut **tx).await.map_err(db_err)?;
         }
         "RECEIVE_PAYMENT" => {
             sqlx::query(&flag("invoice_payments")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
-            let invoice_id: i64 = sqlx::query_scalar("SELECT invoice_id FROM invoice_payments WHERE id = ?1")
-                .bind(doc)
-                .fetch_one(&mut **tx)
-                .await
-                .map_err(db_err)?;
+            let invoice_id: i64 =
+                sqlx::query_scalar("SELECT invoice_id FROM invoice_payments WHERE id = ?1").bind(doc).fetch_one(&mut **tx).await.map_err(db_err)?;
             recompute_paid(tx, "invoices", "invoice_payments", "invoice_id", invoice_id).await?;
         }
         "BILL_PAYMENT" => {
             sqlx::query(&flag("bill_payments")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
-            let bill_id: i64 = sqlx::query_scalar("SELECT bill_id FROM bill_payments WHERE id = ?1")
-                .bind(doc)
-                .fetch_one(&mut **tx)
-                .await
-                .map_err(db_err)?;
+            let bill_id: i64 = sqlx::query_scalar("SELECT bill_id FROM bill_payments WHERE id = ?1").bind(doc).fetch_one(&mut **tx).await.map_err(db_err)?;
             recompute_paid(tx, "bills", "bill_payments", "bill_id", bill_id).await?;
         }
         "JOURNAL" => {
@@ -879,13 +822,12 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
                 .await
                 .map_err(db_err)?;
             // A bounced check: its payment counts toward the invoice again.
-            let bounced: Option<Option<i64>> = sqlx::query_scalar(
-                "UPDATE bounced_checks SET is_voided = 1 WHERE journal_entry_id = ?1 AND is_voided = 0 RETURNING invoice_id",
-            )
-            .bind(journal_entry_id)
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(db_err)?;
+            let bounced: Option<Option<i64>> =
+                sqlx::query_scalar("UPDATE bounced_checks SET is_voided = 1 WHERE journal_entry_id = ?1 AND is_voided = 0 RETURNING invoice_id")
+                    .bind(journal_entry_id)
+                    .fetch_optional(&mut **tx)
+                    .await
+                    .map_err(db_err)?;
             if let Some(Some(invoice_id)) = bounced {
                 recompute_paid(tx, "invoices", "invoice_payments", "invoice_id", invoice_id).await?;
             }
@@ -1128,10 +1070,20 @@ pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification
     let mut findings = Vec::new();
     for (problem, sql) in checks {
         let rows: Vec<(i64, Option<i64>)> = sqlx::query_as(sql).fetch_all(pool).await.map_err(db_err)?;
-        findings.extend(rows.into_iter().map(|(entry_id, entry_number)| AuditFinding { entry_id, entry_number, problem: problem.into(), audit_record_id: None }));
+        findings.extend(rows.into_iter().map(|(entry_id, entry_number)| AuditFinding {
+            entry_id,
+            entry_number,
+            problem: problem.into(),
+            audit_record_id: None,
+        }));
     }
     let chain = crate::audit_chain::verify(pool).await?;
-    findings.extend(chain.problems.into_iter().map(|(record, problem)| AuditFinding { entry_id: 0, entry_number: None, problem, audit_record_id: Some(record) }));
+    findings.extend(chain.problems.into_iter().map(|(record, problem)| AuditFinding {
+        entry_id: 0,
+        entry_number: None,
+        problem,
+        audit_record_id: Some(record),
+    }));
     findings.sort_by_key(|f| (f.audit_record_id.is_some(), f.entry_id, f.audit_record_id, f.problem.clone()));
 
     let (entries_checked, voids_checked, migrations_recorded): (i64, i64, i64) = sqlx::query_as(

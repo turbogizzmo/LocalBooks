@@ -119,7 +119,13 @@ pub(super) async fn open_by_item(pool: &SqlitePool, today: NaiveDate) -> Result<
         rows.extend(lines.iter().map(|l| line_row(l, l.customer_name.clone())));
         let left = sum(lines.iter().map(|l| l.left_qty_e4))?;
         let backordered = sum(lines.iter().map(|l| l.backordered_qty_e4))?;
-        rows.push(labeled(RowKind::Subtotal, 0, w, &format!("Total {name}"), &[json!(left), json!(backordered), json!(sum(lines.iter().map(|l| l.open_cents))?)]));
+        rows.push(labeled(
+            RowKind::Subtotal,
+            0,
+            w,
+            &format!("Total {name}"),
+            &[json!(left), json!(backordered), json!(sum(lines.iter().map(|l| l.open_cents))?)],
+        ));
     }
     rows.push(labeled(RowKind::Total, 0, w, "TOTAL", &[json!(open.total_open_cents)]));
     let notes = vec![format!(

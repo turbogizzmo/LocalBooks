@@ -124,7 +124,11 @@ fn check_short(value: Option<&str>, what: &str, code: &str) -> Result<Option<Str
 }
 
 /// The header as it will be stored: addresses filled from the customer where left out.
-pub(crate) async fn resolve(tx: &mut Transaction<'_, Sqlite>, customer_id: Option<i64>, header: &SalesHeader) -> Result<(String, String, Option<String>, Option<String>), String> {
+pub(crate) async fn resolve(
+    tx: &mut Transaction<'_, Sqlite>,
+    customer_id: Option<i64>,
+    header: &SalesHeader,
+) -> Result<(String, String, Option<String>, Option<String>), String> {
     let defaults = match (customer_id, header.bill_to.is_none() || header.ship_to.is_none()) {
         (Some(id), true) => customer_defaults(&mut **tx, id).await?,
         _ => CustomerSalesDefaults::default(),
@@ -145,7 +149,8 @@ pub(crate) async fn resolve(tx: &mut Transaction<'_, Sqlite>, customer_id: Optio
 /// `table` is `invoices`, `sales_receipts`, `estimates` or `credit_memos`.
 pub(crate) async fn write(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64, header: &SalesHeader) -> Result<(), String> {
     debug_assert!(matches!(table, "invoices" | "sales_receipts" | "estimates" | "credit_memos" | "sales_orders"));
-    let customer_id: Option<i64> = sqlx::query_scalar(&format!("SELECT customer_id FROM {table} WHERE id = ?1")).bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
+    let customer_id: Option<i64> =
+        sqlx::query_scalar(&format!("SELECT customer_id FROM {table} WHERE id = ?1")).bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
     let (bill_to, ship_to, po_number, fob) = resolve(tx, customer_id, header).await?;
     sqlx::query(&format!("UPDATE {table} SET bill_to = ?1, ship_to = ?2, po_number = ?3, fob = ?4 WHERE id = ?5"))
         .bind(bill_to)
@@ -164,8 +169,11 @@ pub(crate) async fn write(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64
 pub async fn read<'e, E: sqlx::SqliteExecutor<'e>>(executor: E, table: &str, id: i64) -> Result<SalesHeader, String> {
     debug_assert!(matches!(table, "invoices" | "sales_receipts" | "estimates" | "credit_memos" | "sales_orders"));
     type AddressRow = (Option<String>, Option<String>, Option<String>, Option<String>);
-    let row: Option<AddressRow> =
-        sqlx::query_as(&format!("SELECT bill_to, ship_to, po_number, fob FROM {table} WHERE id = ?1")).bind(id).fetch_optional(executor).await.map_err(db_err)?;
+    let row: Option<AddressRow> = sqlx::query_as(&format!("SELECT bill_to, ship_to, po_number, fob FROM {table} WHERE id = ?1"))
+        .bind(id)
+        .fetch_optional(executor)
+        .await
+        .map_err(db_err)?;
     let (bill_to, ship_to, po_number, fob) = row.unwrap_or_default();
     Ok(SalesHeader { bill_to, ship_to, po_number, fob })
 }
@@ -190,8 +198,14 @@ pub struct CreditLimitWarning {
 /// Would an invoice of `amount_cents` (home currency) for `customer_name` take them over their
 /// credit limit? `replacing_invoice_id` is the invoice an edit replaces; its open balance is left
 /// out. `None` when there is no limit, the customer is new, or the invoice stays within it.
-pub async fn credit_check(pool: &SqlitePool, customer_name: &str, amount_cents: i64, replacing_invoice_id: Option<i64>) -> Result<Option<CreditLimitWarning>, String> {
-    let customer: Option<i64> = sqlx::query_scalar("SELECT id FROM customers WHERE name = ?1 COLLATE NOCASE").bind(customer_name.trim()).fetch_optional(pool).await.map_err(db_err)?;
+pub async fn credit_check(
+    pool: &SqlitePool,
+    customer_name: &str,
+    amount_cents: i64,
+    replacing_invoice_id: Option<i64>,
+) -> Result<Option<CreditLimitWarning>, String> {
+    let customer: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM customers WHERE name = ?1 COLLATE NOCASE").bind(customer_name.trim()).fetch_optional(pool).await.map_err(db_err)?;
     let Some(customer) = customer else { return Ok(None) };
     // The nearest customer, from this one upward, that has a limit.
     let holder: Option<(i64, String, i64)> = sqlx::query_as(
@@ -224,7 +238,12 @@ pub async fn credit_check(pool: &SqlitePool, customer_name: &str, amount_cents: 
     .await
     .map_err(db_err)?;
     let new_balance = balance.checked_add(amount_cents).ok_or("SALES_AMOUNT_TOO_LARGE: that amount is out of range")?;
-    Ok((new_balance > limit).then_some(CreditLimitWarning { customer_name: name, credit_limit_cents: limit, balance_cents: balance, new_balance_cents: new_balance }))
+    Ok((new_balance > limit).then_some(CreditLimitWarning {
+        customer_name: name,
+        credit_limit_cents: limit,
+        balance_cents: balance,
+        new_balance_cents: new_balance,
+    }))
 }
 
 #[cfg(test)]

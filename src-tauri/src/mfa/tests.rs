@@ -28,7 +28,8 @@ async fn audit_payloads(pool: &SqlitePool) -> Vec<String> {
 fn codes_match_the_rfc_6238_test_vectors() {
     // RFC 6238 appendix B, SHA-1: the 20-byte ASCII secret "12345678901234567890", 8 digits.
     let secret = b"12345678901234567890";
-    for (time, code) in [(59, 94287082), (1111111109, 7081804), (1111111111, 14050471), (1234567890, 89005924), (2000000000, 69279037), (20000000000, 65353130)] {
+    for (time, code) in [(59, 94287082), (1111111109, 7081804), (1111111111, 14050471), (1234567890, 89005924), (2000000000, 69279037), (20000000000, 65353130)]
+    {
         assert_eq!(hotp(secret, step_at(time), 8), code, "time {time}");
     }
     assert_eq!(rfc4648_base32(secret), "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
@@ -87,9 +88,13 @@ async fn the_secret_is_sealed_under_the_password_and_never_written_in_clear() {
     assert_eq!(&opened.0[..], &secret.0[..]);
     drop(conn);
     // Moved to another user's row, it doesn't open: the user id is part of what is sealed.
-    let clerk = users::add(&pool, &owner, NewUserInput { username: "clerk".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "owner password".into() })
-        .await
-        .unwrap();
+    let clerk = users::add(
+        &pool,
+        &owner,
+        NewUserInput { username: "clerk".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "owner password".into() },
+    )
+    .await
+    .unwrap();
     let mut conn = pool.acquire().await.unwrap();
     sqlx::query("INSERT INTO user_factors (user_id, memory_kib, iterations, parallelism, salt, nonce, sealed_secret) SELECT ?1, memory_kib, iterations, parallelism, salt, nonce, sealed_secret FROM user_factors WHERE user_id = ?2")
         .bind(clerk.id)
@@ -171,7 +176,8 @@ async fn every_way_back_removes_the_factor() {
     let pool = test_pool().await;
     let (owner, recovery) = users::turn_on(&pool, "owner", None, "owner password").await.unwrap();
     set_policy(&pool, &owner, Policy::Optional).await.unwrap();
-    let clerk_input = NewUserInput { username: "clerk".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "clerk temp pw".into() };
+    let clerk_input =
+        NewUserInput { username: "clerk".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "clerk temp pw".into() };
     let clerk = users::add(&pool, &owner, clerk_input).await.unwrap();
     let clerk_session = users::sign_in(&pool, "clerk", "clerk temp pw").await.unwrap();
     let factors = |pool: SqlitePool| async move { sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM user_factors").fetch_one(&pool).await.unwrap() };
@@ -185,7 +191,8 @@ async fn every_way_back_removes_the_factor() {
 
     // A temporary password from an Admin: the secret was sealed under the old one.
     enrol(&pool, &clerk_session, "clerk temp pw", T).await;
-    let update = UserUpdate { display_name: "clerk".into(), role: Role::Standard, can_see_sensitive: false, is_active: true, new_password: Some("another temp".into()) };
+    let update =
+        UserUpdate { display_name: "clerk".into(), role: Role::Standard, can_see_sensitive: false, is_active: true, new_password: Some("another temp".into()) };
     users::update(&pool, &owner, clerk.id, update).await.unwrap();
     assert_eq!(factors(pool.clone()).await, 0);
 
@@ -213,10 +220,13 @@ async fn every_way_back_removes_the_factor() {
 #[tokio::test]
 async fn a_stricter_setting_makes_the_right_roles_set_it_up() {
     let (pool, owner) = company().await;
-    let add = |name: &str, role: Role| NewUserInput { username: name.into(), display_name: None, role, can_see_sensitive: false, password: "temporary pw".into() };
+    let add =
+        |name: &str, role: Role| NewUserInput { username: name.into(), display_name: None, role, can_see_sensitive: false, password: "temporary pw".into() };
     let accountant = users::add(&pool, &owner, add("cpa", Role::ExternalAccountant)).await.unwrap();
     let clerk = users::add(&pool, &owner, add("clerk", Role::Standard)).await.unwrap();
-    let must = |pool: SqlitePool| async move { users::list(&pool).await.unwrap().into_iter().map(|u| (u.username, u.must_set_up_two_step)).collect::<std::collections::BTreeMap<_, _>>() };
+    let must = |pool: SqlitePool| async move {
+        users::list(&pool).await.unwrap().into_iter().map(|u| (u.username, u.must_set_up_two_step)).collect::<std::collections::BTreeMap<_, _>>()
+    };
 
     set_policy(&pool, &owner, Policy::Admins).await.unwrap();
     let now = must(pool.clone()).await;

@@ -6,7 +6,12 @@ fn window(view: &str) -> SavedWindow {
 }
 
 fn report(id: &str) -> SavedWindow {
-    SavedWindow { page: Page { view: "reports".into(), action: Some("open".into()), data: Some(json!({ "report": id })) }, bounds: None, maximized: false, minimized: false }
+    SavedWindow {
+        page: Page { view: "reports".into(), action: Some("open".into()), data: Some(json!({ "report": id })) },
+        bounds: None,
+        maximized: false,
+        minimized: false,
+    }
 }
 
 fn snap(windows: Vec<SavedWindow>) -> Snapshot {
@@ -183,9 +188,23 @@ fn the_left_pane_and_what_a_company_opens_on_round_trip_through_their_file() {
     assert_eq!(read(&dir).start_on, StartOn::LastWindows, "the saved desktop by default");
     let mut refused = None;
     update(&dir, |file| {
-        set_preferences(file, Some(KEY), PreferenceChange { sidebar: Some(SidebarMode::OpenWindows), start_on: Some(StartOn::Screen), start_screen: Some("sales/invoices".into()), ..Default::default() }).unwrap();
+        set_preferences(
+            file,
+            Some(KEY),
+            PreferenceChange {
+                sidebar: Some(SidebarMode::OpenWindows),
+                start_on: Some(StartOn::Screen),
+                start_screen: Some("sales/invoices".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
         // Refused changes leave everything as it was.
-        refused = Some(set_preferences(file, None, PreferenceChange { sidebar: Some(SidebarMode::Hidden), start_screen: Some("../etc".into()), ..Default::default() }));
+        refused = Some(set_preferences(
+            file,
+            None,
+            PreferenceChange { sidebar: Some(SidebarMode::Hidden), start_screen: Some("../etc".into()), ..Default::default() },
+        ));
     })
     .unwrap();
     assert!(refused.unwrap().unwrap_err().starts_with("DESKTOP_START"));
@@ -196,7 +215,12 @@ fn the_left_pane_and_what_a_company_opens_on_round_trip_through_their_file() {
 
     // Other choices keep the screen chosen, for when Screen is picked again; the View mode is kept too.
     let mut file = read(&dir);
-    set_preferences(&mut file, Some(KEY), PreferenceChange { sidebar: Some(SidebarMode::Hidden), start_on: Some(StartOn::NoWindows), window_mode: Some(WindowMode::One), ..Default::default() }).unwrap();
+    set_preferences(
+        &mut file,
+        Some(KEY),
+        PreferenceChange { sidebar: Some(SidebarMode::Hidden), start_on: Some(StartOn::NoWindows), window_mode: Some(WindowMode::One), ..Default::default() },
+    )
+    .unwrap();
     assert_eq!((file.sidebar, file.start_on, file.start_screen.as_deref()), (SidebarMode::Hidden, StartOn::NoWindows, Some("sales/invoices")));
     assert_eq!(window_mode(&file, Some(KEY)), WindowMode::One);
     let _ = std::fs::remove_dir_all(&dir);

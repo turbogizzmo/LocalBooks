@@ -58,19 +58,70 @@ fn far_end() -> NaiveDate {
 
 #[derive(Debug, Clone)]
 enum Op {
-    Journal { day: u16, debit: Pick, credit: Pick, cents: i64 },
+    Journal {
+        day: u16,
+        debit: Pick,
+        credit: Pick,
+        cents: i64,
+    },
     /// Lines are (quantity in quarter units, rate in cents); `fx_rate` makes it a EUR invoice.
-    Invoice { day: u16, due_in: u16, lines: Vec<(i64, i64)>, income: Pick, customer: u8, fx_rate: Option<i64> },
-    ReceivePayment { invoice: Pick, percent: u8, after: u16, undeposited: bool, fx_rate: i64 },
-    Bill { day: u16, due_in: u16, lines: Vec<(Pick, i64)>, vendor: u8 },
-    PayBill { bill: Pick, percent: u8, after: u16, from: Pick },
-    Expense { day: u16, lines: Vec<(Pick, i64)>, from: Pick, check: bool },
-    Deposit { day: u16, items: bool, other: Option<(Pick, i64)>, to: Pick },
-    Transfer { day: u16, from: Pick, to: Pick, cents: i64 },
-    Void { entry: Pick },
+    Invoice {
+        day: u16,
+        due_in: u16,
+        lines: Vec<(i64, i64)>,
+        income: Pick,
+        customer: u8,
+        fx_rate: Option<i64>,
+    },
+    ReceivePayment {
+        invoice: Pick,
+        percent: u8,
+        after: u16,
+        undeposited: bool,
+        fx_rate: i64,
+    },
+    Bill {
+        day: u16,
+        due_in: u16,
+        lines: Vec<(Pick, i64)>,
+        vendor: u8,
+    },
+    PayBill {
+        bill: Pick,
+        percent: u8,
+        after: u16,
+        from: Pick,
+    },
+    Expense {
+        day: u16,
+        lines: Vec<(Pick, i64)>,
+        from: Pick,
+        check: bool,
+    },
+    Deposit {
+        day: u16,
+        items: bool,
+        other: Option<(Pick, i64)>,
+        to: Pick,
+    },
+    Transfer {
+        day: u16,
+        from: Pick,
+        to: Pick,
+        cents: i64,
+    },
+    Void {
+        entry: Pick,
+    },
     /// Edits a journal entry, invoice, bill or expense: a new amount, the date moved by `shift` days.
-    Replace { entry: Pick, cents: i64, shift: i16 },
-    SetClosing { day: Option<u16> },
+    Replace {
+        entry: Pick,
+        cents: i64,
+        shift: i16,
+    },
+    SetClosing {
+        day: Option<u16>,
+    },
 }
 
 /// Picks an element of whatever list the step works on (accounts, open invoices, live entries...).
@@ -166,10 +217,9 @@ struct Accounts {
 impl Accounts {
     async fn load(pool: &SqlitePool) -> Self {
         let mut ids = BTreeMap::new();
-        for number in [
-            "1010", "1020", "1500", "2100", "2200", "2500", "3100", "3200", "3900", "4000", "4100", "4900", "6000", "6250", "6300",
-            "6400", "7000", "8000",
-        ] {
+        for number in
+            ["1010", "1020", "1500", "2100", "2200", "2500", "3100", "3200", "3900", "4000", "4100", "4900", "6000", "6250", "6300", "6400", "7000", "8000"]
+        {
             ids.insert(number, account(pool, number).await);
         }
         let pick = |numbers: &[&str]| numbers.iter().map(|n| ids[n]).collect::<Vec<_>>();
@@ -456,10 +506,7 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
             let invoice = m.invoices.get_mut(&invoice_id).unwrap();
             invoice.paid = new_paid;
             invoice.relieved += relief;
-            m.payments.insert(
-                payment_id,
-                PaymentM { invoice: invoice_id, amount, relief, home, undeposited: *undeposited, deposit: None, voided: false },
-            );
+            m.payments.insert(payment_id, PaymentM { invoice: invoice_id, amount, relief, home, undeposited: *undeposited, deposit: None, voided: false });
             Ok(())
         }
         Op::Bill { day, due_in, lines, vendor } => {
@@ -478,7 +525,14 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
             let from = *from.get(&a.pay_from);
             let result = crate::expenses::pay_vendor_bill(
                 pool,
-                BillPaymentInput { bill_id, payment_account_id: from, payment_date: date(day), amount_cents: Cents(amount), reference: None, to_be_printed: false },
+                BillPaymentInput {
+                    bill_id,
+                    payment_account_id: from,
+                    payment_date: date(day),
+                    amount_cents: Cents(amount),
+                    reference: None,
+                    to_be_printed: false,
+                },
             )
             .await
             .map(|_| ());
@@ -515,11 +569,18 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
                     items: payments.iter().map(|id| DepositItemRef { kind: "PAYMENT".into(), id: *id }).collect(),
                     other_lines: other
                         .iter()
-                        .map(|(account_id, amount_cents)| DepositOtherLine { account_id: *account_id, amount_cents: Cents(*amount_cents), memo: None, class_id: None, customer_id: None, vendor_id: None })
+                        .map(|(account_id, amount_cents)| DepositOtherLine {
+                            account_id: *account_id,
+                            amount_cents: Cents(*amount_cents),
+                            memo: None,
+                            class_id: None,
+                            customer_id: None,
+                            vendor_id: None,
+                        })
                         .collect(),
-                        cash_back: None,
-                        deductions: Vec::new(),
-                    },
+                    cash_back: None,
+                    deductions: Vec::new(),
+                },
             )
             .await;
             let deposit_id = match result {
@@ -608,9 +669,7 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
                 _ => None,
             };
             let expected = match paid {
-                Some(paid) => closed_code(m.closed(live.day))
-                    .or(closed_code(m.closed(day)))
-                    .or((*cents < paid).then_some("EDIT_BELOW_PAID")),
+                Some(paid) => closed_code(m.closed(live.day)).or(closed_code(m.closed(day))).or((*cents < paid).then_some("EDIT_BELOW_PAID")),
                 None => m.void_blocker(old).or(closed_code(m.closed(day))),
             };
             match live.kind {
@@ -636,9 +695,8 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
         }
         Op::SetClosing { day } => {
             let lock = day.map(date);
-            let result = crate::closing::set_closing_date(pool, &ClosingInput { lock_date: lock, current_passcode: None, new_passcode: None })
-                .await
-                .map(|_| ());
+            let result =
+                crate::closing::set_closing_date(pool, &ClosingInput { lock_date: lock, current_passcode: None, new_passcode: None }).await.map(|_| ());
             if expect(result, (lock == m.lock).then_some("CLOSE_UNCHANGED"))? {
                 m.lock = lock;
             }
@@ -709,7 +767,8 @@ async fn post_invoice(
                 income_account_id: income,
                 product_service_id: None,
                 class_id: None,
-                is_taxable: false, service_date: None,
+                is_taxable: false,
+                service_date: None,
             })
             .collect(),
         currency: fx_rate.map(|rate| ForeignCurrency { code: "EUR".into(), exchange_rate_e6: rate }),
@@ -731,10 +790,7 @@ async fn post_invoice(
     let home_total = fx_rate.map_or(total, |rate| to_home_cents(total, rate).unwrap());
     let entry = scalar(pool, "SELECT journal_entry_id FROM invoices WHERE id = ?1", invoice_id).await?;
     m.post(entry, day, Kind::Invoice(invoice_id), vec![(a.ar, home_total), (income, -home_total)]);
-    m.invoices.insert(
-        invoice_id,
-        InvoiceM { day, customer: customer.into(), income, fx_rate, total, home_total, paid: 0, relieved: 0, voided: false },
-    );
+    m.invoices.insert(invoice_id, InvoiceM { day, customer: customer.into(), income, fx_rate, total, home_total, paid: 0, relieved: 0, voided: false });
     // The original's payments now pay the edited invoice.
     if let Some(old_id) = replaced {
         let old = m.invoices.get_mut(&old_id).unwrap();
@@ -768,7 +824,8 @@ async fn post_bill(
     replacing: Replacing<'_>,
 ) -> Result<(), String> {
     let total: i64 = lines.iter().map(|l| l.1).sum();
-    let input = BillInput { form_lines: Vec::new(),
+    let input = BillInput {
+        form_lines: Vec::new(),
         terms_id: None,
         vendor_name: vendor.into(),
         bill_number: None,
@@ -826,7 +883,8 @@ async fn post_expense(
     replacing: Replacing<'_>,
 ) -> Result<(), String> {
     let total: i64 = lines.iter().map(|l| l.1).sum();
-    let input = ExpenseInput { form_lines: Vec::new(),
+    let input = ExpenseInput {
+        form_lines: Vec::new(),
         payment_method_id: None,
         kind: if check { "CHECK" } else { "EXPENSE" }.into(),
         payee_name: Some("Payee".into()),
@@ -837,7 +895,14 @@ async fn post_expense(
         memo: None,
         lines: lines
             .iter()
-            .map(|(account_id, amount_cents)| SplitLineInput { account_id: *account_id, amount_cents: Cents(*amount_cents), memo: None, class_id: None, customer_id: None, billable: None })
+            .map(|(account_id, amount_cents)| SplitLineInput {
+                account_id: *account_id,
+                amount_cents: Cents(*amount_cents),
+                memo: None,
+                class_id: None,
+                customer_id: None,
+                billable: None,
+            })
             .collect(),
         currency: None,
     };
@@ -889,10 +954,8 @@ async fn snapshot(pool: &SqlitePool) -> Result<BTreeMap<i64, Snap>, String> {
             .fetch_all(pool)
             .await
             .map_err(|e| e.to_string())?;
-    let mut snaps: BTreeMap<i64, Snap> = headers
-        .into_iter()
-        .map(|(id, date, status, reverses, is_voided)| (id, Snap { date, status, reverses, is_voided, lines: Vec::new() }))
-        .collect();
+    let mut snaps: BTreeMap<i64, Snap> =
+        headers.into_iter().map(|(id, date, status, reverses, is_voided)| (id, Snap { date, status, reverses, is_voided, lines: Vec::new() })).collect();
     for (entry, account, debit, credit) in lines {
         snaps.get_mut(&entry).ok_or("line without an entry")?.lines.push((account, debit, credit));
     }
@@ -903,12 +966,10 @@ async fn snapshot(pool: &SqlitePool) -> Result<BTreeMap<i64, Snap>, String> {
 /// `dates` (each date costs a balance sheet, two P&Ls and a trial balance).
 async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Option<NaiveDate>, dates: &[&str]) -> Result<(), String> {
     // Amounts are stored as integers: a REAL anywhere would mean cents can drift.
-    let non_integer: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM journal_lines WHERE typeof(debit_cents) <> 'integer' OR typeof(credit_cents) <> 'integer'",
-    )
-    .fetch_one(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let non_integer: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM journal_lines WHERE typeof(debit_cents) <> 'integer' OR typeof(credit_cents) <> 'integer'")
+        .fetch_one(pool)
+        .await
+        .map_err(|e| e.to_string())?;
     ensure_eq!(non_integer, 0, "journal lines with non-integer amounts");
 
     // Posted entries never change, never disappear; new ones respect the closing date; each balances.
@@ -1012,24 +1073,28 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
     ensure_eq!(m.balances.get(&a.ar).copied().unwrap_or(0), open_ar, "A/R in the model vs its open invoices");
     let ar_aging = crate::report_center::aging(pool, false, far_end()).await?;
     ensure_eq!(ar_aging.total_cents, open_ar, "A/R aging total");
-    let view_ar: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(b.home_open_cents), 0) FROM v_invoice_balances b JOIN invoices i ON i.id = b.invoice_id WHERE i.is_voided = 0",
-    )
-    .fetch_one(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let view_ar: i64 =
+        sqlx::query_scalar("SELECT COALESCE(SUM(b.home_open_cents), 0) FROM v_invoice_balances b JOIN invoices i ON i.id = b.invoice_id WHERE i.is_voided = 0")
+            .fetch_one(pool)
+            .await
+            .map_err(|e| e.to_string())?;
     ensure_eq!(view_ar, open_ar, "open invoice balances");
     ensure_eq!(scalar(pool, "SELECT COUNT(*) FROM invoices WHERE ?1 = ?1", 0).await?, m.invoices.len() as i64, "invoice rows");
     for (id, inv) in &m.invoices {
-        let (paid, status, voided): (i64, String, bool) =
-            sqlx::query_as("SELECT amount_paid_cents, status, is_voided FROM invoices WHERE id = ?1")
-                .bind(id)
-                .fetch_one(pool)
-                .await
-                .map_err(|e| e.to_string())?;
+        let (paid, status, voided): (i64, String, bool) = sqlx::query_as("SELECT amount_paid_cents, status, is_voided FROM invoices WHERE id = ?1")
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| e.to_string())?;
         ensure_eq!((paid, voided), (inv.paid, inv.voided), "invoice {id} paid and voided");
         if !inv.voided {
-            let expected = if inv.paid == 0 { "UNPAID" } else if inv.paid < inv.total { "PARTIAL" } else { "PAID" };
+            let expected = if inv.paid == 0 {
+                "UNPAID"
+            } else if inv.paid < inv.total {
+                "PARTIAL"
+            } else {
+                "PAID"
+            };
             ensure_eq!(status, expected, "invoice {id} status");
         }
     }
@@ -1041,14 +1106,17 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
     ensure_eq!(ap_aging.total_cents, open_ap, "A/P aging total");
     ensure_eq!(scalar(pool, "SELECT COUNT(*) FROM bills WHERE ?1 = ?1", 0).await?, m.bills.len() as i64, "bill rows");
     for (id, bill) in &m.bills {
-        let (paid, status, voided): (i64, String, bool) = sqlx::query_as("SELECT amount_paid_cents, status, is_voided FROM bills WHERE id = ?1")
-            .bind(id)
-            .fetch_one(pool)
-            .await
-            .map_err(|e| e.to_string())?;
+        let (paid, status, voided): (i64, String, bool) =
+            sqlx::query_as("SELECT amount_paid_cents, status, is_voided FROM bills WHERE id = ?1").bind(id).fetch_one(pool).await.map_err(|e| e.to_string())?;
         ensure_eq!((paid, voided), (bill.paid, bill.voided), "bill {id} paid and voided");
         if !bill.voided {
-            let expected = if bill.paid == 0 { "UNPAID" } else if bill.paid < bill.total { "PARTIAL" } else { "PAID" };
+            let expected = if bill.paid == 0 {
+                "UNPAID"
+            } else if bill.paid < bill.total {
+                "PARTIAL"
+            } else {
+                "PAID"
+            };
             ensure_eq!(status, expected, "bill {id} status");
         }
     }

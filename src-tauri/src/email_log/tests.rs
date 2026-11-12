@@ -1,8 +1,8 @@
 use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, InvoiceInput, InvoiceLineInput};
-use chrono::NaiveDate;
 use crate::money::Cents;
+use chrono::NaiveDate;
 
 async fn invoice(pool: &SqlitePool, customer: &str) -> i64 {
     let services: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(pool).await.unwrap();
@@ -14,7 +14,16 @@ async fn invoice(pool: &SqlitePool, customer: &str) -> i64 {
             customer_name: customer.into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(5_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput {
+                description: "Work".into(),
+                quantity_e4: 10_000,
+                rate_cents: Cents(5_000),
+                income_account_id: services,
+                product_service_id: None,
+                class_id: None,
+                is_taxable: false,
+                service_date: None,
+            }],
             currency: None,
             tax_rate_id: None,
             discount_cents: Cents::ZERO,
@@ -91,7 +100,10 @@ async fn sales_receipts_queue_and_statements_do_not() {
     set_queued(&pool, FormKind::SalesReceipt, receipt.id, true).await.unwrap();
     let queued = queue(&pool).await.unwrap();
     assert_eq!(queued.len(), 1);
-    assert_eq!((queued[0].kind, queued[0].number, queued[0].customer_name.as_str(), queued[0].total_cents), (FormKind::SalesReceipt, receipt.receipt_number, "Globex", 9_900));
+    assert_eq!(
+        (queued[0].kind, queued[0].number, queued[0].customer_name.as_str(), queued[0].total_cents),
+        (FormKind::SalesReceipt, receipt.receipt_number, "Globex", 9_900)
+    );
     let customer: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Globex'").fetch_one(&pool).await.unwrap();
     assert!(set_queued(&pool, FormKind::Statement, customer, true).await.unwrap_err().starts_with("EMAIL_STATEMENT_QUEUE"));
     // Statements still keep a sent history, by customer.
@@ -117,7 +129,15 @@ async fn a_statement_is_marked_sent_for_the_period_it_covered_only() {
     record_for(&pool, FormKind::Statement, 7, Some(march), &["ap@cafe.example".to_string()], Method::Smtp, "March statement").await.unwrap();
     let sent = |period| {
         let pool = pool.clone();
-        async move { statuses(&pool, FormKind::Statement, period).await.unwrap().into_iter().filter(|s| s.last_sent_at.is_some()).map(|s| s.document_id).collect::<Vec<_>>() }
+        async move {
+            statuses(&pool, FormKind::Statement, period)
+                .await
+                .unwrap()
+                .into_iter()
+                .filter(|s| s.last_sent_at.is_some())
+                .map(|s| s.document_id)
+                .collect::<Vec<_>>()
+        }
     };
     assert_eq!(sent(Some(march)).await, vec![7]);
     assert!(sent(Some(april)).await.is_empty(), "April's statement hasn't been sent");

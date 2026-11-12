@@ -86,14 +86,12 @@ const NORMAL_SIGNED: &str = "CASE t.normal_balance WHEN 'DEBIT' THEN l.debit_cen
                                                  ELSE l.credit_cents - l.debit_cents END";
 
 async fn normal_balance(pool: &SqlitePool, account_id: i64) -> Result<String, String> {
-    sqlx::query_scalar(
-        "SELECT t.normal_balance FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
-    )
-    .bind(account_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(db_err)?
-    .ok_or_else(|| format!("REC_UNKNOWN_ACCOUNT: account {account_id} does not exist"))
+    sqlx::query_scalar("SELECT t.normal_balance FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1")
+        .bind(account_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| format!("REC_UNKNOWN_ACCOUNT: account {account_id} does not exist"))
 }
 
 async fn reconciled_balance<'e, E: sqlx::Executor<'e, Database = Sqlite>>(executor: E, account_id: i64) -> Result<i64, String> {
@@ -139,13 +137,11 @@ pub async fn account_state(pool: &SqlitePool, account_id: i64) -> Result<Reconci
     .fetch_one(pool)
     .await
     .map_err(db_err)?;
-    let in_progress = sqlx::query_as::<_, Reconciliation>(
-        "SELECT * FROM reconciliations WHERE account_id = ?1 AND is_locked = 0",
-    )
-    .bind(account_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(db_err)?;
+    let in_progress = sqlx::query_as::<_, Reconciliation>("SELECT * FROM reconciliations WHERE account_id = ?1 AND is_locked = 0")
+        .bind(account_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
     Ok(ReconcileAccountState { account_id, normal_balance, reconciled_balance_cents, last_statement_end_date, in_progress })
 }
 
@@ -185,12 +181,7 @@ pub async fn unreconciled_lines(pool: &SqlitePool, account_id: i64) -> Result<Ve
 
 /// Starts a reconciliation, or updates the statement details of the one already in progress.
 #[cfg(test)]
-pub async fn start(
-    pool: &SqlitePool,
-    account_id: i64,
-    statement_end_date: NaiveDate,
-    statement_ending_balance_cents: i64,
-) -> Result<Reconciliation, String> {
+pub async fn start(pool: &SqlitePool, account_id: i64, statement_end_date: NaiveDate, statement_ending_balance_cents: i64) -> Result<Reconciliation, String> {
     start_with_charges(pool, account_id, statement_end_date, statement_ending_balance_cents, &[]).await
 }
 
@@ -207,23 +198,20 @@ pub async fn start_with_charges(
 ) -> Result<Reconciliation, String> {
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
-        let existing: Option<i64> =
-            sqlx::query_scalar("SELECT id FROM reconciliations WHERE account_id = ?1 AND is_locked = 0")
-                .bind(account_id)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(db_err)?;
+        let existing: Option<i64> = sqlx::query_scalar("SELECT id FROM reconciliations WHERE account_id = ?1 AND is_locked = 0")
+            .bind(account_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
         let id = match existing {
             Some(id) => {
-                sqlx::query(
-                    "UPDATE reconciliations SET statement_end_date = ?1, statement_ending_balance_cents = ?2 WHERE id = ?3",
-                )
-                .bind(statement_end_date)
-                .bind(statement_ending_balance_cents)
-                .bind(id)
-                .execute(&mut *tx)
-                .await
-                .map_err(db_err)?;
+                sqlx::query("UPDATE reconciliations SET statement_end_date = ?1, statement_ending_balance_cents = ?2 WHERE id = ?3")
+                    .bind(statement_end_date)
+                    .bind(statement_ending_balance_cents)
+                    .bind(id)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
                 id
             }
             None => {
@@ -244,11 +232,7 @@ pub async fn start_with_charges(
         for charge in charges {
             post_charge(&mut tx, id, account_id, statement_end_date, charge).await?;
         }
-        sqlx::query_as::<_, Reconciliation>("SELECT * FROM reconciliations WHERE id = ?1")
-            .bind(id)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(db_err)
+        sqlx::query_as::<_, Reconciliation>("SELECT * FROM reconciliations WHERE id = ?1").bind(id).fetch_one(&mut *tx).await.map_err(db_err)
     }
     .await;
     match result {
@@ -310,12 +294,7 @@ async fn post_charge(
 }
 
 /// Ticks (`cleared = true`) or unticks lines in an in-progress reconciliation.
-pub async fn set_lines_cleared(
-    pool: &SqlitePool,
-    reconciliation_id: i64,
-    line_ids: &[i64],
-    cleared: bool,
-) -> Result<ReconcileProgress, String> {
+pub async fn set_lines_cleared(pool: &SqlitePool, reconciliation_id: i64, line_ids: &[i64], cleared: bool) -> Result<ReconcileProgress, String> {
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     match write_cleared(&mut tx, reconciliation_id, line_ids, cleared).await {
         Ok(progress) => {
@@ -326,12 +305,7 @@ pub async fn set_lines_cleared(
     }
 }
 
-async fn write_cleared(
-    tx: &mut Transaction<'_, Sqlite>,
-    reconciliation_id: i64,
-    line_ids: &[i64],
-    cleared: bool,
-) -> Result<ReconcileProgress, String> {
+async fn write_cleared(tx: &mut Transaction<'_, Sqlite>, reconciliation_id: i64, line_ids: &[i64], cleared: bool) -> Result<ReconcileProgress, String> {
     for &line_id in line_ids {
         let result = sqlx::query(
             "UPDATE journal_lines
@@ -358,18 +332,13 @@ pub async fn lock(pool: &SqlitePool, reconciliation_id: i64) -> Result<Reconcili
     let result = async {
         let progress = cleared_balance(&mut *tx, reconciliation_id).await?;
         if progress.difference_cents != 0 {
-            return Err(format!(
-                "REC_NOT_BALANCED: difference is {}; it must be $0.00 to finish",
-                format_cents(progress.difference_cents)
-            ));
+            return Err(format!("REC_NOT_BALANCED: difference is {}; it must be $0.00 to finish", format_cents(progress.difference_cents)));
         }
-        sqlx::query(
-            "UPDATE journal_lines SET reconciled_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE reconciliation_id = ?1",
-        )
-        .bind(reconciliation_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(db_err)?;
+        sqlx::query("UPDATE journal_lines SET reconciled_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE reconciliation_id = ?1")
+            .bind(reconciliation_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
         let locked = sqlx::query(
             "UPDATE reconciliations SET is_locked = 1, locked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
              WHERE id = ?1 AND is_locked = 0",
@@ -381,11 +350,7 @@ pub async fn lock(pool: &SqlitePool, reconciliation_id: i64) -> Result<Reconcili
         if locked.rows_affected() != 1 {
             return Err(format!("REC_LOCKED: reconciliation {reconciliation_id} is already completed"));
         }
-        sqlx::query_as::<_, Reconciliation>("SELECT * FROM reconciliations WHERE id = ?1")
-            .bind(reconciliation_id)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(db_err)
+        sqlx::query_as::<_, Reconciliation>("SELECT * FROM reconciliations WHERE id = ?1").bind(reconciliation_id).fetch_one(&mut *tx).await.map_err(db_err)
     }
     .await;
     match result {
@@ -473,11 +438,8 @@ pub async fn undo_last(pool: &SqlitePool, reconciliation_id: i64, reason: Option
 pub async fn cancel(pool: &SqlitePool, reconciliation_id: i64) -> Result<(), String> {
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
-        let removed = sqlx::query("DELETE FROM reconciliations WHERE id = ?1 AND is_locked = 0")
-            .bind(reconciliation_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_err)?;
+        let removed =
+            sqlx::query("DELETE FROM reconciliations WHERE id = ?1 AND is_locked = 0").bind(reconciliation_id).execute(&mut *tx).await.map_err(db_err)?;
         if removed.rows_affected() != 1 {
             return Err(format!("REC_NOT_OPEN: reconciliation {reconciliation_id} is not in progress"));
         }

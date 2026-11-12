@@ -254,10 +254,7 @@ async fn password_verifiers_from_earlier_versions_still_sign_in() {
 
 #[test]
 fn fields_sealed_by_earlier_versions_still_open() {
-    let key = DataKey {
-        key: Zeroizing::new(core::array::from_fn(|i| (i as u8).wrapping_mul(7))),
-        key_id: "00112233445566778899aabbccddeeff".into(),
-    };
+    let key = DataKey { key: Zeroizing::new(core::array::from_fn(|i| (i as u8).wrapping_mul(7))), key_id: "00112233445566778899aabbccddeeff".into() };
     let stored = "lb1:iZn4UbliYLHCAIzWk4PwhpkmkA++eMVG1oubzHQZ0td/hbrAE7g=";
     assert_eq!(key.decrypt_field("vendors", "tax_id", 42, stored).unwrap(), "12-3456789");
     assert!(key.decrypt_field("vendors", "tax_id", 43, stored).is_err(), "bound to its row");

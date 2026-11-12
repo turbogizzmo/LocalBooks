@@ -88,7 +88,15 @@ pub(super) async fn inventory_turnover(pool: &SqlitePool, start: NaiveDate, end:
         rows.push(row(
             RowKind::Detail,
             0,
-            vec![json!(name), json!(begin), json!(finish), json!(average), json!(cogs), json!(ratio(*cogs, average)), json!(days_on_hand(days, average, *cogs))],
+            vec![
+                json!(name),
+                json!(begin),
+                json!(finish),
+                json!(average),
+                json!(cogs),
+                json!(ratio(*cogs, average)),
+                json!(days_on_hand(days, average, *cogs)),
+            ],
         ));
         shown += 1;
     }
@@ -96,7 +104,15 @@ pub(super) async fn inventory_turnover(pool: &SqlitePool, start: NaiveDate, end:
     rows.push(row(
         RowKind::Total,
         0,
-        vec![json!("TOTAL"), json!(totals.0), json!(totals.1), json!(average), json!(totals.2), json!(ratio(totals.2, average)), json!(days_on_hand(days, average, totals.2))],
+        vec![
+            json!("TOTAL"),
+            json!(totals.0),
+            json!(totals.1),
+            json!(average),
+            json!(totals.2),
+            json!(ratio(totals.2, average)),
+            json!(days_on_hand(days, average, totals.2)),
+        ],
     ));
     let notes = vec![format!(
         "{} with stock on hand or sold in the period. Turnover is the cost of goods sold over the {days} days divided by the average of the beginning and ending value; days on hand is how long that average stock lasts at that rate.",
@@ -204,7 +220,11 @@ pub(super) async fn invoice_profitability_detail(pool: &SqlitePool, start: Naive
         while i < invoices.len() && invoices[i].customer == customer {
             let inv = &invoices[i];
             let profit = inv.income - inv.cogs;
-            let mut r = row(RowKind::Detail, 1, vec![json!(inv.date), json!(inv.number.to_string()), json!(inv.income), json!(inv.cogs), json!(profit), json!(percent(profit, inv.income))]);
+            let mut r = row(
+                RowKind::Detail,
+                1,
+                vec![json!(inv.date), json!(inv.number.to_string()), json!(inv.income), json!(inv.cogs), json!(profit), json!(percent(profit, inv.income))],
+            );
             r.journal_entry_id = Some(inv.journal_entry_id);
             rows.push(r);
             income = add(income, inv.income)?;

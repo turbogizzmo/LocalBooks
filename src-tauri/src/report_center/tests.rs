@@ -28,7 +28,17 @@ async fn aging_is_as_of_a_date_and_summaries_and_ledger_add_up() {
     invoice("Globex", "2026-03-15", "2026-04-14", 5_000).await;
     crate::invoices::record_payment(
         &pool,
-        crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: old, deposit_account_id: checking, payment_date: d(4, 10), amount_cents: Cents(10_000), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+        crate::invoices::PaymentInput {
+            discount_cents: Cents::ZERO,
+            payment_method_id: None,
+            invoice_id: old,
+            deposit_account_id: checking,
+            payment_date: d(4, 10),
+            amount_cents: Cents(10_000),
+            payment_method: "CHECK".into(),
+            reference: None,
+            exchange_rate_e6: None,
+        },
     )
     .await
     .unwrap();
@@ -114,7 +124,14 @@ async fn missing_checks_finds_gaps_and_duplicates_and_keeps_voids() {
         async move { crate::expenses::post_vendor_bill(&pool, input).await.unwrap().id }
     };
     let (b1, b2, b3) = (bill("A").await, bill("B").await, bill("C").await);
-    let pay = |bill_id, reference: &str| crate::expenses::BillPaymentInput { bill_id, payment_account_id: checking, payment_date: d(1, 20), amount_cents: Cents(5_000), reference: Some(reference.into()), to_be_printed: false };
+    let pay = |bill_id, reference: &str| crate::expenses::BillPaymentInput {
+        bill_id,
+        payment_account_id: checking,
+        payment_date: d(1, 20),
+        amount_cents: Cents(5_000),
+        reference: Some(reference.into()),
+        to_be_printed: false,
+    };
     crate::expenses::pay_vendor_bills(&pool, vec![pay(b1, "1010"), pay(b2, "1010")]).await.unwrap();
     crate::expenses::pay_vendor_bill(&pool, pay(b3, "EFT 88")).await.unwrap();
     // Checks from another account are not listed.
@@ -144,14 +161,23 @@ async fn inventory_valuation_and_stock_status_follow_the_stock_ledger() {
     let (sales, checking) = (account(&pool, "4000").await, account(&pool, "1010").await);
     let product = crate::sales::create_product(
         &pool,
-        crate::sales::ProductInput { name: "Widget".into(), description: Some("Blue widget".into()), rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false },
+        crate::sales::ProductInput {
+            name: "Widget".into(),
+            description: Some("Blue widget".into()),
+            rate_cents: Cents(2_500),
+            income_account_id: sales,
+            is_taxable: false,
+        },
     )
     .await
     .unwrap()
     .id;
-    let tracked = crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: product, sku: Some("W-1".into()), asset_account_id: None, cogs_account_id: None })
-        .await
-        .unwrap();
+    let tracked = crate::inventory::track_product(
+        &pool,
+        &crate::inventory::TrackInput { product_id: product, sku: Some("W-1".into()), asset_account_id: None, cogs_account_id: None },
+    )
+    .await
+    .unwrap();
     let buy = |date: &str, qty: i64, rate: i64| {
         let pool = pool.clone();
         let input: crate::expenses::BillInput = serde_json::from_value(serde_json::json!({
@@ -200,7 +226,8 @@ async fn inventory_valuation_and_stock_status_follow_the_stock_ledger() {
     assert_eq!((item.closing_qty_e4, item.closing_value_cents, detail.total_value_cents), (90_000, 9_900, 9_900));
     assert!(inventory_valuation_detail(&pool, d(4, 1), d(4, 30)).await.unwrap().items.len() == 1, "stock on hand keeps the item in a quiet period");
 
-    let po = crate::workflows::PurchaseOrderInput { form_lines: Vec::new(),
+    let po = crate::workflows::PurchaseOrderInput {
+        form_lines: Vec::new(),
         vendor_name: "Supplier".into(),
         po_date: d(3, 25),
         expected_date: Some(d(4, 15)),

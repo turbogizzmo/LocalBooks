@@ -12,7 +12,13 @@ fn new_user(username: &str, role: Role, sensitive: bool) -> NewUserInput {
 }
 
 fn unchanged(user: &UserView) -> UserUpdate {
-    UserUpdate { display_name: user.display_name.clone(), role: user.role, can_see_sensitive: user.can_see_sensitive, is_active: user.is_active, new_password: None }
+    UserUpdate {
+        display_name: user.display_name.clone(),
+        role: user.role,
+        can_see_sensitive: user.can_see_sensitive,
+        is_active: user.is_active,
+        new_password: None,
+    }
 }
 
 #[tokio::test]
@@ -124,7 +130,8 @@ async fn the_recovery_key_resets_an_admin_password() {
     assert!(recover(&pool, &"A".repeat(32), "Owner", "fresh password").await.unwrap_err().starts_with("KEY_WRONG_RECOVERY"));
 
     let session = recover(&pool, recovery.as_str(), "owner", "fresh password").await.unwrap();
-    let trail: Vec<String> = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'USER_CHANGE'").fetch_all(&pool).await.unwrap();
+    let trail: Vec<String> =
+        sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'USER_CHANGE'").fetch_all(&pool).await.unwrap();
     assert!(trail.iter().any(|p| p.contains("RECOVERY_KEY_USED")));
     assert!(trail.iter().all(|p| !p.contains("password\":\"") && !p.contains("fresh password") && !p.contains(recovery.as_str())), "no secrets in the trail");
     assert_eq!(session.user.id, admin.user.id);
@@ -148,15 +155,17 @@ async fn removing_all_users_keeps_the_books_and_drops_protected_values() {
     assert!(remove_all_users(&pool, "remove").await.unwrap_err().starts_with("USERS_REMOVE_CONFIRM"));
     remove_all_users(&pool, REMOVE_ALL_CONFIRMATION).await.unwrap();
     assert!(remove_all_users(&pool, REMOVE_ALL_CONFIRMATION).await.unwrap_err().starts_with("USERS_NONE"));
-    let events: Vec<String> = sqlx::query_scalar("SELECT json_extract(payload_snapshot, '$.event') FROM ledger_audit_log WHERE action_type = 'USER_CHANGE' ORDER BY id")
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+    let events: Vec<String> =
+        sqlx::query_scalar("SELECT json_extract(payload_snapshot, '$.event') FROM ledger_audit_log WHERE action_type = 'USER_CHANGE' ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     assert_eq!(events, ["USERS_TURNED_ON", "USER_ADDED", "ALL_USERS_REMOVED"]);
-    let removed: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE json_extract(payload_snapshot, '$.event') = 'ALL_USERS_REMOVED'")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let removed: String =
+        sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE json_extract(payload_snapshot, '$.event') = 'ALL_USERS_REMOVED'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert!(removed.contains("\"clerk\"") && removed.contains("\"taxIdsErased\":1"), "{removed}");
     let unsealed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE row_hash IS NULL").fetch_one(&pool).await.unwrap();
     assert_eq!(unsealed, 0, "user changes are sealed into the chain");
@@ -164,7 +173,8 @@ async fn removing_all_users_keeps_the_books_and_drops_protected_values() {
     assert!(ledger.intact, "{:?}", ledger.findings);
     assert!(crate::audit_chain::verify(&pool).await.unwrap().problems.is_empty());
     assert!(!users_enabled(&pool).await.unwrap());
-    let taxes: Vec<Option<String>> = sqlx::query_scalar("SELECT tax_id FROM vendors WHERE id IN (?1, ?2) ORDER BY id").bind(vendor).bind(other).fetch_all(&pool).await.unwrap();
+    let taxes: Vec<Option<String>> =
+        sqlx::query_scalar("SELECT tax_id FROM vendors WHERE id IN (?1, ?2) ORDER BY id").bind(vendor).bind(other).fetch_all(&pool).await.unwrap();
     assert_eq!(taxes, vec![Some("plain-123".into()), None]);
     let err = sqlx::query("DELETE FROM users").execute(&pool).await;
     assert!(err.is_ok(), "nothing left to delete");
@@ -192,7 +202,8 @@ async fn turns_users_on_in_a_copy_of_a_real_company_file() {
 
     let key = session.key.as_ref().unwrap();
     for (id, value) in &plain {
-        let (stored, masked): (String, String) = sqlx::query_as("SELECT tax_id, tax_id_masked FROM vendors WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
+        let (stored, masked): (String, String) =
+            sqlx::query_as("SELECT tax_id, tax_id_masked FROM vendors WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
         assert!(crate::crypto::is_encrypted(&stored), "vendor {id} not encrypted");
         assert_eq!(&key.decrypt_field("vendors", "tax_id", *id, &stored).unwrap(), value, "vendor {id} does not decrypt to its old value");
         println!("vendor {id}: encrypted, shown to users without access as {masked}");
@@ -212,7 +223,13 @@ async fn turns_users_on_in_a_copy_of_a_real_company_file() {
     for (id, value) in &plain {
         assert!(!text.contains(value.as_str()), "vendor {id}'s plain tax ID is still in the file");
     }
-    println!("{} tax ID(s) encrypted, none left in plain; {} entries intact; trial balance {} / {}", plain.len(), verification.entries_checked, tb_after.total_debit_cents, tb_after.total_credit_cents);
+    println!(
+        "{} tax ID(s) encrypted, none left in plain; {} entries intact; trial balance {} / {}",
+        plain.len(),
+        verification.entries_checked,
+        tb_after.total_debit_cents,
+        tb_after.total_credit_cents
+    );
 }
 
 #[tokio::test]
@@ -229,7 +246,10 @@ async fn an_external_accountant_never_holds_the_data_key() {
 
     // A bookkeeper who could see sensitive data loses it, and their key slot, on becoming one.
     let books = add(&pool, &admin, new_user("books", Role::Standard, true)).await.unwrap();
-    assert!(update(&pool, &admin, books.id, UserUpdate { role: Role::ExternalAccountant, ..unchanged(&books) }).await.unwrap_err().starts_with("USER_EXTERNAL_NO_SENSITIVE"));
+    assert!(update(&pool, &admin, books.id, UserUpdate { role: Role::ExternalAccountant, ..unchanged(&books) })
+        .await
+        .unwrap_err()
+        .starts_with("USER_EXTERNAL_NO_SENSITIVE"));
     let moved = update(&pool, &admin, books.id, UserUpdate { role: Role::ExternalAccountant, can_see_sensitive: false, ..unchanged(&books) }).await.unwrap();
     assert!(!moved.can_see_sensitive);
     let slots: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM key_slots WHERE user_id = ?1").bind(books.id).fetch_one(&pool).await.unwrap();

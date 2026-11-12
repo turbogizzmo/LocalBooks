@@ -50,7 +50,17 @@ pub const DATE_CHECKS_PRINTED: &str = "date_checks_when_printed";
 /// The largest markup accepted: 1,000%.
 pub const MAX_MARKUP_MILLI_PERCENT: i64 = 1_000_000;
 
-const FLAGS: &[&str] = &[SALES_TAX_MARK_TAXABLE, TIME_BILLABLE, EXPENSES_BILLABLE, REIMBURSED_AS_INCOME, PROMPT_BILLABLE, TAX_1099, INVENTORY, CHECK_MEMO_ACCOUNT, DATE_CHECKS_PRINTED];
+const FLAGS: &[&str] = &[
+    SALES_TAX_MARK_TAXABLE,
+    TIME_BILLABLE,
+    EXPENSES_BILLABLE,
+    REIMBURSED_AS_INCOME,
+    PROMPT_BILLABLE,
+    TAX_1099,
+    INVENTORY,
+    CHECK_MEMO_ACCOUNT,
+    DATE_CHECKS_PRINTED,
+];
 
 fn one_of(v: &str, allowed: &[&str], code: &str, what: &str) -> Result<String, String> {
     if allowed.contains(&v) {
@@ -84,13 +94,12 @@ pub(super) fn validate(key: &str, v: &str) -> Option<Result<String, String>> {
 pub(super) async fn check(pool: &SqlitePool, key: &str, normalized: &str) -> Result<(), String> {
     match key {
         REIMBURSED_ACCOUNT | MARKUP_ACCOUNT if !normalized.is_empty() => {
-            let account: Option<(String, bool)> = sqlx::query_as(
-                "SELECT t.classification, a.is_active FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
-            )
-            .bind(normalized.parse::<i64>().unwrap_or_default())
-            .fetch_optional(pool)
-            .await
-            .map_err(db_err)?;
+            let account: Option<(String, bool)> =
+                sqlx::query_as("SELECT t.classification, a.is_active FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1")
+                    .bind(normalized.parse::<i64>().unwrap_or_default())
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(db_err)?;
             if matches!(account, Some((classification, true)) if classification == "INCOME") {
                 Ok(())
             } else {
@@ -99,7 +108,8 @@ pub(super) async fn check(pool: &SqlitePool, key: &str, normalized: &str) -> Res
         }
         TAX_1099_ACCOUNTS => {
             for id in parse_1099_accounts(normalized)?.keys() {
-                let ok: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM chart_of_accounts WHERE id = ?1)").bind(id).fetch_one(pool).await.map_err(db_err)?;
+                let ok: bool =
+                    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM chart_of_accounts WHERE id = ?1)").bind(id).fetch_one(pool).await.map_err(db_err)?;
                 if !ok {
                     return Err(format!("PREF_BAD_1099_ACCOUNT: account {id} does not exist"));
                 }

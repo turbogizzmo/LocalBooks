@@ -144,7 +144,9 @@ impl Protection {
             iv
         });
         let mut out = iv.to_vec();
-        out.extend(cbc::Encryptor::<aes::Aes256>::new_from_slices(&self.file_key, &iv).expect("32-byte key and 16-byte IV").encrypt_padded_vec_mut::<Pkcs7>(data));
+        out.extend(
+            cbc::Encryptor::<aes::Aes256>::new_from_slices(&self.file_key, &iv).expect("32-byte key and 16-byte IV").encrypt_padded_vec_mut::<Pkcs7>(data),
+        );
         out
     }
 

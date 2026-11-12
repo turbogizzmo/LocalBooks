@@ -57,17 +57,46 @@ async fn fresh(path: &Path, name: &str) -> SqlitePool {
 }
 
 fn line(description: &str, quantity_e4: i64, rate_cents: i64, income: i64, taxable: bool) -> InvoiceLineInput {
-    InvoiceLineInput { description: description.into(), quantity_e4, rate_cents: Cents(rate_cents), income_account_id: income, product_service_id: None, class_id: None, is_taxable: taxable, service_date: None }
+    InvoiceLineInput {
+        description: description.into(),
+        quantity_e4,
+        rate_cents: Cents(rate_cents),
+        income_account_id: income,
+        product_service_id: None,
+        class_id: None,
+        is_taxable: taxable,
+        service_date: None,
+    }
 }
 
 fn invoice(customer: &str, date: NaiveDate, lines: Vec<InvoiceLineInput>) -> InvoiceInput {
-    InvoiceInput { invoice_number: None, customer_name: customer.into(), issue_date: date, due_date: date + chrono::Days::new(30), lines, currency: None, tax_rate_id: None, discount_cents: Cents::ZERO, details: Default::default() }
+    InvoiceInput {
+        invoice_number: None,
+        customer_name: customer.into(),
+        issue_date: date,
+        due_date: date + chrono::Days::new(30),
+        lines,
+        currency: None,
+        tax_rate_id: None,
+        discount_cents: Cents::ZERO,
+        details: Default::default(),
+    }
 }
 
 async fn pay(pool: &SqlitePool, invoice_id: i64, bank: i64, date: NaiveDate, cents: i64, method: &str) {
     invoices::record_payment(
         pool,
-        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id, deposit_account_id: bank, payment_date: date, amount_cents: Cents(cents), payment_method: method.into(), reference: None, exchange_rate_e6: None },
+        PaymentInput {
+            discount_cents: Cents::ZERO,
+            payment_method_id: None,
+            invoice_id,
+            deposit_account_id: bank,
+            payment_date: date,
+            amount_cents: Cents(cents),
+            payment_method: method.into(),
+            reference: None,
+            exchange_rate_e6: None,
+        },
     )
     .await
     .expect("record a payment");
@@ -76,7 +105,8 @@ async fn pay(pool: &SqlitePool, invoice_id: i64, bank: i64, date: NaiveDate, cen
 async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, account_id: i64, cents: i64) -> i64 {
     expenses::post_vendor_bill(
         pool,
-        BillInput { form_lines: Vec::new(),
+        BillInput {
+            form_lines: Vec::new(),
             terms_id: None,
             vendor_name: vendor.into(),
             bill_number: Some(number.into()),
@@ -84,7 +114,17 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, ac
             due_date: date + chrono::Days::new(30),
             memo: None,
             total_cents: Cents(cents),
-            lines: vec![BillLineInput { account_id, amount_cents: Cents(cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+            lines: vec![BillLineInput {
+                account_id,
+                amount_cents: Cents(cents),
+                memo: None,
+                quantity_e4: None,
+                rate_cents: None,
+                product_service_id: None,
+                class_id: None,
+                customer_id: None,
+                billable: None,
+            }],
         },
     )
     .await
@@ -93,13 +133,19 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, ac
 }
 
 async fn pay_bill(pool: &SqlitePool, bill_id: i64, bank: i64, date: NaiveDate, cents: i64) {
-    expenses::pay_vendor_bill(pool, BillPaymentInput { bill_id, payment_account_id: bank, payment_date: date, amount_cents: Cents(cents), reference: None, to_be_printed: false }).await.expect("pay a bill");
+    expenses::pay_vendor_bill(
+        pool,
+        BillPaymentInput { bill_id, payment_account_id: bank, payment_date: date, amount_cents: Cents(cents), reference: None, to_be_printed: false },
+    )
+    .await
+    .expect("pay a bill");
 }
 
 async fn expense(pool: &SqlitePool, kind: &str, payee: &str, paid_from: i64, date: NaiveDate, account_id: i64, cents: i64) {
     expenses::post_expense(
         pool,
-        ExpenseInput { form_lines: Vec::new(),
+        ExpenseInput {
+            form_lines: Vec::new(),
             payment_method_id: None,
             kind: kind.into(),
             payee_name: Some(payee.into()),
@@ -152,7 +198,8 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     let pool = fresh(path, "Edge Cases Test Co").await;
     let (checking, savings, card) = (account(&pool, "1010").await, account(&pool, "1020").await, account(&pool, "2100").await);
     let (sales_acct, services) = (account(&pool, "4000").await, account(&pool, "4100").await);
-    let (office, rent, contractors, equity) = (account(&pool, "6250").await, account(&pool, "6300").await, account(&pool, "6400").await, account(&pool, "3100").await);
+    let (office, rent, contractors, equity) =
+        (account(&pool, "6250").await, account(&pool, "6300").await, account(&pool, "6400").await, account(&pool, "3100").await);
 
     // Users first, so tax IDs are stored encrypted from the start.
     let (admin, recovery) = users::turn_on(&pool, "owner", Some("Olive Owner"), ADMIN_PASSWORD).await.expect("turn users on");
@@ -162,65 +209,144 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
         ("viewer", "Vic Viewer", Role::ViewOnly, false),
         ("accountant", "Ari Accountant", Role::ExternalAccountant, false),
     ] {
-        users::add(&pool, &admin, NewUserInput { username: username.into(), display_name: Some(display.into()), role, can_see_sensitive: sensitive, password: format!("{username} temp pw") })
-            .await
-            .expect("add a user");
+        users::add(
+            &pool,
+            &admin,
+            NewUserInput {
+                username: username.into(),
+                display_name: Some(display.into()),
+                role,
+                can_see_sensitive: sensitive,
+                password: format!("{username} temp pw"),
+            },
+        )
+        .await
+        .expect("add a user");
     }
     let access = Access { protected: true, key: admin.key.as_ref() };
 
     // Opening balance and a funded savings account.
-    ledger::post_journal_entry(&pool, JournalEntry { id: None, date: d(2024, 1, 2), description: "Owner's investment".into(), lines: vec![JournalLine::debit(checking, 5_000_000), JournalLine::credit(equity, 5_000_000)], currency: None })
-        .await
-        .expect("opening balance");
-    crate::banking::post_transfer(&pool, crate::banking::TransferInput { from_account_id: checking, to_account_id: savings, transfer_date: d(2024, 1, 3), amount_cents: Cents(1_000_000), memo: Some("Reserve".into()) })
-        .await
-        .expect("transfer");
+    ledger::post_journal_entry(
+        &pool,
+        JournalEntry {
+            id: None,
+            date: d(2024, 1, 2),
+            description: "Owner's investment".into(),
+            lines: vec![JournalLine::debit(checking, 5_000_000), JournalLine::credit(equity, 5_000_000)],
+            currency: None,
+        },
+    )
+    .await
+    .expect("opening balance");
+    crate::banking::post_transfer(
+        &pool,
+        crate::banking::TransferInput {
+            from_account_id: checking,
+            to_account_id: savings,
+            transfer_date: d(2024, 1, 3),
+            amount_cents: Cents(1_000_000),
+            memo: Some("Reserve".into()),
+        },
+    )
+    .await
+    .expect("transfer");
 
     // Customers with awkward names, and a job under a customer.
-    for name in ["Acme Corp", "Café Olé & Søn's \"Best\" Bakery", "A Customer With A Very Long Name That Goes On And On For Testing Layout Ltd", "Zed's 50% Off <Outlet>"] {
+    for name in [
+        "Acme Corp",
+        "Café Olé & Søn's \"Best\" Bakery",
+        "A Customer With A Very Long Name That Goes On And On For Testing Layout Ltd",
+        "Zed's 50% Off <Outlet>",
+    ] {
         sales::create_customer(&pool, name, None).await.expect("create a customer");
     }
     sales::create_customer(&pool, "Acme Corp:Kitchen Remodel", None).await.expect("create a job");
 
     // Sales tax, and invoices covering the awkward amounts.
-    let rate = sales_tax::create_tax_rate(&pool, TaxRateInput { name: "City 8.875%".into(), rate_ppm: 88_750, agency_name: Some("City Tax Dept".into()), liability_account_id: None })
-        .await
-        .expect("create a tax rate");
-    let paid = invoices::create_and_post_invoice(&pool, invoice("Acme Corp", d(2024, 2, 29), vec![line("Leap-day consulting", 10_000, 150_000, services, false)])).await.expect("leap-day invoice");
+    let rate = sales_tax::create_tax_rate(
+        &pool,
+        TaxRateInput { name: "City 8.875%".into(), rate_ppm: 88_750, agency_name: Some("City Tax Dept".into()), liability_account_id: None },
+    )
+    .await
+    .expect("create a tax rate");
+    let paid =
+        invoices::create_and_post_invoice(&pool, invoice("Acme Corp", d(2024, 2, 29), vec![line("Leap-day consulting", 10_000, 150_000, services, false)]))
+            .await
+            .expect("leap-day invoice");
     pay(&pool, paid.id, checking, d(2024, 3, 15), 150_000, "CHECK").await;
-    let partial = invoices::create_and_post_invoice(&pool, invoice("Acme Corp:Kitchen Remodel", d(2024, 6, 10), vec![line("Cabinets", 30_000, 99_999, sales_acct, false)]))
-        .await
-        .expect("job invoice");
+    let partial = invoices::create_and_post_invoice(
+        &pool,
+        invoice("Acme Corp:Kitchen Remodel", d(2024, 6, 10), vec![line("Cabinets", 30_000, 99_999, sales_acct, false)]),
+    )
+    .await
+    .expect("job invoice");
     pay(&pool, partial.id, checking, d(2024, 7, 1), 100_000, "ACH").await;
-    let mut taxed = invoice("Café Olé & Søn's \"Best\" Bakery", d(2024, 12, 31), vec![line("Fractional quantity", 33_333, 333, sales_acct, true), line("Service, not taxed", 10_000, 12_345, services, false)]);
+    let mut taxed = invoice(
+        "Café Olé & Søn's \"Best\" Bakery",
+        d(2024, 12, 31),
+        vec![line("Fractional quantity", 33_333, 333, sales_acct, true), line("Service, not taxed", 10_000, 12_345, services, false)],
+    );
     taxed.tax_rate_id = Some(rate.id);
     taxed.discount_cents = Cents(101);
     invoices::create_and_post_invoice(&pool, taxed).await.expect("taxed year-end invoice");
-    let mut euro = invoice("A Customer With A Very Long Name That Goes On And On For Testing Layout Ltd", d(2025, 3, 1), vec![line("Export order", 10_000, 250_000, sales_acct, false)]);
+    let mut euro = invoice(
+        "A Customer With A Very Long Name That Goes On And On For Testing Layout Ltd",
+        d(2025, 3, 1),
+        vec![line("Export order", 10_000, 250_000, sales_acct, false)],
+    );
     euro.currency = Some(ForeignCurrency { code: "EUR".into(), exchange_rate_e6: 1_080_000 });
     let euro = invoices::create_and_post_invoice(&pool, euro).await.expect("EUR invoice");
     invoices::record_payment(
         &pool,
-        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: euro.id, deposit_account_id: checking, payment_date: d(2025, 4, 1), amount_cents: Cents(100_000), payment_method: "WIRE".into(), reference: Some("SWIFT 123".into()), exchange_rate_e6: Some(1_100_000) },
+        PaymentInput {
+            discount_cents: Cents::ZERO,
+            payment_method_id: None,
+            invoice_id: euro.id,
+            deposit_account_id: checking,
+            payment_date: d(2025, 4, 1),
+            amount_cents: Cents(100_000),
+            payment_method: "WIRE".into(),
+            reference: Some("SWIFT 123".into()),
+            exchange_rate_e6: Some(1_100_000),
+        },
     )
     .await
     .expect("partial EUR payment at a new rate");
-    let credited = invoices::create_and_post_invoice(&pool, invoice("Zed's 50% Off <Outlet>", d(2025, 5, 5), vec![line("Clearance", 20_000, 5_000, sales_acct, false)])).await.expect("invoice to credit");
+    let credited =
+        invoices::create_and_post_invoice(&pool, invoice("Zed's 50% Off <Outlet>", d(2025, 5, 5), vec![line("Clearance", 20_000, 5_000, sales_acct, false)]))
+            .await
+            .expect("invoice to credit");
     let credit = credits::create_credit_memo(
         &pool,
-        CreditMemoInput { credit_number: None, form_lines: Vec::new(),
+        CreditMemoInput {
+            credit_number: None,
+            form_lines: Vec::new(),
             customer_name: "Zed's 50% Off <Outlet>".into(),
             credit_date: d(2025, 5, 20),
             memo: Some("Damaged goods".into()),
             refund_account_id: None,
-            lines: vec![SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: Cents(2_500), income_account_id: sales_acct, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![SalesLineInput {
+                product_service_id: None,
+                description: "Return".into(),
+                quantity_e4: 10_000,
+                rate_cents: Cents(2_500),
+                income_account_id: sales_acct,
+                class_id: None,
+                is_taxable: false,
+                service_date: None,
+            }],
             tax_rate_id: None,
             header: Default::default(),
         },
     )
     .await
     .expect("credit memo");
-    credits::apply_customer_credit(&pool, ApplyCreditInput { credit_id: credit.id, document_id: credited.id, amount_cents: Cents(2_500), applied_date: d(2025, 5, 21) }).await.expect("apply the credit");
+    credits::apply_customer_credit(
+        &pool,
+        ApplyCreditInput { credit_id: credit.id, document_id: credited.id, amount_cents: Cents(2_500), applied_date: d(2025, 5, 21) },
+    )
+    .await
+    .expect("apply the credit");
 
     // Vendors: 1099 contractors with encrypted tax IDs, bills paid, part paid and open.
     vendor_tax_id(&pool, "Pat Contractor", "123-45-6789", access).await;
@@ -234,15 +360,28 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     expense(&pool, "EXPENSE", "Paper Co", card, d(2025, 9, 9), office, 1).await;
 
     // A mistake, voided.
-    let mistake = ledger::post_journal_entry(&pool, JournalEntry { id: None, date: d(2025, 10, 1), description: "Posted by mistake".into(), lines: vec![JournalLine::debit(office, 99_900), JournalLine::credit(checking, 99_900)], currency: None })
-        .await
-        .expect("entry to void");
+    let mistake = ledger::post_journal_entry(
+        &pool,
+        JournalEntry {
+            id: None,
+            date: d(2025, 10, 1),
+            description: "Posted by mistake".into(),
+            lines: vec![JournalLine::debit(office, 99_900), JournalLine::credit(checking, 99_900)],
+            currency: None,
+        },
+    )
+    .await
+    .expect("entry to void");
     ledger::void_transaction(&pool, mistake).await.expect("void it");
 
     // 2026 activity after the closed year.
-    let open = invoices::create_and_post_invoice(&pool, invoice("Acme Corp", d(2026, 1, 15), vec![line("January retainer", 10_000, 300_000, services, false)])).await.expect("2026 invoice");
+    let open = invoices::create_and_post_invoice(&pool, invoice("Acme Corp", d(2026, 1, 15), vec![line("January retainer", 10_000, 300_000, services, false)]))
+        .await
+        .expect("2026 invoice");
     pay(&pool, open.id, checking, d(2026, 2, 1), 1, "CASH").await;
-    closing::set_closing_date(&pool, &ClosingInput { lock_date: Some(d(2025, 12, 31)), current_passcode: None, new_passcode: Some(CLOSING_PASSCODE.into()) }).await.expect("close 2025");
+    closing::set_closing_date(&pool, &ClosingInput { lock_date: Some(d(2025, 12, 31)), current_passcode: None, new_passcode: Some(CLOSING_PASSCODE.into()) })
+        .await
+        .expect("close 2025");
 
     crate::db::compact(&pool).await.expect("compact");
     crate::db::close_pool(&pool).await;
@@ -255,7 +394,9 @@ async fn no_users(path: &Path) {
     vendor_tax_id(&pool, "Plain Text Contractor", "987-65-4321", Access::OPEN).await;
     let id = bill(&pool, "Plain Text Contractor", "PT-1", d(2025, 4, 1), contractors, 75_000).await;
     pay_bill(&pool, id, checking, d(2025, 4, 15), 75_000).await;
-    let sale = invoices::create_and_post_invoice(&pool, invoice("First Customer", d(2025, 4, 2), vec![line("Setup", 10_000, 120_000, services, false)])).await.expect("invoice");
+    let sale = invoices::create_and_post_invoice(&pool, invoice("First Customer", d(2025, 4, 2), vec![line("Setup", 10_000, 120_000, services, false)]))
+        .await
+        .expect("invoice");
     pay(&pool, sale.id, checking, d(2025, 4, 20), 120_000, "CHECK").await;
     crate::db::compact(&pool).await.expect("compact");
     crate::db::close_pool(&pool).await;
@@ -265,7 +406,8 @@ pub(crate) async fn five_years(path: &Path) {
     let pool = fresh(path, "Five Years Test Co").await;
     let (checking, card) = (account(&pool, "1010").await, account(&pool, "2100").await);
     let (sales_acct, services) = (account(&pool, "4000").await, account(&pool, "4100").await);
-    let expense_accounts = [account(&pool, "6000").await, account(&pool, "6250").await, account(&pool, "6350").await, account(&pool, "6500").await, account(&pool, "6550").await];
+    let expense_accounts =
+        [account(&pool, "6000").await, account(&pool, "6250").await, account(&pool, "6350").await, account(&pool, "6500").await, account(&pool, "6550").await];
     let rent = account(&pool, "6300").await;
     let customers: Vec<String> = (1..=25).map(|n| format!("Customer {n:02}")).collect();
     let mut n = 0i64;
@@ -276,9 +418,12 @@ pub(crate) async fn five_years(path: &Path) {
                 let date = d(year, month, (k % 28 + 1) as u32);
                 let income = if k % 3 == 0 { services } else { sales_acct };
                 let cents = 5_000 + (n * 7_919) % 250_000;
-                let inv = invoices::create_and_post_invoice(&pool, invoice(&customers[(n % 25) as usize], date, vec![line("Monthly work", 10_000, cents, income, false)]))
-                    .await
-                    .expect("invoice");
+                let inv = invoices::create_and_post_invoice(
+                    &pool,
+                    invoice(&customers[(n % 25) as usize], date, vec![line("Monthly work", 10_000, cents, income, false)]),
+                )
+                .await
+                .expect("invoice");
                 // Most are paid; the last months stay open for aging reports.
                 if !(year == 2025 && month >= 11) && n % 9 != 0 {
                     pay(&pool, inv.id, checking, date + chrono::Days::new(20), cents, "ACH").await;

@@ -27,7 +27,16 @@ async fn invoice(pool: &SqlitePool, customer: &str, cents: i64, issued: NaiveDat
         customer_name: customer.into(),
         issue_date: issued,
         due_date: due,
-        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(cents), income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![InvoiceLineInput {
+            description: "Work".into(),
+            quantity_e4: 10_000,
+            rate_cents: Cents(cents),
+            income_account_id: income,
+            product_service_id: None,
+            class_id: None,
+            is_taxable: false,
+            service_date: None,
+        }],
         currency: None,
         tax_rate_id: None,
         discount_cents: Cents::ZERO,
@@ -42,7 +51,8 @@ async fn bill(pool: &SqlitePool, vendor: &str, cents: i64, date: NaiveDate) -> i
 
 async fn bill_on_terms(pool: &SqlitePool, vendor: &str, cents: i64, date: NaiveDate, terms_id: Option<i64>) -> i64 {
     let expense = account(pool, "6300").await;
-    let input = BillInput { form_lines: Vec::new(),
+    let input = BillInput {
+        form_lines: Vec::new(),
         vendor_name: vendor.into(),
         bill_number: None,
         bill_date: date,
@@ -50,7 +60,17 @@ async fn bill_on_terms(pool: &SqlitePool, vendor: &str, cents: i64, date: NaiveD
         memo: None,
         total_cents: Cents(cents),
         terms_id,
-        lines: vec![BillLineInput { account_id: expense, amount_cents: Cents(cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![BillLineInput {
+            account_id: expense,
+            amount_cents: Cents(cents),
+            memo: None,
+            quantity_e4: None,
+            rate_cents: None,
+            product_service_id: None,
+            class_id: None,
+            customer_id: None,
+            billable: None,
+        }],
     };
     post_vendor_bill(pool, input).await.expect("bill posts").id
 }
@@ -87,7 +107,11 @@ async fn receive_payments_applies_by_the_company_preference() {
     assert_eq!(payment_application(&pool, "Acme", None, 4_000, None, None).await.unwrap(), vec![applied(older, 4_000)]);
     preferences::set(&pool, AUTO_APPLY, "off").await.unwrap();
     assert!(payment_application(&pool, "Acme", None, 4_000, None, None).await.unwrap().is_empty());
-    assert_eq!(payment_application(&pool, "Acme", None, 4_000, Some("exact"), None).await.unwrap(), vec![applied(newer, 4_000)], "the Auto Apply button still applies");
+    assert_eq!(
+        payment_application(&pool, "Acme", None, 4_000, Some("exact"), None).await.unwrap(),
+        vec![applied(newer, 4_000)],
+        "the Auto Apply button still applies"
+    );
     assert!(payment_application(&pool, "Acme", Some("EUR"), 4_000, None, None).await.unwrap().is_empty(), "only invoices in the payment's currency");
     assert!(preferences::set(&pool, AUTO_APPLY, "newest").await.unwrap_err().starts_with("PREF_BAD_AUTO_APPLY"));
 }
@@ -105,7 +129,11 @@ async fn selling_to_a_customer_with_overdue_invoices_warns_when_turned_on() {
     preferences::set(&pool, WARN_OVERDUE_CUSTOMER, "true").await.unwrap();
     let warning = guards::overdue_customer_warning(&pool, "acme", today).await.unwrap().expect("Acme is overdue");
     assert_eq!(warning.code, "CUSTOMER_OVERDUE");
-    assert!(warning.message.contains("2 overdue invoices") && warning.message.contains("$125.00") && warning.message.contains("10/01/2026"), "{}", warning.message);
+    assert!(
+        warning.message.contains("2 overdue invoices") && warning.message.contains("$125.00") && warning.message.contains("10/01/2026"),
+        "{}",
+        warning.message
+    );
     assert_eq!(guards::overdue_customer_warning(&pool, "Globex", today).await.unwrap(), None, "nothing past due");
     assert_eq!(guards::overdue_customer_warning(&pool, "New Customer", today).await.unwrap(), None);
     // A job counts toward its customer, and the customer's invoices toward its jobs.
@@ -156,7 +184,8 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
     let other = bill(&pool, "Paper Co", 1_000, d(10, 5)).await;
     let credit = create_vendor_credit(
         &pool,
-        VendorCreditInput { form_lines: Vec::new(),
+        VendorCreditInput {
+            form_lines: Vec::new(),
             vendor_name: "Harbor Hardware".into(),
             reference: Some("RMA-7".into()),
             credit_date: d(10, 2),
@@ -175,15 +204,26 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
         vec![CreditUse { credit_id: credit.id, bill_id: first, amount_cents: 6_000 }, CreditUse { credit_id: credit.id, bill_id: second, amount_cents: 1_000 }]
     );
 
-    let credits: Vec<ApplyCreditInput> = uses.iter().map(|u| ApplyCreditInput { credit_id: u.credit_id, document_id: u.bill_id, amount_cents: Cents(u.amount_cents), applied_date: d(10, 9) }).collect();
-    let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 9), amount_cents, reference: None, to_be_printed: false };
+    let credits: Vec<ApplyCreditInput> = uses
+        .iter()
+        .map(|u| ApplyCreditInput { credit_id: u.credit_id, document_id: u.bill_id, amount_cents: Cents(u.amount_cents), applied_date: d(10, 9) })
+        .collect();
+    let pay = |bill_id, amount_cents| BillPaymentInput {
+        bill_id,
+        payment_account_id: bank,
+        payment_date: d(10, 9),
+        amount_cents,
+        reference: None,
+        to_be_printed: false,
+    };
     // The first bill is paid off by the credit alone; the second needs 20.00 more.
     let too_much = pay_bills_with_credits(&pool, vec![pay(second, Cents(3_000))], credits.clone(), Vec::new(), d(10, 9)).await.unwrap_err();
     assert!(too_much.starts_with("BILL_OVERPAYMENT"), "{too_much}");
     assert_eq!(pay_bills_with_credits(&pool, vec![pay(second, Cents(2_000)), pay(other, Cents(1_000))], credits, Vec::new(), d(10, 9)).await.unwrap(), 3);
     let status: Vec<String> = sqlx::query_scalar("SELECT status FROM bills ORDER BY id").fetch_all(&pool).await.unwrap();
     assert_eq!(status, ["PAID", "PAID", "PAID"]);
-    let left: i64 = sqlx::query_scalar("SELECT remaining_cents FROM v_vendor_credit_balances WHERE vendor_credit_id = ?1").bind(credit.id).fetch_one(&pool).await.unwrap();
+    let left: i64 =
+        sqlx::query_scalar("SELECT remaining_cents FROM v_vendor_credit_balances WHERE vendor_credit_id = ?1").bind(credit.id).fetch_one(&pool).await.unwrap();
     assert_eq!(left, 0);
 }
 
@@ -191,11 +231,35 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
 async fn zero_amount_estimate_lines_stay_off_the_invoice() {
     let pool = test_pool().await;
     let income = account(&pool, "4100").await;
-    let line = |what: &str, rate: i64| SalesLineInput { product_service_id: None, description: what.into(), quantity_e4: 10_000, rate_cents: Cents(rate), income_account_id: income, class_id: None, is_taxable: false, service_date: None };
-    let estimate = |lines| EstimateInput { estimate_number: None, customer_name: "Initech".into(), estimate_date: d(10, 1), expiration_date: None, memo: None, lines, tax_rate_id: None, discount_cents: Cents::ZERO, details: Default::default() };
-    let est = create_estimate(&pool, estimate(vec![line("Design", 50_000), line("Site visit (included)", 0), line("Build", 25_000)])).await.expect("a zero line is allowed");
+    let line = |what: &str, rate: i64| SalesLineInput {
+        product_service_id: None,
+        description: what.into(),
+        quantity_e4: 10_000,
+        rate_cents: Cents(rate),
+        income_account_id: income,
+        class_id: None,
+        is_taxable: false,
+        service_date: None,
+    };
+    let estimate = |lines| EstimateInput {
+        estimate_number: None,
+        customer_name: "Initech".into(),
+        estimate_date: d(10, 1),
+        expiration_date: None,
+        memo: None,
+        lines,
+        tax_rate_id: None,
+        discount_cents: Cents::ZERO,
+        details: Default::default(),
+    };
+    let est = create_estimate(&pool, estimate(vec![line("Design", 50_000), line("Site visit (included)", 0), line("Build", 25_000)]))
+        .await
+        .expect("a zero line is allowed");
     assert_eq!(est.total_cents, 75_000);
-    assert!(create_estimate(&pool, estimate(vec![line("Nothing", 0)])).await.unwrap_err().starts_with("EST_AMOUNT_TOO_LARGE"), "the estimate itself needs an amount");
+    assert!(
+        create_estimate(&pool, estimate(vec![line("Nothing", 0)])).await.unwrap_err().starts_with("EST_AMOUNT_TOO_LARGE"),
+        "the estimate itself needs an amount"
+    );
 
     assert_eq!(preferences::get(&pool, DROP_ZERO_LINES).await.unwrap(), "true");
     let converted = convert_to_invoice(&pool, est.id, d(10, 5), d(11, 4)).await.unwrap();
@@ -216,7 +280,16 @@ async fn zero_amount_estimate_lines_stay_off_the_invoice() {
         due_date: d(11, 5),
         lines: [("Design", 50_000), ("Extra", 0)]
             .into_iter()
-            .map(|(what, rate)| InvoiceLineInput { description: what.into(), quantity_e4: 10_000, rate_cents: Cents(rate), income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None })
+            .map(|(what, rate)| InvoiceLineInput {
+                description: what.into(),
+                quantity_e4: 10_000,
+                rate_cents: Cents(rate),
+                income_account_id: income,
+                product_service_id: None,
+                class_id: None,
+                is_taxable: false,
+                service_date: None,
+            })
             .collect(),
         currency: None,
         tax_rate_id: None,
@@ -313,14 +386,28 @@ async fn pay_bills_takes_early_payment_discounts_through_their_last_day() {
 
     preferences::set(&pool, BILL_AUTO_DISCOUNTS, "true").await.unwrap();
     assert!(pay_bills_plan(&pool, &[on_terms], d(10, 5)).await.unwrap().discounts.is_empty(), "no discount account yet");
-    assert!(preferences::set(&pool, BILL_DISCOUNT_ACCOUNT, &bank.to_string()).await.unwrap_err().starts_with("PREF_BAD_DISCOUNT_ACCOUNT"), "not a bank account");
+    assert!(
+        preferences::set(&pool, BILL_DISCOUNT_ACCOUNT, &bank.to_string()).await.unwrap_err().starts_with("PREF_BAD_DISCOUNT_ACCOUNT"),
+        "not a bank account"
+    );
     preferences::set(&pool, BILL_DISCOUNT_ACCOUNT, &expense.to_string()).await.unwrap();
 
     let plan = pay_bills_plan(&pool, &[on_terms, plain], d(10, 11)).await.unwrap();
-    assert_eq!(plan.discounts, vec![DiscountUse { bill_id: on_terms, amount_cents: 1_000 }], "2% of 500.00, on the 10th day; none on a bill without a discount");
+    assert_eq!(
+        plan.discounts,
+        vec![DiscountUse { bill_id: on_terms, amount_cents: 1_000 }],
+        "2% of 500.00, on the 10th day; none on a bill without a discount"
+    );
     assert!(pay_bills_plan(&pool, &[on_terms], d(10, 12)).await.unwrap().discounts.is_empty(), "the discount has ended");
 
-    let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 11), amount_cents, reference: None, to_be_printed: false };
+    let pay = |bill_id, amount_cents| BillPaymentInput {
+        bill_id,
+        payment_account_id: bank,
+        payment_date: d(10, 11),
+        amount_cents,
+        reference: None,
+        to_be_printed: false,
+    };
     let late = pay_bills_with_credits(&pool, vec![pay(on_terms, Cents(49_000))], Vec::new(), plan.discounts.clone(), d(10, 12)).await.unwrap_err();
     assert!(late.starts_with("BILL_NO_DISCOUNT"), "{late}");
     assert_eq!(pay_bills_with_credits(&pool, vec![pay(on_terms, Cents(49_000))], Vec::new(), plan.discounts, d(10, 11)).await.unwrap(), 1);
@@ -338,7 +425,16 @@ async fn invoice_on_terms(pool: &SqlitePool, customer: &str, cents: i64, issued:
         customer_name: customer.into(),
         issue_date: issued,
         due_date: issued + Duration::days(30),
-        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(cents), income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![InvoiceLineInput {
+            description: "Work".into(),
+            quantity_e4: 10_000,
+            rate_cents: Cents(cents),
+            income_account_id: income,
+            product_service_id: None,
+            class_id: None,
+            is_taxable: false,
+            service_date: None,
+        }],
         currency: None,
         tax_rate_id: None,
         discount_cents: Cents::ZERO,
@@ -356,7 +452,8 @@ async fn assert_receivables_tie(pool: &SqlitePool, customer_id: i64, expected: i
     .fetch_one(pool)
     .await
     .unwrap();
-    let open: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(total_cents - amount_paid_cents), 0) FROM invoices WHERE is_voided = 0").fetch_one(pool).await.unwrap();
+    let open: i64 =
+        sqlx::query_scalar("SELECT COALESCE(SUM(total_cents - amount_paid_cents), 0) FROM invoices WHERE is_voided = 0").fetch_one(pool).await.unwrap();
     let aging = crate::invoices::ar_aging(pool, d(12, 31)).await.unwrap().total_cents;
     // A voided payment's reversing entry has no customer on the statement yet (see docs/gaps.md),
     // so after a void the statement is left out.
@@ -368,7 +465,11 @@ async fn assert_receivables_tie(pool: &SqlitePool, customer_id: i64, expected: i
 }
 
 async fn net_cents(pool: &SqlitePool, account_id: i64) -> i64 {
-    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1").bind(account_id).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1")
+        .bind(account_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 #[tokio::test]
@@ -376,14 +477,16 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
     use crate::invoices::{record_payments, PaymentInput};
     let pool = test_pool().await;
     let bank = account(&pool, "1010").await;
-    let undeposited: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE is_system = 1 AND account_type = 'OTHER_CURRENT_ASSET' ORDER BY id LIMIT 1")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    let discounts: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES ('4995', 'Sales Discounts', 'INCOME') RETURNING id")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let undeposited: i64 =
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE is_system = 1 AND account_type = 'OTHER_CURRENT_ASSET' ORDER BY id LIMIT 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let discounts: i64 =
+        sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES ('4995', 'Sales Discounts', 'INCOME') RETURNING id")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     let terms: i64 = sqlx::query_scalar("INSERT INTO terms (name, net_days, discount_ppm, discount_days) VALUES ('2% 10 Net 30', 30, 20000, 10) RETURNING id")
         .fetch_one(&pool)
         .await
@@ -412,7 +515,10 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
     assert_eq!(payment_discounts(&pool, &ids, d(10, 11)).await.unwrap(), PaymentDiscounts::default());
     let err = record_payments(&pool, vec![pay(early, 49_000, 1_000, 11)]).await.unwrap_err();
     assert!(err.starts_with("INV_NO_DISCOUNT_ACCOUNT"), "{err}");
-    assert!(preferences::set(&pool, PAYMENT_DISCOUNT_ACCOUNT, &bank.to_string()).await.unwrap_err().starts_with("PREF_BAD_DISCOUNT_ACCOUNT"), "not a bank account");
+    assert!(
+        preferences::set(&pool, PAYMENT_DISCOUNT_ACCOUNT, &bank.to_string()).await.unwrap_err().starts_with("PREF_BAD_DISCOUNT_ACCOUNT"),
+        "not a bank account"
+    );
     preferences::set(&pool, PAYMENT_DISCOUNT_ACCOUNT, &discounts.to_string()).await.unwrap();
     preferences::set(&pool, PAYMENT_AUTO_DISCOUNTS, "true").await.unwrap();
 
@@ -453,7 +559,8 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
         .fetch_all(&pool)
         .await
         .unwrap();
-    let ar: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'ACCOUNTS_RECEIVABLE' AND is_system = 1").fetch_one(&pool).await.unwrap();
+    let ar: i64 =
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'ACCOUNTS_RECEIVABLE' AND is_system = 1").fetch_one(&pool).await.unwrap();
     assert_eq!(lines, vec![(undeposited, 49_000, 0), (discounts, 1_000, 0), (ar, 0, 50_000)], "one entry: cash and discount against A/R");
     assert_eq!(net_cents(&pool, discounts).await, 1_000);
     assert_receivables_tie(&pool, customer, 55_000).await;

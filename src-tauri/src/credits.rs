@@ -182,13 +182,12 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
     let mut debits: Vec<((i64, Option<i64>), i64)> = Vec::new();
     for (idx, line) in input.lines.iter().enumerate() {
         let n = idx + 1;
-        let row: Option<(String, bool)> = sqlx::query_as(
-            "SELECT t.classification, a.is_active FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
-        )
-        .bind(line.income_account_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
+        let row: Option<(String, bool)> =
+            sqlx::query_as("SELECT t.classification, a.is_active FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1")
+                .bind(line.income_account_id)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(db_err)?;
         match row {
             Some((class, true)) if class == "INCOME" || (write_off && class == "EXPENSE") => {}
             Some((_, false)) => return Err(format!("CM_INACTIVE_ACCOUNT: line {n} uses an inactive account")),
@@ -202,7 +201,9 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
                 .await
                 .map_err(db_err)?;
             if tracked {
-                return Err(format!("CM_STOCK_RETURN: line {n} is a tracked stock item; record returned stock with Products › Adjust stock and credit it as a non-stock line"));
+                return Err(format!(
+                    "CM_STOCK_RETURN: line {n} is a tracked stock item; record returned stock with Products › Adjust stock and credit it as a non-stock line"
+                ));
             }
         }
         if let Some(class) = line.class_id {
@@ -310,13 +311,12 @@ pub(crate) async fn apply_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite>
         return Err("CM_NOT_AVAILABLE: a voided credit memo or a refund receipt has no credit to apply".into());
     }
     type InvoiceRow = (Option<i64>, i64, i64, bool, String, Option<String>);
-    let invoice: Option<InvoiceRow> = sqlx::query_as(
-        "SELECT customer_id, total_cents, amount_paid_cents, is_voided, status, currency_code FROM invoices WHERE id = ?1",
-    )
-    .bind(input.document_id)
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(db_err)?;
+    let invoice: Option<InvoiceRow> =
+        sqlx::query_as("SELECT customer_id, total_cents, amount_paid_cents, is_voided, status, currency_code FROM invoices WHERE id = ?1")
+            .bind(input.document_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(db_err)?;
     let (inv_customer, total, paid, inv_voided, status, currency) = invoice.ok_or("CM_INVOICE_NOT_FOUND: that invoice does not exist")?;
     if inv_customer != Some(customer) {
         return Err("CM_OTHER_CUSTOMER: a credit can only be applied to the same customer's invoices".into());
@@ -361,12 +361,11 @@ pub struct AppliedCredits {
 /// them are one transaction.
 pub async fn apply_open_credits_to_invoice(pool: &SqlitePool, invoice_id: i64, applied_date: NaiveDate) -> Result<AppliedCredits, String> {
     run(pool, async |tx| {
-        let invoice: Option<(Option<i64>, i64, i64)> =
-            sqlx::query_as("SELECT customer_id, total_cents, amount_paid_cents FROM invoices WHERE id = ?1")
-                .bind(invoice_id)
-                .fetch_optional(&mut **tx)
-                .await
-                .map_err(db_err)?;
+        let invoice: Option<(Option<i64>, i64, i64)> = sqlx::query_as("SELECT customer_id, total_cents, amount_paid_cents FROM invoices WHERE id = ?1")
+            .bind(invoice_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(db_err)?;
         let (customer, total, paid) = invoice.ok_or("CM_INVOICE_NOT_FOUND: that invoice does not exist")?;
         let customer = customer.ok_or("CM_OTHER_CUSTOMER: that invoice has no customer to take credits from")?;
         let credits: Vec<(i64, i64)> = sqlx::query_as(
@@ -708,10 +707,7 @@ const VENDOR_CREDIT_SELECT: &str = "SELECT c.id, c.vendor_id, v.name AS vendor_n
  FROM vendor_credits c JOIN vendors v ON v.id = c.vendor_id JOIN v_vendor_credit_balances b ON b.vendor_credit_id = c.id";
 
 pub async fn list_vendor_credits(pool: &SqlitePool) -> Result<Vec<VendorCreditSummary>, String> {
-    sqlx::query_as::<_, VendorCreditSummary>(&format!("{VENDOR_CREDIT_SELECT} ORDER BY c.credit_date DESC, c.id DESC"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as::<_, VendorCreditSummary>(&format!("{VENDOR_CREDIT_SELECT} ORDER BY c.credit_date DESC, c.id DESC")).fetch_all(pool).await.map_err(db_err)
 }
 
 async fn vendor_credit(pool: &SqlitePool, id: i64) -> Result<VendorCreditSummary, String> {
@@ -745,17 +741,16 @@ pub(crate) async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input:
     crate::purchase_lines::check(tx, &input.form_lines, "VC").await?;
     let vendor = input.vendor_name.trim();
     let vendor_id = find_or_create_named(tx, Party::Vendor, vendor).await?;
-    let credit_id: i64 = sqlx::query_scalar(
-        "INSERT INTO vendor_credits (vendor_id, reference, credit_date, memo, total_cents) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id",
-    )
-    .bind(vendor_id)
-    .bind(clean(input.reference.as_deref()))
-    .bind(input.credit_date)
-    .bind(clean(input.memo.as_deref()))
-    .bind(total)
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(db_err)?;
+    let credit_id: i64 =
+        sqlx::query_scalar("INSERT INTO vendor_credits (vendor_id, reference, credit_date, memo, total_cents) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id")
+            .bind(vendor_id)
+            .bind(clean(input.reference.as_deref()))
+            .bind(input.credit_date)
+            .bind(clean(input.memo.as_deref()))
+            .bind(total)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(db_err)?;
 
     let mut lines = vec![JournalLine::debit(system_account(tx, "ACCOUNTS_PAYABLE").await?, total)];
     for (idx, line) in input.lines.iter().enumerate() {

@@ -73,7 +73,14 @@ fn per_item_levels_price_listed_items_and_leave_the_rest_at_standard() {
 
 #[test]
 fn validation_refuses_bad_levels() {
-    let ok = PriceLevelInput { name: "Wholesale".into(), kind: LevelKind::FixedPercent, percent_milli: -10_000, rounding: Rounding::None, items: vec![], is_active: true };
+    let ok = PriceLevelInput {
+        name: "Wholesale".into(),
+        kind: LevelKind::FixedPercent,
+        percent_milli: -10_000,
+        rounding: Rounding::None,
+        items: vec![],
+        is_active: true,
+    };
     assert!(validate(&ok).is_ok());
     let err = |input: PriceLevelInput| validate(&input).unwrap_err();
     assert!(err(PriceLevelInput { name: "  ".into(), ..ok.clone() }).starts_with("PRICE_LEVEL_NO_NAME"));
@@ -122,18 +129,36 @@ async fn books() -> Books {
         async move { sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_one(&pool).await.unwrap() }
     };
     let (sales, services, obe) = (account("4000").await, account("4100").await, account("3000").await);
-    let product = |name: &str, rate_cents, income_account_id| ProductInput { name: name.into(), description: None, rate_cents, income_account_id, is_taxable: true };
+    let product =
+        |name: &str, rate_cents, income_account_id| ProductInput { name: name.into(), description: None, rate_cents, income_account_id, is_taxable: true };
     let consulting = create_product(&pool, product("Consulting", Cents(15_000), services)).await.unwrap().id;
     let widget = create_product(&pool, product("Widget", Cents(2_500), sales)).await.unwrap().id;
     let item = track_product(&pool, &TrackInput { product_id: widget, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap().id;
-    adjust(&pool, &AdjustInput { item_id: item, date: "2026-10-01".parse().unwrap(), qty_change_e4: 100_000, total_cost_cents: Some(5_250), offset_account_id: obe, memo: None })
-        .await
-        .unwrap();
+    adjust(
+        &pool,
+        &AdjustInput {
+            item_id: item,
+            date: "2026-10-01".parse().unwrap(),
+            qty_change_e4: 100_000,
+            total_cost_cents: Some(5_250),
+            offset_account_id: obe,
+            memo: None,
+        },
+    )
+    .await
+    .unwrap();
     Books { pool, consulting, widget }
 }
 
 fn wholesale() -> PriceLevelInput {
-    PriceLevelInput { name: "Wholesale".into(), kind: LevelKind::FixedPercent, percent_milli: -10_000, rounding: Rounding::None, items: vec![], is_active: true }
+    PriceLevelInput {
+        name: "Wholesale".into(),
+        kind: LevelKind::FixedPercent,
+        percent_milli: -10_000,
+        rounding: Rounding::None,
+        items: vec![],
+        is_active: true,
+    }
 }
 
 #[tokio::test]
@@ -260,7 +285,8 @@ async fn a_customer_default_is_set_on_the_customer() {
     set_active(&b.pool, level.id, false).await.unwrap();
     update_party(&b.pool, "customer", acme.id, input(Some(level.id)), Access::OPEN).await.unwrap();
     let globex = crate::sales::create_customer(&b.pool, "Globex", None).await.unwrap();
-    let err = update_party(&b.pool, "customer", globex.id, PartyDetailsInput { name: "Globex".into(), ..input(Some(level.id)) }, Access::OPEN).await.unwrap_err();
+    let err =
+        update_party(&b.pool, "customer", globex.id, PartyDetailsInput { name: "Globex".into(), ..input(Some(level.id)) }, Access::OPEN).await.unwrap_err();
     assert!(err.starts_with("PARTY_INACTIVE_PRICE_LEVEL"), "{err}");
 }
 

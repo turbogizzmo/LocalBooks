@@ -156,7 +156,11 @@ pub async fn export(pool: &SqlitePool, start: NaiveDate, end: NaiveDate, today: 
             continue;
         };
         if line.form != TXF_FORM || line.kind == TaxLineKind::BalanceSheet {
-            left_out.push(TxfLeftOut { account_name: r.account_name.clone(), reason: format!("{} is not a Schedule C line", line.title()), amount_cents: r.net_cents });
+            left_out.push(TxfLeftOut {
+                account_name: r.account_name.clone(),
+                reason: format!("{} is not a Schedule C line", line.title()),
+                amount_cents: r.net_cents,
+            });
             continue;
         }
         let Some((reference, format)) = reference_for(line.line) else {
@@ -179,12 +183,7 @@ pub async fn export(pool: &SqlitePool, start: NaiveDate, end: NaiveDate, today: 
     records.sort_by_key(|r| order(r.reference));
     records.retain(|r| r.amount_cents != 0);
 
-    let mut lines: Vec<String> = vec![
-        "V042".into(),
-        format!("ATillhouse {}", env!("CARGO_PKG_VERSION")),
-        format!("D{}", today.format("%m/%d/%Y")),
-        "^".into(),
-    ];
+    let mut lines: Vec<String> = vec!["V042".into(), format!("ATillhouse {}", env!("CARGO_PKG_VERSION")), format!("D{}", today.format("%m/%d/%Y")), "^".into()];
     for r in &records {
         lines.extend(["TS".to_string(), format!("N{}", r.reference), "C1".into(), "L1".into(), format!("${}", amount_text(r.amount_cents))]);
         if let Some(d) = &r.description {

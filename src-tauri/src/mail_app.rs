@@ -63,7 +63,9 @@ pub fn parse_recipients(text: &str) -> Result<Vec<String>, String> {
         let valid = address.len() <= 254
             && !address.chars().any(|c| c.is_whitespace() || c.is_control() || matches!(c, '<' | '>' | '"' | '(' | ')' | '[' | ']' | '\\'))
             && match address.rsplit_once('@') {
-                Some((local, domain)) => !local.is_empty() && domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.') && !domain.contains('@'),
+                Some((local, domain)) => {
+                    !local.is_empty() && domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.') && !domain.contains('@')
+                }
                 None => false,
             };
         if !valid {
@@ -197,7 +199,9 @@ mod platform {
     use std::time::Duration;
     use windows_sys::Win32::Foundation::FreeLibrary;
     use windows_sys::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
-    use windows_sys::Win32::System::Mapi::{MapiFileDescW, MapiMessageW, MapiRecipDescW, MAPI_DIALOG, MAPI_LOGON_UI, MAPI_TO, MAPI_USER_ABORT, SUCCESS_SUCCESS};
+    use windows_sys::Win32::System::Mapi::{
+        MapiFileDescW, MapiMessageW, MapiRecipDescW, MAPI_DIALOG, MAPI_LOGON_UI, MAPI_TO, MAPI_USER_ABORT, SUCCESS_SUCCESS,
+    };
 
     type SendMailW = unsafe extern "system" fn(session: usize, ui_param: usize, message: *const MapiMessageW, flags: u32, reserved: u32) -> u32;
 
@@ -216,7 +220,12 @@ mod platform {
         let mut recipients: Vec<MapiRecipDescW> = addresses
             .iter_mut()
             .zip(names.iter_mut())
-            .map(|(address, name)| MapiRecipDescW { ulRecipClass: MAPI_TO, lpszName: name.as_mut_ptr(), lpszAddress: address.as_mut_ptr(), ..Default::default() })
+            .map(|(address, name)| MapiRecipDescW {
+                ulRecipClass: MAPI_TO,
+                lpszName: name.as_mut_ptr(),
+                lpszAddress: address.as_mut_ptr(),
+                ..Default::default()
+            })
             .collect();
         let mut descs: Vec<MapiFileDescW> = paths
             .iter_mut()

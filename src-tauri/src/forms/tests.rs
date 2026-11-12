@@ -1,8 +1,8 @@
 use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, InvoiceInput, InvoiceLineInput};
-use chrono::NaiveDate;
 use crate::money::Cents;
+use chrono::NaiveDate;
 
 fn texts(pages: &[Page]) -> Vec<String> {
     pages
@@ -40,7 +40,8 @@ fn templates_validate_and_fill_defaults() {
 
 #[test]
 fn layout_follows_the_template() {
-    let company = Company { name: "Acme Studio".into(), address: "1 Loop Rd".into(), email: "hi@acme.test".into(), currency_symbol: "$".into(), ..Company::default() };
+    let company =
+        Company { name: "Acme Studio".into(), address: "1 Loop Rd".into(), email: "hi@acme.test".into(), currency_symbol: "$".into(), ..Company::default() };
     let doc = sample_doc(FormKind::Invoice, "$");
     let tpl = FormTemplate::default_for(FormKind::Invoice);
     let all = texts(&layout(&doc, &company, &tpl, Some((400, 100))));
@@ -72,9 +73,17 @@ fn layout_follows_the_template() {
 
 #[test]
 fn header_and_totals_text_stays_clear_of_the_logo_and_amounts() {
-    let company = Company { name: "Northwest Regional Landscaping and Snow Removal Cooperative".into(), address: "1234 Southeast Industrial Parkway, Building 7, Unit 12, Portland, OR 97214".into(), currency_symbol: "$".into(), ..Company::default() };
+    let company = Company {
+        name: "Northwest Regional Landscaping and Snow Removal Cooperative".into(),
+        address: "1234 Southeast Industrial Parkway, Building 7, Unit 12, Portland, OR 97214".into(),
+        currency_symbol: "$".into(),
+        ..Company::default()
+    };
     let mut doc = sample_doc(FormKind::Invoice, "$");
-    doc.totals.insert(0, TotalRow { label: "Sales tax (Multnomah County Combined Special District Rate)".into(), value: "$1,234.56".into(), grand: false, payment: false });
+    doc.totals.insert(
+        0,
+        TotalRow { label: "Sales tax (Multnomah County Combined Special District Rate)".into(), value: "$1,234.56".into(), grand: false, payment: false },
+    );
     let tpl = FormTemplate { logo_size: LogoSize::Large, ..FormTemplate::default_for(FormKind::Invoice) };
     let pages = layout(&doc, &company, &tpl, Some((1000, 200)));
     let (logo_x, logo_bottom) = pages[0].ops.iter().find_map(|op| if let Op::Image { x, y, h, .. } = op { Some((*x, y + h)) } else { None }).unwrap();
@@ -93,7 +102,16 @@ fn header_and_totals_text_stays_clear_of_the_logo_and_amounts() {
 fn long_documents_paginate_and_stay_on_the_page() {
     let company = Company { name: "Acme".into(), currency_symbol: "$".into(), ..Company::default() };
     let mut doc = sample_doc(FormKind::Estimate, "$");
-    doc.lines = (0..80).map(|i| FormLine { description: format!("Line {i} with a fairly long description that wraps onto a second line in the table"), quantity: "1".into(), rate: "$1.00".into(), amount: "$1.00".into(), details: Vec::new(), service_date: String::new() }).collect();
+    doc.lines = (0..80)
+        .map(|i| FormLine {
+            description: format!("Line {i} with a fairly long description that wraps onto a second line in the table"),
+            quantity: "1".into(),
+            rate: "$1.00".into(),
+            amount: "$1.00".into(),
+            details: Vec::new(),
+            service_date: String::new(),
+        })
+        .collect();
     let tpl = FormTemplate { paper: Paper::A4, ..FormTemplate::default_for(FormKind::Estimate) };
     let pages = layout(&doc, &company, &tpl, None);
     assert!(pages.len() > 2);
@@ -117,7 +135,10 @@ async fn real_invoices_render_saved_templates_to_pdf() {
     let d = |day| NaiveDate::from_ymd_opt(2026, 10, day).unwrap();
     // The invoice copies the billing address when it is written, so it is set first.
     crate::sales::create_customer(&pool, "Initech", None).await.unwrap();
-    sqlx::query("UPDATE customers SET billing_address = '9 Elm St\nAustin, TX', email = 'ap@initech.test' WHERE name = 'Initech'").execute(&pool).await.unwrap();
+    sqlx::query("UPDATE customers SET billing_address = '9 Elm St\nAustin, TX', email = 'ap@initech.test' WHERE name = 'Initech'")
+        .execute(&pool)
+        .await
+        .unwrap();
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
@@ -125,7 +146,16 @@ async fn real_invoices_render_saved_templates_to_pdf() {
             customer_name: "Initech".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput { description: "Design (hours)".into(), quantity_e4: 15_000, rate_cents: Cents(10_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput {
+                description: "Design (hours)".into(),
+                quantity_e4: 15_000,
+                rate_cents: Cents(10_000),
+                income_account_id: services,
+                product_service_id: None,
+                class_id: None,
+                is_taxable: false,
+                service_date: None,
+            }],
             currency: None,
             tax_rate_id: None,
             discount_cents: Cents::ZERO,
@@ -190,7 +220,16 @@ fn every_layout_preset_renders_every_form_on_one_page() {
     }
     // Compact fits more lines on a page than Classic.
     let mut doc = sample_doc(FormKind::Invoice, "$");
-    doc.lines = (0..60).map(|i| FormLine { description: format!("Line {i}"), quantity: "1".into(), rate: "$1.00".into(), amount: "$1.00".into(), details: Vec::new(), service_date: String::new() }).collect();
+    doc.lines = (0..60)
+        .map(|i| FormLine {
+            description: format!("Line {i}"),
+            quantity: "1".into(),
+            rate: "$1.00".into(),
+            amount: "$1.00".into(),
+            details: Vec::new(),
+            service_date: String::new(),
+        })
+        .collect();
     let pages = |preset| layout(&doc, &company, &FormTemplate { layout: preset, ..FormTemplate::default_for(FormKind::Invoice) }, None).len();
     assert!(pages(FormLayout::Compact) < pages(FormLayout::Classic));
 }
@@ -201,7 +240,8 @@ fn statements_print_transactions_and_aging() {
     let doc = sample_doc(FormKind::Statement, "$");
     let tpl = FormTemplate::default_for(FormKind::Statement);
     let all = texts(&layout(&doc, &company, &tpl, None));
-    for expected in ["Statement", "10/01/2026 – 10/31/2026", "STATEMENT FOR", "Balance forward", "Invoice #1001", "Payment #2045", "Amount due", "Over 90 days"] {
+    for expected in ["Statement", "10/01/2026 – 10/31/2026", "STATEMENT FOR", "Balance forward", "Invoice #1001", "Payment #2045", "Amount due", "Over 90 days"]
+    {
         assert!(all.iter().any(|t| t == expected), "missing {expected:?} in {all:?}");
     }
     let all = texts(&layout(&doc, &company, &FormTemplate { show_aging: false, ..tpl.clone() }, None));
@@ -225,7 +265,14 @@ async fn styles_hold_their_own_templates_and_follow_the_customer() {
     assert!(!modern.is_default);
     // A copy starts with the source's templates; then it changes on its own.
     assert_eq!(get_template(&pool, Some(modern.id), FormKind::Invoice).await.unwrap().title, "Tax Invoice");
-    save_template(&pool, Some(modern.id), FormKind::Invoice, FormTemplate { layout: FormLayout::Modern, title: "Bill".into(), ..FormTemplate::default_for(FormKind::Invoice) }).await.unwrap();
+    save_template(
+        &pool,
+        Some(modern.id),
+        FormKind::Invoice,
+        FormTemplate { layout: FormLayout::Modern, title: "Bill".into(), ..FormTemplate::default_for(FormKind::Invoice) },
+    )
+    .await
+    .unwrap();
     assert_eq!(get_template(&pool, None, FormKind::Invoice).await.unwrap().title, "Tax Invoice");
     assert!(create_style(&pool, "modern", None).await.unwrap_err().starts_with("FORM_STYLE_DUPLICATE"));
     assert!(create_style(&pool, " ", None).await.unwrap_err().starts_with("FORM_STYLE_NAME"));
@@ -295,7 +342,10 @@ async fn sales_receipts_and_statements_render_from_the_books() {
     }
     sqlx::query("UPDATE customers SET email = 'ap@initech.test' WHERE id = ?1").bind(customer).execute(&pool).await.unwrap();
     let receipt_mail = email_draft(&pool, FormKind::SalesReceipt, receipt.id, None).await.unwrap();
-    assert_eq!((receipt_mail.to.as_str(), receipt_mail.file_name.clone()), ("ap@initech.test", format!("Sales Receipt {} · Initech.pdf", receipt.receipt_number)));
+    assert_eq!(
+        (receipt_mail.to.as_str(), receipt_mail.file_name.clone()),
+        ("ap@initech.test", format!("Sales Receipt {} · Initech.pdf", receipt.receipt_number))
+    );
     let statement_mail = email_draft(&pool, FormKind::Statement, customer, Some(period)).await.unwrap();
     assert!(statement_mail.body.contains("The amount due is $400.00"), "{}", statement_mail.body);
     assert_eq!(statement_mail.file_name, "Statement 2026-10-31 · Initech.pdf");
@@ -304,7 +354,10 @@ async fn sales_receipts_and_statements_render_from_the_books() {
     assert!(bytes.starts_with(b"%PDF-1.4"));
     let backwards = Period { start_date: period.end_date, end_date: period.start_date };
     assert!(render(&pool, FormKind::Statement, Some(customer), Some(backwards), None, false).await.is_err());
-    assert_eq!(Period::last_month(NaiveDate::from_ymd_opt(2026, 3, 15).unwrap()), Period { start_date: NaiveDate::from_ymd_opt(2026, 2, 1).unwrap(), end_date: NaiveDate::from_ymd_opt(2026, 2, 28).unwrap() });
+    assert_eq!(
+        Period::last_month(NaiveDate::from_ymd_opt(2026, 3, 15).unwrap()),
+        Period { start_date: NaiveDate::from_ymd_opt(2026, 2, 1).unwrap(), end_date: NaiveDate::from_ymd_opt(2026, 2, 28).unwrap() }
+    );
 }
 
 #[tokio::test]
@@ -313,11 +366,21 @@ async fn sales_forms_print_rep_shipping_and_custom_fields() {
     use crate::sales_lists::{create_sales_rep, create_ship_method, SalesDetails, SalesRepInput};
     let pool = test_pool().await;
     let services: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
-    let widget: i64 =
-        sqlx::query_scalar("INSERT INTO products_services (name, rate_cents, income_account_id) VALUES ('Widget', 500, ?1) RETURNING id").bind(services).fetch_one(&pool).await.unwrap();
+    let widget: i64 = sqlx::query_scalar("INSERT INTO products_services (name, rate_cents, income_account_id) VALUES ('Widget', 500, ?1) RETURNING id")
+        .bind(services)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     let color = create_custom_field(&pool, FieldList::Item, CustomFieldInput { label: "Color".into(), on_sales_forms: true }).await.unwrap();
     let sku = create_custom_field(&pool, FieldList::Item, CustomFieldInput { label: "Bin".into(), on_sales_forms: false }).await.unwrap();
-    save_record_values(&pool, FieldList::Item, widget, &[FieldValue { field_id: color.id, value: "Red".into() }, FieldValue { field_id: sku.id, value: "B7".into() }]).await.unwrap();
+    save_record_values(
+        &pool,
+        FieldList::Item,
+        widget,
+        &[FieldValue { field_id: color.id, value: "Red".into() }, FieldValue { field_id: sku.id, value: "B7".into() }],
+    )
+    .await
+    .unwrap();
     let po = create_custom_field(&pool, FieldList::Customer, CustomFieldInput { label: "PO number".into(), on_sales_forms: true }).await.unwrap();
     let rep = create_sales_rep(&pool, SalesRepInput { initials: "JS".into(), name: None }).await.unwrap();
     let ups = create_ship_method(&pool, "UPS Ground").await.unwrap();
@@ -329,7 +392,16 @@ async fn sales_forms_print_rep_shipping_and_custom_fields() {
             customer_name: "Initech".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput { description: "Widget".into(), quantity_e4: 20_000, rate_cents: Cents(500), income_account_id: services, product_service_id: Some(widget), class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput {
+                description: "Widget".into(),
+                quantity_e4: 20_000,
+                rate_cents: Cents(500),
+                income_account_id: services,
+                product_service_id: Some(widget),
+                class_id: None,
+                is_taxable: false,
+                service_date: None,
+            }],
             currency: None,
             tax_rate_id: None,
             discount_cents: Cents::ZERO,
@@ -348,12 +420,20 @@ async fn sales_forms_print_rep_shipping_and_custom_fields() {
     let doc = invoice_doc(&pool, invoice.id, "$").await.unwrap();
     let tpl = FormTemplate { message: "Shipped {ship_via} on {ship_date} by {rep}.".into(), ..FormTemplate::default_for(FormKind::Invoice) };
     let all = texts(&layout(&doc, &company, &tpl, None));
-    for expected in ["Rep", "JS", "Ship date", "10/02/2026", "Ship via", "UPS Ground", "PO number", "PO-55", "Color: Red", "Shipped UPS Ground on 10/02/2026 by JS."] {
+    for expected in
+        ["Rep", "JS", "Ship date", "10/02/2026", "Ship via", "UPS Ground", "PO number", "PO-55", "Color: Red", "Shipped UPS Ground on 10/02/2026 by JS."]
+    {
         assert!(all.iter().any(|t| t == expected), "missing {expected:?} in {all:?}");
     }
     assert!(!all.iter().any(|t| t.contains("B7")), "a field not marked for sales forms is not printed");
 
-    let hidden = FormTemplate { show_sales_rep: false, show_shipping: false, show_custom_fields: false, show_item_fields: false, ..FormTemplate::default_for(FormKind::Invoice) };
+    let hidden = FormTemplate {
+        show_sales_rep: false,
+        show_shipping: false,
+        show_custom_fields: false,
+        show_item_fields: false,
+        ..FormTemplate::default_for(FormKind::Invoice)
+    };
     let all = texts(&layout(&doc, &company, &hidden, None));
     for absent in ["Rep", "Ship via", "UPS Ground", "PO-55", "Color: Red"] {
         assert!(!all.iter().any(|t| t == absent), "{absent:?} should be hidden");
@@ -365,8 +445,22 @@ async fn sales_forms_print_rep_shipping_and_custom_fields() {
 async fn taxable_lines_print_with_a_t() {
     let pool = test_pool().await;
     let services: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
-    let rate = crate::sales_tax::create_tax_rate(&pool, crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 50_000, agency_name: None, liability_account_id: None }).await.unwrap();
-    let line = |d: &str, taxable: bool| InvoiceLineInput { description: d.into(), quantity_e4: 10_000, rate_cents: Cents(1_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: taxable, service_date: None };
+    let rate = crate::sales_tax::create_tax_rate(
+        &pool,
+        crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 50_000, agency_name: None, liability_account_id: None },
+    )
+    .await
+    .unwrap();
+    let line = |d: &str, taxable: bool| InvoiceLineInput {
+        description: d.into(),
+        quantity_e4: 10_000,
+        rate_cents: Cents(1_000),
+        income_account_id: services,
+        product_service_id: None,
+        class_id: None,
+        is_taxable: taxable,
+        service_date: None,
+    };
     let day = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
     let input = |tax: Option<i64>| InvoiceInput {
         invoice_number: None,
@@ -415,7 +509,9 @@ async fn a_document_keeps_its_service_dates_and_prints_with_the_style_picked_on_
     let pool = test_pool().await;
     let standard = list_styles(&pool).await.unwrap()[0].id;
     let bold = create_style(&pool, "Bold", Some(standard)).await.unwrap();
-    save_template(&pool, Some(bold.id), FormKind::Invoice, FormTemplate { title: "Bill".into(), ..FormTemplate::default_for(FormKind::Invoice) }).await.unwrap();
+    save_template(&pool, Some(bold.id), FormKind::Invoice, FormTemplate { title: "Bill".into(), ..FormTemplate::default_for(FormKind::Invoice) })
+        .await
+        .unwrap();
     let services: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
     let input: InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Initech", "issueDate": "2026-10-01", "dueDate": "2026-10-31",
         "formStyleId": bold.id, "poNumber": "PO-9",
@@ -436,17 +532,23 @@ async fn a_document_keeps_its_service_dates_and_prints_with_the_style_picked_on_
     // A style that is deleted: the invoice goes back to the customer's (the default).
     delete_style(&pool, bold.id).await.unwrap();
     assert!(render(&pool, FormKind::Invoice, Some(invoice.id), None, None, false).await.unwrap().form.title.starts_with("Invoice "));
-    assert!(sqlx::query_scalar::<_, Option<i64>>("SELECT form_style_id FROM invoices WHERE id = ?1").bind(invoice.id).fetch_one(&pool).await.unwrap().is_none());
+    assert!(sqlx::query_scalar::<_, Option<i64>>("SELECT form_style_id FROM invoices WHERE id = ?1")
+        .bind(invoice.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .is_none());
 }
 
 #[tokio::test]
 async fn a_saved_credit_memo_prints_with_its_bill_to_and_po_number() {
     let pool = test_pool().await;
     let services: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
-    let input: crate::credits::CreditMemoInput = serde_json::from_value(serde_json::json!({ "customerName": "Globex", "creditDate": "2026-10-05", "memo": "Damaged on arrival",
+    let input: crate::credits::CreditMemoInput =
+        serde_json::from_value(serde_json::json!({ "customerName": "Globex", "creditDate": "2026-10-05", "memo": "Damaged on arrival",
         "billTo": "Globex Corp\n9 Elm Street", "poNumber": "PO-31",
         "lines": [{ "description": "Returned widget", "quantityE4": 20_000, "rateCents": 1_250, "incomeAccountId": services }] }))
-    .unwrap();
+        .unwrap();
     let memo = crate::credits::create_credit_memo(&pool, input).await.unwrap();
     let rendered = render(&pool, FormKind::CreditMemo, Some(memo.id), None, None, false).await.unwrap();
     assert_eq!(rendered.form.title, format!("Credit Memo {} · Globex", memo.credit_number));
@@ -455,7 +557,9 @@ async fn a_saved_credit_memo_prints_with_its_bill_to_and_po_number() {
         assert!(all.iter().any(|t| t.contains(expected)), "missing {expected:?} in {all:?}");
     }
     // A Credit Memo layout of its own is kept with the style.
-    save_template(&pool, None, FormKind::CreditMemo, FormTemplate { title: "Credit Note".into(), ..FormTemplate::default_for(FormKind::CreditMemo) }).await.unwrap();
+    save_template(&pool, None, FormKind::CreditMemo, FormTemplate { title: "Credit Note".into(), ..FormTemplate::default_for(FormKind::CreditMemo) })
+        .await
+        .unwrap();
     assert!(render(&pool, FormKind::CreditMemo, Some(memo.id), None, None, false).await.unwrap().form.title.starts_with("Credit Note "));
 }
 
@@ -469,8 +573,10 @@ async fn a_bill_payment_prints_and_emails_its_stub_with_every_bill_on_the_check(
     crate::expenses::create_vendor(&pool, "Paper Supply Co", Some("ap@paper.example")).await.unwrap();
     let mut bills = Vec::new();
     for (number, cents) in [("INV-778", 50_000), ("INV-781", 20_000), ("INV-790", 9_000)] {
-        let input: crate::expenses::BillInput = serde_json::from_value(serde_json::json!({ "vendorName": "Paper Supply Co", "billNumber": number, "billDate": "2026-10-01", "dueDate": "2026-10-31",
-            "totalCents": cents, "lines": [{ "accountId": rent, "amountCents": cents }] }))
+        let input: crate::expenses::BillInput = serde_json::from_value(
+            serde_json::json!({ "vendorName": "Paper Supply Co", "billNumber": number, "billDate": "2026-10-01", "dueDate": "2026-10-31",
+            "totalCents": cents, "lines": [{ "accountId": rent, "amountCents": cents }] }),
+        )
         .unwrap();
         bills.push(crate::expenses::post_vendor_bill(&pool, input).await.unwrap().id);
     }
@@ -488,7 +594,11 @@ async fn a_bill_payment_prints_and_emails_its_stub_with_every_bill_on_the_check(
 
     let doc = bill_payment_doc(&pool, first, "$").await.unwrap();
     assert_eq!((doc.number.as_str(), doc.customer_name.as_str(), doc.customer_email.as_deref()), ("1001", "Paper Supply Co", Some("ap@paper.example")));
-    assert_eq!(doc.lines.iter().map(|l| (l.rate.as_str(), l.amount.as_str())).collect::<Vec<_>>(), [("$500.00", "$500.00"), ("$200.00", "$150.00")], "only check 1001's bills");
+    assert_eq!(
+        doc.lines.iter().map(|l| (l.rate.as_str(), l.amount.as_str())).collect::<Vec<_>>(),
+        [("$500.00", "$500.00"), ("$200.00", "$150.00")],
+        "only check 1001's bills"
+    );
     assert!(doc.lines[0].description.starts_with("Bill INV-778"));
     assert_eq!(doc.total, "$650.00");
 
@@ -524,7 +634,12 @@ async fn a_purchase_order_prints_with_the_vendors_address_job_and_class_and_can_
     }))
     .unwrap();
     let po = crate::workflows::create_purchase_order(&pool, order).await.unwrap();
-    sqlx::query("UPDATE vendors SET company_name = 'Paper Company LLC', address = '12 Mill Rd\nSpringfield', email = 'orders@paper.example' WHERE name = 'Paper Co'").execute(&pool).await.unwrap();
+    sqlx::query(
+        "UPDATE vendors SET company_name = 'Paper Company LLC', address = '12 Mill Rd\nSpringfield', email = 'orders@paper.example' WHERE name = 'Paper Co'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     let doc = purchase_order_doc(&pool, po, "$").await.unwrap();
     assert_eq!((doc.kind, doc.customer_name.as_str(), doc.customer_email.as_deref()), (FormKind::PurchaseOrder, "Paper Co", Some("orders@paper.example")));
@@ -536,7 +651,10 @@ async fn a_purchase_order_prints_with_the_vendors_address_job_and_class_and_can_
 
     crate::email_log::set_queued(&pool, FormKind::PurchaseOrder, po, true).await.unwrap();
     let queued = crate::email_log::queue(&pool).await.unwrap();
-    assert_eq!(queued.iter().map(|q| (q.kind, q.customer_name.as_str(), q.customer_email.as_deref())).collect::<Vec<_>>(), [(FormKind::PurchaseOrder, "Paper Co", Some("orders@paper.example"))]);
+    assert_eq!(
+        queued.iter().map(|q| (q.kind, q.customer_name.as_str(), q.customer_email.as_deref())).collect::<Vec<_>>(),
+        [(FormKind::PurchaseOrder, "Paper Co", Some("orders@paper.example"))]
+    );
     crate::email_log::record(&pool, FormKind::PurchaseOrder, po, &["orders@paper.example".to_string()], crate::email_log::Method::Smtp, "PO").await.unwrap();
     assert!(crate::email_log::queue(&pool).await.unwrap().is_empty(), "sent, it leaves the queue");
 }

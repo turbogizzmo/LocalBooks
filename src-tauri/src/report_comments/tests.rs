@@ -14,7 +14,16 @@ fn snapshot() -> Value {
 }
 
 fn first(row: i64, col: i64, body: &str) -> CommentInput {
-    CommentInput { report_id: None, title: Some("Profit and Loss".into()), subtitle: Some("January 2026".into()), snapshot: Some(snapshot()), row, col, figure: "$12,500.00".into(), body: body.into() }
+    CommentInput {
+        report_id: None,
+        title: Some("Profit and Loss".into()),
+        subtitle: Some("January 2026".into()),
+        snapshot: Some(snapshot()),
+        row,
+        col,
+        figure: "$12,500.00".into(),
+        body: body.into(),
+    }
 }
 
 #[tokio::test]
@@ -24,9 +33,21 @@ async fn the_first_comment_keeps_the_report_and_more_attach_to_it() {
     assert_eq!((report.title.as_str(), report.subtitle.as_str(), report.created_by.as_str()), ("Profit and Loss", "January 2026", "Dana"));
     assert_eq!(report.snapshot, snapshot(), "kept exactly as shown");
     let c = &report.comments[0];
-    assert_eq!((c.row_index, c.col_index, c.figure.as_str(), c.line_label.as_str(), c.body.as_str()), (1, 1, "$12,500.00", "Design services", "Includes the Quillfeather retainer"));
+    assert_eq!(
+        (c.row_index, c.col_index, c.figure.as_str(), c.line_label.as_str(), c.body.as_str()),
+        (1, 1, "$12,500.00", "Design services", "Includes the Quillfeather retainer")
+    );
 
-    let more = CommentInput { report_id: Some(report.id), title: None, subtitle: None, snapshot: None, row: 2, col: 1, figure: "$12,500.00".into(), body: "Up 8% on December".into() };
+    let more = CommentInput {
+        report_id: Some(report.id),
+        title: None,
+        subtitle: None,
+        snapshot: None,
+        row: 2,
+        col: 1,
+        figure: "$12,500.00".into(),
+        body: "Up 8% on December".into(),
+    };
     let report = add_comment(&pool, &more, "Sam").await.unwrap();
     assert_eq!(report.comments.len(), 2);
     assert_eq!(report.comments[1].line_label, "Total Income");
@@ -45,7 +66,8 @@ async fn the_first_comment_keeps_the_report_and_more_attach_to_it() {
 #[tokio::test]
 async fn comments_need_a_figure_and_words_and_a_bad_one_keeps_nothing() {
     let pool = test_pool().await;
-    for (row, col, why) in [(0, 1, "a heading's empty cell"), (9, 1, "no such line"), (1, 5, "no such column"), (-1, 0, "negative"), (1, 0, "the line's name")] {
+    for (row, col, why) in [(0, 1, "a heading's empty cell"), (9, 1, "no such line"), (1, 5, "no such column"), (-1, 0, "negative"), (1, 0, "the line's name")]
+    {
         assert!(add_comment(&pool, &first(row, col, "x"), "Dana").await.unwrap_err().starts_with("COMMENT_NO_FIGURE"), "{why}");
     }
     assert!(add_comment(&pool, &first(1, 1, "   "), "Dana").await.unwrap_err().starts_with("COMMENT_EMPTY"));

@@ -15,7 +15,8 @@ async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 fn bill(lines: Vec<(i64, i64, Option<i64>)>) -> BillInput {
-    BillInput { form_lines: Vec::new(),
+    BillInput {
+        form_lines: Vec::new(),
         terms_id: None,
         vendor_name: "Timberline Supply".into(),
         bill_number: None,
@@ -25,7 +26,17 @@ fn bill(lines: Vec<(i64, i64, Option<i64>)>) -> BillInput {
         total_cents: Cents(lines.iter().map(|(_, cents, _)| cents).sum()),
         lines: lines
             .into_iter()
-            .map(|(account_id, amount_cents, job)| BillLineInput { account_id, amount_cents: Cents(amount_cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: job, billable: None })
+            .map(|(account_id, amount_cents, job)| BillLineInput {
+                account_id,
+                amount_cents: Cents(amount_cents),
+                memo: None,
+                quantity_e4: None,
+                rate_cents: None,
+                product_service_id: None,
+                class_id: None,
+                customer_id: job,
+                billable: None,
+            })
             .collect(),
     }
 }
@@ -48,7 +59,8 @@ async fn an_unknown_job_is_refused() {
     let supplies = account_id(&pool, "6250").await;
     let err = crate::expenses::post_vendor_bill(&pool, bill(vec![(supplies, 1_000, Some(9_999))])).await.unwrap_err();
     assert!(err.starts_with("BILL_UNKNOWN_JOB"), "{err}");
-    let input = ExpenseInput { form_lines: Vec::new(),
+    let input = ExpenseInput {
+        form_lines: Vec::new(),
         payment_method_id: None,
         kind: "EXPENSE".into(),
         payee_name: None,
@@ -71,7 +83,8 @@ async fn a_bill_line_is_shared_among_its_jobs() {
     let job = crate::sales::create_customer(&pool, "Acme:Kitchen", None).await.unwrap().id;
     let acme: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
     // Three lines on one account post as one ledger line of $10.01.
-    let posted = crate::expenses::post_vendor_bill(&pool, bill(vec![(supplies, 600, Some(job)), (supplies, 300, Some(acme)), (supplies, 101, None)])).await.unwrap();
+    let posted =
+        crate::expenses::post_vendor_bill(&pool, bill(vec![(supplies, 600, Some(job)), (supplies, 300, Some(acme)), (supplies, 101, None)])).await.unwrap();
     let lines = job_lines(&pool, None, d(31)).await.unwrap();
     let shares: Vec<(Option<i64>, i64)> = lines.iter().map(|l| (l.job, l.cost())).collect();
     assert_eq!(shares, vec![(Some(job), 600), (Some(acme), 300), (None, 101)]);
@@ -93,7 +106,16 @@ async fn a_bill_line_is_shared_among_its_jobs() {
 async fn estimates_without_invoices() {
     let pool = test_pool().await;
     let services = account_id(&pool, "4100").await;
-    let line = crate::sales::SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: 10_000, rate_cents: Cents(50_000), income_account_id: services, class_id: None, is_taxable: false, service_date: None };
+    let line = crate::sales::SalesLineInput {
+        product_service_id: None,
+        description: "Design".into(),
+        quantity_e4: 10_000,
+        rate_cents: Cents(50_000),
+        income_account_id: services,
+        class_id: None,
+        is_taxable: false,
+        service_date: None,
+    };
     let input = crate::estimates::EstimateInput {
         estimate_number: None,
         customer_name: "Acme:Kitchen".into(),

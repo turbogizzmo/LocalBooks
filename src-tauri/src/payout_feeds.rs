@@ -127,15 +127,27 @@ pub fn stripe_breakdown(payout_amount: i64, transactions: &[Value]) -> Result<Br
         match kind.as_str() {
             "charge" | "payment" => {
                 b.gross_cents = add(b.gross_cents, amount)?;
-                b.items.push(PayoutItem { kind: "CHARGE".into(), description: if description.is_empty() { "Card sale".into() } else { description }, amount_cents: amount });
+                b.items.push(PayoutItem {
+                    kind: "CHARGE".into(),
+                    description: if description.is_empty() { "Card sale".into() } else { description },
+                    amount_cents: amount,
+                });
             }
             "refund" | "payment_refund" | "payment_failure_refund" => {
                 b.refund_cents = add(b.refund_cents, -amount)?;
-                b.items.push(PayoutItem { kind: "REFUND".into(), description: if description.is_empty() { "Refund".into() } else { description }, amount_cents: -amount });
+                b.items.push(PayoutItem {
+                    kind: "REFUND".into(),
+                    description: if description.is_empty() { "Refund".into() } else { description },
+                    amount_cents: -amount,
+                });
             }
             "adjustment" | "dispute" if category.starts_with("dispute") || kind == "dispute" => {
                 b.chargeback_cents = add(b.chargeback_cents, -amount)?;
-                b.items.push(PayoutItem { kind: "CHARGEBACK".into(), description: if description.is_empty() { "Dispute".into() } else { description }, amount_cents: -amount });
+                b.items.push(PayoutItem {
+                    kind: "CHARGEBACK".into(),
+                    description: if description.is_empty() { "Dispute".into() } else { description },
+                    amount_cents: -amount,
+                });
             }
             "stripe_fee" | "application_fee" | "tax" => b.fee_cents = add(b.fee_cents, -amount)?,
             _ => b.other_cents = add(b.other_cents, amount)?,
@@ -169,23 +181,72 @@ pub fn deposit_for(feed: &PayoutFeed, arrival: NaiveDate, payout_id: &str, b: &B
         let memo = Some(item.description.chars().take(200).collect::<String>());
         match (item.kind.as_str(), item.amount_cents) {
             (_, 0) => {}
-            ("CHARGE", a) if a > 0 => other_lines.push(DepositOtherLine { account_id: feed.sales_account_id, amount_cents: Cents(a), memo, class_id: None, customer_id: None, vendor_id: None }),
+            ("CHARGE", a) if a > 0 => other_lines.push(DepositOtherLine {
+                account_id: feed.sales_account_id,
+                amount_cents: Cents(a),
+                memo,
+                class_id: None,
+                customer_id: None,
+                vendor_id: None,
+            }),
             ("CHARGE", a) => deductions.push(DepositDeduction { account_id: feed.sales_account_id, amount_cents: Cents(-a), memo, kind: "OTHER".into() }),
-            ("REFUND", a) if a > 0 => deductions.push(DepositDeduction { account_id: feed.refund_account_id, amount_cents: Cents(a), memo, kind: "REFUND".into() }),
-            ("REFUND", a) => other_lines.push(DepositOtherLine { account_id: feed.refund_account_id, amount_cents: Cents(-a), memo, class_id: None, customer_id: None, vendor_id: None }),
-            (_, a) if a > 0 => deductions.push(DepositDeduction { account_id: feed.chargeback_account_id, amount_cents: Cents(a), memo, kind: "CHARGEBACK".into() }),
-            (_, a) => other_lines.push(DepositOtherLine { account_id: feed.chargeback_account_id, amount_cents: Cents(-a), memo, class_id: None, customer_id: None, vendor_id: None }),
+            ("REFUND", a) if a > 0 => {
+                deductions.push(DepositDeduction { account_id: feed.refund_account_id, amount_cents: Cents(a), memo, kind: "REFUND".into() })
+            }
+            ("REFUND", a) => other_lines.push(DepositOtherLine {
+                account_id: feed.refund_account_id,
+                amount_cents: Cents(-a),
+                memo,
+                class_id: None,
+                customer_id: None,
+                vendor_id: None,
+            }),
+            (_, a) if a > 0 => {
+                deductions.push(DepositDeduction { account_id: feed.chargeback_account_id, amount_cents: Cents(a), memo, kind: "CHARGEBACK".into() })
+            }
+            (_, a) => other_lines.push(DepositOtherLine {
+                account_id: feed.chargeback_account_id,
+                amount_cents: Cents(-a),
+                memo,
+                class_id: None,
+                customer_id: None,
+                vendor_id: None,
+            }),
         }
     }
     let processor = processor_name(&feed.processor);
     match b.fee_cents {
-        f if f > 0 => deductions.push(DepositDeduction { account_id: feed.fee_account_id, amount_cents: Cents(f), memo: Some(format!("{processor} fees")), kind: "FEE".into() }),
-        f if f < 0 => other_lines.push(DepositOtherLine { account_id: feed.fee_account_id, amount_cents: Cents(-f), memo: Some(format!("{processor} fees returned")), class_id: None, customer_id: None, vendor_id: None }),
+        f if f > 0 => deductions.push(DepositDeduction {
+            account_id: feed.fee_account_id,
+            amount_cents: Cents(f),
+            memo: Some(format!("{processor} fees")),
+            kind: "FEE".into(),
+        }),
+        f if f < 0 => other_lines.push(DepositOtherLine {
+            account_id: feed.fee_account_id,
+            amount_cents: Cents(-f),
+            memo: Some(format!("{processor} fees returned")),
+            class_id: None,
+            customer_id: None,
+            vendor_id: None,
+        }),
         _ => {}
     }
     match b.other_cents {
-        o if o > 0 => other_lines.push(DepositOtherLine { account_id: feed.fee_account_id, amount_cents: Cents(o), memo: Some(format!("{processor} adjustments")), class_id: None, customer_id: None, vendor_id: None }),
-        o if o < 0 => deductions.push(DepositDeduction { account_id: feed.fee_account_id, amount_cents: Cents(-o), memo: Some(format!("{processor} adjustments")), kind: "OTHER".into() }),
+        o if o > 0 => other_lines.push(DepositOtherLine {
+            account_id: feed.fee_account_id,
+            amount_cents: Cents(o),
+            memo: Some(format!("{processor} adjustments")),
+            class_id: None,
+            customer_id: None,
+            vendor_id: None,
+        }),
+        o if o < 0 => deductions.push(DepositDeduction {
+            account_id: feed.fee_account_id,
+            amount_cents: Cents(-o),
+            memo: Some(format!("{processor} adjustments")),
+            kind: "OTHER".into(),
+        }),
         _ => {}
     }
     DepositInput {
@@ -247,17 +308,28 @@ pub async fn feeds(pool: &SqlitePool) -> Result<Vec<PayoutFeed>, String> {
 }
 
 pub(crate) async fn feed(pool: &SqlitePool, id: i64) -> Result<PayoutFeed, String> {
-    sqlx::query_as(&format!("{FEED_SELECT} WHERE id = ?1")).bind(id).fetch_optional(pool).await.map_err(db_err)?.ok_or_else(|| "PAYOUT_NO_FEED: that payout feed was removed".into())
+    sqlx::query_as(&format!("{FEED_SELECT} WHERE id = ?1"))
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| "PAYOUT_NO_FEED: that payout feed was removed".into())
 }
 
 pub(crate) async fn check_accounts(pool: &SqlitePool, input: &FeedInput) -> Result<(), String> {
     let kind = |id: i64| async move {
-        sqlx::query_scalar::<_, String>("SELECT account_type FROM chart_of_accounts WHERE id = ?1 AND is_active = 1").bind(id).fetch_optional(pool).await.map_err(db_err)
+        sqlx::query_scalar::<_, String>("SELECT account_type FROM chart_of_accounts WHERE id = ?1 AND is_active = 1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)
     };
     if kind(input.bank_account_id).await?.as_deref() != Some("BANK") {
         return Err("PAYOUT_BANK: choose the bank account payouts arrive in".into());
     }
-    for (id, what) in [(input.sales_account_id, "sales"), (input.fee_account_id, "fees"), (input.refund_account_id, "refunds"), (input.chargeback_account_id, "chargebacks")] {
+    for (id, what) in
+        [(input.sales_account_id, "sales"), (input.fee_account_id, "fees"), (input.refund_account_id, "refunds"), (input.chargeback_account_id, "chargebacks")]
+    {
         match kind(id).await? {
             None => return Err(format!("PAYOUT_ACCOUNT: choose an active account for {what}")),
             Some(_) if id == input.bank_account_id => return Err(format!("PAYOUT_ACCOUNT: the {what} account can't be the bank account")),
@@ -506,13 +578,19 @@ pub async fn fetch(pool: &SqlitePool, store: &SecretStore, apis: &Apis, feed_id:
 
 /// The company's home currency code.
 pub(crate) async fn home_currency(pool: &SqlitePool) -> Result<String, String> {
-    let home: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'home_currency_code'").fetch_optional(pool).await.map_err(db_err)?;
+    let home: Option<String> =
+        sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'home_currency_code'").fetch_optional(pool).await.map_err(db_err)?;
     Ok(home.unwrap_or_else(|| "USD".into()).to_uppercase())
 }
 
 /// Whether a payout was already fetched for this feed.
 pub(crate) async fn seen(pool: &SqlitePool, feed_id: i64, payout_id: &str) -> Result<bool, String> {
-    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM payouts WHERE feed_id = ?1 AND processor_payout_id = ?2)").bind(feed_id).bind(payout_id).fetch_one(pool).await.map_err(db_err)
+    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM payouts WHERE feed_id = ?1 AND processor_payout_id = ?2)")
+        .bind(feed_id)
+        .bind(payout_id)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Keeps a payout's breakdown, NEW; false when it was already kept (by a fetch running at the same
@@ -602,12 +680,25 @@ pub async fn record(pool: &SqlitePool, payout_id: i64) -> Result<i64, String> {
     }
     let f = feed(pool, p.feed_id).await?;
     let items: Vec<PayoutItem> = serde_json::from_str(&p.details_json).map_err(|_| "PAYOUT_DAMAGED: the payout's details can't be read".to_string())?;
-    let b = Breakdown { net_cents: p.net_cents, gross_cents: p.gross_cents, fee_cents: p.fee_cents, refund_cents: p.refund_cents, chargeback_cents: p.chargeback_cents, other_cents: p.other_cents, items };
+    let b = Breakdown {
+        net_cents: p.net_cents,
+        gross_cents: p.gross_cents,
+        fee_cents: p.fee_cents,
+        refund_cents: p.refund_cents,
+        chargeback_cents: p.chargeback_cents,
+        other_cents: p.other_cents,
+        items,
+    };
     let input = deposit_for(&f, p.arrival_date, &p.processor_payout_id, &b);
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result: Result<i64, String> = async {
         let (deposit_id, _) = crate::banking::write_deposit(&mut tx, &input).await?;
-        let done = sqlx::query("UPDATE payouts SET status = 'RECORDED', deposit_id = ?1 WHERE id = ?2 AND status = 'NEW'").bind(deposit_id).bind(payout_id).execute(&mut *tx).await.map_err(db_err)?;
+        let done = sqlx::query("UPDATE payouts SET status = 'RECORDED', deposit_id = ?1 WHERE id = ?2 AND status = 'NEW'")
+            .bind(deposit_id)
+            .bind(payout_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
         if done.rows_affected() != 1 {
             return Err("PAYOUT_DONE: this payout was recorded meanwhile".into());
         }
@@ -623,7 +714,8 @@ pub async fn record(pool: &SqlitePool, payout_id: i64) -> Result<i64, String> {
 /// Leaves a new payout out (it was entered by hand), or brings an ignored one back.
 pub async fn set_ignored(pool: &SqlitePool, payout_id: i64, ignored: bool) -> Result<(), String> {
     let (from, to) = if ignored { ("NEW", "IGNORED") } else { ("IGNORED", "NEW") };
-    let done = sqlx::query("UPDATE payouts SET status = ?1 WHERE id = ?2 AND status = ?3").bind(to).bind(payout_id).bind(from).execute(pool).await.map_err(db_err)?;
+    let done =
+        sqlx::query("UPDATE payouts SET status = ?1 WHERE id = ?2 AND status = ?3").bind(to).bind(payout_id).bind(from).execute(pool).await.map_err(db_err)?;
     if done.rows_affected() != 1 {
         return Err("PAYOUT_DONE: that payout can't be changed now".into());
     }

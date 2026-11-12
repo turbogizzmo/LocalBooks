@@ -21,8 +21,8 @@ use sqlx::SqlitePool;
 pub mod header;
 pub mod keys;
 pub mod user_slots;
-pub mod whole_file;
 pub mod vfs;
+pub mod whole_file;
 
 /// The page keys of the encrypted company files unlocked in this process, by the key header's file
 /// id. Registered when a file is unlocked and forgotten when it is locked or closed, so a copy of

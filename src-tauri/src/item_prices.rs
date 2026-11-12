@@ -135,10 +135,7 @@ const ITEMS_SELECT: &str = "
     ORDER BY p.name COLLATE NOCASE";
 
 pub async fn list_items(pool: &SqlitePool) -> Result<Vec<PriceItem>, String> {
-    sqlx::query_as(ITEMS_SELECT)
-    .fetch_all(pool)
-    .await
-    .map_err(db_err)
+    sqlx::query_as(ITEMS_SELECT).fetch_all(pool).await.map_err(db_err)
 }
 
 /// One item's proposed price.
@@ -193,9 +190,7 @@ pub struct AppliedPrices {
 pub async fn apply(pool: &SqlitePool, input: &PriceChangeInput) -> Result<AppliedPrices, String> {
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
-        let items: Vec<PriceItem> = sqlx::query_as(ITEMS_SELECT).fetch_all(&mut *tx)
-        .await
-        .map_err(db_err)?;
+        let items: Vec<PriceItem> = sqlx::query_as(ITEMS_SELECT).fetch_all(&mut *tx).await.map_err(db_err)?;
         let changed: Vec<PriceChange> = plan(&items, input)?.into_iter().filter(|c| c.new_cents.is_some()).collect();
         if changed.is_empty() {
             return Err("PRICE_NOTHING_TO_CHANGE: none of the selected prices would change".to_string());
@@ -217,14 +212,13 @@ pub async fn apply(pool: &SqlitePool, input: &PriceChangeInput) -> Result<Applie
                 "productId": c.product_id, "name": c.name, "beforeCents": c.current_cents, "afterCents": c.new_cents,
             })).collect::<Vec<_>>(),
         });
-        let audit_record_id: i64 = sqlx::query_scalar(
-            "INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot) VALUES ('PRICE_CHANGE', ?1, ?2) RETURNING id",
-        )
-        .bind(changed.len() as i64)
-        .bind(payload.to_string())
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(db_err)?;
+        let audit_record_id: i64 =
+            sqlx::query_scalar("INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot) VALUES ('PRICE_CHANGE', ?1, ?2) RETURNING id")
+                .bind(changed.len() as i64)
+                .bind(payload.to_string())
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(db_err)?;
         Ok(AppliedPrices { changed, audit_record_id })
     }
     .await;

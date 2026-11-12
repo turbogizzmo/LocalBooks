@@ -18,7 +18,10 @@ fn check(payee: &str, bank: i64, expense: i64, cents: i64) -> crate::expenses::E
 #[tokio::test]
 async fn other_names_are_kept_paid_by_check_and_named_on_their_entries() {
     let pool = test_pool().await;
-    let owner = create(&pool, &OtherNameInput { name: " Sam Owner ".into(), phone: Some("555-0100".into()), notes: Some("Owner".into()), ..Default::default() }).await.unwrap();
+    let owner =
+        create(&pool, &OtherNameInput { name: " Sam Owner ".into(), phone: Some("555-0100".into()), notes: Some("Owner".into()), ..Default::default() })
+            .await
+            .unwrap();
     assert_eq!((owner.name.as_str(), owner.phone.as_deref(), owner.payment_count), ("Sam Owner", Some("555-0100"), 0));
 
     // A name is used by one record only, among customers, vendors and other names.
@@ -33,9 +36,11 @@ async fn other_names_are_kept_paid_by_check_and_named_on_their_entries() {
     let posted = crate::expenses::post_expense(&pool, check("sam owner", bank, draws, 50_000)).await.unwrap();
     let vendors: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vendors").fetch_one(&pool).await.unwrap();
     assert_eq!(vendors, 0);
-    let (other, vendor): (Option<i64>, Option<i64>) = sqlx::query_as("SELECT other_name_id, vendor_id FROM expenses WHERE id = ?1").bind(posted.id).fetch_one(&pool).await.unwrap();
+    let (other, vendor): (Option<i64>, Option<i64>) =
+        sqlx::query_as("SELECT other_name_id, vendor_id FROM expenses WHERE id = ?1").bind(posted.id).fetch_one(&pool).await.unwrap();
     assert_eq!((other, vendor), (Some(owner.id), None));
-    let party: Option<String> = sqlx::query_scalar("SELECT party_name FROM v_entry_party WHERE journal_entry_id = ?1").bind(posted.journal_entry_id).fetch_one(&pool).await.unwrap();
+    let party: Option<String> =
+        sqlx::query_scalar("SELECT party_name FROM v_entry_party WHERE journal_entry_id = ?1").bind(posted.journal_entry_id).fetch_one(&pool).await.unwrap();
     assert_eq!(party.as_deref(), Some("Sam Owner"));
     let listed = crate::expenses::list_expenses(&pool).await.unwrap();
     assert_eq!(listed[0].payee_name.as_deref(), Some("Sam Owner"));
@@ -48,10 +53,16 @@ async fn other_names_are_kept_paid_by_check_and_named_on_their_entries() {
     assert_eq!(vendors, 1);
 
     // Editing and inactivating are list changes in the audit trail.
-    let renamed = update(&pool, owner.id, &OtherNameInput { name: "Sam Owner Jr".into(), notes: Some("05/03/2026: draw".into()), ..Default::default() }).await.unwrap();
+    let renamed =
+        update(&pool, owner.id, &OtherNameInput { name: "Sam Owner Jr".into(), notes: Some("05/03/2026: draw".into()), ..Default::default() }).await.unwrap();
     assert_eq!((renamed.name.as_str(), renamed.notes.as_deref(), renamed.phone), ("Sam Owner Jr", Some("05/03/2026: draw"), None));
     assert!(!set_active(&pool, owner.id, false).await.unwrap().is_active);
-    let audited: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'LIST_CHANGE' AND json_extract(payload_snapshot, '$.list') = 'OTHER_NAME'").fetch_one(&pool).await.unwrap();
+    let audited: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'LIST_CHANGE' AND json_extract(payload_snapshot, '$.list') = 'OTHER_NAME'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!(audited, 3, "added, edited, made inactive");
     assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
 }

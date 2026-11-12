@@ -72,7 +72,13 @@ fn extracts_a_real_qbw_file() {
     println!("read in {:.1}s; stages: {stages:?}", started.elapsed().as_secs_f64());
     println!(
         "pages {}, attributed tables {}, headers {}, lines {}, invoices {}, undecodable {}, ignored (not invoice tables) {}",
-        x.page_count, x.attributed_tables, x.header_count, x.lines.len(), invoices.len(), x.skipped_line_count, x.ignored_line_count
+        x.page_count,
+        x.attributed_tables,
+        x.header_count,
+        x.lines.len(),
+        invoices.len(),
+        x.skipped_line_count,
+        x.ignored_line_count
     );
     println!("dated lines {dated}, range {first:?} .. {last:?}");
     for (label, (n, cents)) in &by_label {
@@ -193,7 +199,8 @@ async fn staged_lines_post_as_balanced_entries_once() {
     assert_eq!((dup.entries_posted, dup.skipped_already_posted), (0, 1));
 
     // Voiding an imported entry frees that invoice to be posted again.
-    let je: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM qbw_posted_invoices WHERE qb_invoice_id = 'INV0000000000002'").fetch_one(&pool).await.unwrap();
+    let je: i64 =
+        sqlx::query_scalar("SELECT journal_entry_id FROM qbw_posted_invoices WHERE qb_invoice_id = 'INV0000000000002'").fetch_one(&pool).await.unwrap();
     ledger::void_transaction(&pool, je).await.unwrap();
     let repost = post_batch(&pool, &PostBatchInput { batch_id: second, ..input.clone() }).await.unwrap();
     assert_eq!(repost.entries_posted, 1);
@@ -220,10 +227,7 @@ async fn staged_lines_post_as_balanced_entries_once() {
 #[tokio::test]
 async fn a_failure_mid_batch_rolls_back_every_entry() {
     let pool = test_pool().await;
-    let lines = vec![
-        line("INV0000000000001", Some("2012-03-05"), 1_000, SERVICE, 1),
-        line("INV0000000000002", Some("2012-03-06"), 2_000, SERVICE, 2),
-    ];
+    let lines = vec![line("INV0000000000001", Some("2012-03-05"), 1_000, SERVICE, 1), line("INV0000000000002", Some("2012-03-06"), 2_000, SERVICE, 2)];
     let batch = stage(&pool, Path::new("/books/a.qbw"), &extraction(lines)).await.unwrap();
     let sales = account(&pool, "4000").await;
     set_mapping(&pool, batch, SERVICE, Some(sales)).await.unwrap();

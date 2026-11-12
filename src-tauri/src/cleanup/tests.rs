@@ -7,7 +7,11 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn balance(pool: &SqlitePool, account: i64) -> i64 {
-    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1").bind(account).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1")
+        .bind(account)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 fn d(text: &str) -> NaiveDate {
@@ -26,11 +30,33 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: &str, due: &str, cent
 
 async fn credit_memo(pool: &SqlitePool, customer: &str, date: &str, cents: i64) -> i64 {
     let services = account(pool, "4100").await;
-    let line = SalesLineInput { product_service_id: None, description: "Credit".into(), quantity_e4: 10_000, rate_cents: Cents(cents), income_account_id: services, class_id: None, is_taxable: false, service_date: None };
-    crate::credits::create_credit_memo(pool, CreditMemoInput { credit_number: None, form_lines: Vec::new(), customer_name: customer.into(), credit_date: d(date), memo: None, refund_account_id: None, lines: vec![line], tax_rate_id: None, header: Default::default() })
-        .await
-        .unwrap()
-        .id
+    let line = SalesLineInput {
+        product_service_id: None,
+        description: "Credit".into(),
+        quantity_e4: 10_000,
+        rate_cents: Cents(cents),
+        income_account_id: services,
+        class_id: None,
+        is_taxable: false,
+        service_date: None,
+    };
+    crate::credits::create_credit_memo(
+        pool,
+        CreditMemoInput {
+            credit_number: None,
+            form_lines: Vec::new(),
+            customer_name: customer.into(),
+            credit_date: d(date),
+            memo: None,
+            refund_account_id: None,
+            lines: vec![line],
+            tax_rate_id: None,
+            header: Default::default(),
+        },
+    )
+    .await
+    .unwrap()
+    .id
 }
 
 async fn invoice_state(pool: &SqlitePool, id: i64) -> (i64, String) {
@@ -38,12 +64,15 @@ async fn invoice_state(pool: &SqlitePool, id: i64) -> (i64, String) {
 }
 
 async fn cleanup_events(pool: &SqlitePool) -> Vec<serde_json::Value> {
-    let rows: Vec<String> = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'CLEANUP' ORDER BY id").fetch_all(pool).await.unwrap();
+    let rows: Vec<String> =
+        sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'CLEANUP' ORDER BY id").fetch_all(pool).await.unwrap();
     rows.iter().map(|r| serde_json::from_str(r).unwrap()).collect()
 }
 
 async fn close_books(pool: &SqlitePool, date: &str) {
-    crate::closing::set_closing_date(pool, &crate::closing::ClosingInput { lock_date: Some(d(date)), current_passcode: None, new_passcode: None }).await.unwrap();
+    crate::closing::set_closing_date(pool, &crate::closing::ClosingInput { lock_date: Some(d(date)), current_passcode: None, new_passcode: None })
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -64,12 +93,19 @@ async fn unapplied_credits_are_listed_beside_open_documents_and_applied_oldest_f
     let bill = crate::expenses::post_vendor_bill(&pool, bill).await.unwrap().id;
     let vendor_credit = crate::credits::create_vendor_credit(
         &pool,
-        crate::credits::VendorCreditInput { form_lines: Vec::new(),
+        crate::credits::VendorCreditInput {
+            form_lines: Vec::new(),
             vendor_name: "Paper Co".into(),
             reference: Some("RMA 7".into()),
             credit_date: d("2026-02-10"),
             memo: None,
-            lines: vec![crate::credits::VendorCreditLineInput { account_id: expense, amount_cents: Cents(2_500), memo: None, class_id: None, customer_id: None }],
+            lines: vec![crate::credits::VendorCreditLineInput {
+                account_id: expense,
+                amount_cents: Cents(2_500),
+                memo: None,
+                class_id: None,
+                customer_id: None,
+            }],
         },
     )
     .await
@@ -158,8 +194,22 @@ async fn double_deposit(pool: &SqlitePool) -> (i64, i64, i64) {
         memo: Some("Bank feed: ACME CHECK 1001".into()),
         items: vec![],
         other_lines: vec![
-            crate::banking::DepositOtherLine { account_id: services, amount_cents: Cents(12_000), memo: None, class_id: None, customer_id: None, vendor_id: None },
-            crate::banking::DepositOtherLine { account_id: services, amount_cents: Cents(500), memo: Some("Interest".into()), class_id: None, customer_id: None, vendor_id: None },
+            crate::banking::DepositOtherLine {
+                account_id: services,
+                amount_cents: Cents(12_000),
+                memo: None,
+                class_id: None,
+                customer_id: None,
+                vendor_id: None,
+            },
+            crate::banking::DepositOtherLine {
+                account_id: services,
+                amount_cents: Cents(500),
+                memo: Some("Interest".into()),
+                class_id: None,
+                customer_id: None,
+                vendor_id: None,
+            },
         ],
         cash_back: None,
         deductions: Vec::new(),
@@ -253,10 +303,11 @@ async fn matching_respects_the_closing_date_and_line_amounts() {
 async fn old_invoices_are_written_off_with_applied_credit_memos() {
     let pool = test_pool().await;
     let (ar, services) = (account(&pool, "1200").await, account(&pool, "4100").await);
-    let bad_debt: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES ('6700', 'Bad Debt', 'EXPENSE') RETURNING id")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let bad_debt: i64 =
+        sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES ('6700', 'Bad Debt', 'EXPENSE') RETURNING id")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     let old = invoice(&pool, "Acme", "2025-01-01", "2025-01-31", 10_000).await;
     let small = invoice(&pool, "Bolt", "2025-06-01", "2025-07-01", 50_000).await;
     let recent = invoice(&pool, "Acme", "2026-05-01", "2026-05-31", 7_000).await;
@@ -264,7 +315,17 @@ async fn old_invoices_are_written_off_with_applied_credit_memos() {
     let checking = account(&pool, "1010").await;
     crate::invoices::record_payment(
         &pool,
-        crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: small, deposit_account_id: checking, payment_date: d("2025-07-01"), amount_cents: Cents(49_750), payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
+        crate::invoices::PaymentInput {
+            discount_cents: Cents::ZERO,
+            payment_method_id: None,
+            invoice_id: small,
+            deposit_account_id: checking,
+            payment_date: d("2025-07-01"),
+            amount_cents: Cents(49_750),
+            payment_method: "ACH".into(),
+            reference: None,
+            exchange_rate_e6: None,
+        },
     )
     .await
     .unwrap();
@@ -278,7 +339,8 @@ async fn old_invoices_are_written_off_with_applied_credit_memos() {
     let tiny = write_off_candidates(&pool, &filter(0, Some(1_000))).await.unwrap();
     assert_eq!(tiny.iter().map(|c| c.invoice_id).collect::<Vec<_>>(), [small]);
 
-    let input = |account_id| WriteOffInput { invoice_ids: vec![old, small], account_id, write_off_date: d("2026-06-30"), memo: Some("Year-end cleanup".into()) };
+    let input =
+        |account_id| WriteOffInput { invoice_ids: vec![old, small], account_id, write_off_date: d("2026-06-30"), memo: Some("Year-end cleanup".into()) };
     assert!(write_off(&pool, &input(ar)).await.unwrap_err().starts_with("WO_BAD_ACCOUNT"));
     let before = balance(&pool, ar).await;
     let done = write_off(&pool, &input(bad_debt)).await.unwrap();
@@ -288,7 +350,8 @@ async fn old_invoices_are_written_off_with_applied_credit_memos() {
     assert_eq!(invoice_state(&pool, old).await, (10_000, "PAID".into()));
     assert_eq!(invoice_state(&pool, small).await, (50_000, "PAID".into()));
     assert_eq!(invoice_state(&pool, recent).await, (0, "UNPAID".into()));
-    let memo: (String, i64) = sqlx::query_as("SELECT memo, total_cents FROM credit_memos WHERE id = ?1").bind(done.credit_memo_ids[0]).fetch_one(&pool).await.unwrap();
+    let memo: (String, i64) =
+        sqlx::query_as("SELECT memo, total_cents FROM credit_memos WHERE id = ?1").bind(done.credit_memo_ids[0]).fetch_one(&pool).await.unwrap();
     assert_eq!(memo, ("Write-off of invoice #1001: Year-end cleanup".into(), 10_000));
     assert_eq!(cleanup_events(&pool).await[0]["event"], "WRITE_OFF_INVOICES");
 
@@ -312,17 +375,21 @@ async fn list_changes_come_from_creation_dates_and_the_audit_trail() {
     let customer = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
     let vendor = crate::expenses::create_vendor(&pool, "Paper Co", None).await.unwrap().id;
     let services = account(&pool, "4100").await;
-    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Consulting".into(), description: None, rate_cents: Cents(10_000), income_account_id: services, is_taxable: false })
-        .await
-        .unwrap()
-        .id;
+    let product = crate::sales::create_product(
+        &pool,
+        crate::sales::ProductInput { name: "Consulting".into(), description: None, rate_cents: Cents(10_000), income_account_id: services, is_taxable: false },
+    )
+    .await
+    .unwrap()
+    .id;
     sqlx::query("UPDATE customers SET name = 'Acme Corp' WHERE id = ?1").bind(customer).execute(&pool).await.unwrap();
     sqlx::query("UPDATE customers SET phone = '555-0100' WHERE id = ?1").bind(customer).execute(&pool).await.unwrap();
     sqlx::query("UPDATE vendors SET is_active = 0 WHERE id = ?1").bind(vendor).execute(&pool).await.unwrap();
     sqlx::query("UPDATE products_services SET rate_cents = 12500 WHERE id = ?1").bind(product).execute(&pool).await.unwrap();
     crate::accounts::set_account_active(&pool, account(&pool, "6600").await, false).await.unwrap();
     // A change to a field nobody reviews writes nothing.
-    let rows = || async { sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'LIST_CHANGE'").fetch_one(&pool).await.unwrap() };
+    let rows =
+        || async { sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'LIST_CHANGE'").fetch_one(&pool).await.unwrap() };
     let before = rows().await;
     sqlx::query("UPDATE customers SET form_style_id = NULL WHERE id = ?1").bind(customer).execute(&pool).await.unwrap();
     assert_eq!(rows().await, before);
@@ -347,14 +414,27 @@ async fn list_changes_come_from_creation_dates_and_the_audit_trail() {
 async fn inventory_comparison_finds_entries_that_post_to_inventory_without_stock() {
     let pool = test_pool().await;
     let (sales, obe, checking) = (account(&pool, "4000").await, account(&pool, "3000").await, account(&pool, "1010").await);
-    let widget = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false })
-        .await
-        .unwrap()
-        .id;
-    let item = crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: widget, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap();
+    let widget = crate::sales::create_product(
+        &pool,
+        crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: sales, is_taxable: false },
+    )
+    .await
+    .unwrap()
+    .id;
+    let item =
+        crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: widget, sku: None, asset_account_id: None, cogs_account_id: None })
+            .await
+            .unwrap();
     crate::inventory::adjust(
         &pool,
-        &crate::inventory::AdjustInput { item_id: item.id, date: d("2026-01-10"), qty_change_e4: 100_000, total_cost_cents: Some(5_000), offset_account_id: obe, memo: None },
+        &crate::inventory::AdjustInput {
+            item_id: item.id,
+            date: d("2026-01-10"),
+            qty_change_e4: 100_000,
+            total_cost_cents: Some(5_000),
+            offset_account_id: obe,
+            memo: None,
+        },
     )
     .await
     .unwrap();

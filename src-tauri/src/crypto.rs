@@ -200,12 +200,10 @@ async fn derive(secret: Zeroizing<Vec<u8>>, salt: [u8; SALT_LEN], cost: Cost) ->
         return Err("CRYPTO_KDF: unusable key slot cost".into());
     }
     tokio::task::spawn_blocking(move || {
-        let params = Params::new(cost.memory_kib, cost.iterations, cost.parallelism, Some(KEY_LEN))
-            .map_err(|e| format!("CRYPTO_KDF: unusable key slot cost ({e})"))?;
+        let params =
+            Params::new(cost.memory_kib, cost.iterations, cost.parallelism, Some(KEY_LEN)).map_err(|e| format!("CRYPTO_KDF: unusable key slot cost ({e})"))?;
         let mut out = Zeroizing::new([0u8; KEY_LEN]);
-        Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
-            .hash_password_into(&secret, &salt, &mut out[..])
-            .map_err(|e| format!("CRYPTO_KDF: {e}"))?;
+        Argon2::new(Algorithm::Argon2id, Version::V0x13, params).hash_password_into(&secret, &salt, &mut out[..]).map_err(|e| format!("CRYPTO_KDF: {e}"))?;
         Ok(out)
     })
     .await
@@ -335,10 +333,7 @@ async fn open_slot(key_id: String, kind: &str, user_id: Option<i64>, slot: Slot,
     let slot_key = derive(secret, salt, cost).await?;
     let aad = slot_aad(&key_id, kind, user_id);
     let nonce = Nonce::try_from(slot.nonce.as_slice()).map_err(|_| "CRYPTO_SLOT: damaged key slot".to_string())?;
-    let Ok(plain) = Aes256Gcm::new_from_slice(&slot_key[..])
-        .expect("a 32-byte key")
-        .decrypt(&nonce, Payload { msg: &slot.wrapped_key, aad: &aad })
-    else {
+    let Ok(plain) = Aes256Gcm::new_from_slice(&slot_key[..]).expect("a 32-byte key").decrypt(&nonce, Payload { msg: &slot.wrapped_key, aad: &aad }) else {
         return Ok(None);
     };
     let plain = Zeroizing::new(plain);

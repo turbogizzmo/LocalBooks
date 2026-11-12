@@ -3,11 +3,7 @@ use crate::db::test_pool;
 use crate::ledger::{post_journal_entry, JournalEntry, JournalLine};
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
-    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
-        .bind(number)
-        .fetch_one(pool)
-        .await
-        .expect("seeded account exists")
+    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.expect("seeded account exists")
 }
 
 fn ymd(y: i32, m: u32, d: u32) -> NaiveDate {
@@ -17,23 +13,13 @@ fn ymd(y: i32, m: u32, d: u32) -> NaiveDate {
 #[tokio::test]
 async fn trial_balance_balances_and_series_accumulates() {
     let pool = test_pool().await;
-    let (checking, card, owner, rent) = (
-        account_id(&pool, "1010").await,
-        account_id(&pool, "2100").await,
-        account_id(&pool, "3100").await,
-        account_id(&pool, "6300").await,
-    );
+    let (checking, card, owner, rent) =
+        (account_id(&pool, "1010").await, account_id(&pool, "2100").await, account_id(&pool, "3100").await, account_id(&pool, "6300").await);
     let post = |date, lines| post_journal_entry(&pool, JournalEntry { id: None, date, description: String::new(), lines, currency: None });
 
-    post(ymd(2025, 6, 1), vec![JournalLine::debit(checking, 500_000), JournalLine::credit(owner, 500_000)])
-        .await
-        .unwrap();
-    post(ymd(2026, 9, 5), vec![JournalLine::debit(rent, 120_000), JournalLine::credit(card, 120_000)])
-        .await
-        .unwrap();
-    post(ymd(2026, 10, 2), vec![JournalLine::debit(card, 20_000), JournalLine::credit(checking, 20_000)])
-        .await
-        .unwrap();
+    post(ymd(2025, 6, 1), vec![JournalLine::debit(checking, 500_000), JournalLine::credit(owner, 500_000)]).await.unwrap();
+    post(ymd(2026, 9, 5), vec![JournalLine::debit(rent, 120_000), JournalLine::credit(card, 120_000)]).await.unwrap();
+    post(ymd(2026, 10, 2), vec![JournalLine::debit(card, 20_000), JournalLine::credit(checking, 20_000)]).await.unwrap();
 
     let tb = trial_balance(&pool).await.unwrap();
     assert_eq!(tb.total_debit_cents, tb.total_credit_cents);

@@ -410,7 +410,13 @@ fn yearless_month(text: &str) -> Option<u32> {
     let t = text.trim();
     let with_year = |suffix: &str| format!("{t}{suffix}");
     if t.contains('/') || t.contains('-') || t.contains('.') {
-        let sep = if t.contains('/') { '/' } else if t.contains('-') { '-' } else { '.' };
+        let sep = if t.contains('/') {
+            '/'
+        } else if t.contains('-') {
+            '-'
+        } else {
+            '.'
+        };
         let parts: Vec<&str> = t.split(sep).collect();
         if parts.len() != 2 || !parts.iter().all(|p| (1..=2).contains(&p.len()) && p.bytes().all(|b| b.is_ascii_digit())) {
             return None;
@@ -473,8 +479,15 @@ fn statement_period(lines: &[Line]) -> Option<(NaiveDate, NaiveDate)> {
 }
 
 const OPENING: &[&str] = &[
-    "opening balance", "beginning balance", "previous balance", "starting balance", "balance forward", "balance brought forward",
-    "brought forward", "balance last statement", "start balance",
+    "opening balance",
+    "beginning balance",
+    "previous balance",
+    "starting balance",
+    "balance forward",
+    "balance brought forward",
+    "brought forward",
+    "balance last statement",
+    "start balance",
 ];
 const CLOSING: &[&str] = &["closing balance", "ending balance", "new balance", "balance this statement", "end balance", "statement balance"];
 
@@ -571,7 +584,8 @@ fn table_from_lines(lines: &[Line]) -> Result<PdfTable, String> {
         } else if close && !cells.has_money(cols) {
             // A wrapped description.
             let desc = description_column(cols);
-            let extra: Vec<&str> = cells.text.iter().enumerate().filter(|(i, t)| !t.is_empty() && cols[*i].kind != Kind::Balance).map(|(_, t)| t.as_str()).collect();
+            let extra: Vec<&str> =
+                cells.text.iter().enumerate().filter(|(i, t)| !t.is_empty() && cols[*i].kind != Kind::Balance).map(|(_, t)| t.as_str()).collect();
             if let Some(d) = desc {
                 let joined = extra.join(" ");
                 if !joined.is_empty() {
@@ -601,9 +615,8 @@ fn table_from_lines(lines: &[Line]) -> Result<PdfTable, String> {
         return Err("BANK_PDF_NO_YEAR: the dates in this statement have no year, and Tillhouse could not find the statement period".into());
     }
 
-    let markers_used: Vec<(bool, bool)> = (0..columns.len())
-        .map(|i| (rows.iter().any(|r| r.markers[i] == Some(Marker::Cr)), rows.iter().any(|r| r.markers[i] == Some(Marker::Dr))))
-        .collect();
+    let markers_used: Vec<(bool, bool)> =
+        (0..columns.len()).map(|i| (rows.iter().any(|r| r.markers[i] == Some(Marker::Cr)), rows.iter().any(|r| r.markers[i] == Some(Marker::Dr)))).collect();
     let records = rows
         .into_iter()
         .enumerate()
@@ -644,10 +657,7 @@ fn same_titles(a: &[Column], b: &[Column]) -> bool {
 fn description_column(columns: &[Column]) -> Option<usize> {
     const NAMES: &[&str] = &["description", "details", "transaction", "particulars", "narrative", "memo", "payee", "merchant"];
     let lower: Vec<String> = columns.iter().map(|c| c.title.to_lowercase()).collect();
-    NAMES
-        .iter()
-        .find_map(|n| lower.iter().position(|t| t.contains(n) && !t.contains("date")))
-        .or_else(|| columns.iter().position(|c| c.kind == Kind::Text))
+    NAMES.iter().find_map(|n| lower.iter().position(|t| t.contains(n) && !t.contains("date"))).or_else(|| columns.iter().position(|c| c.kind == Kind::Text))
 }
 
 #[cfg(test)]

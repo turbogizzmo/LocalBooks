@@ -20,7 +20,16 @@ async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 fn line(account: i64, rate_cents: i64, is_taxable: bool) -> InvoiceLineInput {
-    InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(rate_cents), income_account_id: account, product_service_id: None, class_id: None, is_taxable, service_date: None }
+    InvoiceLineInput {
+        description: "Work".into(),
+        quantity_e4: 10_000,
+        rate_cents: Cents(rate_cents),
+        income_account_id: account,
+        product_service_id: None,
+        class_id: None,
+        is_taxable,
+        service_date: None,
+    }
 }
 
 fn with_form(form_lines: Vec<FormLineInput>) -> SalesDetails {
@@ -43,8 +52,11 @@ fn invoice(lines: Vec<InvoiceLineInput>, form_lines: Vec<FormLineInput>, tax_rat
 
 /// The entry balances, and its debit to `control` (A/R or the deposit account) is the total.
 async fn assert_posts(pool: &SqlitePool, entry_id: i64, control: i64, total: i64) {
-    let (debits, credits): (i64, i64) =
-        sqlx::query_as("SELECT SUM(debit_cents), SUM(credit_cents) FROM journal_lines WHERE journal_entry_id = ?1").bind(entry_id).fetch_one(pool).await.unwrap();
+    let (debits, credits): (i64, i64) = sqlx::query_as("SELECT SUM(debit_cents), SUM(credit_cents) FROM journal_lines WHERE journal_entry_id = ?1")
+        .bind(entry_id)
+        .fetch_one(pool)
+        .await
+        .unwrap();
     assert_eq!(debits, credits, "entry {entry_id} balances");
     let to_control: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) - SUM(credit_cents) FROM journal_lines WHERE journal_entry_id = ?1 AND account_id = ?2")
         .bind(entry_id)
@@ -119,7 +131,16 @@ async fn an_invoice_with_subtotals_posts_balanced_and_reads_back_in_order() {
 async fn a_sales_receipt_with_a_subtotal_posts_balanced() {
     let pool = test_pool().await;
     let (checking, services) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await);
-    let sale = |rate_cents| SalesLineInput { product_service_id: None, description: "Visit".into(), quantity_e4: 20_000, rate_cents, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
+    let sale = |rate_cents| SalesLineInput {
+        product_service_id: None,
+        description: "Visit".into(),
+        quantity_e4: 20_000,
+        rate_cents,
+        income_account_id: services,
+        class_id: None,
+        is_taxable: false,
+        service_date: None,
+    };
     let receipt = post_sales_receipt(
         &pool,
         SalesReceiptInput {
@@ -153,7 +174,16 @@ async fn a_sales_receipt_with_a_subtotal_posts_balanced() {
 async fn an_estimate_carries_its_subtotals_to_its_invoice() {
     let pool = test_pool().await;
     let (ar, services) = (account_id(&pool, "1200").await, account_id(&pool, "4100").await);
-    let est_line = |rate_cents| SalesLineInput { product_service_id: None, description: "Phase".into(), quantity_e4: 10_000, rate_cents, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
+    let est_line = |rate_cents| SalesLineInput {
+        product_service_id: None,
+        description: "Phase".into(),
+        quantity_e4: 10_000,
+        rate_cents,
+        income_account_id: services,
+        class_id: None,
+        is_taxable: false,
+        service_date: None,
+    };
     let estimate = crate::estimates::create_estimate(
         &pool,
         crate::estimates::EstimateInput {
@@ -284,7 +314,10 @@ async fn discounts_given(pool: &SqlitePool) -> i64 {
     // The account the document discount uses, made on first use.
     match sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Discounts Given'").fetch_optional(pool).await.unwrap() {
         Some(id) => id,
-        None => sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Discounts Given', 'INCOME') RETURNING id").fetch_one(pool).await.unwrap(),
+        None => sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Discounts Given', 'INCOME') RETURNING id")
+            .fetch_one(pool)
+            .await
+            .unwrap(),
     }
 }
 
@@ -313,7 +346,11 @@ async fn an_invoice_with_discounts_and_tax_posts_balanced_and_taxes_the_discount
     let input = invoice(
         vec![line(services, 10_000, true), line(services, 5_000, false)],
         vec![
-            FormLineInput { product_service_id: Some(item.id), description: "Loyalty".into(), ..FormLineInput::discount(1, discounts, Some(100_000), None, true) },
+            FormLineInput {
+                product_service_id: Some(item.id),
+                description: "Loyalty".into(),
+                ..FormLineInput::discount(1, discounts, Some(100_000), None, true)
+            },
             FormLineInput::subtotal(2),
             FormLineInput::discount(2, discounts, None, Some(500), false),
         ],
@@ -349,7 +386,16 @@ async fn a_sales_receipt_with_a_discount_posts_balanced() {
     let pool = test_pool().await;
     let (checking, services) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await);
     let discounts = discounts_given(&pool).await;
-    let sale = SalesLineInput { product_service_id: None, description: "Visit".into(), quantity_e4: 10_000, rate_cents: Cents(8_000), income_account_id: services, class_id: None, is_taxable: false, service_date: None };
+    let sale = SalesLineInput {
+        product_service_id: None,
+        description: "Visit".into(),
+        quantity_e4: 10_000,
+        rate_cents: Cents(8_000),
+        income_account_id: services,
+        class_id: None,
+        is_taxable: false,
+        service_date: None,
+    };
     let receipt = post_sales_receipt(
         &pool,
         SalesReceiptInput {
@@ -377,9 +423,12 @@ async fn a_sales_receipt_with_a_discount_posts_balanced() {
 async fn a_discount_must_post_to_an_active_income_account_from_a_discount_item() {
     let pool = test_pool().await;
     let (checking, services) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await);
-    let err = create_and_post_invoice(&pool, invoice(vec![line(services, 1_000, false)], vec![FormLineInput::discount(1, checking, None, Some(100), false)], None, 0))
-        .await
-        .unwrap_err();
+    let err = create_and_post_invoice(
+        &pool,
+        invoice(vec![line(services, 1_000, false)], vec![FormLineInput::discount(1, checking, None, Some(100), false)], None, 0),
+    )
+    .await
+    .unwrap_err();
     assert!(err.starts_with("INV_NOT_INCOME_ACCOUNT"), "{err}");
     let plain = crate::sales::create_product(
         &pool,
@@ -390,7 +439,12 @@ async fn a_discount_must_post_to_an_active_income_account_from_a_discount_item()
     let discounts = discounts_given(&pool).await;
     let err = create_and_post_invoice(
         &pool,
-        invoice(vec![line(services, 1_000, false)], vec![FormLineInput { product_service_id: Some(plain.id), ..FormLineInput::discount(1, discounts, None, Some(100), false) }], None, 0),
+        invoice(
+            vec![line(services, 1_000, false)],
+            vec![FormLineInput { product_service_id: Some(plain.id), ..FormLineInput::discount(1, discounts, None, Some(100), false) }],
+            None,
+            0,
+        ),
     )
     .await
     .unwrap_err();
@@ -455,7 +509,16 @@ async fn fixed_and_percent_charges_post_balanced_and_carry_from_an_estimate() {
     )
     .await
     .unwrap();
-    let est_line = |rate_cents, product| SalesLineInput { product_service_id: product, description: "Work".into(), quantity_e4: 10_000, rate_cents, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
+    let est_line = |rate_cents, product| SalesLineInput {
+        product_service_id: product,
+        description: "Work".into(),
+        quantity_e4: 10_000,
+        rate_cents,
+        income_account_id: services,
+        class_id: None,
+        is_taxable: false,
+        service_date: None,
+    };
     // 123.45 of work, 3% handling on it (3.70), a fixed 15.00 shipping line, then a subtotal.
     let estimate = crate::estimates::create_estimate(
         &pool,
@@ -503,7 +566,12 @@ async fn a_percent_charge_must_use_a_charge_item() {
     .unwrap();
     let err = create_and_post_invoice(
         &pool,
-        invoice(vec![line(services, 1_000, false)], vec![FormLineInput { product_service_id: Some(promo.id), ..FormLineInput::charge(1, services, 10_000, false) }], None, 0),
+        invoice(
+            vec![line(services, 1_000, false)],
+            vec![FormLineInput { product_service_id: Some(promo.id), ..FormLineInput::charge(1, services, 10_000, false) }],
+            None,
+            0,
+        ),
     )
     .await
     .unwrap_err();
@@ -518,7 +586,13 @@ async fn a_percent_charge_must_use_a_charge_item() {
 async fn a_group_posts_its_items_and_can_print_as_one_line() {
     let pool = test_pool().await;
     let (ar, services) = (account_id(&pool, "1200").await, account_id(&pool, "4100").await);
-    let product = |name: &str, rate_cents| crate::sales::ProductInput { name: name.into(), description: None, rate_cents, income_account_id: services, is_taxable: false };
+    let product = |name: &str, rate_cents| crate::sales::ProductInput {
+        name: name.into(),
+        description: None,
+        rate_cents,
+        income_account_id: services,
+        is_taxable: false,
+    };
     let install = crate::sales::create_product(&pool, product("Install", Cents(8_000))).await.unwrap();
     let cable = crate::sales::create_product(&pool, product("Cable", Cents(1_250))).await.unwrap();
     let kit = save_group(
@@ -535,10 +609,14 @@ async fn a_group_posts_its_items_and_can_print_as_one_line() {
     .unwrap();
     assert_eq!(kit.members.iter().map(|m| (m.product_name.as_str(), m.quantity_e4)).collect::<Vec<_>>(), vec![("Install", 10_000), ("Cable", 40_000)]);
     // A group can't take an item's name, nor an item a group's.
-    assert!(save_group(&pool, None, GroupInput { name: "cable".into(), description: None, print_items: true, members: vec![GroupMemberInput { product_id: cable.id, quantity_e4: 1 }] })
-        .await
-        .unwrap_err()
-        .contains("ITEM_GROUP_NAME"));
+    assert!(save_group(
+        &pool,
+        None,
+        GroupInput { name: "cable".into(), description: None, print_items: true, members: vec![GroupMemberInput { product_id: cable.id, quantity_e4: 1 }] }
+    )
+    .await
+    .unwrap_err()
+    .contains("ITEM_GROUP_NAME"));
     assert!(crate::sales::create_product(&pool, product("Install Kit", Cents(1))).await.unwrap_err().contains("ITEM_GROUP_NAME"));
 
     let member = |p: &crate::sales::ProductView, quantity_e4| InvoiceLineInput {
@@ -548,12 +626,18 @@ async fn a_group_posts_its_items_and_can_print_as_one_line() {
         income_account_id: services,
         product_service_id: Some(p.id),
         class_id: None,
-        is_taxable: false, service_date: None,
+        is_taxable: false,
+        service_date: None,
     };
     let heading = FormLineInput { item_group_id: Some(kit.id), description: "Installation, with cable".into(), ..FormLineInput::group(0, 2, false) };
     let inv = create_and_post_invoice(
         &pool,
-        invoice(vec![member(&install, 10_000), member(&cable, 40_000), line(services, 2_000, false)], vec![heading, FormLineInput::discount(2, services, Some(50_000), None, false)], None, 0),
+        invoice(
+            vec![member(&install, 10_000), member(&cable, 40_000), line(services, 2_000, false)],
+            vec![heading, FormLineInput::discount(2, services, Some(50_000), None, false)],
+            None,
+            0,
+        ),
     )
     .await
     .unwrap();
@@ -582,9 +666,13 @@ async fn a_group_holds_items_and_fixed_charges_only() {
     )
     .await
     .unwrap();
-    let err = save_group(&pool, None, GroupInput { name: "Bad".into(), description: None, print_items: true, members: vec![GroupMemberInput { product_id: promo.id, quantity_e4: 10_000 }] })
-        .await
-        .unwrap_err();
+    let err = save_group(
+        &pool,
+        None,
+        GroupInput { name: "Bad".into(), description: None, print_items: true, members: vec![GroupMemberInput { product_id: promo.id, quantity_e4: 10_000 }] },
+    )
+    .await
+    .unwrap_err();
     assert!(err.contains("ITEM_TYPE_IN_GROUP"), "{err}");
     let err = save_group(&pool, None, GroupInput { name: "Empty".into(), description: None, print_items: true, members: vec![] }).await.unwrap_err();
     assert!(err.starts_with("ITEM_GROUP_EMPTY"), "{err}");
@@ -653,9 +741,12 @@ async fn taxable_lines_and_taxable_discounts_print_their_t_and_subtotals_do_not(
     let pool = test_pool().await;
     let services = account_id(&pool, "4100").await;
     let discounts = discounts_given(&pool).await;
-    let rate = crate::sales_tax::create_tax_rate(&pool, crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 80_000, agency_name: None, liability_account_id: None })
-        .await
-        .unwrap();
+    let rate = crate::sales_tax::create_tax_rate(
+        &pool,
+        crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 80_000, agency_name: None, liability_account_id: None },
+    )
+    .await
+    .unwrap();
     // A group of a taxable and an untaxed item, 10% off it (taxable), a subtotal, an untaxed line.
     let inv = create_and_post_invoice(
         &pool,
@@ -685,17 +776,38 @@ async fn taxable_lines_and_taxable_discounts_print_their_t_and_subtotals_do_not(
 async fn a_group_s_tracked_items_go_through_the_stock_guard_each() {
     let pool = test_pool().await;
     let (services, equity) = (account_id(&pool, "4100").await, account_id(&pool, "3000").await);
-    let widget = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: services, is_taxable: false })
-        .await
-        .unwrap();
-    let item = crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: widget.id, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap();
-    crate::inventory::adjust(&pool, &crate::inventory::AdjustInput { item_id: item.id, date: d(1), qty_change_e4: 30_000, total_cost_cents: Some(3_000), offset_account_id: equity, memo: None })
-        .await
-        .unwrap();
+    let widget = crate::sales::create_product(
+        &pool,
+        crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: Cents(2_500), income_account_id: services, is_taxable: false },
+    )
+    .await
+    .unwrap();
+    let item = crate::inventory::track_product(
+        &pool,
+        &crate::inventory::TrackInput { product_id: widget.id, sku: None, asset_account_id: None, cogs_account_id: None },
+    )
+    .await
+    .unwrap();
+    crate::inventory::adjust(
+        &pool,
+        &crate::inventory::AdjustInput {
+            item_id: item.id,
+            date: d(1),
+            qty_change_e4: 30_000,
+            total_cost_cents: Some(3_000),
+            offset_account_id: equity,
+            memo: None,
+        },
+    )
+    .await
+    .unwrap();
     // A group of 4 widgets and an hour of fitting, with a discount and a subtotal under it.
     let sale = |widgets_e4| {
         let mut input = invoice(
-            vec![InvoiceLineInput { product_service_id: Some(widget.id), quantity_e4: widgets_e4, rate_cents: Cents(2_500), ..line(services, 2_500, false) }, line(services, 5_000, false)],
+            vec![
+                InvoiceLineInput { product_service_id: Some(widget.id), quantity_e4: widgets_e4, rate_cents: Cents(2_500), ..line(services, 2_500, false) },
+                line(services, 5_000, false),
+            ],
             vec![FormLineInput::group(0, 2, true), FormLineInput::discount(2, services, None, Some(1_000), false), FormLineInput::subtotal(2)],
             None,
             0,
@@ -707,9 +819,13 @@ async fn a_group_s_tracked_items_go_through_the_stock_guard_each() {
     assert!(codes(crate::guards::warnings_on(&pool, &crate::guards::invoice(&sale(30_000), None), d(10)).await.unwrap()).is_empty(), "3 on hand, 3 sold");
     assert_eq!(codes(crate::guards::warnings_on(&pool, &crate::guards::invoice(&sale(40_000), None), d(10)).await.unwrap()), ["NEGATIVE_STOCK"]);
     crate::preferences::set(&pool, crate::preferences::tax_time::NEGATIVE_STOCK, "stop").await.unwrap();
-    let err = crate::guards::check(&pool, crate::guards::invoice(&sale(40_000), None), Some(&["NEGATIVE_STOCK".to_string(), "DATE_FAR_PAST".to_string(), "DATE_FAR_FUTURE".to_string()]))
-        .await
-        .unwrap_err();
+    let err = crate::guards::check(
+        &pool,
+        crate::guards::invoice(&sale(40_000), None),
+        Some(&["NEGATIVE_STOCK".to_string(), "DATE_FAR_PAST".to_string(), "DATE_FAR_FUTURE".to_string()]),
+    )
+    .await
+    .unwrap_err();
     assert!(err.starts_with("INV_NOT_ENOUGH_STOCK"), "{err}");
 }
 
@@ -731,7 +847,16 @@ async fn a_credit_memo_with_a_discount_a_charge_and_a_subtotal_posts_balanced_an
     )
     .await
     .unwrap();
-    let returned = SalesLineInput { product_service_id: None, description: "Returned work".into(), quantity_e4: 10_000, rate_cents: Cents(10_000), income_account_id: services, class_id: None, is_taxable: true, service_date: None };
+    let returned = SalesLineInput {
+        product_service_id: None,
+        description: "Returned work".into(),
+        quantity_e4: 10_000,
+        rate_cents: Cents(10_000),
+        income_account_id: services,
+        class_id: None,
+        is_taxable: true,
+        service_date: None,
+    };
     // 100.00 taxable, 5% handling on it (5.00, taxable), a subtotal, then 10% off (taxable).
     let form_lines = vec![
         FormLineInput { product_service_id: Some(handling.id), description: "Handling".into(), ..FormLineInput::charge(1, services, 50_000, true) },
@@ -758,18 +883,20 @@ async fn a_credit_memo_with_a_discount_a_charge_and_a_subtotal_posts_balanced_an
     assert_eq!(memo.total_cents, 10_206);
     // A credit memo credits A/R by its total.
     assert_posts(&pool, memo.journal_entry_id.unwrap(), ar, -10_206).await;
-    let to_discounts: i64 = sqlx::query_scalar("SELECT SUM(credit_cents) - SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = ?1 AND account_id = ?2")
-        .bind(memo.journal_entry_id)
-        .bind(discounts)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let to_discounts: i64 =
+        sqlx::query_scalar("SELECT SUM(credit_cents) - SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = ?1 AND account_id = ?2")
+            .bind(memo.journal_entry_id)
+            .bind(discounts)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(to_discounts, 1_050, "a credit memo's discount reverses the invoice's: the discount account is credited");
-    let stored: Vec<(i64, Option<i64>)> = sqlx::query_as("SELECT line_number, percent_ppm FROM credit_memo_lines WHERE credit_memo_id = ?1 ORDER BY line_number")
-        .bind(memo.id)
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+    let stored: Vec<(i64, Option<i64>)> =
+        sqlx::query_as("SELECT line_number, percent_ppm FROM credit_memo_lines WHERE credit_memo_id = ?1 ORDER BY line_number")
+            .bind(memo.id)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     assert_eq!(stored, vec![(1, None), (2, Some(50_000))]);
 
     let printed = crate::forms::credit_memo_doc(&pool, memo.id, "$").await.unwrap();

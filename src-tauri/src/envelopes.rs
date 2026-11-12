@@ -93,7 +93,8 @@ impl EnvelopeLayout {
 }
 
 pub async fn get_layout(pool: &SqlitePool) -> Result<EnvelopeLayout, String> {
-    let stored: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(LAYOUT_KEY).fetch_optional(pool).await.map_err(db_err)?;
+    let stored: Option<String> =
+        sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(LAYOUT_KEY).fetch_optional(pool).await.map_err(db_err)?;
     // A layout that no longer reads falls back to the default rather than blocking printing.
     Ok(stored.and_then(|json| serde_json::from_str::<EnvelopeLayout>(&json).ok()).and_then(|l| l.validated().ok()).unwrap_or_default())
 }
@@ -146,7 +147,11 @@ async fn recipient(pool: &SqlitePool, target: EnvelopeTarget) -> Result<Vec<Stri
     match target {
         EnvelopeTarget::Customer { id } => {
             let row: Option<(String, Option<String>, Option<String>)> =
-                sqlx::query_as("SELECT name, company_name, billing_address FROM customers WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?;
+                sqlx::query_as("SELECT name, company_name, billing_address FROM customers WHERE id = ?1")
+                    .bind(id)
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(db_err)?;
             let (name, company, address) = row.ok_or_else(|| "ENVELOPE_NOT_FOUND: that customer no longer exists".to_string())?;
             Ok(address_block(&name, company.as_deref(), address.as_deref()))
         }
@@ -180,7 +185,16 @@ const MUTED: Rgb = Rgb(0x4b, 0x55, 0x63);
 pub fn layout(layout: &EnvelopeLayout, company: &forms::Company, to: &[String]) -> Page {
     let (width, height) = layout.size.size();
     let mut ops = Vec::new();
-    let text = |x: f32, y: f32, s: &str, bold: bool, size: f32, color: Rgb| Op::Text { x, y, text: s.to_string(), family: layout.font, bold, size, color, align: Align::Left };
+    let text = |x: f32, y: f32, s: &str, bold: bool, size: f32, color: Rgb| Op::Text {
+        x,
+        y,
+        text: s.to_string(),
+        family: layout.font,
+        bold,
+        size,
+        color,
+        align: Align::Left,
+    };
     if layout.return_address {
         let name = if company.name.trim().is_empty() { company.legal_name.trim() } else { company.name.trim() };
         let mut y = 18.0 + 10.0;
@@ -239,10 +253,7 @@ pub async fn render(pool: &SqlitePool, target: Option<EnvelopeTarget>, with: Opt
     };
     let company = forms::load_company(pool).await?;
     let page = layout(&layout_used, &company, &to);
-    Ok(RenderedEnvelope {
-        form: RenderedForm { title: title(&to), pages: vec![page], logo: None, customer_email: None },
-        page_size: layout_used.size.css(),
-    })
+    Ok(RenderedEnvelope { form: RenderedForm { title: title(&to), pages: vec![page], logo: None, customer_email: None }, page_size: layout_used.size.css() })
 }
 
 #[cfg(test)]
@@ -292,7 +303,8 @@ mod tests {
 
     #[test]
     fn a_nudge_never_pushes_the_address_off_the_envelope() {
-        let to: Vec<String> = ["Jordan Rivera", "Rivera Landscaping and Garden Design LLC", "412 Orchard Lane", "Springfield, OR 97477"].map(String::from).to_vec();
+        let to: Vec<String> =
+            ["Jordan Rivera", "Rivera Landscaping and Garden Design LLC", "412 Orchard Lane", "Springfield, OR 97477"].map(String::from).to_vec();
         for (right, down) in [(72, 72), (-72, -72), (72, -72), (-72, 72)] {
             let page = layout(&EnvelopeLayout { size: EnvelopeSize::Monarch, nudge_right: right, nudge_down: down, ..Default::default() }, &company(), &to);
             for (x, y, text) in texts(&page).into_iter().filter(|(_, _, t)| to.contains(t)) {

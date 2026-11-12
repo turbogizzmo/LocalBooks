@@ -3,11 +3,7 @@ use crate::db::test_pool;
 use crate::ledger::{post_journal_entry, JournalEntry, JournalLine};
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
-    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
-        .bind(number)
-        .fetch_one(pool)
-        .await
-        .expect("seeded account exists")
+    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.expect("seeded account exists")
 }
 
 fn d(m: u32, day: u32) -> NaiveDate {
@@ -32,11 +28,7 @@ async fn post(pool: &SqlitePool, date: NaiveDate, debit: i64, credit: i64, cents
 #[tokio::test]
 async fn reconcile_balances_locks_and_freezes() {
     let pool = test_pool().await;
-    let (checking, owner, rent) = (
-        account_id(&pool, "1010").await,
-        account_id(&pool, "3100").await,
-        account_id(&pool, "6300").await,
-    );
+    let (checking, owner, rent) = (account_id(&pool, "1010").await, account_id(&pool, "3100").await, account_id(&pool, "6300").await);
     let deposit = post(&pool, d(9, 2), checking, owner, 500_000).await;
     post(&pool, d(9, 10), rent, checking, 120_000).await;
     post(&pool, d(9, 28), rent, checking, 5_000).await; // not yet on the statement
@@ -97,11 +89,7 @@ async fn reconcile_balances_locks_and_freezes() {
 #[tokio::test]
 async fn credit_card_balances_on_the_credit_side() {
     let pool = test_pool().await;
-    let (card, fuel, checking) = (
-        account_id(&pool, "2100").await,
-        account_id(&pool, "6100").await,
-        account_id(&pool, "1010").await,
-    );
+    let (card, fuel, checking) = (account_id(&pool, "2100").await, account_id(&pool, "6100").await, account_id(&pool, "1010").await);
     post(&pool, d(9, 5), fuel, card, 6_000).await; // charge raises the amount owed
     post(&pool, d(9, 20), card, checking, 2_500).await; // payment lowers it
 
@@ -123,12 +111,8 @@ async fn rejects_accounts_that_cannot_be_reconciled() {
 #[tokio::test]
 async fn service_charge_and_interest_post_with_the_reconciliation_and_balance() {
     let pool = test_pool().await;
-    let (checking, owner, rent, sales) = (
-        account_id(&pool, "1010").await,
-        account_id(&pool, "3100").await,
-        account_id(&pool, "6300").await,
-        account_id(&pool, "4000").await,
-    );
+    let (checking, owner, rent, sales) =
+        (account_id(&pool, "1010").await, account_id(&pool, "3100").await, account_id(&pool, "6300").await, account_id(&pool, "4000").await);
     post(&pool, d(9, 2), checking, owner, 500_000).await;
     // The statement: 5,000.00 in, a 12.50 fee and 1.25 interest, so it ends at 4,988.75.
     let charges = [
@@ -188,7 +172,10 @@ async fn undo_last_reconciliation_releases_its_lines_with_an_audit_row() {
     let report_before = crate::accountant_reports::previous_reconciliation(&pool, august.id, true).await.unwrap();
 
     assert!(undo_last(&pool, 9_999, None).await.unwrap_err().starts_with("REC_NOT_FOUND"));
-    let direct = sqlx::query("INSERT INTO reconciliation_undos (reconciliation_id, released_count, released_total_cents) VALUES (9999, 0, 0)").execute(&pool).await.unwrap_err();
+    let direct = sqlx::query("INSERT INTO reconciliation_undos (reconciliation_id, released_count, released_total_cents) VALUES (9999, 0, 0)")
+        .execute(&pool)
+        .await
+        .unwrap_err();
     assert!(direct.to_string().contains("REC_NOT_FOUND"), "{direct}");
     // Only the last one can be undone.
     let err = undo_last(&pool, august.id, None).await.expect_err("not the last");
@@ -211,10 +198,12 @@ async fn undo_last_reconciliation_releases_its_lines_with_an_audit_row() {
         .await
         .unwrap();
     assert!(detail.contains("through 2026-09-30") && detail.contains("1 transaction uncleared") && detail.ends_with(": wrong statement"), "{detail}");
-    let sealed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'EDIT' AND json_extract(payload_snapshot, '$.kind') = 'UNDO_RECONCILIATION'")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let sealed: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'EDIT' AND json_extract(payload_snapshot, '$.kind') = 'UNDO_RECONCILIATION'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!(sealed, 1);
     assert!(crate::audit_chain::verify(&pool).await.unwrap().problems.is_empty());
 
@@ -243,7 +232,11 @@ async fn undo_waits_for_a_reconciliation_in_progress() {
     // A line of a reconciliation that wasn't undone still can't be released.
     let other = reconcile_through(&pool, checking, d(8, 31), 100_000).await;
     let line: i64 = sqlx::query_scalar("SELECT id FROM journal_lines WHERE reconciliation_id = ?1").bind(other.id).fetch_one(&pool).await.unwrap();
-    let err = sqlx::query("UPDATE journal_lines SET reconciliation_id = NULL, reconciled_at = NULL WHERE id = ?1").bind(line).execute(&pool).await.expect_err("locked");
+    let err = sqlx::query("UPDATE journal_lines SET reconciliation_id = NULL, reconciled_at = NULL WHERE id = ?1")
+        .bind(line)
+        .execute(&pool)
+        .await
+        .expect_err("locked");
     assert!(err.to_string().contains("REC_LOCKED"), "{err}");
 }
 
@@ -271,7 +264,11 @@ async fn a_statement_file_attaches_to_the_reconciliation() {
     let next = start(&pool, checking, d(9, 30), 100_000).await.unwrap();
     add_record_file(&pool, "RECONCILIATION", next.id, "september.png", b"png").await.unwrap();
     cancel(&pool, next.id).await.unwrap();
-    let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM record_attachments WHERE record_kind = 'RECONCILIATION' AND record_id = ?1").bind(next.id).fetch_one(&pool).await.unwrap();
+    let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM record_attachments WHERE record_kind = 'RECONCILIATION' AND record_id = ?1")
+        .bind(next.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(left, 0);
     undo_last(&pool, open.id, None).await.unwrap();
     assert!(add_record_file(&pool, "RECONCILIATION", open.id, "late.pdf", b"x").await.unwrap_err().starts_with("REC_UNDONE"));
@@ -285,5 +282,8 @@ fn reconcile_charge_and_bill_payment_amounts_are_bare_integers_in_json() {
     let payment: crate::expenses::BillPaymentInput =
         serde_json::from_str(r#"{"billId":3,"paymentAccountId":1,"paymentDate":"2026-06-15","amountCents":24690,"reference":null}"#).unwrap();
     assert_eq!(payment.amount_cents, Cents(24_690));
-    assert!(serde_json::from_str::<ReconcileCharge>(r#"{"kind":"INTEREST_EARNED","amountCents":0.5,"date":"2026-06-30","accountId":7}"#).is_err(), "a fractional amount is refused");
+    assert!(
+        serde_json::from_str::<ReconcileCharge>(r#"{"kind":"INTEREST_EARNED","amountCents":0.5,"date":"2026-06-30","accountId":7}"#).is_err(),
+        "a fractional amount is refused"
+    );
 }

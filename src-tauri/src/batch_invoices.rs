@@ -122,7 +122,11 @@ pub async fn create(pool: &SqlitePool, input: BatchInput) -> Result<BatchResult,
             let invoice_id = invoices::write_invoice(&mut tx, &invoice).await.map_err(|e| format!("{e} (for {name})"))?;
             match delivery.as_deref() {
                 Some("EMAIL") => {
-                    sqlx::query("INSERT INTO form_email_queue (form_type, document_id) VALUES ('INVOICE', ?1) ON CONFLICT DO NOTHING").bind(invoice_id).execute(&mut *tx).await.map_err(db_err)?;
+                    sqlx::query("INSERT INTO form_email_queue (form_type, document_id) VALUES ('INVOICE', ?1) ON CONFLICT DO NOTHING")
+                        .bind(invoice_id)
+                        .execute(&mut *tx)
+                        .await
+                        .map_err(db_err)?;
                     emailed_later += 1;
                 }
                 Some("PRINT") => {

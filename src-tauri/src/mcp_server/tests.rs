@@ -28,7 +28,8 @@ async fn call(pool: &SqlitePool, id: i64, method: &str, params: Value) -> Value 
 #[tokio::test]
 async fn speaks_mcp_lifecycle_and_lists_read_only_tools() {
     let pool = test_pool().await;
-    let init = call(&pool, 1, "initialize", json!({ "protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": { "name": "t", "version": "1" } })).await;
+    let init =
+        call(&pool, 1, "initialize", json!({ "protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": { "name": "t", "version": "1" } })).await;
     assert_eq!(init["result"]["protocolVersion"], "2025-03-26", "a supported version is echoed");
     assert_eq!(init["result"]["serverInfo"]["name"], "localbooks");
     let init = call(&pool, 2, "initialize", json!({ "protocolVersion": "1999-01-01" })).await;
@@ -56,12 +57,14 @@ async fn speaks_mcp_lifecycle_and_lists_read_only_tools() {
 #[tokio::test]
 async fn tools_report_the_books_without_changing_them() {
     let pool = test_pool().await;
-    let (checking, services, rent, owner) = (account(&pool, "1010").await, account(&pool, "4100").await, account(&pool, "6100").await, account(&pool, "3000").await);
+    let (checking, services, rent, owner) =
+        (account(&pool, "1010").await, account(&pool, "4100").await, account(&pool, "6100").await, account(&pool, "3000").await);
     post(&pool, "2026-01-02", checking, owner, 1_000_000).await;
     post(&pool, "2026-03-10", checking, services, 250_000).await;
     post(&pool, "2026-03-15", rent, checking, 120_000).await;
     post(&pool, "2026-12-01", checking, services, 99_999).await; // after the as-of date below
-    let before: (i64, i64) = sqlx::query_as("SELECT (SELECT COUNT(*) FROM journal_entries), (SELECT COUNT(*) FROM ledger_audit_log)").fetch_one(&pool).await.unwrap();
+    let before: (i64, i64) =
+        sqlx::query_as("SELECT (SELECT COUNT(*) FROM journal_entries), (SELECT COUNT(*) FROM ledger_audit_log)").fetch_one(&pool).await.unwrap();
 
     let tb = call(&pool, 1, "tools/call", json!({ "name": "get_trial_balance", "arguments": { "asOf": "2026-06-30" } })).await;
     let tb = &tb["result"]["structuredContent"];
@@ -70,11 +73,15 @@ async fn tools_report_the_books_without_changing_them() {
     let checking_row = tb["accounts"].as_array().unwrap().iter().find(|a| a["accountNumber"] == "1010").unwrap();
     assert_eq!(checking_row["debitCents"], 1_130_000, "December activity is excluded");
 
-    let pl = call(&pool, 2, "tools/call", json!({ "name": "get_profit_and_loss_summary", "arguments": { "startDate": "2026-01-01", "endDate": "2026-06-30" } })).await;
+    let pl =
+        call(&pool, 2, "tools/call", json!({ "name": "get_profit_and_loss_summary", "arguments": { "startDate": "2026-01-01", "endDate": "2026-06-30" } }))
+            .await;
     let pl = &pl["result"]["structuredContent"];
     assert_eq!(pl["totalRevenueCents"], 250_000);
     assert_eq!(pl["netIncomeCents"], 130_000);
-    let reversed = call(&pool, 3, "tools/call", json!({ "name": "get_profit_and_loss_summary", "arguments": { "startDate": "2026-06-30", "endDate": "2026-01-01" } })).await;
+    let reversed =
+        call(&pool, 3, "tools/call", json!({ "name": "get_profit_and_loss_summary", "arguments": { "startDate": "2026-06-30", "endDate": "2026-01-01" } }))
+            .await;
     assert_eq!(reversed["result"]["isError"], true);
 
     // Two open invoices: one 45 days overdue, one not yet due.
@@ -101,7 +108,8 @@ async fn tools_report_the_books_without_changing_them() {
     assert_eq!(aging["mostOverdue"][0]["daysOverdue"], 45);
     assert!(text.contains("40.00%"), "{text}");
 
-    let after: (i64, i64) = sqlx::query_as("SELECT (SELECT COUNT(*) FROM journal_entries), (SELECT COUNT(*) FROM ledger_audit_log)").fetch_one(&pool).await.unwrap();
+    let after: (i64, i64) =
+        sqlx::query_as("SELECT (SELECT COUNT(*) FROM journal_entries), (SELECT COUNT(*) FROM ledger_audit_log)").fetch_one(&pool).await.unwrap();
     assert_eq!(after.0, before.0 + 2, "only the two invoices this test created were posted");
     assert_eq!(after.1, before.1 + 2);
 }
@@ -160,7 +168,8 @@ async fn http_transport_admits_only_authorized_local_clients() {
     assert_eq!(send(addr, post_raw(port, Some(&token), "MCP-Protocol-Version: 1999-01-01\r\n", init)).await.0, 400);
     let (status, _, body) = send(addr, post_raw(port, Some(&token), "", "{not json")).await;
     assert_eq!((status, serde_json::from_str::<Value>(&body).unwrap()["error"]["code"].as_i64()), (400, Some(-32700)));
-    let (status, _, body) = send(addr, post_raw(port, Some(&token), "MCP-Protocol-Version: 2025-06-18\r\n", r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#)).await;
+    let (status, _, body) =
+        send(addr, post_raw(port, Some(&token), "MCP-Protocol-Version: 2025-06-18\r\n", r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#)).await;
     assert_eq!((status, body.as_str()), (202, ""));
 
     let call = r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_trial_balance","arguments":{}}}"#;

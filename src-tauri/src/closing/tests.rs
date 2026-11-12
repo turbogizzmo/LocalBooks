@@ -28,10 +28,7 @@ fn lock(date: Option<&str>, current: Option<&str>, new: Option<&str>) -> Closing
 #[test]
 fn passcodes_hash_with_pbkdf2_and_verify_in_constant_time() {
     // RFC 7914 §11 PBKDF2-HMAC-SHA256 test vector (first 32 bytes, 1 iteration).
-    assert_eq!(
-        hex(&pbkdf2_sha256(b"passwd", b"salt", 1)),
-        "55ac046e56e3089fec1691c22544b605f94185216dde0465e68b9d57c20dacbc"
-    );
+    assert_eq!(hex(&pbkdf2_sha256(b"passwd", b"salt", 1)), "55ac046e56e3089fec1691c22544b605f94185216dde0465e68b9d57c20dacbc");
     let stored = hash_passcode("year-end 2026");
     assert!(stored.starts_with("pbkdf2-sha256$"));
     assert_ne!(stored, hash_passcode("year-end 2026"), "each hash has its own salt");
@@ -57,11 +54,27 @@ async fn closed_periods_refuse_posts_and_voids_until_reopened_with_the_passcode(
     assert_eq!(void_transaction(&pool, early).await.unwrap_err(), CLOSED_MESSAGE, "a void would change the closed period");
 
     // The database refuses too, even if application code is bypassed.
-    let draft: i64 = sqlx::query_scalar("INSERT INTO journal_entries (entry_number, entry_date) VALUES (99, '2026-01-15') RETURNING id").fetch_one(&pool).await.unwrap();
+    let draft: i64 =
+        sqlx::query_scalar("INSERT INTO journal_entries (entry_number, entry_date) VALUES (99, '2026-01-15') RETURNING id").fetch_one(&pool).await.unwrap();
     let (checking, sales) = (account(&pool, "1010").await, account(&pool, "4000").await);
-    sqlx::query("INSERT INTO journal_lines (journal_entry_id, line_number, account_id, debit_cents) VALUES (?1, 1, ?2, 5)").bind(draft).bind(checking).execute(&pool).await.unwrap();
-    sqlx::query("INSERT INTO journal_lines (journal_entry_id, line_number, account_id, credit_cents) VALUES (?1, 2, ?2, 5)").bind(draft).bind(sales).execute(&pool).await.unwrap();
-    let err = sqlx::query("UPDATE journal_entries SET status = 'POSTED', posted_at = 'now' WHERE id = ?1").bind(draft).execute(&pool).await.map_err(db_err).unwrap_err();
+    sqlx::query("INSERT INTO journal_lines (journal_entry_id, line_number, account_id, debit_cents) VALUES (?1, 1, ?2, 5)")
+        .bind(draft)
+        .bind(checking)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO journal_lines (journal_entry_id, line_number, account_id, credit_cents) VALUES (?1, 2, ?2, 5)")
+        .bind(draft)
+        .bind(sales)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let err = sqlx::query("UPDATE journal_entries SET status = 'POSTED', posted_at = 'now' WHERE id = ?1")
+        .bind(draft)
+        .execute(&pool)
+        .await
+        .map_err(db_err)
+        .unwrap_err();
     assert_eq!(err, CLOSED_MESSAGE);
 
     // Moving the date needs the passcode.
@@ -108,7 +121,8 @@ async fn an_external_accountant_posts_in_a_closed_period_and_the_report_says_who
     // The database backstop is back for everyone once that transaction committed.
     let flag: Option<i64> = sqlx::query_scalar("SELECT value FROM closing_exception_in_progress").fetch_one(&pool).await.unwrap();
     assert_eq!(flag, None, "commit_write clears the pass");
-    let draft: i64 = sqlx::query_scalar("INSERT INTO journal_entries (entry_number, entry_date) VALUES (98, '2026-03-20') RETURNING id").fetch_one(&pool).await.unwrap();
+    let draft: i64 =
+        sqlx::query_scalar("INSERT INTO journal_entries (entry_number, entry_date) VALUES (98, '2026-03-20') RETURNING id").fetch_one(&pool).await.unwrap();
     let refused = sqlx::query("UPDATE journal_entries SET status = 'POSTED' WHERE id = ?1").bind(draft).execute(&pool).await.unwrap_err().to_string();
     assert!(refused.contains("PERIOD_CLOSED"), "{refused}");
 
@@ -128,7 +142,8 @@ async fn an_entry_made_in_the_same_clock_step_as_a_close_is_ordered_by_entry_id(
     let pool = test_pool().await;
     let date = |s: &str| s.parse::<chrono::NaiveDate>().unwrap();
     let exceptions = |pool: SqlitePool| async move {
-        let report = crate::list_reports::run(&pool, "closing-date-exceptions", Some(date("2025-01-01")), Some(date("2025-12-31")), date("2026-01-15")).await.unwrap();
+        let report =
+            crate::list_reports::run(&pool, "closing-date-exceptions", Some(date("2025-01-01")), Some(date("2025-12-31")), date("2026-01-15")).await.unwrap();
         report.report.rows.iter().filter_map(|r| r.journal_entry_id).collect::<Vec<i64>>()
     };
     let before = post(&pool, "2025-11-10").await.unwrap();
@@ -144,6 +159,10 @@ async fn an_entry_made_in_the_same_clock_step_as_a_close_is_ordered_by_entry_id(
     sqlx::query("DROP TRIGGER trg_closing_locks_no_update").execute(&pool).await.unwrap();
     sqlx::query("UPDATE closing_locks SET set_at = (SELECT created_at FROM journal_entries WHERE id = ?1)").bind(late).execute(&pool).await.unwrap();
 
-    assert_eq!(exceptions(pool.clone()).await, vec![late], "posted after the first close, though at the same time; the entry made before it is not an exception");
+    assert_eq!(
+        exceptions(pool.clone()).await,
+        vec![late],
+        "posted after the first close, though at the same time; the entry made before it is not an exception"
+    );
     assert!(!exceptions(pool.clone()).await.contains(&before));
 }

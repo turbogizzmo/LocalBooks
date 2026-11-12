@@ -46,7 +46,15 @@ pub async fn record(pool: &SqlitePool, kind: FormKind, document_id: i64, recipie
 }
 
 /// [`record`], with the statement period's end date for a statement (its statement date).
-pub async fn record_for(pool: &SqlitePool, kind: FormKind, document_id: i64, period_end: Option<NaiveDate>, recipients: &[String], method: Method, subject: &str) -> Result<(), String> {
+pub async fn record_for(
+    pool: &SqlitePool,
+    kind: FormKind,
+    document_id: i64,
+    period_end: Option<NaiveDate>,
+    recipients: &[String],
+    method: Method,
+    subject: &str,
+) -> Result<(), String> {
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     sqlx::query("INSERT INTO form_email_log (form_type, document_id, recipients, method, subject, period_end) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
         .bind(kind.key())
@@ -58,7 +66,12 @@ pub async fn record_for(pool: &SqlitePool, kind: FormKind, document_id: i64, per
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;
-    sqlx::query("DELETE FROM form_email_queue WHERE form_type = ?1 AND document_id = ?2").bind(kind.key()).bind(document_id).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("DELETE FROM form_email_queue WHERE form_type = ?1 AND document_id = ?2")
+        .bind(kind.key())
+        .bind(document_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     crate::ledger::commit_write(tx).await.map_err(db_err)
 }
 
@@ -147,7 +160,12 @@ pub async fn statuses(pool: &SqlitePool, kind: FormKind, period_end: Option<Naiv
 /// Marks a form "Email later", or takes it off the queue.
 pub async fn set_queued(pool: &SqlitePool, kind: FormKind, document_id: i64, queued: bool) -> Result<(), String> {
     if !queued {
-        sqlx::query("DELETE FROM form_email_queue WHERE form_type = ?1 AND document_id = ?2").bind(kind.key()).bind(document_id).execute(pool).await.map_err(db_err)?;
+        sqlx::query("DELETE FROM form_email_queue WHERE form_type = ?1 AND document_id = ?2")
+            .bind(kind.key())
+            .bind(document_id)
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
         return Ok(());
     }
     let state: Option<bool> = match kind {
@@ -155,7 +173,9 @@ pub async fn set_queued(pool: &SqlitePool, kind: FormKind, document_id: i64, que
         FormKind::Estimate => sqlx::query_scalar("SELECT 0 FROM estimates WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
         FormKind::SalesReceipt => sqlx::query_scalar("SELECT is_voided FROM sales_receipts WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
         // An unapplied payment kept as credit has no form to send.
-        FormKind::CreditMemo => sqlx::query_scalar("SELECT is_voided FROM credit_memos WHERE id = ?1 AND payment_account_id IS NULL").bind(document_id).fetch_optional(pool).await,
+        FormKind::CreditMemo => {
+            sqlx::query_scalar("SELECT is_voided FROM credit_memos WHERE id = ?1 AND payment_account_id IS NULL").bind(document_id).fetch_optional(pool).await
+        }
         FormKind::BillPayment => sqlx::query_scalar("SELECT is_voided FROM bill_payments WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
         FormKind::SalesOrder => sqlx::query_scalar("SELECT 0 FROM sales_orders WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
         FormKind::PurchaseOrder => sqlx::query_scalar("SELECT 0 FROM purchase_orders WHERE id = ?1").bind(document_id).fetch_optional(pool).await,

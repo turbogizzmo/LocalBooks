@@ -18,9 +18,17 @@ impl Drop for TempDir {
 }
 
 async fn post_sale(pool: &SqlitePool, cents: i64) {
-    let id = |n: &'static str| async move { sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_one(pool).await.unwrap() };
+    let id = |n: &'static str| async move {
+        sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_one(pool).await.unwrap()
+    };
     let (checking, services) = (id("1010").await, id("4100").await);
-    let entry = JournalEntry { id: None, date: NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(), description: "Sale to Quillfeather Studio".into(), lines: vec![JournalLine::debit(checking, cents), JournalLine::credit(services, cents)], currency: None };
+    let entry = JournalEntry {
+        id: None,
+        date: NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
+        description: "Sale to Quillfeather Studio".into(),
+        lines: vec![JournalLine::debit(checking, cents), JournalLine::credit(services, cents)],
+        currency: None,
+    };
     post_journal_entry(pool, entry).await.unwrap();
 }
 
@@ -105,7 +113,10 @@ async fn offsite_copies_are_encrypted_pruned_tested_and_restored() {
     let bytes = std::fs::read(&first.path).unwrap();
     assert!(!bytes.windows(15).any(|w| w == b"SQLite format 3"), "no plain database header");
     assert!(!bytes.windows(11).any(|w| w == b"Quillfeathe"), "no readable business data");
-    assert!(std::fs::read_dir(db.backups_dir()).unwrap().all(|e| !e.unwrap().file_name().to_string_lossy().starts_with(".offsite")), "the plain temp copy is gone");
+    assert!(
+        std::fs::read_dir(db.backups_dir()).unwrap().all(|e| !e.unwrap().file_name().to_string_lossy().starts_with(".offsite")),
+        "the plain temp copy is gone"
+    );
 
     // Three copies with two to keep: the oldest goes.
     for _ in 0..2 {

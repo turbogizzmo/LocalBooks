@@ -45,7 +45,8 @@ pub struct SalesTaxAdjustmentView {
 /// Posts an adjustment; returns its id.
 pub async fn adjust_sales_tax(pool: &SqlitePool, input: &SalesTaxAdjustmentInput) -> Result<i64, String> {
     let amount = input.amount_cents;
-    let cents = amount.checked_abs().filter(|a| (1..=MAX_LINE_CENTS).contains(a)).ok_or("TAX_BAD_AMOUNT: enter the amount to raise or lower the tax owed by")?;
+    let cents =
+        amount.checked_abs().filter(|a| (1..=MAX_LINE_CENTS).contains(a)).ok_or("TAX_BAD_AMOUNT: enter the amount to raise or lower the tax owed by")?;
     let memo = input.memo.as_deref().map(str::trim).filter(|m| !m.is_empty());
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {

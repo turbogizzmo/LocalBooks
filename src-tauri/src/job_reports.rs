@@ -176,8 +176,10 @@ struct Customers {
 
 impl Customers {
     async fn load(pool: &SqlitePool) -> Result<Self, String> {
-        let rows: Vec<(i64, String, Option<i64>)> =
-            sqlx::query_as("SELECT id, name, parent_id FROM customers ORDER BY replace(lower(name), ':', char(1)), id").fetch_all(pool).await.map_err(db_err)?;
+        let rows: Vec<(i64, String, Option<i64>)> = sqlx::query_as("SELECT id, name, parent_id FROM customers ORDER BY replace(lower(name), ':', char(1)), id")
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
         let mut by_id = HashMap::new();
         let mut order = Vec::new();
         for (id, name, parent) in rows {
@@ -430,7 +432,8 @@ async fn job_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate) 
         }
         if sources.is_empty() {
             if let Some(stock) = sold.get(&r.doc_entry) {
-                sources = stock.iter().filter(|(account, _, _)| *account == r.account_id).map(|(_, product, cost)| (default_job, Some(*product), *cost)).collect();
+                sources =
+                    stock.iter().filter(|(account, _, _)| *account == r.account_id).map(|(_, product, cost)| (default_job, Some(*product), *cost)).collect();
             }
         }
         if sources.is_empty() {
@@ -483,7 +486,9 @@ struct Matcher {
 
 impl Matcher {
     fn new(f: &JobFilter, customers: &Customers) -> Self {
-        let jobs = (!f.job_ids.is_empty() || f.no_job).then(|| if f.with_subjobs { customers.with_descendants(&f.job_ids) } else { f.job_ids.iter().copied().collect() });
+        let jobs =
+            (!f.job_ids.is_empty() || f.no_job)
+                .then(|| if f.with_subjobs { customers.with_descendants(&f.job_ids) } else { f.job_ids.iter().copied().collect() });
         let items = (!f.item_ids.is_empty() || f.no_item).then(|| f.item_ids.iter().copied().collect());
         let accounts = (!f.account_ids.is_empty()).then(|| f.account_ids.iter().copied().collect());
         Matcher { jobs, no_job: f.no_job, items, no_item: f.no_item, accounts }
@@ -693,7 +698,12 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
             for l in &lines {
                 add(sums.entry(l.job).or_default(), &[l.cost(), l.revenue()]);
             }
-            let drill = |ids: Vec<i64>, none: bool| Some(JobDrill { report: JobReportKind::JobProfitDetail, filter: JobFilter { job_ids: ids, with_subjobs: false, no_job: none, ..params.filter.clone() } });
+            let drill = |ids: Vec<i64>, none: bool| {
+                Some(JobDrill {
+                    report: JobReportKind::JobProfitDetail,
+                    filter: JobFilter { job_ids: ids, with_subjobs: false, no_job: none, ..params.filter.clone() },
+                })
+            };
             let tree = Tree { customers: &customers, sums: &sums, cells: &profit_cells, drill: &drill };
             let (rows, total) = tree.rows(2);
             report.columns = profit_columns("Customer:Job");
@@ -846,7 +856,12 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
                     for ((job, _), s) in &sums {
                         add(by_job.entry(*job).or_default(), s);
                     }
-                    let drill = |ids: Vec<i64>, none: bool| Some(JobDrill { report: JobReportKind::JobEstimatesDetail, filter: JobFilter { job_ids: ids, with_subjobs: false, no_job: none, ..params.filter.clone() } });
+                    let drill = |ids: Vec<i64>, none: bool| {
+                        Some(JobDrill {
+                            report: JobReportKind::JobEstimatesDetail,
+                            filter: JobFilter { job_ids: ids, with_subjobs: false, no_job: none, ..params.filter.clone() },
+                        })
+                    };
                     let tree = Tree { customers: &customers, sums: &by_job, cells: &estimate_cells, drill: &drill };
                     let (rows, total) = tree.rows(3);
                     report.columns = estimate_columns("Customer:Job");
@@ -866,7 +881,14 @@ pub async fn run(pool: &SqlitePool, kind: JobReportKind, params: &JobReportParam
                             let mut cells = vec![json!(item_label(item, &names))];
                             cells.extend(estimate_cells(s));
                             let mut r = row(RowKind::Detail, 1, cells);
-                            let filter = JobFilter { job_ids: job.into_iter().collect(), with_subjobs: false, no_job: job.is_none(), item_ids: item.into_iter().collect(), no_item: item.is_none(), ..params.filter.clone() };
+                            let filter = JobFilter {
+                                job_ids: job.into_iter().collect(),
+                                with_subjobs: false,
+                                no_job: job.is_none(),
+                                item_ids: item.into_iter().collect(),
+                                no_item: item.is_none(),
+                                ..params.filter.clone()
+                            };
                             r.drill = Some(JobDrill { report: JobReportKind::JobTransactions, filter });
                             report.rows.push(r);
                             add(&mut sum, s);
@@ -940,18 +962,21 @@ async fn estimates_report(pool: &SqlitePool, report: &mut JobReport, customers: 
 
     // The invoice an estimate became, following edits (an edit voids the invoice and posts a
     // replacement): (invoice number, total, live entry), or None once voided.
-    let invoices: HashMap<i64, (i64, i64, Option<i64>, bool)> = sqlx::query_as::<_, (i64, i64, i64, Option<i64>, bool)>(
-        "SELECT id, invoice_number, total_cents, journal_entry_id, is_voided FROM invoices",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(db_err)?
-    .into_iter()
-    .map(|(id, n, t, e, v)| (id, (n, t, e, v)))
-    .collect();
+    let invoices: HashMap<i64, (i64, i64, Option<i64>, bool)> =
+        sqlx::query_as::<_, (i64, i64, i64, Option<i64>, bool)>("SELECT id, invoice_number, total_cents, journal_entry_id, is_voided FROM invoices")
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?
+            .into_iter()
+            .map(|(id, n, t, e, v)| (id, (n, t, e, v)))
+            .collect();
     let by_entry: HashMap<i64, i64> = invoices.iter().filter_map(|(id, (_, _, e, _))| e.map(|e| (e, *id))).collect();
-    let edits: HashMap<i64, i64> =
-        sqlx::query_as::<_, (i64, i64)>("SELECT old_entry_id, new_entry_id FROM transaction_edits").fetch_all(pool).await.map_err(db_err)?.into_iter().collect();
+    let edits: HashMap<i64, i64> = sqlx::query_as::<_, (i64, i64)>("SELECT old_entry_id, new_entry_id FROM transaction_edits")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?
+        .into_iter()
+        .collect();
     let live_invoice = |mut id: i64| -> Option<(i64, i64, i64)> {
         for _ in 0..64 {
             let (number, total, entry, voided) = *invoices.get(&id)?;

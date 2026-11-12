@@ -116,11 +116,8 @@ pub fn parse_amount_cents(raw: &str) -> Result<i64, String> {
         1 => frac.parse::<i64>().map_err(|_| format!("invalid amount '{raw}'"))? * 10,
         _ => frac[..2].parse().map_err(|_| format!("invalid amount '{raw}'"))?,
     };
-    let total = dollars
-        .checked_mul(100)
-        .and_then(|d| d.checked_add(cents))
-        .filter(|t| *t <= MAX_LINE_CENTS)
-        .ok_or_else(|| format!("amount '{raw}' is too large"))?;
+    let total =
+        dollars.checked_mul(100).and_then(|d| d.checked_add(cents)).filter(|t| *t <= MAX_LINE_CENTS).ok_or_else(|| format!("amount '{raw}' is too large"))?;
     Ok(if negative { -total } else { total })
 }
 
@@ -309,8 +306,8 @@ fn decode_text(bytes: &[u8]) -> String {
         return text.to_string();
     }
     const CP1252: [char; 32] = [
-        '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž', '\u{8f}', '\u{90}', '‘', '’', '“',
-        '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}', 'ž', 'Ÿ',
+        '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž', '\u{8f}', '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™',
+        'š', '›', 'œ', '\u{9d}', 'ž', 'Ÿ',
     ];
     bytes.iter().map(|&b| if (0x80..0xA0).contains(&b) { CP1252[usize::from(b - 0x80)] } else { char::from(b) }).collect()
 }
@@ -331,10 +328,7 @@ pub fn header_signature(headers: &[String]) -> String {
 pub fn detect_mapping(headers: &[String]) -> Option<ColumnMapping> {
     let norm: Vec<String> = headers.iter().map(|h| normalize_header(h)).collect();
     let find = |candidates: &[&str]| -> Option<usize> {
-        candidates
-            .iter()
-            .find_map(|c| norm.iter().position(|h| h == c))
-            .or_else(|| candidates.iter().find_map(|c| norm.iter().position(|h| h.contains(c))))
+        candidates.iter().find_map(|c| norm.iter().position(|h| h == c)).or_else(|| candidates.iter().find_map(|c| norm.iter().position(|h| h.contains(c))))
     };
     let date = find(&["date", "transaction date", "posting date", "posted date"])?;
     let description = find(&["description", "memo", "payee", "name", "details"])?;
@@ -380,10 +374,7 @@ impl CsvTable {
 
     fn column(&self, name: &str) -> Result<usize, String> {
         let wanted = normalize_header(name);
-        self.headers
-            .iter()
-            .position(|h| normalize_header(h) == wanted)
-            .ok_or_else(|| format!("BANK_CSV_COLUMNS: this file has no '{name}' column"))
+        self.headers.iter().position(|h| normalize_header(h) == wanted).ok_or_else(|| format!("BANK_CSV_COLUMNS: this file has no '{name}' column"))
     }
 
     /// Values of one column, for detecting the date order.
@@ -438,8 +429,9 @@ pub fn parse_bank_csv_reader<R: std::io::Read>(mut reader: R) -> Result<Vec<Bank
     let mut bytes = Vec::new();
     reader.read_to_end(&mut bytes).map_err(|e| format!("BANK_CSV_READ: {e}"))?;
     let table = CsvTable::read(&decode_text(&bytes))?;
-    let mut mapping = detect_mapping(&table.headers)
-        .ok_or_else(|| format!("BANK_CSV_COLUMNS: could not tell which columns hold the date, description and amount (headers: {})", table.headers.join(", ")))?;
+    let mut mapping = detect_mapping(&table.headers).ok_or_else(|| {
+        format!("BANK_CSV_COLUMNS: could not tell which columns hold the date, description and amount (headers: {})", table.headers.join(", "))
+    })?;
     mapping.date_order = detect_date_order(table.values(&mapping.date)).0;
     table.rows(&mapping)
 }
@@ -454,7 +446,14 @@ fn decode_entities(value: &str) -> String {
     if !value.contains('&') {
         return value.to_string();
     }
-    value.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&#39;", "'").replace("&nbsp;", " ").replace("&amp;", "&")
+    value
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&#39;", "'")
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
 }
 
 /// The text after `<TAG>` up to the next tag or line break, in `block` (whose uppercase copy is
@@ -476,11 +475,7 @@ pub fn parse_ofx(text: &str) -> Result<Vec<BankRow>, String> {
     while let Some(found) = upper[pos..].find("<STMTTRN>") {
         let start = pos + found;
         let body = start + "<STMTTRN>".len();
-        let end = ["</STMTTRN>", "<STMTTRN>", "</BANKTRANLIST>"]
-            .iter()
-            .filter_map(|t| upper[body..].find(t).map(|i| body + i))
-            .min()
-            .unwrap_or(text.len());
+        let end = ["</STMTTRN>", "<STMTTRN>", "</BANKTRANLIST>"].iter().filter_map(|t| upper[body..].find(t).map(|i| body + i)).min().unwrap_or(text.len());
         let (block, block_upper) = (&text[body..end], &upper[body..end]);
         let line = text[..start].bytes().filter(|&b| b == b'\n').count() as u64 + 1;
         let err = |e: String| format!("BANK_OFX_ROW: transaction at line {line}: {e}");
@@ -585,7 +580,12 @@ fn read_bank_file(path: &Path) -> Result<BankFile, String> {
 
 /// The mapping a table will be read with: given, saved for its headers, or detected. Also returns
 /// where it came from and whether the date order is certain.
-async fn choose_mapping(pool: &SqlitePool, table: &CsvTable, signature: &str, given: Option<ColumnMapping>) -> Result<(Option<ColumnMapping>, Option<&'static str>, bool), String> {
+async fn choose_mapping(
+    pool: &SqlitePool,
+    table: &CsvTable,
+    signature: &str,
+    given: Option<ColumnMapping>,
+) -> Result<(Option<ColumnMapping>, Option<&'static str>, bool), String> {
     if let Some(m) = given {
         return Ok((Some(m), Some("GIVEN"), true));
     }
@@ -605,13 +605,12 @@ async fn choose_mapping(pool: &SqlitePool, table: &CsvTable, signature: &str, gi
 /// Whether the balances of `bank_account_id` are what is owed (a card, loan or other liability).
 async fn balance_is_owed(pool: &SqlitePool, bank_account_id: Option<i64>) -> Result<bool, String> {
     let Some(id) = bank_account_id else { return Ok(false) };
-    let owed: Option<bool> = sqlx::query_scalar(
-        "SELECT t.classification = 'LIABILITY' FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
-    )
-    .bind(id)
-    .fetch_optional(pool)
-    .await
-    .map_err(db_err)?;
+    let owed: Option<bool> =
+        sqlx::query_scalar("SELECT t.classification = 'LIABILITY' FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
     Ok(owed.unwrap_or(false))
 }
 
@@ -786,19 +785,42 @@ pub async fn inspect_file(pool: &SqlitePool, path: &Path, given: Option<ColumnMa
 // ------------------------------------------------------------------------------------------------
 
 const NOISE_WORDS: &[&str] = &[
-    "POS", "DEBIT", "CREDIT", "PURCHASE", "CARD", "CHECKCARD", "ACH", "PAYMENT", "ONLINE", "RECURRING", "WEB",
-    "PMT", "PPD", "CCD", "ID", "SQ", "TST", "VISA", "MC", "INC", "LLC", "CO", "THE", "WWW", "COM", "XX", "XXX", "XXXX",
+    "POS",
+    "DEBIT",
+    "CREDIT",
+    "PURCHASE",
+    "CARD",
+    "CHECKCARD",
+    "ACH",
+    "PAYMENT",
+    "ONLINE",
+    "RECURRING",
+    "WEB",
+    "PMT",
+    "PPD",
+    "CCD",
+    "ID",
+    "SQ",
+    "TST",
+    "VISA",
+    "MC",
+    "INC",
+    "LLC",
+    "CO",
+    "THE",
+    "WWW",
+    "COM",
+    "XX",
+    "XXX",
+    "XXXX",
 ];
 
 /// Derives a reusable match pattern from a bank description, e.g. `SQ *BLUE BOTTLE #123 OAKLAND`
 /// becomes a pattern matching `BLUE ... BOTTLE`. Returns `None` when nothing distinctive remains.
 pub fn learned_pattern(description: &str) -> Option<String> {
     let upper = description.to_uppercase();
-    let words: Vec<&str> = upper
-        .split(|c: char| !(c.is_ascii_alphabetic() || c == '&' || c == '\''))
-        .filter(|w| w.len() >= 2 && !NOISE_WORDS.contains(w))
-        .take(2)
-        .collect();
+    let words: Vec<&str> =
+        upper.split(|c: char| !(c.is_ascii_alphabetic() || c == '&' || c == '\'')).filter(|w| w.len() >= 2 && !NOISE_WORDS.contains(w)).take(2).collect();
     if words.is_empty() {
         return None;
     }
@@ -844,15 +866,9 @@ impl RuleSet {
             .collect::<Result<Vec<_>, _>>()?;
 
         let fallback = |number: &'static str| {
-            sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1 AND is_active = 1")
-                .bind(number)
-                .fetch_optional(pool)
+            sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1 AND is_active = 1").bind(number).fetch_optional(pool)
         };
-        Ok(Self {
-            rules,
-            uncategorized_expense: fallback("6900").await.map_err(db_err)?,
-            uncategorized_income: fallback("4900").await.map_err(db_err)?,
-        })
+        Ok(Self { rules, uncategorized_expense: fallback("6900").await.map_err(db_err)?, uncategorized_income: fallback("4900").await.map_err(db_err)? })
     }
 
     /// The first rule matching the line, if any.
@@ -879,7 +895,12 @@ impl RuleSet {
 
 /// What a bank line is categorized as: an explicit rule first; otherwise the model's suggestion from
 /// similar past transactions; otherwise uncategorized. The model's payee is offered either way.
-pub fn combine(rules: &RuleSet, amount_cents: i64, ruled: Option<CategorySuggestion>, predicted: Option<suggest::Prediction>) -> (Option<CategorySuggestion>, Option<String>) {
+pub fn combine(
+    rules: &RuleSet,
+    amount_cents: i64,
+    ruled: Option<CategorySuggestion>,
+    predicted: Option<suggest::Prediction>,
+) -> (Option<CategorySuggestion>, Option<String>) {
     let payee = predicted.as_ref().and_then(|p| p.payee.clone()).filter(|_| amount_cents < 0);
     let suggestion = ruled
         .or_else(|| {
@@ -940,11 +961,7 @@ pub async fn import_file(pool: &SqlitePool, path: &Path, bank_account_id: i64, g
     }
 }
 
-async fn write_import(
-    tx: &mut Transaction<'_, Sqlite>,
-    rows: &[BankRow],
-    bank_account_id: i64,
-) -> Result<ImportSummary, String> {
+async fn write_import(tx: &mut Transaction<'_, Sqlite>, rows: &[BankRow], bank_account_id: i64) -> Result<ImportSummary, String> {
     let mut summary = ImportSummary::default();
     let mut occurrences: HashMap<String, u32> = HashMap::new();
 
@@ -1019,8 +1036,7 @@ pub async fn list_pending(pool: &SqlitePool, suggester: &Suggester, file: &str) 
 
     let rules = RuleSet::load(pool).await?;
     let ruled: Vec<Option<CategorySuggestion>> = rows.iter().map(|r| rules.matching(&r.3, r.4)).collect();
-    let queries: Vec<Query> =
-        rows.iter().map(|r| Query { bank_account_id: r.1, date: r.2, description: &r.3, amount_cents: r.4 }).collect();
+    let queries: Vec<Query> = rows.iter().map(|r| Query { bank_account_id: r.1, date: r.2, description: &r.3, amount_cents: r.4 }).collect();
     let only: Vec<Option<i64>> = ruled.iter().map(|s| s.as_ref().map(|s| s.account_id)).collect();
     let predicted = suggester.with_model(pool, file, |m| m.predict_batch(&queries, &only)).await?;
     drop(queries);
@@ -1099,13 +1115,12 @@ pub async fn approve_many(pool: &SqlitePool, suggester: &Suggester, file: &str, 
 async fn write_approval(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, approval: &Approval) -> Result<(i64, Example), String> {
     let Approval { category_account_id, class_id, .. } = *approval;
     let payee_name = approval.payee_name.as_deref().map(str::trim).filter(|p| !p.is_empty());
-    let row: Option<(i64, NaiveDate, String, i64, String)> = sqlx::query_as(
-        "SELECT bank_account_id, txn_date, description, amount_cents, status FROM bank_transactions WHERE id = ?1",
-    )
-    .bind(transaction_id)
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(db_err)?;
+    let row: Option<(i64, NaiveDate, String, i64, String)> =
+        sqlx::query_as("SELECT bank_account_id, txn_date, description, amount_cents, status FROM bank_transactions WHERE id = ?1")
+            .bind(transaction_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(db_err)?;
     let (bank_account_id, date, description, amount_cents, status) =
         row.ok_or_else(|| format!("BANK_TXN_NOT_FOUND: bank line {transaction_id} does not exist"))?;
     if status != "PENDING" {
@@ -1119,7 +1134,8 @@ async fn write_approval(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, a
     // (Dr category / Cr bank), money in becomes a Deposit (Dr bank / Cr category).
     let amount = amount_cents.abs();
     let (entry_id, direction) = if amount_cents < 0 {
-        let expense = ExpenseInput { form_lines: Vec::new(),
+        let expense = ExpenseInput {
+            form_lines: Vec::new(),
             payment_method_id: None,
             kind: "EXPENSE".into(),
             payee_name: payee_name.map(str::to_string),
@@ -1128,7 +1144,14 @@ async fn write_approval(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, a
             check_number: None,
             payment_method: None,
             memo: Some(description.clone()),
-            lines: vec![SplitLineInput { account_id: category_account_id, amount_cents: Cents(amount), memo: Some(description.clone()), class_id, customer_id: None, billable: None }],
+            lines: vec![SplitLineInput {
+                account_id: category_account_id,
+                amount_cents: Cents(amount),
+                memo: Some(description.clone()),
+                class_id,
+                customer_id: None,
+                billable: None,
+            }],
             currency: None,
         };
         (write_expense(tx, &expense).await?.1, "OUTFLOW")
@@ -1138,7 +1161,14 @@ async fn write_approval(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, a
             deposit_date: date,
             memo: Some(description.clone()),
             items: Vec::new(),
-            other_lines: vec![DepositOtherLine { account_id: category_account_id, amount_cents: Cents(amount), memo: Some(description.clone()), class_id, customer_id: None, vendor_id: None }],
+            other_lines: vec![DepositOtherLine {
+                account_id: category_account_id,
+                amount_cents: Cents(amount),
+                memo: Some(description.clone()),
+                class_id,
+                customer_id: None,
+                vendor_id: None,
+            }],
             cash_back: None,
             deductions: Vec::new(),
         };

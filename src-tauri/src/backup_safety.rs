@@ -106,8 +106,11 @@ fn parse_at(text: &str) -> Option<NaiveDateTime> {
 
 /// The newest event of `kind`, compared as times (a time that doesn't parse loses), and its location.
 async fn newest(pool: &SqlitePool, kind: Kind) -> Result<(Option<String>, Option<String>), String> {
-    let rows: Vec<(String, Option<String>)> =
-        sqlx::query_as("SELECT at, location FROM backup_safety_events WHERE kind = ?1 ORDER BY id DESC").bind(kind.code()).fetch_all(pool).await.map_err(db_err)?;
+    let rows: Vec<(String, Option<String>)> = sqlx::query_as("SELECT at, location FROM backup_safety_events WHERE kind = ?1 ORDER BY id DESC")
+        .bind(kind.code())
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
     let best = rows.into_iter().fold(None::<(String, Option<String>)>, |best, row| match best {
         Some(b) if parse_at(&row.0) <= parse_at(&b.0) => Some(b),
         _ => Some(row),
@@ -150,7 +153,9 @@ fn same_volume(a: &Path, b: &Path) -> bool {
     use std::path::Component;
     // `C:` and `\\?\C:` (a canonical path) are the same drive.
     let root = |p: &Path| match std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()).components().next() {
-        Some(Component::Prefix(prefix)) => Some(prefix.as_os_str().to_string_lossy().to_ascii_lowercase().trim_start_matches(r"\\?\").trim_start_matches(r"unc\").to_string()),
+        Some(Component::Prefix(prefix)) => {
+            Some(prefix.as_os_str().to_string_lossy().to_ascii_lowercase().trim_start_matches(r"\\?\").trim_start_matches(r"unc\").to_string())
+        }
         _ => None,
     };
     root(a) == root(b)
@@ -206,7 +211,11 @@ fn day_of(at: &Option<String>) -> Option<NaiveDate> {
 }
 
 fn days_word(n: i64) -> String {
-    if n == 1 { "1 day".into() } else { format!("{n} days") }
+    if n == 1 {
+        "1 day".into()
+    } else {
+        format!("{n} days")
+    }
 }
 
 /// The reminders: one when no backup has been copied off this disk in `days` days, one when none

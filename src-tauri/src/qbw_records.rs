@@ -95,7 +95,6 @@ impl Numeric {
         let value = i64::try_from(magnitude).ok()?;
         Some((if self.negative { -value } else { value }, exact))
     }
-
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -108,7 +107,12 @@ pub enum Value {
     Numeric(Numeric),
     Bytes(Vec<u8>),
     /// A long value stored out of row: the inline prefix and where its chunks start.
-    Long { prefix: Vec<u8>, total_len: u32, page: u32, slot: u16 },
+    Long {
+        prefix: Vec<u8>,
+        total_len: u32,
+        page: u32,
+        slot: u16,
+    },
 }
 
 impl Value {
@@ -181,7 +185,6 @@ impl Value {
             _ => None,
         }
     }
-
 }
 
 /// One decoded table row, by column name.
@@ -288,8 +291,7 @@ pub fn read_catalog(pages: &[LogicalPage]) -> Catalog {
     }
     let mut columns: HashMap<u32, Vec<Column>> = HashMap::new();
     for ((table, id), candidates) in defs {
-        let ((name, domain, nullable, width), _) =
-            candidates.into_iter().max_by_key(|(_, (count, object_id))| (*count, *object_id)).expect("non-empty");
+        let ((name, domain, nullable, width), _) = candidates.into_iter().max_by_key(|(_, (count, object_id))| (*count, *object_id)).expect("non-empty");
         columns.entry(table).or_default().push(Column { id, name, domain, nullable, width });
     }
     for cols in columns.values_mut() {

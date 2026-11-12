@@ -141,22 +141,15 @@ pub async fn create_vendor(pool: &SqlitePool, name: &str, email: Option<&str>) -
 }
 
 pub async fn list_bills(pool: &SqlitePool) -> Result<Vec<BillSummary>, String> {
-    sqlx::query_as::<_, BillSummary>(&format!(
-        "{BILL_SELECT} ORDER BY b.is_voided, CASE b.status WHEN 'PAID' THEN 1 ELSE 0 END, b.due_date, b.id"
-    ))
-    .fetch_all(pool)
-    .await
-    .map(|all| all.into_iter().map(with_discount).collect())
-    .map_err(db_err)
+    sqlx::query_as::<_, BillSummary>(&format!("{BILL_SELECT} ORDER BY b.is_voided, CASE b.status WHEN 'PAID' THEN 1 ELSE 0 END, b.due_date, b.id"))
+        .fetch_all(pool)
+        .await
+        .map(|all| all.into_iter().map(with_discount).collect())
+        .map_err(db_err)
 }
 
 async fn get_bill(pool: &SqlitePool, bill_id: i64) -> Result<BillSummary, String> {
-    sqlx::query_as::<_, BillSummary>(&format!("{BILL_SELECT} WHERE b.id = ?1"))
-        .bind(bill_id)
-        .fetch_one(pool)
-        .await
-        .map(with_discount)
-        .map_err(db_err)
+    sqlx::query_as::<_, BillSummary>(&format!("{BILL_SELECT} WHERE b.id = ?1")).bind(bill_id).fetch_one(pool).await.map(with_discount).map_err(db_err)
 }
 
 /// Pure validation; returns the bill total.
@@ -238,7 +231,8 @@ pub(crate) async fn is_billable(tx: &mut Transaction<'_, Sqlite>, billable: Opti
         Some(b) => Ok(b),
         None => {
             let key = crate::preferences::tax_time::EXPENSES_BILLABLE;
-            let saved: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(key).fetch_optional(&mut **tx).await.map_err(db_err)?;
+            let saved: Option<String> =
+                sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(key).fetch_optional(&mut **tx).await.map_err(db_err)?;
             Ok(saved.as_deref() == Some("true"))
         }
     }
@@ -249,11 +243,13 @@ pub(crate) async fn is_billable(tx: &mut Transaction<'_, Sqlite>, billable: Opti
 async fn check_memo(tx: &mut Transaction<'_, Sqlite>, vendor_id: Option<i64>) -> Result<Option<String>, String> {
     let Some(vendor) = vendor_id else { return Ok(None) };
     let key = crate::preferences::tax_time::CHECK_MEMO_ACCOUNT;
-    let on: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(key).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let on: Option<String> =
+        sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(key).fetch_optional(&mut **tx).await.map_err(db_err)?;
     if on.as_deref() != Some("true") {
         return Ok(None);
     }
-    let number: Option<String> = sqlx::query_scalar("SELECT NULLIF(trim(account_number), '') FROM vendors WHERE id = ?1").bind(vendor).fetch_one(&mut **tx).await.map_err(db_err)?;
+    let number: Option<String> =
+        sqlx::query_scalar("SELECT NULLIF(trim(account_number), '') FROM vendors WHERE id = ?1").bind(vendor).fetch_one(&mut **tx).await.map_err(db_err)?;
     Ok(number.map(|n| format!("Acct #{n}")))
 }
 
@@ -374,8 +370,7 @@ pub(crate) async fn write_bill_carrying(tx: &mut Transaction<'_, Sqlite>, input:
     }
 
     let ap_account = system_account(tx, "ACCOUNTS_PAYABLE").await?;
-    let mut lines: Vec<JournalLine> =
-        debits.into_iter().map(|((account, class), cents)| JournalLine::debit(account, cents).with_class(class)).collect();
+    let mut lines: Vec<JournalLine> = debits.into_iter().map(|((account, class), cents)| JournalLine::debit(account, cents).with_class(class)).collect();
     lines.extend(crate::purchase_lines::journal_lines(&input.form_lines, &form_amounts, true));
     crate::purchase_lines::write(tx, crate::purchase_lines::PurchaseDoc::Bill, bill_id, &input.form_lines, &form_amounts).await?;
     lines.push(JournalLine::credit(ap_account, total));
@@ -500,8 +495,7 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
     .fetch_optional(&mut **tx)
     .await
     .map_err(db_err)?;
-    let (vendor, total, paid, status, _bill_date, voided) =
-        bill.ok_or_else(|| format!("BILL_NOT_FOUND: bill {} does not exist", input.bill_id))?;
+    let (vendor, total, paid, status, _bill_date, voided) = bill.ok_or_else(|| format!("BILL_NOT_FOUND: bill {} does not exist", input.bill_id))?;
     if voided {
         return Err(format!("BILL_NOT_OPEN: this bill from {vendor} is voided"));
     }
@@ -510,11 +504,7 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
     }
     let open_balance = total - paid;
     if amount > open_balance {
-        return Err(format!(
-            "BILL_OVERPAYMENT: payment of {} exceeds the open balance of {}",
-            format_cents(amount),
-            format_cents(open_balance)
-        ));
+        return Err(format!("BILL_OVERPAYMENT: payment of {} exceeds the open balance of {}", format_cents(amount), format_cents(open_balance)));
     }
     // A bill may be paid before its date (paying a vendor ahead of the bill), as QuickBooks allows.
     let account_type: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1")
@@ -555,12 +545,7 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
     };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::BillPayment(payment_id)).await?;
 
-    sqlx::query("UPDATE bill_payments SET journal_entry_id = ?1 WHERE id = ?2")
-        .bind(entry_id)
-        .bind(payment_id)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    sqlx::query("UPDATE bill_payments SET journal_entry_id = ?1 WHERE id = ?2").bind(entry_id).bind(payment_id).execute(&mut **tx).await.map_err(db_err)?;
 
     let new_paid = paid + amount;
     sqlx::query("UPDATE bills SET amount_paid_cents = ?1, status = ?2 WHERE id = ?3")
@@ -572,7 +557,6 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
         .map_err(db_err)?;
     Ok(payment_id)
 }
-
 
 // ------------------------------------------------------------------------------------------------
 // Expenses & checks
@@ -666,11 +650,7 @@ pub async fn post_expense(pool: &SqlitePool, input: ExpenseInput) -> Result<Expe
         Err(err) => return Err(rollback(tx, err).await),
     };
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
-    sqlx::query_as::<_, ExpenseView>(&format!("{EXPENSE_SELECT} WHERE x.id = ?1"))
-        .bind(id)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as::<_, ExpenseView>(&format!("{EXPENSE_SELECT} WHERE x.id = ?1")).bind(id).fetch_one(pool).await.map_err(db_err)
 }
 
 /// Writes and posts an expense inside the caller's transaction; returns (expense id, entry id).
@@ -799,20 +779,12 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     };
     let entry = JournalEntry { id: None, date: input.expense_date, description, lines, currency: input.currency.clone() };
     let entry_id = post_entry_in_tx(tx, &entry, source(expense_id)).await?;
-    sqlx::query("UPDATE expenses SET journal_entry_id = ?1 WHERE id = ?2")
-        .bind(entry_id)
-        .bind(expense_id)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    sqlx::query("UPDATE expenses SET journal_entry_id = ?1 WHERE id = ?2").bind(entry_id).bind(expense_id).execute(&mut **tx).await.map_err(db_err)?;
     Ok((expense_id, entry_id))
 }
 
 pub async fn list_expenses(pool: &SqlitePool) -> Result<Vec<ExpenseView>, String> {
-    sqlx::query_as::<_, ExpenseView>(&format!("{EXPENSE_SELECT} ORDER BY x.expense_date DESC, x.id DESC"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as::<_, ExpenseView>(&format!("{EXPENSE_SELECT} ORDER BY x.expense_date DESC, x.id DESC")).fetch_all(pool).await.map_err(db_err)
 }
 
 /// Checks waiting in the print queue, oldest first; only those from `account_id` when given.

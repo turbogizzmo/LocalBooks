@@ -65,11 +65,7 @@ fn compares_stock_of_a_real_file() {
     for m in &moves {
         *kinds.entry(balanced[&m.transaction_id].1).or_default() += 1;
     }
-    println!(
-        "tracked items {}, matching {matching}, differing {differing}; moves {} ({kinds:?}), states refused {odd}",
-        ledger.stock.items.len(),
-        moves.len()
-    );
+    println!("tracked items {}, matching {matching}, differing {differing}; moves {} ({kinds:?}), states refused {odd}", ledger.stock.items.len(), moves.len());
 }
 
 fn assembly(item_id: i64, pending_builds_e4: i64) -> SourceStockItem {
@@ -112,11 +108,12 @@ fn lines_on_an_inventory_account_move_stock_with_the_sign_turned() {
     stock.add(9, 67, -5_400, -20_000);
     stock.add(9, 67, 0, 0);
     stock.add(10, 67, 2_700, 10_000);
-    assert_eq!(stock.moves, [SourceStockMove { transaction_id: 9, item_id: 67, qty_e4: 20_000, value_cents: 5_400 }, SourceStockMove {
-        transaction_id: 10,
-        item_id: 67,
-        qty_e4: -10_000,
-        value_cents: -2_700
-    }]);
+    assert_eq!(
+        stock.moves,
+        [
+            SourceStockMove { transaction_id: 9, item_id: 67, qty_e4: 20_000, value_cents: 5_400 },
+            SourceStockMove { transaction_id: 10, item_id: 67, qty_e4: -10_000, value_cents: -2_700 }
+        ]
+    );
     assert_eq!(stock.totals(|t| t == 9)[&67], (20_000, 5_400));
 }

@@ -212,7 +212,9 @@ async fn token(http: &reqwest::Client, api: &str, creds: &PayPalCredentials) -> 
     let body: Value = response.json().await.map_err(|_| "PAYOUT_RESPONSE: PayPal's answer couldn't be read".to_string())?;
     if !status.is_success() {
         return Err(match status.as_u16() {
-            400 | 401 => "PAYOUT_KEY: PayPal didn't accept the client id and secret; check them, and that they are for the right environment (live or sandbox)".into(),
+            400 | 401 => {
+                "PAYOUT_KEY: PayPal didn't accept the client id and secret; check them, and that they are for the right environment (live or sandbox)".into()
+            }
             _ => format!("PAYOUT_REFUSED: PayPal said: {}", text(&body, "error_description")),
         });
     }
@@ -232,7 +234,10 @@ async fn search(http: &reqwest::Client, api: &str, token: &str, start: DateTime<
     let status = response.status();
     let body: Value = response.json().await.map_err(|_| "PAYOUT_RESPONSE: PayPal's answer couldn't be read".to_string())?;
     if !status.is_success() {
-        let message = [text(&body, "message"), text(&body, "error_description"), text(&body, "name")].into_iter().find(|m| !m.is_empty()).unwrap_or_else(|| "request refused".into());
+        let message = [text(&body, "message"), text(&body, "error_description"), text(&body, "name")]
+            .into_iter()
+            .find(|m| !m.is_empty())
+            .unwrap_or_else(|| "request refused".into());
         return Err(match status.as_u16() {
             401 => "PAYOUT_KEY: PayPal didn't accept the app's credentials".into(),
             403 => format!("PAYOUT_PERMISSION: the app can't search transactions ({message}); turn on Transaction search for it at developer.paypal.com"),
@@ -277,7 +282,14 @@ async fn transactions(http: &reqwest::Client, api: &str, token: &str, start: Dat
 
 /// Connects a PayPal app: checks the credentials with a token and one search, keeps them in the
 /// credential store, and saves the feed with its accounts.
-pub async fn connect_paypal(pool: &SqlitePool, store: &SecretStore, api: &str, creds: &PayPalCredentials, input: &FeedInput, now: DateTime<Utc>) -> Result<PayoutFeed, String> {
+pub async fn connect_paypal(
+    pool: &SqlitePool,
+    store: &SecretStore,
+    api: &str,
+    creds: &PayPalCredentials,
+    input: &FeedInput,
+    now: DateTime<Utc>,
+) -> Result<PayoutFeed, String> {
     if creds.client_id.trim().is_empty() || creds.secret.trim().is_empty() {
         return Err("PAYOUT_KEY: paste the PayPal app's client id and secret".into());
     }
@@ -286,7 +298,9 @@ pub async fn connect_paypal(pool: &SqlitePool, store: &SecretStore, api: &str, c
     let token = token(&http, api, creds).await?;
     search(&http, api, &token, now - Duration::days(1), now, 1).await?;
     let secret_key = format!("paypal-{}", hex(&crate::crypto::random::<8>()?));
-    let stored = serde_json::to_string(&PayPalCredentials { client_id: creds.client_id.trim().into(), secret: creds.secret.trim().into(), sandbox: creds.sandbox }).map_err(|e| e.to_string())?;
+    let stored =
+        serde_json::to_string(&PayPalCredentials { client_id: creds.client_id.trim().into(), secret: creds.secret.trim().into(), sandbox: creds.sandbox })
+            .map_err(|e| e.to_string())?;
     store.put(&secret_key, &stored).await?;
     let id: Result<i64, String> = sqlx::query_scalar(
         "INSERT INTO payout_feeds (processor, name, secret_key, account_ref, bank_account_id, sales_account_id, fee_account_id, refund_account_id, chargeback_account_id)
@@ -316,7 +330,8 @@ pub async fn connect_paypal(pool: &SqlitePool, store: &SecretStore, api: &str, c
 /// Fetches the withdrawals since `since` (and a month before, to find what the first one carried)
 /// and keeps the ones not seen before.
 pub(super) async fn fetch(pool: &SqlitePool, f: &PayoutFeed, api: &str, stored: &str, since: DateTime<Utc>, now: DateTime<Utc>) -> Result<FetchResult, String> {
-    let creds: PayPalCredentials = serde_json::from_str(stored).map_err(|_| "PAYOUT_KEY_MISSING: the feed's PayPal credentials can't be read; connect it again".to_string())?;
+    let creds: PayPalCredentials =
+        serde_json::from_str(stored).map_err(|_| "PAYOUT_KEY_MISSING: the feed's PayPal credentials can't be read; connect it again".to_string())?;
     let http = client()?;
     let token = token(&http, api, &creds).await?;
     let txns = transactions(&http, api, &token, since - Duration::days(LOOKBACK_DAYS), now).await?;

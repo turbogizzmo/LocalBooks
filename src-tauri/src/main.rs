@@ -6,9 +6,8 @@
 mod accountant_reports;
 mod accountants_copy;
 mod accounts;
-mod app_menu;
 mod ach;
-mod mac_app_name;
+mod app_menu;
 mod approvals;
 mod attachment_export;
 mod attachments_library;
@@ -30,14 +29,16 @@ mod company_setup;
 mod company_snapshot;
 mod condense;
 mod credits;
+mod crypto;
 mod custom_fields;
 mod custom_reports;
-mod crypto;
 mod customer_groups;
 mod db;
 mod desktop;
 mod diagnostics;
 mod doc_numbers;
+#[cfg(test)]
+mod docs_checks;
 mod document_inbox;
 mod duplicates;
 mod edits;
@@ -45,57 +46,56 @@ mod email_log;
 mod envelopes;
 mod estimates;
 mod expenses;
-mod forensic;
-mod form_1099;
-mod forms;
-mod fx_rates;
-mod gnucash_import;
-mod graphs;
-mod guards;
-#[cfg(test)]
-mod docs_checks;
-#[cfg(test)]
-mod frontend_checks;
-mod iif_import;
-mod installed_qb;
 mod export_engine;
 mod file_cipher;
 mod file_menu;
 mod file_repair;
 mod finance_charges;
-mod instance;
+mod forensic;
+mod form_1099;
+mod forms;
+#[cfg(test)]
+mod frontend_checks;
+mod fx_rates;
+mod gnucash_import;
+mod graphs;
+mod guards;
+mod iif_import;
 mod info_panel;
+mod installed_qb;
+mod instance;
 mod inventory;
-mod item_receipts;
 mod invoices;
-mod item_details;
 mod item_categories;
+mod item_details;
 mod item_prices;
+mod item_receipts;
 mod item_types;
 mod job_reports;
 mod ledger;
 mod list_delete;
-mod list_order;
 mod list_export;
+mod list_order;
 mod list_reports;
-mod mfa;
-mod money;
+mod mac_app_name;
 mod mail_app;
+mod mcp_server;
+mod merges;
+mod mfa;
+mod mileage;
+mod money;
+mod money_bars;
+mod nacha;
 mod offsite;
 mod opening;
 mod other_names;
 mod parties;
 mod party_contacts;
-mod payroll_import;
 mod payout_feeds;
-mod permissions;
+mod payroll_import;
 mod pdf;
+mod permissions;
 mod platform_auth;
-mod mcp_server;
-mod merges;
-mod mileage;
-mod money_bars;
-mod nacha;
 mod preferences;
 mod price_levels;
 mod print_batches;
@@ -114,38 +114,38 @@ mod qbw_records;
 mod qbw_stock;
 mod qbw_stock_import;
 mod qif_import;
-mod report_import;
 mod reconcile;
 mod registers;
+mod release_check;
 mod reminders;
 mod report_center;
 mod report_comments;
-mod release_check;
+mod report_import;
 mod reports;
-mod rollback;
 mod revaluation;
+mod rollback;
 mod sales;
 mod sales_header;
 mod sales_lists;
 mod sales_orders;
 mod sales_prefs;
 mod sales_tax;
-mod tax_ids;
-mod txf;
-mod temp_files;
-#[cfg(test)]
-mod test_companies;
 mod secrets;
 mod sign_in_throttle;
 mod simplefin;
 mod smtp;
 mod statements;
 mod storage;
-mod wal_guard;
+mod tax_ids;
+mod temp_files;
+#[cfg(test)]
+mod test_companies;
 mod text_import;
 mod timesheet;
+mod txf;
 mod users;
 mod vouchers;
+mod wal_guard;
 mod windows;
 mod workflows;
 mod xlsx_export;
@@ -155,8 +155,8 @@ mod harness;
 mod payment_reminders;
 mod report_pdf;
 mod report_schedules;
-mod statement_charges;
 mod sheet_import;
+mod statement_charges;
 
 use tauri::Manager;
 
@@ -229,11 +229,8 @@ fn main() {
                 temp_files::sweep(&cache, temp_files::KEEP, std::time::SystemTime::now());
             }
             steps.step("clearing temporary files");
-            let config = db::DbConfig {
-                config_dir: config_dir.clone(),
-                default_path: data_dir.join(storage::DB_FILE_NAME),
-                backups_dir: data_dir.join("backups"),
-            };
+            let config =
+                db::DbConfig { config_dir: config_dir.clone(), default_path: data_dir.join(storage::DB_FILE_NAME), backups_dir: data_dir.join("backups") };
             // A double-clicked .localbooks file arrives as a launch argument on Windows and Linux.
             // If LocalBooks is already running, hand the file (or a plain launch) to it and quit.
             let launch_file = storage::company_file_from_args(std::env::args_os());
@@ -327,7 +324,13 @@ fn main() {
 /// The launch's company file, opened off the UI thread (gap R28; `docs/plans/opening-screen.md`).
 /// The window shows Opening <name>… until this ends; then it reloads into the failure screen,
 /// sign-in or the app. The work that needs the books open starts only once they are.
-async fn open_at_launch(app: tauri::AppHandle, config: db::DbConfig, launch_file: Option<std::path::PathBuf>, data_dir: std::path::PathBuf, turn: opening::Turn) {
+async fn open_at_launch(
+    app: tauri::AppHandle,
+    config: db::DbConfig,
+    launch_file: Option<std::path::PathBuf>,
+    data_dir: std::path::PathBuf,
+    turn: opening::Turn,
+) {
     let started = std::time::Instant::now();
     let opened = db::Db::startup_with_file(config, launch_file).await;
     diagnostics::log(&format!("company file opened in {} ms{}", started.elapsed().as_millis(), if opened.is_err() { " (failed)" } else { "" }));

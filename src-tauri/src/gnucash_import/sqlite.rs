@@ -97,11 +97,8 @@ pub(super) async fn read_connection(conn: &mut SqliteConnection) -> Result<Book,
         return Err("GNUCASH_NOT_GNUCASH: this SQLite file is not a GnuCash book (it has no splits table)".into());
     }
 
-    let commodities: HashMap<String, String> = all(conn, "commodities")
-        .await?
-        .iter()
-        .filter_map(|r| Some((text(r, "guid")?, commodity_key(&text(r, "namespace")?, &text(r, "mnemonic")?))))
-        .collect();
+    let commodities: HashMap<String, String> =
+        all(conn, "commodities").await?.iter().filter_map(|r| Some((text(r, "guid")?, commodity_key(&text(r, "namespace")?, &text(r, "mnemonic")?)))).collect();
     let commodity = |guid: Option<String>| guid.and_then(|g| commodities.get(&g).cloned()).unwrap_or_default();
 
     let template_roots: HashSet<String> = optional(conn, "books").await?.iter().filter_map(|r| text(r, "root_template_guid")).collect();
@@ -161,7 +158,13 @@ pub(super) async fn read_connection(conn: &mut SqliteConnection) -> Result<Book,
     let mut splits: HashMap<String, Vec<Split>> = HashMap::new();
     for r in all(conn, "splits").await? {
         let (Some(tx), Some(account)) = (text(&r, "tx_guid"), text(&r, "account_guid")) else { continue };
-        splits.entry(tx).or_default().push(Split { account, memo: text(&r, "memo"), value: num(&r, "value"), quantity: num(&r, "quantity"), lot: text(&r, "lot_guid") });
+        splits.entry(tx).or_default().push(Split {
+            account,
+            memo: text(&r, "memo"),
+            value: num(&r, "value"),
+            quantity: num(&r, "quantity"),
+            lot: text(&r, "lot_guid"),
+        });
     }
     let mut transactions: Vec<Transaction> = Vec::new();
     for r in all(conn, "transactions").await? {
@@ -199,7 +202,14 @@ pub(super) async fn read_connection(conn: &mut SqliteConnection) -> Result<Book,
     let jobs = optional(conn, "jobs")
         .await?
         .iter()
-        .filter_map(|r| Some(Job { guid: text(r, "guid")?, name: text(r, "name").unwrap_or_default(), active: int(r, "active").is_none_or(|a| a != 0), owner: owner(r, "owner") }))
+        .filter_map(|r| {
+            Some(Job {
+                guid: text(r, "guid")?,
+                name: text(r, "name").unwrap_or_default(),
+                active: int(r, "active").is_none_or(|a| a != 0),
+                owner: owner(r, "owner"),
+            })
+        })
         .collect();
     let invoices = optional(conn, "invoices")
         .await?

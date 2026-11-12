@@ -41,7 +41,16 @@ pub enum FormKind {
 
 impl FormKind {
     #[cfg(test)]
-    pub const ALL: [FormKind; 8] = [FormKind::Invoice, FormKind::Estimate, FormKind::SalesReceipt, FormKind::Statement, FormKind::CreditMemo, FormKind::BillPayment, FormKind::SalesOrder, FormKind::PurchaseOrder];
+    pub const ALL: [FormKind; 8] = [
+        FormKind::Invoice,
+        FormKind::Estimate,
+        FormKind::SalesReceipt,
+        FormKind::Statement,
+        FormKind::CreditMemo,
+        FormKind::BillPayment,
+        FormKind::SalesOrder,
+        FormKind::PurchaseOrder,
+    ];
 
     pub(crate) fn key(self) -> &'static str {
         match self {
@@ -379,12 +388,14 @@ pub async fn create_style(pool: &SqlitePool, name: &str, copy_from: Option<i64>)
         .await
         .map_err(|e| duplicate_name(e, &name))?;
     if let Some(source) = copy_from {
-        sqlx::query("INSERT INTO form_templates (style_id, form_type, template_json) SELECT ?1, form_type, template_json FROM form_templates WHERE style_id = ?2")
-            .bind(id)
-            .bind(source)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_err)?;
+        sqlx::query(
+            "INSERT INTO form_templates (style_id, form_type, template_json) SELECT ?1, form_type, template_json FROM form_templates WHERE style_id = ?2",
+        )
+        .bind(id)
+        .bind(source)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     }
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
     find_style(pool, id).await
@@ -427,7 +438,11 @@ pub async fn delete_style(pool: &SqlitePool, id: i64) -> Result<(), String> {
 async fn style_id(pool: &SqlitePool, style: Option<i64>) -> Result<i64, String> {
     match style {
         Some(id) => Ok(find_style(pool, id).await?.id),
-        None => sqlx::query_scalar("SELECT id FROM form_styles WHERE is_default = 1").fetch_optional(pool).await.map_err(db_err)?.ok_or_else(|| "FORM_STYLE_NONE: there is no default form style".to_string()),
+        None => sqlx::query_scalar("SELECT id FROM form_styles WHERE is_default = 1")
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?
+            .ok_or_else(|| "FORM_STYLE_NONE: there is no default form style".to_string()),
     }
 }
 
@@ -685,14 +700,18 @@ async fn customer(pool: &SqlitePool, id: Option<i64>, name: &str, statement: boo
     let contact = if statement { "(SELECT pc.name FROM party_contacts pc WHERE pc.customer_id = c.id AND pc.for_statements = 1)" } else { "NULL" };
     type AddressRow = (Option<String>, Option<String>, Option<String>, Option<String>);
     let row: Option<AddressRow> = match id {
-        Some(id) => sqlx::query_as(&format!("SELECT c.company_name, c.billing_address, {recipient}, {contact} FROM customers c WHERE c.id = ?1"))
-            .bind(id)
-            .fetch_optional(pool)
-            .await,
-        None => sqlx::query_as(&format!("SELECT c.company_name, c.billing_address, {recipient}, {contact} FROM customers c WHERE c.name = ?1 COLLATE NOCASE"))
-            .bind(name)
-            .fetch_optional(pool)
-            .await,
+        Some(id) => {
+            sqlx::query_as(&format!("SELECT c.company_name, c.billing_address, {recipient}, {contact} FROM customers c WHERE c.id = ?1"))
+                .bind(id)
+                .fetch_optional(pool)
+                .await
+        }
+        None => {
+            sqlx::query_as(&format!("SELECT c.company_name, c.billing_address, {recipient}, {contact} FROM customers c WHERE c.name = ?1 COLLATE NOCASE"))
+                .bind(name)
+                .fetch_optional(pool)
+                .await
+        }
     }
     .map_err(db_err)?;
     let (company_name, billing_address, email, contact) = row.unwrap_or_default();
@@ -774,7 +793,17 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         .map(|(i, details)| {
             let rate = i.percent_ppm.map_or_else(|| money(i.rate_cents), crate::item_types::percent_text);
             let service_date = i.service_date.map(|d| format_date(&d.to_string())).unwrap_or_default();
-            (i.line_number, FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate, amount: money(i.amount_cents), details, service_date })
+            (
+                i.line_number,
+                FormLine {
+                    description: i.description.clone(),
+                    quantity: format_quantity(i.quantity_e4),
+                    rate,
+                    amount: money(i.amount_cents),
+                    details,
+                    service_date,
+                },
+            )
         })
         .collect();
     let taxable: Vec<bool> = detail.items.iter().map(|i| i.is_taxable).collect();
@@ -784,7 +813,12 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
     breakdown(&mut totals, inv.total_cents, inv.tax_cents, inv.discount_cents, inv.tax_rate_name.as_deref(), &money);
     totals.push(TotalRow { label: "Total".into(), value: money(inv.total_cents), grand: false, payment: false });
     for p in &detail.payments {
-        totals.push(TotalRow { label: format!("Payment received {}", format_date(&p.payment_date.to_string())), value: money(-p.amount_cents), grand: false, payment: true });
+        totals.push(TotalRow {
+            label: format!("Payment received {}", format_date(&p.payment_date.to_string())),
+            value: money(-p.amount_cents),
+            grand: false,
+            payment: true,
+        });
     }
     if inv.credits_applied_cents > 0 {
         totals.push(TotalRow { label: "Credits applied".into(), value: money(-inv.credits_applied_cents), grand: false, payment: true });
@@ -1060,7 +1094,8 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         Some(r) => format!("{method} #{r}"),
         None => method.to_string(),
     };
-    let meta = vec![("Receipt date".to_string(), format_date(&date), false), ("Payment".to_string(), paid_by, false), ("Total".to_string(), money(total), true)];
+    let meta =
+        vec![("Receipt date".to_string(), format_date(&date), false), ("Payment".to_string(), paid_by, false), ("Total".to_string(), money(total), true)];
     let mut totals = Vec::new();
     breakdown(&mut totals, total, tax, discount, tax_name.as_deref(), &money);
     totals.push(TotalRow { label: "Total".into(), value: money(total), grand: true, payment: false });
@@ -1105,7 +1140,8 @@ pub async fn credit_memo_doc(pool: &SqlitePool, credit_id: i64, symbol: &str) ->
     .fetch_optional(pool)
     .await
     .map_err(db_err)?;
-    let (number, customer_id, name, date, memo, total, tax, tax_name, voided, refund_account) = header.ok_or("FORM_NOT_FOUND: that credit memo no longer exists")?;
+    let (number, customer_id, name, date, memo, total, tax, tax_name, voided, refund_account) =
+        header.ok_or("FORM_NOT_FOUND: that credit memo no longer exists")?;
     let rows: Vec<ItemRow> = sqlx::query_as(
         "SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, percent_ppm, NULL AS service_date
          FROM credit_memo_lines WHERE credit_memo_id = ?1 ORDER BY line_number",
@@ -1257,7 +1293,14 @@ pub async fn statement_doc(pool: &SqlitePool, customer_id: i64, period: Period, 
     let money = |cents: i64| format_money(cents, None, symbol);
     let cust = customer(pool, Some(customer_id), &s.customer_name, true).await?;
     let iso = |d: NaiveDate| d.format("%Y-%m-%d").to_string();
-    let mut rows = vec![[format_date(&iso(period.start_date)), "Balance forward".to_string(), String::new(), String::new(), String::new(), money(s.opening_balance_cents)]];
+    let mut rows = vec![[
+        format_date(&iso(period.start_date)),
+        "Balance forward".to_string(),
+        String::new(),
+        String::new(),
+        String::new(),
+        money(s.opening_balance_cents),
+    ]];
     for r in &s.rows {
         let transaction = match r.number.as_deref().filter(|n| !n.is_empty()) {
             Some(n) => format!("{} #{n}", statement_label(&r.source_type)),
@@ -1381,7 +1424,14 @@ pub async fn bill_payment_doc(pool: &SqlitePool, payment_id: i64, symbol: &str) 
 /// A made-up document for the designer's preview when no real one is chosen.
 pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
     let money = |cents: i64| format_money(cents, None, symbol);
-    let line = |d: &str, q: i64, r: i64, served: &str| FormLine { description: d.into(), quantity: format_quantity(q), rate: money(r), amount: money(q * r / 10_000), details: Vec::new(), service_date: served.into() };
+    let line = |d: &str, q: i64, r: i64, served: &str| FormLine {
+        description: d.into(),
+        quantity: format_quantity(q),
+        rate: money(r),
+        amount: money(q * r / 10_000),
+        details: Vec::new(),
+        service_date: served.into(),
+    };
     let lines = vec![
         line("Website redesign: discovery, wireframes and two rounds of revisions", 1_0000, 240_000, "09/15/2026"),
         line("Consulting (hours)", 12_5000, 12_500, "09/28/2026"),
@@ -1462,7 +1512,14 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
         aging: [money(total - 100_000), money(0), money(0), money(0), money(0)],
     });
     if kind == FormKind::BillPayment {
-        let bill = |n: &str, date: &str, amount: i64, paid: i64| FormLine { description: format!("Bill {n} · {date}"), quantity: String::new(), rate: money(amount), amount: money(paid), details: Vec::new(), service_date: String::new() };
+        let bill = |n: &str, date: &str, amount: i64, paid: i64| FormLine {
+            description: format!("Bill {n} · {date}"),
+            quantity: String::new(),
+            rate: money(amount),
+            amount: money(paid),
+            details: Vec::new(),
+            service_date: String::new(),
+        };
         return FormDoc {
             kind,
             number: "1001".into(),
@@ -1788,8 +1845,11 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
     if tpl.show_company_address && !company.address.is_empty() {
         details.extend(company.address.lines().map(String::from));
     }
-    let contact: Vec<&str> =
-        [(tpl.show_company_phone, company.phone.as_str()), (tpl.show_company_email, company.email.as_str())].into_iter().filter(|(on, v)| *on && !v.is_empty()).map(|(_, v)| v).collect();
+    let contact: Vec<&str> = [(tpl.show_company_phone, company.phone.as_str()), (tpl.show_company_email, company.email.as_str())]
+        .into_iter()
+        .filter(|(on, v)| *on && !v.is_empty())
+        .map(|(_, v)| v)
+        .collect();
     if !contact.is_empty() {
         details.push(contact.join(" · "));
     }
@@ -1871,7 +1931,15 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
     for (label, value, strong) in &meta {
         my += meta_lead;
         if *strong && modern {
-            l.push(Op::Rect { x: meta_x - 4.0, y: my - m.small - 3.0, w: right - meta_x + 4.0, h: meta_lead, fill: Some(tint(accent, 0.88)), stroke: None, line_width: 0.0 });
+            l.push(Op::Rect {
+                x: meta_x - 4.0,
+                y: my - m.small - 3.0,
+                w: right - meta_x + 4.0,
+                h: meta_lead,
+                fill: Some(tint(accent, 0.88)),
+                stroke: None,
+                line_width: 0.0,
+            });
         }
         l.text(meta_x, my, label, false, m.small, MUTED, Align::Left);
         l.text(right, my, value, *strong, if *strong { m.small + 1.0 } else { m.small }, INK, Align::Right);
@@ -1990,7 +2058,8 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
     if let (Some(statement), true) = (&doc.statement, tpl.show_aging) {
         let w = (right - MARGIN) / 5.0;
         let labels = ["Current", "1–30 days past due", "31–60 days", "61–90 days", "Over 90 days"];
-        let cols: Vec<Col> = labels.iter().enumerate().map(|(i, label)| Col { x: MARGIN + i as f32 * w, w, label: (*label).into(), align: Align::Right }).collect();
+        let cols: Vec<Col> =
+            labels.iter().enumerate().map(|(i, label)| Col { x: MARGIN + i as f32 * w, w, label: (*label).into(), align: Align::Right }).collect();
         l.ensure(m.header_h + m.leading + m.row_pad, doc);
         table_header(&mut l, &cols, m);
         let cells: Vec<Vec<String>> = statement.aging.iter().map(|a| vec![a.clone()]).collect();
@@ -2106,7 +2175,9 @@ pub(crate) async fn document(pool: &SqlitePool, kind: FormKind, document_id: Opt
         (FormKind::BillPayment, Some(id)) => bill_payment_doc(pool, id, symbol).await,
         (FormKind::SalesOrder, Some(id)) => sales_order_doc(pool, id, symbol).await,
         (FormKind::PurchaseOrder, Some(id)) => purchase_order_doc(pool, id, symbol).await,
-        (FormKind::Statement, Some(id)) => statement_doc(pool, id, period.unwrap_or_else(|| Period::last_month(chrono::Local::now().date_naive())), symbol).await,
+        (FormKind::Statement, Some(id)) => {
+            statement_doc(pool, id, period.unwrap_or_else(|| Period::last_month(chrono::Local::now().date_naive())), symbol).await
+        }
     }
 }
 
@@ -2122,7 +2193,14 @@ fn form_title(tpl: &FormTemplate, doc: &FormDoc) -> String {
 /// Lays out a document (or the sample, without one) with `template`, or else the template of the
 /// customer's form style. `with_image` also decodes the logo for a PDF; the screen needs only its
 /// size.
-pub async fn render(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>, period: Option<Period>, template: Option<FormTemplate>, with_image: bool) -> Result<Rendered, String> {
+pub async fn render(
+    pool: &SqlitePool,
+    kind: FormKind,
+    document_id: Option<i64>,
+    period: Option<Period>,
+    template: Option<FormTemplate>,
+    with_image: bool,
+) -> Result<Rendered, String> {
     let company = load_company(pool).await?;
     let doc = document(pool, kind, document_id, period, &company.currency_symbol).await?;
     let tpl = match template {
@@ -2152,7 +2230,6 @@ pub async fn render(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>,
     let title = form_title(&tpl, &doc);
     Ok(Rendered { form: RenderedForm { title, pages, logo: size.and(company.logo), customer_email: doc.customer_email }, image })
 }
-
 
 /// The PDF file for a document with its customer's form style: (suggested file name, bytes).
 /// `period` is for statements (see `document`).
@@ -2189,7 +2266,8 @@ pub async fn email_draft(pool: &SqlitePool, kind: FormKind, document_id: i64, pe
 
 /// "Invoice 1001 · Acme" → "Invoice 1001 · Acme.pdf", without characters file systems refuse.
 pub fn file_name(title: &str) -> String {
-    let clean: String = title.chars().map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() { '-' } else { c }).collect();
+    let clean: String =
+        title.chars().map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() { '-' } else { c }).collect();
     format!("{}.pdf", clean.trim().trim_matches('.'))
 }
 

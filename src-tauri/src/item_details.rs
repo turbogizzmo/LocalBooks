@@ -132,7 +132,8 @@ pub async fn paste_items(pool: &SqlitePool, rows: &[PastedItem]) -> Result<Paste
             continue;
         }
         seen.push(name.clone());
-        let existing: Option<i64> = sqlx::query_scalar("SELECT id FROM products_services WHERE name = ?1 COLLATE NOCASE").bind(&name).fetch_optional(pool).await.map_err(db_err)?;
+        let existing: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM products_services WHERE name = ?1 COLLATE NOCASE").bind(&name).fetch_optional(pool).await.map_err(db_err)?;
         let rate = money(r.rate.as_deref(), "price", row, &mut problems);
         let cost = money(r.cost.as_deref(), "cost", row, &mut problems);
         let account = match clean(r.income_account.as_deref()) {

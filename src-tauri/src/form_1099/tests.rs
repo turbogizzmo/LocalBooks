@@ -8,9 +8,10 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 
 async fn pay(pool: &SqlitePool, vendor: &str, date: &str, cents: i64) {
     let (checking, contractors) = (account(pool, "1010").await, account(pool, "6400").await);
-    let check: ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": vendor, "paymentAccountId": checking, "expenseDate": date,
+    let check: ExpenseInput =
+        serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": vendor, "paymentAccountId": checking, "expenseDate": date,
         "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": contractors, "amountCents": cents, "memo": null }] }))
-    .unwrap();
+        .unwrap();
     crate::expenses::post_expense(pool, check).await.unwrap();
 }
 
@@ -59,7 +60,10 @@ async fn a_w9_keeps_its_details_and_stores_the_tin_on_the_vendor() {
     let bad = W9Input { tin_type: Some(TinType::Ein), tin: Some("00-0000000".into()), ..Default::default() };
     assert!(set_w9(&pool, Access::OPEN, v.id, &bad).await.unwrap_err().starts_with("TIN_INVALID"));
     assert!(set_w9(&pool, Access::OPEN, v.id, &W9Input { tin: Some("412345678".into()), ..Default::default() }).await.unwrap_err().starts_with("TIN_TYPE"));
-    assert!(set_w9(&pool, Access::OPEN, v.id, &W9Input { tax_classification: Some("PIRATE".into()), keep_tin: true, ..Default::default() }).await.unwrap_err().starts_with("W9_CLASSIFICATION"));
+    assert!(set_w9(&pool, Access::OPEN, v.id, &W9Input { tax_classification: Some("PIRATE".into()), keep_tin: true, ..Default::default() })
+        .await
+        .unwrap_err()
+        .starts_with("W9_CLASSIFICATION"));
     assert_eq!(get_w9(&pool, Access::OPEN, v.id).await.unwrap().tin.as_deref(), Some("41-2345678"));
 
     // keep_tin leaves the number alone; the audit trail notes the change but never the number.
@@ -75,9 +79,21 @@ async fn the_1096_summary_lists_forms_over_the_threshold_and_what_is_missing() {
     let pool = test_pool().await;
     for (name, is_1099) in [("Ridgeline Carpentry", 1), ("Small Jobs Co", 1), ("Not Tracked", 0)] {
         let v = crate::expenses::create_vendor(&pool, name, None).await.unwrap();
-        sqlx::query("UPDATE vendors SET is_1099 = ?1, address = CASE WHEN ?2 = 'Ridgeline Carpentry' THEN '12 Fir Lane, Bend, OR 97701' END WHERE id = ?3").bind(is_1099).bind(name).bind(v.id).execute(&pool).await.unwrap();
+        sqlx::query("UPDATE vendors SET is_1099 = ?1, address = CASE WHEN ?2 = 'Ridgeline Carpentry' THEN '12 Fir Lane, Bend, OR 97701' END WHERE id = ?3")
+            .bind(is_1099)
+            .bind(name)
+            .bind(v.id)
+            .execute(&pool)
+            .await
+            .unwrap();
         if name == "Ridgeline Carpentry" {
-            let input = W9Input { tin_type: Some(TinType::Ssn), tin: Some("123-45-6789".into()), legal_name: Some("Dana Ridge".into()), received_on: NaiveDate::from_ymd_opt(2026, 1, 9), ..Default::default() };
+            let input = W9Input {
+                tin_type: Some(TinType::Ssn),
+                tin: Some("123-45-6789".into()),
+                legal_name: Some("Dana Ridge".into()),
+                received_on: NaiveDate::from_ymd_opt(2026, 1, 9),
+                ..Default::default()
+            };
             set_w9(&pool, Access::OPEN, v.id, &input).await.unwrap();
         }
     }
@@ -90,7 +106,10 @@ async fn the_1096_summary_lists_forms_over_the_threshold_and_what_is_missing() {
     let s = nec_summary(&pool, 2026, Access::OPEN).await.unwrap();
     assert_eq!((s.form_count, s.total_cents, s.threshold_cents), (1, 250_000, 200_000));
     let f = &s.forms[0];
-    assert_eq!((f.recipient_name.as_str(), f.tin.as_deref(), f.tin_masked.as_deref(), f.tin_type.as_deref()), ("Dana Ridge", Some("123-45-6789"), Some("***-**-6789"), Some("SSN")));
+    assert_eq!(
+        (f.recipient_name.as_str(), f.tin.as_deref(), f.tin_masked.as_deref(), f.tin_type.as_deref()),
+        ("Dana Ridge", Some("123-45-6789"), Some("***-**-6789"), Some("SSN"))
+    );
     assert!(f.missing.is_empty(), "{:?}", f.missing);
     assert_eq!(s.under_threshold, vec![("Small Jobs Co".to_string(), 199_999)]);
     assert_eq!(s.payer_missing, vec!["company EIN".to_string(), "company address".to_string()]);

@@ -1,6 +1,6 @@
 use super::*;
-use serde_json::json;
 use crate::money::Cents;
+use serde_json::json;
 
 async fn count(pool: &SqlitePool, sql: &str, id: i64) -> usize {
     sqlx::query_scalar::<_, i64>(sql).bind(id).fetch_one(pool).await.unwrap() as usize
@@ -19,20 +19,24 @@ async fn one_of_each(pool: &SqlitePool) -> Vec<(&'static str, i64)> {
     }))).unwrap();
     let estimate: crate::estimates::EstimateInput = serde_json::from_value(json!({
         "customerName": "Walk-in", "estimateDate": "2025-06-02", "expirationDate": null, "memo": "Quote", "lines": sale
-    })).unwrap();
+    }))
+    .unwrap();
     let credit: crate::credits::CreditMemoInput = serde_json::from_value(json!({
         "customerName": "Walk-in", "creditDate": "2025-06-02", "memo": "Returned", "lines": sale
-    })).unwrap();
+    }))
+    .unwrap();
     let vendor_credit: crate::credits::VendorCreditInput = serde_json::from_value(json!({
         "vendorName": "Paper Co", "reference": "CR-9", "creditDate": "2025-06-02", "memo": null,
         "lines": [{ "accountId": expense, "amountCents": 4_000, "memo": "Damaged reams" }]
-    })).unwrap();
+    }))
+    .unwrap();
     crate::preferences::set(pool, crate::preferences::tax_time::INVENTORY, "true").await.unwrap();
     let job: i64 = sqlx::query_scalar("INSERT INTO customers (name) VALUES ('Harbor Office Refit') RETURNING id").fetch_one(pool).await.unwrap();
     let order: crate::workflows::PurchaseOrderInput = serde_json::from_value(json!({
         "vendorName": "Paper Co", "poDate": "2025-06-02", "memo": "Restock",
         "lines": [{ "accountId": expense, "description": "Paper", "quantityE4": 50_000, "rateCents": 900, "amountCents": 4_500, "customerId": job }]
-    })).unwrap();
+    }))
+    .unwrap();
     vec![
         ("SALES_RECEIPT", crate::sales::post_sales_receipt(pool, receipt).await.unwrap().id),
         ("ESTIMATE", crate::estimates::create_estimate(pool, estimate).await.unwrap().id),
@@ -69,7 +73,10 @@ async fn each_kind_copies_its_header_and_lines() {
     assert_eq!(copy("ESTIMATE").await.lines.len(), 2);
     assert_eq!(copy("CREDIT_MEMO").await.memo.as_deref(), Some("Returned"));
     let vendor_credit = copy("VENDOR_CREDIT").await;
-    assert_eq!((vendor_credit.reference.as_deref(), vendor_credit.lines[0].description.as_str(), vendor_credit.lines[0].amount_cents), (Some("CR-9"), "Damaged reams", 4_000));
+    assert_eq!(
+        (vendor_credit.reference.as_deref(), vendor_credit.lines[0].description.as_str(), vendor_credit.lines[0].amount_cents),
+        (Some("CR-9"), "Damaged reams", 4_000)
+    );
     let order = copy("PURCHASE_ORDER").await;
     assert_eq!((order.memo.as_deref(), order.lines[0].quantity_e4, order.lines[0].rate_cents), (Some("Restock"), Some(50_000), Some(900)));
     let job: Option<i64> = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Harbor Office Refit'").fetch_optional(&pool).await.unwrap();
@@ -89,18 +96,32 @@ async fn a_deposit_copies_only_its_other_lines_and_a_transfer_its_accounts() {
     let (checking, savings) = (account("1010").await, account("1020").await);
     let transfer = crate::banking::post_transfer(
         &pool,
-        crate::banking::TransferInput { transfer_date: chrono::NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(), from_account_id: checking, to_account_id: savings, amount_cents: Cents(50_000), memo: Some("To savings".into()) },
+        crate::banking::TransferInput {
+            transfer_date: chrono::NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(),
+            from_account_id: checking,
+            to_account_id: savings,
+            amount_cents: Cents(50_000),
+            memo: Some("To savings".into()),
+        },
     )
     .await
     .unwrap();
     let copy = copy_source(&pool, "TRANSFER", transfer).await.unwrap();
-    assert_eq!((copy.account_id, copy.to_account_id, copy.amount_cents, copy.memo.as_deref()), (Some(checking), Some(savings), Some(50_000), Some("To savings")));
+    assert_eq!(
+        (copy.account_id, copy.to_account_id, copy.amount_cents, copy.memo.as_deref()),
+        (Some(checking), Some(savings), Some(50_000), Some("To savings"))
+    );
 
     // Every deposit: its copy holds the lines that aren't a received payment or sales receipt.
     let deposits: Vec<i64> = sqlx::query_scalar("SELECT id FROM deposits").fetch_all(&pool).await.unwrap();
     for id in deposits {
         let copy = copy_source(&pool, "DEPOSIT", id).await.unwrap();
-        let other = count(&pool, "SELECT COUNT(*) FROM deposit_lines WHERE deposit_id = ?1 AND is_voided = 0 AND invoice_payment_id IS NULL AND sales_receipt_id IS NULL", id).await;
+        let other = count(
+            &pool,
+            "SELECT COUNT(*) FROM deposit_lines WHERE deposit_id = ?1 AND is_voided = 0 AND invoice_payment_id IS NULL AND sales_receipt_id IS NULL",
+            id,
+        )
+        .await;
         assert_eq!(copy.lines.len(), other);
         assert!(copy.account_id.is_some());
     }
@@ -111,7 +132,16 @@ async fn a_credit_memo_copy_keeps_its_discounts_and_charges_so_it_totals_the_sam
     use crate::item_types::{charge_input, FormLineInput};
     let pool = crate::harness::fixture::harbor_lane().await;
     let income: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4000'").fetch_one(&pool).await.unwrap();
-    let item = |description: &str, rate_cents: i64| crate::sales::SalesLineInput { product_service_id: None, description: description.into(), quantity_e4: 10_000, rate_cents: Cents(rate_cents), income_account_id: income, class_id: None, is_taxable: false, service_date: None };
+    let item = |description: &str, rate_cents: i64| crate::sales::SalesLineInput {
+        product_service_id: None,
+        description: description.into(),
+        quantity_e4: 10_000,
+        rate_cents: Cents(rate_cents),
+        income_account_id: income,
+        class_id: None,
+        is_taxable: false,
+        service_date: None,
+    };
     // $100.00 with a 5% restocking charge after it, $20.00, then a subtotal and 10% off it.
     let original = crate::credits::create_credit_memo(
         &pool,
@@ -124,7 +154,11 @@ async fn a_credit_memo_copy_keeps_its_discounts_and_charges_so_it_totals_the_sam
             tax_rate_id: None,
             lines: vec![item("Chairs", 10_000), item("Delivery", 2_000)],
             header: Default::default(),
-            form_lines: vec![FormLineInput::charge(1, income, 50_000, false), FormLineInput::subtotal(2), FormLineInput::discount(2, income, Some(100_000), None, false)],
+            form_lines: vec![
+                FormLineInput::charge(1, income, 50_000, false),
+                FormLineInput::subtotal(2),
+                FormLineInput::discount(2, income, Some(100_000), None, false),
+            ],
         },
     )
     .await
@@ -146,11 +180,26 @@ async fn a_credit_memo_copy_keeps_its_discounts_and_charges_so_it_totals_the_sam
         .iter()
         .map(|f| match f.kind.as_str() {
             "SUBTOTAL" => FormLineInput::subtotal(after(f.line_number)),
-            _ => FormLineInput::discount(after(f.line_number), f.account_id.unwrap(), f.percent_ppm, f.percent_ppm.is_none().then_some(f.amount_cents), f.is_taxable),
+            _ => FormLineInput::discount(
+                after(f.line_number),
+                f.account_id.unwrap(),
+                f.percent_ppm,
+                f.percent_ppm.is_none().then_some(f.amount_cents),
+                f.is_taxable,
+            ),
         })
         .collect();
     for l in copy.lines.iter().filter(|l| l.percent_ppm.is_some()) {
-        form_lines.push(charge_input(l.line_number, &l.description, l.percent_ppm.unwrap(), l.account_id, l.product_service_id, l.class_id, l.is_taxable, &item_numbers));
+        form_lines.push(charge_input(
+            l.line_number,
+            &l.description,
+            l.percent_ppm.unwrap(),
+            l.account_id,
+            l.product_service_id,
+            l.class_id,
+            l.is_taxable,
+            &item_numbers,
+        ));
     }
     form_lines.sort_by_key(|f| f.after_lines);
     let lines = copy.lines.iter().filter(|l| l.percent_ppm.is_none()).map(|l| item(&l.description, l.rate_cents.unwrap())).collect();

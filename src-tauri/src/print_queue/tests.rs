@@ -2,8 +2,8 @@ use super::*;
 use crate::db::test_pool;
 use crate::expenses::SplitLineInput;
 use crate::invoices::InvoiceLineInput;
-use chrono::NaiveDate;
 use crate::money::Cents;
+use chrono::NaiveDate;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.expect("seeded account")
@@ -17,7 +17,8 @@ async fn check(pool: &SqlitePool, payee: &str, number: Option<&str>, cents: i64,
     let (checking, rent) = (account_id(pool, "1010").await, account_id(pool, "6300").await);
     post_expense(
         pool,
-        ExpenseInput { form_lines: Vec::new(),
+        ExpenseInput {
+            form_lines: Vec::new(),
             payment_method_id: None,
             kind: "CHECK".into(),
             payee_name: Some(payee.into()),
@@ -47,7 +48,8 @@ fn invoice_input(pool_services: i64) -> InvoiceInput {
             income_account_id: pool_services,
             product_service_id: None,
             class_id: None,
-            is_taxable: false, service_date: None,
+            is_taxable: false,
+            service_date: None,
         }],
         currency: None,
         tax_rate_id: None,
@@ -76,7 +78,10 @@ async fn a_queued_check_posts_without_a_number_and_takes_one_when_it_prints() {
     assert!(clash.starts_with("PRINT_NUMBER_USED"), "{clash}");
     let twice = mark_checks_printed(
         &pool,
-        vec![PrintedCheck { expense_id: first.id, check_number: "1002".into(), bill_check_id: None }, PrintedCheck { expense_id: second.id, check_number: "1002".into(), bill_check_id: None }],
+        vec![
+            PrintedCheck { expense_id: first.id, check_number: "1002".into(), bill_check_id: None },
+            PrintedCheck { expense_id: second.id, check_number: "1002".into(), bill_check_id: None },
+        ],
     )
     .await
     .unwrap_err();
@@ -109,7 +114,8 @@ async fn only_unnumbered_live_checks_join_the_queue() {
     assert!(refused.contains("PRINT_HAS_NUMBER"), "{refused}");
 
     let (card, supplies) = (account_id(&pool, "2100").await, account_id(&pool, "6250").await);
-    let expense = ExpenseInput { form_lines: Vec::new(),
+    let expense = ExpenseInput {
+        form_lines: Vec::new(),
         payment_method_id: None,
         kind: "EXPENSE".into(),
         payee_name: None,
@@ -143,7 +149,8 @@ async fn an_edited_queued_check_stays_queued() {
     let pool = test_pool().await;
     let queued = check(&pool, "Landlord", None, 10_000, true).await.unwrap();
     let (checking, rent) = (account_id(&pool, "1010").await, account_id(&pool, "6300").await);
-    let edited = ExpenseInput { form_lines: Vec::new(),
+    let edited = ExpenseInput {
+        form_lines: Vec::new(),
         payment_method_id: None,
         kind: "CHECK".into(),
         payee_name: Some("Landlord".into()),
@@ -198,7 +205,8 @@ async fn pay_bills_checks_wait_in_the_queue_one_per_vendor_and_take_their_number
     use crate::expenses::{BillInput, BillLineInput, BillPaymentInput};
     let pool = test_pool().await;
     let (checking, rent, card) = (account_id(&pool, "1010").await, account_id(&pool, "6300").await, account_id(&pool, "2100").await);
-    let bill = |vendor: &str, number: &str, cents: i64| BillInput { form_lines: Vec::new(),
+    let bill = |vendor: &str, number: &str, cents: i64| BillInput {
+        form_lines: Vec::new(),
         terms_id: None,
         vendor_name: vendor.into(),
         bill_number: Some(number.into()),
@@ -206,13 +214,30 @@ async fn pay_bills_checks_wait_in_the_queue_one_per_vendor_and_take_their_number
         due_date: d(31),
         memo: None,
         total_cents: Cents(cents),
-        lines: vec![BillLineInput { account_id: rent, amount_cents: Cents(cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![BillLineInput {
+            account_id: rent,
+            amount_cents: Cents(cents),
+            memo: None,
+            quantity_e4: None,
+            rate_cents: None,
+            product_service_id: None,
+            class_id: None,
+            customer_id: None,
+            billable: None,
+        }],
     };
     let mut ids = Vec::new();
     for (vendor, number, cents) in [("Landlord", "L-1", 100_000), ("Landlord", "L-2", 20_000), ("Plumber", "P-9", 7_500)] {
         ids.push(crate::expenses::post_vendor_bill(&pool, bill(vendor, number, cents)).await.unwrap().id);
     }
-    let pay = |bill_id: i64, cents: i64| BillPaymentInput { bill_id, payment_account_id: checking, payment_date: d(10), amount_cents: Cents(cents), reference: Some("777".into()), to_be_printed: true };
+    let pay = |bill_id: i64, cents: i64| BillPaymentInput {
+        bill_id,
+        payment_account_id: checking,
+        payment_date: d(10),
+        amount_cents: Cents(cents),
+        reference: Some("777".into()),
+        to_be_printed: true,
+    };
     crate::expenses::pay_vendor_bills(&pool, vec![pay(ids[0], 100_000), pay(ids[1], 20_000), pay(ids[2], 7_500)]).await.unwrap();
 
     // Posted already, with no number yet; one check per vendor.
@@ -255,13 +280,22 @@ async fn a_payment_taken_on_the_invoice_is_saved_with_it() {
                 .unwrap()
         }
     };
-    let paid = |cents: i64| crate::invoices::PaidNow { deposit_account_id: checking, amount_cents: Cents(cents), payment_method: "CHECK".into(), payment_method_id: None, reference: Some("1042".into()) };
+    let paid = |cents: i64| crate::invoices::PaidNow {
+        deposit_account_id: checking,
+        amount_cents: Cents(cents),
+        payment_method: "CHECK".into(),
+        payment_method_id: None,
+        reference: Some("1042".into()),
+    };
 
     // Part paid at the counter: the invoice is PARTIAL and the money is in the bank, dated the invoice's date.
     let part = create_invoice(&pool, invoice_input(services), &Default::default(), false, Some(&paid(5_000))).await.unwrap();
     assert_eq!((part.status.as_str(), part.balance_cents), ("PARTIAL", 7_500));
     let payments = crate::invoices::list_payments(&pool, part.id).await.unwrap();
-    assert_eq!(payments.iter().map(|p| (p.amount_cents, p.payment_date.clone(), p.reference.clone())).collect::<Vec<_>>(), [(5_000, d(1).to_string(), Some("1042".into()))]);
+    assert_eq!(
+        payments.iter().map(|p| (p.amount_cents, p.payment_date.clone(), p.reference.clone())).collect::<Vec<_>>(),
+        [(5_000, d(1).to_string(), Some("1042".into()))]
+    );
     assert_eq!((balance(ar).await, balance(checking).await), (7_500, 5_000));
 
     // Paid in full and queued to print.
@@ -294,17 +328,38 @@ async fn a_pay_bills_check_is_re_dated_when_it_prints() {
         due_date: d(31),
         memo: None,
         total_cents: Cents(cents),
-        lines: vec![BillLineInput { account_id: rent, amount_cents: Cents(cents), memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![BillLineInput {
+            account_id: rent,
+            amount_cents: Cents(cents),
+            memo: None,
+            quantity_e4: None,
+            rate_cents: None,
+            product_service_id: None,
+            class_id: None,
+            customer_id: None,
+            billable: None,
+        }],
     };
     let mut ids = Vec::new();
     for (vendor, number, cents) in [("Landlord", "L-1", 100_000), ("Landlord", "L-2", 20_000), ("Plumber", "P-9", 7_500)] {
         ids.push(crate::expenses::post_vendor_bill(&pool, bill(vendor, number, cents)).await.unwrap().id);
     }
     // L-2 is paid only in part, so its open balance has to come back whole before it is paid again.
-    let pay = |bill_id: i64, cents: i64| BillPaymentInput { bill_id, payment_account_id: checking, payment_date: d(10), amount_cents: Cents(cents), reference: None, to_be_printed: true };
+    let pay = |bill_id: i64, cents: i64| BillPaymentInput {
+        bill_id,
+        payment_account_id: checking,
+        payment_date: d(10),
+        amount_cents: Cents(cents),
+        reference: None,
+        to_be_printed: true,
+    };
     crate::expenses::pay_vendor_bills(&pool, vec![pay(ids[0], 100_000), pay(ids[1], 15_000), pay(ids[2], 7_500)]).await.unwrap();
     crate::preferences::set(&pool, crate::preferences::tax_time::DATE_CHECKS_PRINTED, "true").await.unwrap();
-    let bank = || sqlx::query_scalar::<_, i64>("SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) FROM journal_lines l WHERE l.account_id = ?1").bind(checking).fetch_one(&pool);
+    let bank = || {
+        sqlx::query_scalar::<_, i64>("SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) FROM journal_lines l WHERE l.account_id = ?1")
+            .bind(checking)
+            .fetch_one(&pool)
+    };
     let bank_before = bank().await.unwrap();
 
     let queue = queued_bill_checks(&pool, None).await.unwrap();
@@ -325,7 +380,11 @@ async fn a_pay_bills_check_is_re_dated_when_it_prints() {
     let live: Vec<_> = rows.iter().filter(|r| !r.6).map(|r| (r.1, r.2.as_str(), r.3, r.4.as_deref(), r.5)).collect();
     assert_eq!(
         live,
-        [(ids[2], "2026-10-10", 7_500, Some("1002"), false), (ids[0], "2026-10-12", 100_000, Some("1001"), false), (ids[1], "2026-10-12", 15_000, Some("1001"), false)],
+        [
+            (ids[2], "2026-10-10", 7_500, Some("1002"), false),
+            (ids[0], "2026-10-12", 100_000, Some("1001"), false),
+            (ids[1], "2026-10-12", 15_000, Some("1001"), false)
+        ],
         "Plumber's kept its date; Landlord's two payments were paid again on the 12th"
     );
     let voided: Vec<(i64, &str, Option<&str>)> = rows.iter().filter(|r| r.6).map(|r| (r.1, r.2.as_str(), r.4.as_deref())).collect();

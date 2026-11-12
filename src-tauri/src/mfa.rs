@@ -232,9 +232,7 @@ fn rfc4648_base32(bytes: &[u8]) -> String {
 
 /// Percent-encodes a label part of an `otpauth://` URI.
 fn uri_part(text: &str) -> String {
-    text.bytes()
-        .map(|b| if b.is_ascii_alphanumeric() || b"-._~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") })
-        .collect()
+    text.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-._~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
 }
 
 /// What the set-up screen shows: the QR code, and the same secret as text for typing in.
@@ -436,11 +434,12 @@ pub async fn check_code(pool: &SqlitePool, user_id: i64, secret: &Secret, code: 
         return crate::ledger::commit_write(tx).await.map_err(db_err);
     }
     let code = as_backup(code).ok_or_else(|| CODE_WRONG.to_string())?;
-    let unused: Vec<(i64, Vec<u8>, Vec<u8>)> = sqlx::query_as("SELECT id, salt, code_hash FROM user_backup_codes WHERE user_id = ?1 AND used_at IS NULL ORDER BY id")
-        .bind(user_id)
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(db_err)?;
+    let unused: Vec<(i64, Vec<u8>, Vec<u8>)> =
+        sqlx::query_as("SELECT id, salt, code_hash FROM user_backup_codes WHERE user_id = ?1 AND used_at IS NULL ORDER BY id")
+            .bind(user_id)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(db_err)?;
     let mut matched = None;
     for (id, salt, hash) in &unused {
         if same(&backup_hash(salt, &code), hash) && matched.is_none() {
@@ -448,7 +447,11 @@ pub async fn check_code(pool: &SqlitePool, user_id: i64, secret: &Secret, code: 
         }
     }
     let id = matched.ok_or_else(|| CODE_WRONG.to_string())?;
-    sqlx::query("UPDATE user_backup_codes SET used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("UPDATE user_backup_codes SET used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     let username: String = sqlx::query_scalar("SELECT username FROM users WHERE id = ?1").bind(user_id).fetch_one(&mut *tx).await.map_err(db_err)?;
     crate::users::record(&mut tx, user_id, "MFA_BACKUP_CODE_USED", serde_json::json!({ "username": username, "backupCodesLeft": unused.len() - 1 })).await?;
     crate::ledger::commit_write(tx).await.map_err(db_err)
@@ -526,7 +529,11 @@ pub async fn reseal(conn: &mut SqliteConnection, user_id: i64, current: &str, ne
 
 /// How many unused backup codes `user_id` has left.
 pub async fn backup_codes_left(conn: &mut SqliteConnection, user_id: i64) -> Result<i64, String> {
-    sqlx::query_scalar("SELECT COUNT(*) FROM user_backup_codes WHERE user_id = ?1 AND used_at IS NULL").bind(user_id).fetch_one(&mut *conn).await.map_err(db_err)
+    sqlx::query_scalar("SELECT COUNT(*) FROM user_backup_codes WHERE user_id = ?1 AND used_at IS NULL")
+        .bind(user_id)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(db_err)
 }
 
 #[cfg(test)]

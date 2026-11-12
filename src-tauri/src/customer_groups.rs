@@ -20,7 +20,11 @@ use crate::ledger::db_err;
 #[serde(tag = "field", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Rule {
     /// Open balance at least (or, with `atMost`, at most) this many cents.
-    Balance { cents: i64, #[serde(default)] at_most: bool },
+    Balance {
+        cents: i64,
+        #[serde(default)]
+        at_most: bool,
+    },
     /// The customer type (Customer & Vendor Profile Lists).
     CustomerType { id: i64 },
     /// The terms on the customer record.
@@ -195,10 +199,12 @@ type GroupRow = (i64, String, Option<String>, Option<i64>, Option<NaiveDate>, bo
 
 async fn build(pool: &SqlitePool, rows: Vec<GroupRow>) -> Result<Vec<CustomerGroup>, String> {
     let facts = customer_facts(pool).await?;
-    let manual: Vec<(i64, i64)> = sqlx::query_as("SELECT m.group_id, m.customer_id FROM customer_group_members m JOIN customers c ON c.id = m.customer_id ORDER BY c.name COLLATE NOCASE")
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?;
+    let manual: Vec<(i64, i64)> = sqlx::query_as(
+        "SELECT m.group_id, m.customer_id FROM customer_group_members m JOIN customers c ON c.id = m.customer_id ORDER BY c.name COLLATE NOCASE",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
     let mut out = Vec::with_capacity(rows.len());
     for (id, name, rules_json, every_days, last_sent, open_only, style_id, message, pay_every, pay_min, pay_last) in rows {
         // Rules a newer version wrote that this one can't read leave the group empty, not broken.
@@ -277,7 +283,11 @@ pub async fn save(pool: &SqlitePool, id: Option<i64>, input: &CustomerGroupInput
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let duplicate = |e: sqlx::Error| {
         let msg = db_err(e);
-        if msg.contains("UNIQUE") { format!("GROUP_DUPLICATE: there is already a group named '{}'", input.name.trim()) } else { msg }
+        if msg.contains("UNIQUE") {
+            format!("GROUP_DUPLICATE: there is already a group named '{}'", input.name.trim())
+        } else {
+            msg
+        }
     };
     let id = match id {
         Some(id) => {

@@ -67,16 +67,19 @@ pub async fn timesheet_week(pool: &SqlitePool, date: NaiveDate) -> Result<Timesh
     use crate::preferences::tax_time;
     let first_day = crate::preferences::get(pool, tax_time::WEEK_START).await?;
     let start = week_of(date, tax_time::parse_weekday(&first_day)?);
-    Ok(TimesheetWeek { start, end: start + chrono::Duration::days(6), first_day, billable_by_default: crate::preferences::flag(pool, tax_time::TIME_BILLABLE).await? })
+    Ok(TimesheetWeek {
+        start,
+        end: start + chrono::Duration::days(6),
+        first_day,
+        billable_by_default: crate::preferences::flag(pool, tax_time::TIME_BILLABLE).await?,
+    })
 }
 
 pub async fn list_employees(pool: &SqlitePool) -> Result<Vec<PartyView>, String> {
-    sqlx::query_as::<_, PartyView>(
-        "SELECT id, name, email, is_active, 0 AS open_balance_cents FROM employees ORDER BY name COLLATE NOCASE",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(db_err)
+    sqlx::query_as::<_, PartyView>("SELECT id, name, email, is_active, 0 AS open_balance_cents FROM employees ORDER BY name COLLATE NOCASE")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
 }
 
 pub async fn create_employee(pool: &SqlitePool, name: &str, email: Option<&str>) -> Result<PartyView, String> {
@@ -84,18 +87,16 @@ pub async fn create_employee(pool: &SqlitePool, name: &str, email: Option<&str>)
     if name.is_empty() {
         return Err("EMP_NO_NAME: enter the employee's name".into());
     }
-    sqlx::query_as::<_, PartyView>(
-        "INSERT INTO employees (name, email) VALUES (?1, ?2) RETURNING id, name, email, is_active, 0 AS open_balance_cents",
-    )
-    .bind(name)
-    .bind(email.map(str::trim).filter(|e| !e.is_empty()))
-    .fetch_one(pool)
-    .await
-    .map_err(|e| match e {
-        sqlx::Error::Database(db) if db.message().contains("UNIQUE") => format!("EMP_DUPLICATE: '{name}' already exists"),
-        sqlx::Error::Database(db) if db.message().contains("CHECK") => "EMP_BAD_EMAIL: enter a valid email address".into(),
-        other => db_err(other),
-    })
+    sqlx::query_as::<_, PartyView>("INSERT INTO employees (name, email) VALUES (?1, ?2) RETURNING id, name, email, is_active, 0 AS open_balance_cents")
+        .bind(name)
+        .bind(email.map(str::trim).filter(|e| !e.is_empty()))
+        .fetch_one(pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::Database(db) if db.message().contains("UNIQUE") => format!("EMP_DUPLICATE: '{name}' already exists"),
+            sqlx::Error::Database(db) if db.message().contains("CHECK") => "EMP_BAD_EMAIL: enter a valid email address".into(),
+            other => db_err(other),
+        })
 }
 
 fn validate(input: &TimeActivityInput, n: usize) -> Result<(), String> {

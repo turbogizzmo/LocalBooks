@@ -140,15 +140,22 @@ async fn exports_statements_with_numbers_indents_and_totals() {
     let pool = test_pool().await;
     let id = |n: &'static str| {
         let pool = pool.clone();
-        async move {
-            sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_one(&pool).await.unwrap()
-        }
+        async move { sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_one(&pool).await.unwrap() }
     };
     let (checking, services) = (id("1010").await, id("4100").await);
     let date = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
-    post_journal_entry(&pool, JournalEntry { id: None, date, description: String::new(), lines: vec![JournalLine::debit(checking, 123_456), JournalLine::credit(services, 123_456)], currency: None })
-        .await
-        .unwrap();
+    post_journal_entry(
+        &pool,
+        JournalEntry {
+            id: None,
+            date,
+            description: String::new(),
+            lines: vec![JournalLine::debit(checking, 123_456), JournalLine::credit(services, 123_456)],
+            currency: None,
+        },
+    )
+    .await
+    .unwrap();
     crate::preferences::set(&pool, "company_name", "Acme Widgets").await.unwrap();
 
     let (start, end) = (NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 12, 31).unwrap());
@@ -183,4 +190,3 @@ async fn exports_statements_with_numbers_indents_and_totals() {
     assert!(render_report(&pool, "cash_flow", None, None, Some(date), None).await.unwrap_err().starts_with("EXPORT_UNKNOWN_REPORT"));
     assert!(render_report(&pool, "balance_sheet", None, None, None, None).await.unwrap_err().starts_with("EXPORT_BAD_RANGE"));
 }
-

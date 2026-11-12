@@ -62,8 +62,11 @@ pub struct CustomerStatement {
 /// A customer's statement for a period, including its jobs: the balance brought forward, each
 /// invoice, payment, credit and refund in Accounts Receivable, and the balance due by age.
 pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date: NaiveDate, end_date: NaiveDate) -> Result<CustomerStatement, String> {
-    let head: Option<(String, Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT name, company_name, billing_address FROM customers WHERE id = ?1").bind(customer_id).fetch_optional(pool).await.map_err(db_err)?;
+    let head: Option<(String, Option<String>, Option<String>)> = sqlx::query_as("SELECT name, company_name, billing_address FROM customers WHERE id = ?1")
+        .bind(customer_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
     let (name, company_name, billing_address) = head.ok_or("STMT_NOT_FOUND: that customer does not exist")?;
     let mine = "(p.party_name = ?1 OR substr(p.party_name, 1, length(?1) + 1) = ?1 || ':')";
     let ar_lines = "FROM v_posted_lines l
@@ -274,7 +277,8 @@ type Piece = (i64, NaiveDate, String, Option<String>, i64, i64, String, i64, i64
 /// mapped to in Preferences › Tax: 1099. Accounts not mapped are left out. With no account mapped
 /// at all, everything counts as nonemployee compensation (1099-NEC box 1), as before mapping existed.
 pub async fn vendors_1099(pool: &SqlitePool, year: i32, access: crate::tax_ids::Access<'_>) -> Result<Vec<Vendor1099Row>, String> {
-    let (start, end) = (NaiveDate::from_ymd_opt(year, 1, 1).ok_or("RPT_BAD_YEAR: invalid year")?, NaiveDate::from_ymd_opt(year, 12, 31).ok_or("RPT_BAD_YEAR: invalid year")?);
+    let (start, end) =
+        (NaiveDate::from_ymd_opt(year, 1, 1).ok_or("RPT_BAD_YEAR: invalid year")?, NaiveDate::from_ymd_opt(year, 12, 31).ok_or("RPT_BAD_YEAR: invalid year")?);
     let mapping = crate::preferences::tax_time::accounts_1099(pool).await?;
     let mut rows: Vec<Vendor1099Row> = sqlx::query_as("SELECT v.id AS vendor_id, v.name AS vendor_name, v.tax_id, v.tax_id_masked, v.address FROM vendors v WHERE v.is_1099 = 1 ORDER BY v.name COLLATE NOCASE")
         .fetch_all(pool)
@@ -321,7 +325,13 @@ pub async fn vendors_1099(pool: &SqlitePool, year: i32, access: crate::tax_ids::
             let paid = lines.iter().filter(|d| d.box_code == b.code).try_fold(0i64, |s, d| s.checked_add(d.amount_cents)).ok_or_else(overflow)?;
             if paid != 0 {
                 let threshold = threshold_1099_cents(b.code, year);
-                row.boxes.push(BoxAmount1099 { code: b.code.into(), label: format!("{} {}", b.form, b.label), paid_cents: paid, threshold_cents: threshold, over_threshold: paid >= threshold });
+                row.boxes.push(BoxAmount1099 {
+                    code: b.code.into(),
+                    label: format!("{} {}", b.form, b.label),
+                    paid_cents: paid,
+                    threshold_cents: threshold,
+                    over_threshold: paid >= threshold,
+                });
             }
         }
         row.paid_cents = row.boxes.iter().try_fold(0i64, |s, b| s.checked_add(b.paid_cents)).ok_or_else(overflow)?;
@@ -479,12 +489,14 @@ pub struct RecurringTemplate {
 
 pub async fn get_recurring(pool: &SqlitePool, id: i64) -> Result<RecurringTemplate, String> {
     type Row = (i64, String, String, String, i64, NaiveDate, Option<NaiveDate>, Option<i64>, String);
-    let row: Option<Row> = sqlx::query_as("SELECT id, name, kind, frequency, every, next_date, end_date, anchor_day, payload FROM recurring_templates WHERE id = ?1")
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
-    let (id, name, kind, frequency, every, next_date, end_date, anchor_day, payload) = row.ok_or("REC_NOT_FOUND: that recurring transaction no longer exists")?;
+    let row: Option<Row> =
+        sqlx::query_as("SELECT id, name, kind, frequency, every, next_date, end_date, anchor_day, payload FROM recurring_templates WHERE id = ?1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
+    let (id, name, kind, frequency, every, next_date, end_date, anchor_day, payload) =
+        row.ok_or("REC_NOT_FOUND: that recurring transaction no longer exists")?;
     let payload = serde_json::from_str(&payload).map_err(|e| format!("REC_BAD_PAYLOAD: {e}"))?;
     Ok(RecurringTemplate { id, name, kind, frequency, every, next_date, end_date, anchor_day, payload })
 }
@@ -521,7 +533,11 @@ pub async fn save_recurring(pool: &SqlitePool, id: Option<i64>, input: Recurring
     let anchor = i64::from(anchor_day(input.next_date, input.anchor_day));
     let unique = |e: sqlx::Error| {
         let msg = db_err(e);
-        if msg.contains("UNIQUE") { format!("REC_DUPLICATE: there is already a recurring transaction named '{name}'") } else { msg }
+        if msg.contains("UNIQUE") {
+            format!("REC_DUPLICATE: there is already a recurring transaction named '{name}'")
+        } else {
+            msg
+        }
     };
     match id {
         None => sqlx::query_scalar("INSERT INTO recurring_templates (name, kind, payload, frequency, every, next_date, end_date, anchor_day) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id")
@@ -639,14 +655,21 @@ pub async fn enter_due_report(pool: &SqlitePool, as_of: NaiveDate, only: Option<
                 sqlx::query("SAVEPOINT recurring_copy").execute(&mut **tx).await.map_err(db_err)?;
                 let posted = async {
                     let entry = post_occurrence(tx, &kind, &payload, next).await?;
-                    sqlx::query("INSERT INTO recurring_runs (template_id, run_date, journal_entry_id) VALUES (?1, ?2, ?3)").bind(id).bind(next).bind(entry).execute(&mut **tx).await.map_err(db_err)?;
+                    sqlx::query("INSERT INTO recurring_runs (template_id, run_date, journal_entry_id) VALUES (?1, ?2, ?3)")
+                        .bind(id)
+                        .bind(next)
+                        .bind(entry)
+                        .execute(&mut **tx)
+                        .await
+                        .map_err(db_err)?;
                     Ok::<(), String>(())
                 }
                 .await;
                 if let Err(reason) = posted {
                     sqlx::query("ROLLBACK TO recurring_copy").execute(&mut **tx).await.map_err(db_err)?;
                     sqlx::query("RELEASE recurring_copy").execute(&mut **tx).await.map_err(db_err)?;
-                    let name: String = sqlx::query_scalar("SELECT name FROM recurring_templates WHERE id = ?1").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
+                    let name: String =
+                        sqlx::query_scalar("SELECT name FROM recurring_templates WHERE id = ?1").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
                     report.skipped.push(SkippedOccurrence { template_id: id, name, date: next, reason });
                     break;
                 }
@@ -698,7 +721,11 @@ pub async fn edit_recurring_schedule(pool: &SqlitePool, id: i64, input: &Schedul
     .await
     .map_err(|e| {
         let msg = db_err(e);
-        if msg.contains("UNIQUE") { format!("REC_DUPLICATE: there is already a recurring transaction named '{name}'") } else { msg }
+        if msg.contains("UNIQUE") {
+            format!("REC_DUPLICATE: there is already a recurring transaction named '{name}'")
+        } else {
+            msg
+        }
     })?;
     if done.rows_affected() == 0 {
         return Err("REC_NOT_FOUND: that recurring transaction no longer exists".into());
@@ -825,7 +852,10 @@ pub fn validate_purchase_order(input: &PurchaseOrderInput) -> Result<i64, String
         if !(1..=MAX_LINE_CENTS).contains(&line.amount_cents.get()) {
             return Err(format!("PO_BAD_AMOUNT: line {} needs an amount above zero", idx + 1));
         }
-        total = total.checked_add(line.amount_cents.get()).filter(|t| *t <= MAX_LINE_CENTS).ok_or_else(|| format!("PO_TOO_LARGE: the order exceeds {}", format_cents(MAX_LINE_CENTS)))?;
+        total = total
+            .checked_add(line.amount_cents.get())
+            .filter(|t| *t <= MAX_LINE_CENTS)
+            .ok_or_else(|| format!("PO_TOO_LARGE: the order exceeds {}", format_cents(MAX_LINE_CENTS)))?;
     }
     let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents.get()).collect();
     let (_, total) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "PO")?;
@@ -886,7 +916,8 @@ async fn write_purchase_order_lines(tx: &mut Transaction<'_, Sqlite>, id: i64, i
 /// Whether an order can still be changed or deleted: open (or closed by hand), with nothing
 /// received against it and not billed. Its number comes back for the messages.
 async fn changeable_order(tx: &mut Transaction<'_, Sqlite>, id: i64, verb: &str) -> Result<i64, String> {
-    let head: Option<(i64, String)> = sqlx::query_as("SELECT po_number, status FROM purchase_orders WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let head: Option<(i64, String)> =
+        sqlx::query_as("SELECT po_number, status FROM purchase_orders WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
     let (number, status) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
     if status == "BILLED" {
         return Err(format!("PO_BILLED: purchase order #{number} has been billed and can't be {verb}; void the bill first"));
@@ -896,7 +927,8 @@ async fn changeable_order(tx: &mut Transaction<'_, Sqlite>, id: i64, verb: &str)
         return Err(format!("PO_AWAITING_APPROVAL: a bill from purchase order #{number} is waiting for approval, so it can't be {verb}; reject the request under Expenses › Approvals first"));
     }
     // Any receipt against it, even a voided one, still points at the order and its lines.
-    let received: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM item_receipts WHERE purchase_order_id = ?1)").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
+    let received: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM item_receipts WHERE purchase_order_id = ?1)").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
     if received {
         return Err(format!("PO_HAS_RECEIPTS: items have been received against purchase order #{number} (a voided receipt counts), so it can't be {verb}; close it, or make a new order"));
     }
@@ -940,11 +972,13 @@ pub async fn update_purchase_order(pool: &SqlitePool, id: i64, input: PurchaseOr
 pub async fn delete_purchase_order(pool: &SqlitePool, id: i64) -> Result<(), String> {
     run(pool, async |tx| {
         let number = changeable_order(tx, id, "deleted").await?;
-        let files: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM record_attachments WHERE record_kind = 'PURCHASE_ORDER' AND record_id = ?1 AND deleted_at IS NULL)")
-            .bind(id)
-            .fetch_one(&mut **tx)
-            .await
-            .map_err(db_err)?;
+        let files: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM record_attachments WHERE record_kind = 'PURCHASE_ORDER' AND record_id = ?1 AND deleted_at IS NULL)",
+        )
+        .bind(id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)?;
         if files {
             return Err(format!("PO_HAS_FILES: purchase order #{number} has attached files; delete them first"));
         }
@@ -984,7 +1018,13 @@ type OrderHead = (String, i64, String, Option<String>, i64, Option<i64>);
 /// The bill an open purchase order becomes, with the same lines, discounts and charges, and the
 /// vendor's terms (so Pay Bills offers its early-payment discount). Nothing is written: the screen's
 /// command runs the bill checks and approval rules on it first, as Enter Bills does.
-pub async fn purchase_order_bill(pool: &SqlitePool, id: i64, bill_date: NaiveDate, due_date: NaiveDate, bill_number: Option<String>) -> Result<BillInput, String> {
+pub async fn purchase_order_bill(
+    pool: &SqlitePool,
+    id: i64,
+    bill_date: NaiveDate,
+    due_date: NaiveDate,
+    bill_number: Option<String>,
+) -> Result<BillInput, String> {
     let head: Option<OrderHead> = sqlx::query_as(
         "SELECT v.name, o.total_cents, o.status, o.memo, o.po_number, v.terms_id FROM purchase_orders o JOIN vendors v ON v.id = o.vendor_id WHERE o.id = ?1",
     )
@@ -1047,14 +1087,19 @@ pub async fn post_purchase_order_bill(pool: &SqlitePool, id: i64, bill: &BillInp
 
 /// The pending approval request holding a bill from order `id`, if any.
 pub async fn awaiting_approval(conn: &mut SqliteConnection, id: i64) -> Result<Option<i64>, String> {
-    sqlx::query_scalar("SELECT id FROM approval_requests WHERE from_purchase_order_id = ?1 AND status = 'PENDING'").bind(id).fetch_optional(&mut *conn).await.map_err(db_err)
+    sqlx::query_scalar("SELECT id FROM approval_requests WHERE from_purchase_order_id = ?1 AND status = 'PENDING'")
+        .bind(id)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(db_err)
 }
 
 /// Inside a write transaction: refuses unless order `id` is open with nothing received, then
 /// posts `bill` and marks the order billed with the bill's id. Used by Create Bill and by
 /// approving a bill that Create Bill submitted for approval.
 pub async fn bill_order_in_tx(tx: &mut Transaction<'_, Sqlite>, id: i64, bill: &BillInput) -> Result<i64, String> {
-    let head: Option<(String, i64)> = sqlx::query_as("SELECT status, po_number FROM purchase_orders WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let head: Option<(String, i64)> =
+        sqlx::query_as("SELECT status, po_number FROM purchase_orders WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
     let (status, number) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
     if status != "OPEN" {
         return Err(format!("PO_NOT_OPEN: only an open purchase order can be billed, and #{number} is {}", status.to_lowercase()));
@@ -1173,15 +1218,16 @@ pub async fn add_attachment(pool: &SqlitePool, journal_entry_id: i64, file_name:
     if !posted {
         return Err("ATTACH_NOT_POSTED: attach files to a posted transaction".into());
     }
-    let id: i64 = sqlx::query_scalar("INSERT INTO attachments (journal_entry_id, file_name, media_type, size_bytes, content) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id")
-        .bind(journal_entry_id)
-        .bind(name)
-        .bind(media_type(name))
-        .bind(content.len() as i64)
-        .bind(content)
-        .fetch_one(pool)
-        .await
-        .map_err(db_err)?;
+    let id: i64 =
+        sqlx::query_scalar("INSERT INTO attachments (journal_entry_id, file_name, media_type, size_bytes, content) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id")
+            .bind(journal_entry_id)
+            .bind(name)
+            .bind(media_type(name))
+            .bind(content.len() as i64)
+            .bind(content)
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
     list_attachments(pool, journal_entry_id).await?.into_iter().find(|a| a.id == id).ok_or_else(|| "ATTACH_NOT_SAVED: the file was not saved".into())
 }
 

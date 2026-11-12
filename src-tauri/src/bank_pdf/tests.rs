@@ -28,7 +28,9 @@ fn page(ops: Vec<Op>) -> Page {
 /// running balance, wrapped descriptions, a date printed once for two transactions, a repeated
 /// header and page footers.
 pub(crate) fn checking_statement_pdf() -> Vec<u8> {
-    let header = |y: f32| vec![bold(40.0, y, "Date"), bold(90.0, y, "Description"), right(400.0, y, "Withdrawals"), right(480.0, y, "Deposits"), right(560.0, y, "Balance")];
+    let header = |y: f32| {
+        vec![bold(40.0, y, "Date"), bold(90.0, y, "Description"), right(400.0, y, "Withdrawals"), right(480.0, y, "Deposits"), right(560.0, y, "Balance")]
+    };
     let mut first = vec![
         bold(40.0, 50.0, "Maple Street Credit Union"),
         text(40.0, 64.0, "Pat Example, 12 Sample Road, Springfield"),

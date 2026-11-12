@@ -783,11 +783,11 @@ fn nocase(s: &str) -> String {
 fn group_of(by: GroupBy, l: &Line, as_of: NaiveDate) -> (GroupKey, String) {
     let missing = |v: Option<&String>| i64::from(v.is_none());
     match by {
-        GroupBy::Account => (
-            (l.type_sort, l.account_number.clone().unwrap_or_default(), l.account_name.clone(), l.account_id),
-            l.account_name.clone(),
+        GroupBy::Account => ((l.type_sort, l.account_number.clone().unwrap_or_default(), l.account_name.clone(), l.account_id), l.account_name.clone()),
+        GroupBy::Name => (
+            (missing(l.name.as_ref()), l.name.as_deref().map(nocase).unwrap_or_default(), String::new(), 0),
+            l.name.clone().unwrap_or_else(|| "No name".into()),
         ),
-        GroupBy::Name => ((missing(l.name.as_ref()), l.name.as_deref().map(nocase).unwrap_or_default(), String::new(), 0), l.name.clone().unwrap_or_else(|| "No name".into())),
         GroupBy::Item => (
             (missing(l.item_name.as_ref()), l.item_name.as_deref().map(nocase).unwrap_or_default(), String::new(), l.item_id.unwrap_or(0)),
             l.item_name.clone().unwrap_or_else(|| "No product/service".into()),
@@ -799,7 +799,10 @@ fn group_of(by: GroupBy, l: &Line, as_of: NaiveDate) -> (GroupKey, String) {
         GroupBy::Type => ((0, l.type_text().to_string(), String::new(), 0), l.type_text().to_string()),
         GroupBy::Rep => {
             let label = l.rep_label();
-            ((missing(label.as_ref()), label.as_deref().map(nocase).unwrap_or_default(), String::new(), l.rep_id.unwrap_or(0)), label.unwrap_or_else(|| "No rep".into()))
+            (
+                (missing(label.as_ref()), label.as_deref().map(nocase).unwrap_or_default(), String::new(), l.rep_id.unwrap_or(0)),
+                label.unwrap_or_else(|| "No rep".into()),
+            )
         }
         GroupBy::Transaction => {
             let label = match &l.num {
@@ -895,11 +898,12 @@ pub async fn run(pool: &SqlitePool, settings: &ReportSettings, today: NaiveDate)
         lines.retain(|l| seen.insert(l.journal_entry_id));
     }
 
-    let openings = if settings.mode == Mode::Detail && settings.group_by == Some(GroupBy::Account) && settings.opening_balances && settings.source == Source::Ledger {
-        Some(opening_balances(pool, &filter, settings.start_date, end, settings.sign).await?)
-    } else {
-        None
-    };
+    let openings =
+        if settings.mode == Mode::Detail && settings.group_by == Some(GroupBy::Account) && settings.opening_balances && settings.source == Source::Ledger {
+            Some(opening_balances(pool, &filter, settings.start_date, end, settings.sign).await?)
+        } else {
+            None
+        };
 
     let mut groups: BTreeMap<GroupKey, Group<'_>> = BTreeMap::new();
     let by = settings.group_by.unwrap_or(GroupBy::Account);
@@ -1085,14 +1089,28 @@ fn detail(settings: &ReportSettings, grouped: bool, groups: &BTreeMap<GroupKey, 
             rows.push(ReportRow { kind: RowKind::Detail, depth, cells, journal_entry_id: Some(l.journal_entry_id), account_id: None, drill: None });
         }
         if grouped {
-            rows.push(ReportRow { kind: RowKind::Subtotal, depth: 0, cells: sums.cells(format!("Total {}", group.label), cols, Some(balance)), journal_entry_id: None, account_id: None, drill: None });
+            rows.push(ReportRow {
+                kind: RowKind::Subtotal,
+                depth: 0,
+                cells: sums.cells(format!("Total {}", group.label), cols, Some(balance)),
+                journal_entry_id: None,
+                account_id: None,
+                drill: None,
+            });
         }
         total.merge(&sums);
         last_balance = balance;
     }
     // A running balance across groups means nothing, so the grand total shows one only ungrouped.
     let balance = (!grouped).then_some(last_balance);
-    rows.push(ReportRow { kind: RowKind::Total, depth: 0, cells: total.cells("TOTAL".into(), cols, balance), journal_entry_id: None, account_id: None, drill: None });
+    rows.push(ReportRow {
+        kind: RowKind::Total,
+        depth: 0,
+        cells: total.cells("TOTAL".into(), cols, balance),
+        journal_entry_id: None,
+        account_id: None,
+        drill: None,
+    });
     (heads, rows)
 }
 
@@ -1200,7 +1218,14 @@ fn summary(
             *t += a;
         }
         total_qty += qty;
-        rows.push(ReportRow { kind: RowKind::Detail, depth: 0, cells, journal_entry_id: None, account_id: group.account_id, drill: drill_for(by, group, settings.start_date, end) });
+        rows.push(ReportRow {
+            kind: RowKind::Detail,
+            depth: 0,
+            cells,
+            journal_entry_id: None,
+            account_id: group.account_id,
+            drill: drill_for(by, group, settings.start_date, end),
+        });
     }
     let mut cells = vec![json!("TOTAL")];
     if show_qty {
@@ -1254,7 +1279,12 @@ pub fn presets() -> Vec<Preset> {
     use Column::*;
     let classes = |c: &[&str]| Filters { classifications: types(c), ..Filters::default() };
     let account_type = |t: &str| Filters { account_types: types(&[t]), ..Filters::default() };
-    let open_docs = |t: &str, docs: &[&str]| Filters { account_types: types(&[t]), transaction_types: types(docs), paid_status: Some(PaidStatus::Open), ..Filters::default() };
+    let open_docs = |t: &str, docs: &[&str]| Filters {
+        account_types: types(&[t]),
+        transaction_types: types(docs),
+        paid_status: Some(PaidStatus::Open),
+        ..Filters::default()
+    };
     let sales = types(&["INVOICE", "SALES_RECEIPT", "CREDIT_MEMO"]);
     let purchases = types(&["BILL", "VENDOR_CREDIT", "CHECK", "EXPENSE", "CARD_CREDIT"]);
     let items = |types: &[String], items_only: bool, columns: &[Column], mode: Mode| ReportSettings {
@@ -1284,14 +1314,19 @@ pub fn presets() -> Vec<Preset> {
     // Debits minus credits: the bank line is negative and the lines it paid for positive.
     let by_transaction = |codes: &[&str]| ReportSettings {
         sign: Sign::Debit,
-        ..ledger(&[Type, Date, Num, Name, Memo, Account, Class, Amount], Some(GroupBy::Transaction), Filters { transaction_types: types(codes), ..Filters::default() })
+        ..ledger(
+            &[Type, Date, Num, Name, Memo, Account, Class, Amount],
+            Some(GroupBy::Transaction),
+            Filters { transaction_types: types(codes), ..Filters::default() },
+        )
     };
     let by_month = |s: ReportSettings| ReportSettings { column_by: Some(Period::Month), ..summary(s) };
     let names_list = |kind: NameKind| ReportSettings {
         per_transaction: true,
         ..ledger(&[Type, Date, Num, Memo, Account, Split, Amount], Some(GroupBy::Name), Filters { name_kind: Some(kind), ..Filters::default() })
     };
-    let purchases_by_vendor = ReportSettings { group_by: Some(GroupBy::Name), ..items(&purchases, true, &[Type, Date, Num, Memo, Item, Qty, Rate, Amount, Balance], Mode::Detail) };
+    let purchases_by_vendor =
+        ReportSettings { group_by: Some(GroupBy::Name), ..items(&purchases, true, &[Type, Date, Num, Memo, Item, Qty, Rate, Amount, Balance], Mode::Detail) };
     vec![
         // Credits minus debits, so income is positive, expenses negative and the total is net income.
         preset(
@@ -1309,9 +1344,19 @@ pub fn presets() -> Vec<Preset> {
             "Business overview",
             range,
             "fiscalYearToDate",
-            ReportSettings { sign: Sign::Credit, ..ledger(&[Type, Date, Num, Name, Memo, Split, Amount, Balance], Some(GroupBy::Account), classes(&["INCOME", "EXPENSE"])) },
+            ReportSettings {
+                sign: Sign::Credit,
+                ..ledger(&[Type, Date, Num, Name, Memo, Split, Amount, Balance], Some(GroupBy::Account), classes(&["INCOME", "EXPENSE"]))
+            },
         ),
-        preset("pl-detail", "Profit & Loss Detail", "Business overview", range, "fiscalYearToDate", ledger(&[Type, Date, Num, Name, Memo, Class, Split, Amount, Balance], Some(GroupBy::Account), classes(&["INCOME", "EXPENSE"]))),
+        preset(
+            "pl-detail",
+            "Profit & Loss Detail",
+            "Business overview",
+            range,
+            "fiscalYearToDate",
+            ledger(&[Type, Date, Num, Name, Memo, Class, Split, Amount, Balance], Some(GroupBy::Account), classes(&["INCOME", "EXPENSE"])),
+        ),
         preset(
             "bs-detail",
             "Balance Sheet Detail",
@@ -1320,13 +1365,41 @@ pub fn presets() -> Vec<Preset> {
             "thisMonth",
             ReportSettings { opening_balances: true, ..ledger(&gl_columns, Some(GroupBy::Account), classes(&["ASSET", "LIABILITY", "EQUITY"])) },
         ),
-        preset("ar-aging-detail", "A/R Aging Detail", "Who owes you", as_of, "today", ledger(&[Type, Date, Num, Name, DueDate, Aging, OpenBalance], Some(GroupBy::Aging), open_docs("ACCOUNTS_RECEIVABLE", &["INVOICE", "CREDIT_MEMO"]))),
-        preset("open-invoices", "Open Invoices", "Who owes you", as_of, "today", ledger(&[Type, Date, Num, Memo, DueDate, Aging, OpenBalance], Some(GroupBy::Name), open_docs("ACCOUNTS_RECEIVABLE", &["INVOICE", "CREDIT_MEMO"]))),
+        preset(
+            "ar-aging-detail",
+            "A/R Aging Detail",
+            "Who owes you",
+            as_of,
+            "today",
+            ledger(&[Type, Date, Num, Name, DueDate, Aging, OpenBalance], Some(GroupBy::Aging), open_docs("ACCOUNTS_RECEIVABLE", &["INVOICE", "CREDIT_MEMO"])),
+        ),
+        preset(
+            "open-invoices",
+            "Open Invoices",
+            "Who owes you",
+            as_of,
+            "today",
+            ledger(&[Type, Date, Num, Memo, DueDate, Aging, OpenBalance], Some(GroupBy::Name), open_docs("ACCOUNTS_RECEIVABLE", &["INVOICE", "CREDIT_MEMO"])),
+        ),
         preset("customer-balance-summary", "Customer Balance Summary", "Who owes you", as_of, "today", summary(customer_balance.clone())),
         preset("customer-balance-detail", "Customer Balance Detail", "Who owes you", as_of, "today", customer_balance),
         preset("transaction-list-customer", "Transaction List by Customer", "Who owes you", range, "fiscalYearToDate", names_list(NameKind::Customer)),
-        preset("sales-customer-detail", "Sales by Customer Detail", "Sales and customers", range, "fiscalYearToDate", ledger(&[Type, Date, Num, Memo, Item, Qty, Rate, Account, Amount, Balance], Some(GroupBy::Name), classes(&["INCOME"]))),
-        preset("sales-product-detail", "Sales by Product/Service Detail", "Sales and customers", range, "fiscalYearToDate", items(&sales, false, &[Type, Date, Num, Name, Memo, Qty, Rate, Amount, Balance], Mode::Detail)),
+        preset(
+            "sales-customer-detail",
+            "Sales by Customer Detail",
+            "Sales and customers",
+            range,
+            "fiscalYearToDate",
+            ledger(&[Type, Date, Num, Memo, Item, Qty, Rate, Account, Amount, Balance], Some(GroupBy::Name), classes(&["INCOME"])),
+        ),
+        preset(
+            "sales-product-detail",
+            "Sales by Product/Service Detail",
+            "Sales and customers",
+            range,
+            "fiscalYearToDate",
+            items(&sales, false, &[Type, Date, Num, Name, Memo, Qty, Rate, Amount, Balance], Mode::Detail),
+        ),
         // The lines behind Sales by Rep Summary: invoices and sales receipts, by the rep on each.
         preset(
             "sales-rep-detail",
@@ -1334,21 +1407,73 @@ pub fn presets() -> Vec<Preset> {
             "Sales and customers",
             range,
             "fiscalYearToDate",
-            ReportSettings { group_by: Some(GroupBy::Rep), ..items(&types(&["INVOICE", "SALES_RECEIPT"]), false, &[Type, Date, Num, Name, Memo, Item, Qty, Rate, Amount, Balance], Mode::Detail) },
+            ReportSettings {
+                group_by: Some(GroupBy::Rep),
+                ..items(&types(&["INVOICE", "SALES_RECEIPT"]), false, &[Type, Date, Num, Name, Memo, Item, Qty, Rate, Amount, Balance], Mode::Detail)
+            },
         ),
         preset("income-customer-summary", "Income by Customer Summary", "Sales and customers", range, "fiscalYearToDate", summary(income_by_customer.clone())),
         preset("income-customer-detail", "Income by Customer Detail", "Sales and customers", range, "fiscalYearToDate", income_by_customer),
-        preset("ap-aging-detail", "A/P Aging Detail", "What you owe", as_of, "today", ledger(&[Type, Date, Num, Name, DueDate, Aging, OpenBalance], Some(GroupBy::Aging), open_docs("ACCOUNTS_PAYABLE", &["BILL", "VENDOR_CREDIT"]))),
-        preset("unpaid-bills", "Unpaid Bills", "What you owe", as_of, "today", ledger(&[Type, Date, Num, Memo, DueDate, Aging, OpenBalance], Some(GroupBy::Name), open_docs("ACCOUNTS_PAYABLE", &["BILL", "VENDOR_CREDIT"]))),
+        preset(
+            "ap-aging-detail",
+            "A/P Aging Detail",
+            "What you owe",
+            as_of,
+            "today",
+            ledger(&[Type, Date, Num, Name, DueDate, Aging, OpenBalance], Some(GroupBy::Aging), open_docs("ACCOUNTS_PAYABLE", &["BILL", "VENDOR_CREDIT"])),
+        ),
+        preset(
+            "unpaid-bills",
+            "Unpaid Bills",
+            "What you owe",
+            as_of,
+            "today",
+            ledger(&[Type, Date, Num, Memo, DueDate, Aging, OpenBalance], Some(GroupBy::Name), open_docs("ACCOUNTS_PAYABLE", &["BILL", "VENDOR_CREDIT"])),
+        ),
         preset("vendor-balance-summary", "Vendor Balance Summary", "What you owe", as_of, "today", summary(vendor_balance.clone())),
         preset("vendor-balance-detail", "Vendor Balance Detail", "What you owe", as_of, "today", vendor_balance),
         preset("transaction-list-vendor", "Transaction List by Vendor", "What you owe", range, "fiscalYearToDate", names_list(NameKind::Vendor)),
-        preset("expenses-vendor-month", "Expenses by Vendor by Month", "Expenses and vendors", range, "fiscalYearToDate", by_month(ledger(&[], Some(GroupBy::Name), Filters { exclude_voided: true, ..classes(&["EXPENSE"]) }))),
-        preset("expenses-vendor-detail", "Expenses by Vendor Detail", "Expenses and vendors", range, "fiscalYearToDate", ledger(&[Type, Date, Num, Memo, Account, Class, Amount, Balance], Some(GroupBy::Name), classes(&["EXPENSE"]))),
-        preset("purchases-vendor-summary", "Purchases by Vendor Summary", "Expenses and vendors", range, "fiscalYearToDate", summary(purchases_by_vendor.clone())),
+        preset(
+            "expenses-vendor-month",
+            "Expenses by Vendor by Month",
+            "Expenses and vendors",
+            range,
+            "fiscalYearToDate",
+            by_month(ledger(&[], Some(GroupBy::Name), Filters { exclude_voided: true, ..classes(&["EXPENSE"]) })),
+        ),
+        preset(
+            "expenses-vendor-detail",
+            "Expenses by Vendor Detail",
+            "Expenses and vendors",
+            range,
+            "fiscalYearToDate",
+            ledger(&[Type, Date, Num, Memo, Account, Class, Amount, Balance], Some(GroupBy::Name), classes(&["EXPENSE"])),
+        ),
+        preset(
+            "purchases-vendor-summary",
+            "Purchases by Vendor Summary",
+            "Expenses and vendors",
+            range,
+            "fiscalYearToDate",
+            summary(purchases_by_vendor.clone()),
+        ),
         preset("purchases-vendor-detail", "Purchases by Vendor Detail", "Expenses and vendors", range, "fiscalYearToDate", purchases_by_vendor),
-        preset("purchases-item-summary", "Purchases by Product/Service Summary", "Expenses and vendors", range, "fiscalYearToDate", summary(items(&purchases, true, &[], Mode::Summary))),
-        preset("purchases-item-detail", "Purchases by Product/Service Detail", "Expenses and vendors", range, "fiscalYearToDate", items(&purchases, true, &[Type, Date, Num, Name, Memo, Qty, Rate, Amount, Balance], Mode::Detail)),
+        preset(
+            "purchases-item-summary",
+            "Purchases by Product/Service Summary",
+            "Expenses and vendors",
+            range,
+            "fiscalYearToDate",
+            summary(items(&purchases, true, &[], Mode::Summary)),
+        ),
+        preset(
+            "purchases-item-detail",
+            "Purchases by Product/Service Detail",
+            "Expenses and vendors",
+            range,
+            "fiscalYearToDate",
+            items(&purchases, true, &[Type, Date, Num, Name, Memo, Qty, Rate, Amount, Balance], Mode::Detail),
+        ),
         preset(
             "1099-detail",
             "1099 Detail",
@@ -1360,7 +1485,13 @@ pub fn presets() -> Vec<Preset> {
                 ..ledger(
                     &[Type, Date, Num, Memo, Account, Amount, Balance],
                     Some(GroupBy::Name),
-                    Filters { account_types: types(&["BANK"]), transaction_types: types(&["CHECK", "EXPENSE", "BILL_PAYMENT"]), vendors_1099: true, exclude_voided: true, ..Filters::default() },
+                    Filters {
+                        account_types: types(&["BANK"]),
+                        transaction_types: types(&["CHECK", "EXPENSE", "BILL_PAYMENT"]),
+                        vendors_1099: true,
+                        exclude_voided: true,
+                        ..Filters::default()
+                    },
                 )
             },
         ),
@@ -1374,16 +1505,33 @@ pub fn presets() -> Vec<Preset> {
             "thisMonth",
             ReportSettings { per_transaction: true, ..ledger(&[Type, Date, Num, Name, Memo, Account, Split, Amount], None, Filters::default()) },
         ),
-        preset("transaction-detail-account", "Transaction Detail by Account", ACCOUNTANT, range, "thisMonth", ledger(&[Type, Date, Num, Name, Memo, Class, Split, Debit, Credit, Balance], Some(GroupBy::Account), Filters::default())),
+        preset(
+            "transaction-detail-account",
+            "Transaction Detail by Account",
+            ACCOUNTANT,
+            range,
+            "thisMonth",
+            ledger(&[Type, Date, Num, Name, Memo, Class, Split, Debit, Credit, Balance], Some(GroupBy::Account), Filters::default()),
+        ),
         preset(
             "voided-transactions",
             "Voided Transactions",
             ACCOUNTANT,
             range,
             "fiscalYearToDate",
-            ReportSettings { per_transaction: true, ..ledger(&[Type, Date, Num, Name, Memo, Account, Amount], None, Filters { voided_only: true, ..Filters::default() }) },
+            ReportSettings {
+                per_transaction: true,
+                ..ledger(&[Type, Date, Num, Name, Memo, Account, Amount], None, Filters { voided_only: true, ..Filters::default() })
+            },
         ),
-        preset("journal", "Journal", ACCOUNTANT, range, "thisMonth", ledger(&[Type, Date, Num, Name, Memo, Account, Debit, Credit], Some(GroupBy::Transaction), Filters::default())),
+        preset(
+            "journal",
+            "Journal",
+            ACCOUNTANT,
+            range,
+            "thisMonth",
+            ledger(&[Type, Date, Num, Name, Memo, Account, Debit, Credit], Some(GroupBy::Transaction), Filters::default()),
+        ),
         preset(
             "adjusting-journal",
             "Adjusting Journal Entries",

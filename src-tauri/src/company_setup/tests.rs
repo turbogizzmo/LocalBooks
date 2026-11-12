@@ -19,10 +19,7 @@ fn everything(industry_name: &str) -> Vec<String> {
 }
 
 async fn chart(pool: &SqlitePool) -> Vec<(Option<String>, String, String, bool)> {
-    sqlx::query_as("SELECT account_number, full_name, account_type, is_system FROM v_chart_of_accounts ORDER BY account_number")
-        .fetch_all(pool)
-        .await
-        .unwrap()
+    sqlx::query_as("SELECT account_number, full_name, account_type, is_system FROM v_chart_of_accounts ORDER BY account_number").fetch_all(pool).await.unwrap()
 }
 
 async fn number_of(pool: &SqlitePool, name: &str) -> Option<String> {
@@ -92,10 +89,11 @@ async fn every_industry_and_tax_form_builds_a_valid_chart() {
     for (key, _, tax_form) in ENTITY_TYPES {
         let pool = test_pool().await;
         apply(&pool, &setup("Professional Consulting", key, &["42700"])).await.unwrap_or_else(|e| panic!("{key}: {e}"));
-        let equity: Vec<String> = sqlx::query_scalar("SELECT name FROM chart_of_accounts WHERE account_type = 'EQUITY' AND account_number <> '30000' ORDER BY account_number")
-            .fetch_all(&pool)
-            .await
-            .unwrap();
+        let equity: Vec<String> =
+            sqlx::query_scalar("SELECT name FROM chart_of_accounts WHERE account_type = 'EQUITY' AND account_number <> '30000' ORDER BY account_number")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
         let mut expected: Vec<(String, String)> = equity_for(key).iter().map(|e| (e.number.clone(), e.name.clone())).collect();
         expected.sort();
         assert_eq!(equity, expected.into_iter().map(|(_, n)| n).collect::<Vec<_>>(), "{key}");
@@ -143,7 +141,13 @@ async fn setup_replaces_the_standard_chart_and_saves_the_answers() {
         ]
     );
     let prefs = crate::preferences::get_all(&pool).await.unwrap();
-    for (key, value) in [("tax_form", "SCHEDULE_C"), ("sales_tax_enabled", "true"), ("company_legal_name", "Hearth Kitchen LLC"), ("company_ein", "12-3456789"), ("fiscal_year_start", "07-01")] {
+    for (key, value) in [
+        ("tax_form", "SCHEDULE_C"),
+        ("sales_tax_enabled", "true"),
+        ("company_legal_name", "Hearth Kitchen LLC"),
+        ("company_ein", "12-3456789"),
+        ("fiscal_year_start", "07-01"),
+    ] {
         assert_eq!(prefs.get(key).map(String::as_str), Some(value), "{key}");
     }
 
@@ -194,9 +198,12 @@ async fn standard_accounts_follow_the_charts_numbering() {
     // A QuickBooks-style chart: the first sales tax rate creates Sales Tax Payable as 25500.
     let pool = test_pool().await;
     apply(&pool, &setup("Professional Consulting", "corporation", &["42700", "24400"])).await.unwrap();
-    let rate = crate::sales_tax::create_tax_rate(&pool, crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 60_000, agency_name: None, liability_account_id: None })
-        .await
-        .unwrap();
+    let rate = crate::sales_tax::create_tax_rate(
+        &pool,
+        crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 60_000, agency_name: None, liability_account_id: None },
+    )
+    .await
+    .unwrap();
     assert_eq!(rate.liability_account_name, "Sales Tax Payable", "not Client Deposits");
     assert_eq!(number_of(&pool, "Sales Tax Payable").await.as_deref(), Some("25500"));
 }

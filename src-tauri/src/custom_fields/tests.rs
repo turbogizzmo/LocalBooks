@@ -63,9 +63,15 @@ async fn a_field_printed_on_a_form_stays() {
     let pool = test_pool().await;
     let po = create_custom_field(&pool, FieldList::Customer, field("PO number", true)).await.unwrap();
     let mut tx = crate::ledger::begin_write(&pool).await.unwrap();
-    write_document_fields(&mut tx, SalesDoc::Invoice, 1, &[FieldValue { field_id: po.id, value: "77".into() }, FieldValue { field_id: po.id, value: " ".into() }], &[])
-        .await
-        .unwrap();
+    write_document_fields(
+        &mut tx,
+        SalesDoc::Invoice,
+        1,
+        &[FieldValue { field_id: po.id, value: "77".into() }, FieldValue { field_id: po.id, value: " ".into() }],
+        &[],
+    )
+    .await
+    .unwrap();
     crate::ledger::commit_write(tx).await.unwrap();
     assert_eq!(document_fields(&pool, SalesDoc::Invoice, 1).await.unwrap()[0].value, "77");
     assert!(delete_custom_field(&pool, po.id).await.unwrap_err().starts_with("CF_PRINTED"));
@@ -78,8 +84,11 @@ async fn a_field_printed_on_a_form_stays() {
 async fn imported_values_add_fields_while_there_is_room() {
     let pool = test_pool().await;
     let income: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
-    let item_id: i64 =
-        sqlx::query_scalar("INSERT INTO products_services (name, rate_cents, income_account_id) VALUES ('Widget', 100, ?1) RETURNING id").bind(income).fetch_one(&pool).await.unwrap();
+    let item_id: i64 = sqlx::query_scalar("INSERT INTO products_services (name, rate_cents, income_account_id) VALUES ('Widget', 100, ?1) RETURNING id")
+        .bind(income)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     for n in 1..=14 {
         create_custom_field(&pool, FieldList::Item, field(&format!("F{n}"), false)).await.unwrap();
     }

@@ -92,7 +92,9 @@ async fn mock_server() -> Mock {
                 let n = socket.read(&mut buf).await.unwrap_or(0);
                 let head = String::from_utf8_lossy(&buf[..n]).to_string();
                 let line = head.lines().next().unwrap_or("").to_string();
-                let authorized = head.lines().any(|l| l.eq_ignore_ascii_case(&format!("authorization: Basic {}", base64::engine::general_purpose::STANDARD.encode("demo:s3cret"))));
+                let authorized = head
+                    .lines()
+                    .any(|l| l.eq_ignore_ascii_case(&format!("authorization: Basic {}", base64::engine::general_purpose::STANDARD.encode("demo:s3cret"))));
                 req.lock().unwrap().push(line.clone());
                 let (code, body) = if line.starts_with("POST /simplefin/claim/GOOD ") {
                     let mut c = claimed.lock().unwrap();
@@ -318,10 +320,8 @@ async fn simplefin_live() {
     link_account(&pool, account.id, checking, today - Days::new(60), today).await.unwrap();
     let summary = sf.sync(&pool, view.id, Utc::now()).await.unwrap();
     println!("{summary:#?}");
-    let sample: Vec<(String, String, i64)> = sqlx::query_as("SELECT txn_date, description, amount_cents FROM bank_transactions ORDER BY txn_date DESC LIMIT 8")
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+    let sample: Vec<(String, String, i64)> =
+        sqlx::query_as("SELECT txn_date, description, amount_cents FROM bank_transactions ORDER BY txn_date DESC LIMIT 8").fetch_all(&pool).await.unwrap();
     for line in sample {
         println!("  {line:?}");
     }

@@ -43,7 +43,7 @@ jobs:
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
-          components: clippy
+          components: clippy, rustfmt
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -52,6 +52,11 @@ jobs:
           shared-key: lint
           # Pull requests read main's cache; saving a copy per PR pushed main's out of the 10 GB limit.
           save-if: ${{ github.event_name != 'pull_request' }}
+
+      - name: Formatting (cargo fmt)
+        # Settings in src-tauri/rustfmt.toml. Run `cargo fmt` in src-tauri before pushing.
+        working-directory: src-tauri
+        run: cargo fmt --check
 
       - name: Clippy
         working-directory: src-tauri

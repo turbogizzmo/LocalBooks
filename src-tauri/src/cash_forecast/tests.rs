@@ -20,9 +20,10 @@ async fn invoice(pool: &SqlitePool, customer: &str, cents: i64, due: &str) -> i6
 
 async fn bill(pool: &SqlitePool, vendor: &str, cents: i64, due: &str) {
     let rent = account(pool, "6300").await;
-    let input: crate::expenses::BillInput = serde_json::from_value(serde_json::json!({ "vendorName": vendor, "billNumber": vendor, "billDate": "2026-10-01", "dueDate": due,
+    let input: crate::expenses::BillInput =
+        serde_json::from_value(serde_json::json!({ "vendorName": vendor, "billNumber": vendor, "billDate": "2026-10-01", "dueDate": due,
         "totalCents": cents, "lines": [{ "accountId": rent, "amountCents": cents }] }))
-    .unwrap();
+        .unwrap();
     crate::expenses::post_vendor_bill(pool, input).await.unwrap();
 }
 
@@ -44,7 +45,17 @@ async fn money_due_in_and_out_lands_in_its_week_and_ties_out_to_the_agings() {
     let partly = invoice(&pool, "Initech", 30_000, "2026-11-20").await; // week 2, 100.00 paid
     crate::invoices::record_payment(
         &pool,
-        crate::invoices::PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: partly, deposit_account_id: checking, payment_date: d("2026-11-02"), amount_cents: Cents(10_000), payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+        crate::invoices::PaymentInput {
+            discount_cents: Cents::ZERO,
+            payment_method_id: None,
+            invoice_id: partly,
+            deposit_account_id: checking,
+            payment_date: d("2026-11-02"),
+            amount_cents: Cents(10_000),
+            payment_method: "CHECK".into(),
+            reference: None,
+            exchange_rate_e6: None,
+        },
     )
     .await
     .unwrap();

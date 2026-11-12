@@ -23,8 +23,17 @@ use quick_xml::Reader;
 use super::{commodity_key, parse_date, Account, Address, Book, Entry, Format, Invoice, Job, Lot, Num, OwnerKind, Party, Split, Transaction};
 
 /// Objects collected whole.
-const OBJECTS: &[&str] =
-    &["gnc:account", "gnc:transaction", "gnc:GncCustomer", "gnc:GncVendor", "gnc:GncEmployee", "gnc:GncJob", "gnc:GncInvoice", "gnc:GncEntry", "gnc:GncBillTerm"];
+const OBJECTS: &[&str] = &[
+    "gnc:account",
+    "gnc:transaction",
+    "gnc:GncCustomer",
+    "gnc:GncVendor",
+    "gnc:GncEmployee",
+    "gnc:GncJob",
+    "gnc:GncInvoice",
+    "gnc:GncEntry",
+    "gnc:GncBillTerm",
+];
 /// Parts of an object collected as sub-records: a transaction's splits, an account's lots.
 const PARTS: &[&str] = &["trn:split", "gnc:lot"];
 /// Subtrees with nothing to import.
@@ -121,7 +130,9 @@ pub fn read_xml<R: BufRead>(input: R) -> Result<Book, String> {
     let mut book = Book::default();
 
     loop {
-        let event = reader.read_event_into(&mut buf).map_err(|e| format!("GNUCASH_PARSE_FAILED: the XML could not be read at byte {}: {e}", reader.buffer_position()))?;
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|e| format!("GNUCASH_PARSE_FAILED: the XML could not be read at byte {}: {e}", reader.buffer_position()))?;
         match event {
             Event::Start(e) => {
                 let name = e.name().as_ref().to_string();
@@ -278,7 +289,12 @@ fn add(book: &mut Book, r: Record) {
         "gnc:GncEmployee" => book.employees.extend(r.party("employee", "username")),
         "gnc:GncJob" => {
             if let Some(guid) = r.trimmed("job:guid") {
-                book.jobs.push(Job { guid, name: r.get("job:name").unwrap_or_default(), active: r.flag("job:active").unwrap_or(true), owner: r.owner("job:owner") });
+                book.jobs.push(Job {
+                    guid,
+                    name: r.get("job:name").unwrap_or_default(),
+                    active: r.flag("job:active").unwrap_or(true),
+                    owner: r.owner("job:owner"),
+                });
             }
         }
         "gnc:GncInvoice" => {

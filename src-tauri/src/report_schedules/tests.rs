@@ -119,7 +119,11 @@ async fn schedules_are_checked_and_report_builder_reports_can_be_scheduled() {
 #[tokio::test]
 async fn a_schedule_can_send_password_protected_pdfs_with_the_password_kept_off_the_company_file() {
     let pool = test_pool().await;
-    let passwords = SecretStore::in_file(std::env::temp_dir().join(format!("lb-report-pw-{}-{}.json", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default())), "test", "the report PDF password");
+    let passwords = SecretStore::in_file(
+        std::env::temp_dir().join(format!("lb-report-pw-{}-{}.json", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default())),
+        "test",
+        "the report PDF password",
+    );
     let mut s = schedule(Destination::Email);
     s.protect_pdf = true;
     // A password is needed the first time.
@@ -129,7 +133,8 @@ async fn a_schedule_can_send_password_protected_pdfs_with_the_password_kept_off_
     assert!(saved.protect_pdf && saved.pdf_password.is_none());
     assert!(!serde_json::to_string(&saved).unwrap().contains("month-end"), "the password is never sent back");
     // Nothing about the password is in the company file but the name it's stored under.
-    let stored: Option<String> = sqlx::query_scalar("SELECT pdf_password_key FROM report_schedules WHERE id = ?1").bind(saved.id).fetch_one(&pool).await.unwrap();
+    let stored: Option<String> =
+        sqlx::query_scalar("SELECT pdf_password_key FROM report_schedules WHERE id = ?1").bind(saved.id).fetch_one(&pool).await.unwrap();
     let key = stored.expect("protected");
     assert!(!key.contains("month-end"));
     assert_eq!(passwords.get(&key).await.unwrap().as_deref(), Some("month-end 2026"));

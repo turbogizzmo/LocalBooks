@@ -54,7 +54,16 @@ async fn a_voucher_pdf_has_its_header_lines_and_totals() {
 async fn a_long_voucher_runs_onto_more_pages() {
     let pool = test_pool().await;
     let company = forms::load_company(&pool).await.unwrap();
-    let line = |n: i64| JournalLineView { line_number: n, account_id: 1, account_name: "Office Supplies".into(), debit_cents: 100, credit_cents: 0, memo: Some(format!("Line {n}")), class_id: None, class_name: None };
+    let line = |n: i64| JournalLineView {
+        line_number: n,
+        account_id: 1,
+        account_name: "Office Supplies".into(),
+        debit_cents: 100,
+        credit_cents: 0,
+        memo: Some(format!("Line {n}")),
+        class_id: None,
+        class_name: None,
+    };
     let lines: Vec<_> = (1..=120).map(line).collect();
     let pages = layout(&doc(1, None, "Name"), &company, &lines).unwrap();
     assert!(pages.len() > 1);

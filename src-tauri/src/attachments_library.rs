@@ -83,7 +83,11 @@ pub async fn add_record_file(pool: &SqlitePool, record_kind: &str, record_id: i6
         return Err(format!("ATTACH_NO_RECORD: that {} does not exist", record_kind.to_lowercase().replace('_', " ")));
     }
     if record_kind == "RECONCILIATION" {
-        let undone: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM reconciliation_undos WHERE reconciliation_id = ?1)").bind(record_id).fetch_one(pool).await.map_err(db_err)?;
+        let undone: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM reconciliation_undos WHERE reconciliation_id = ?1)")
+            .bind(record_id)
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
         if undone {
             return Err("REC_UNDONE: that reconciliation was undone; attach the statement to the new one".into());
         }
@@ -264,7 +268,14 @@ pub async fn delete(pool: &SqlitePool, file: FileRef) -> Result<(), String> {
 
 /// Brings a deleted file back to its transaction or record.
 pub async fn restore(pool: &SqlitePool, file: FileRef) -> Result<(), String> {
-    one_row(sqlx::query(&format!("UPDATE {} SET deleted_at = NULL WHERE id = ?1", file.source.table())).bind(file.id).execute(pool).await.map_err(db_err)?.rows_affected())
+    one_row(
+        sqlx::query(&format!("UPDATE {} SET deleted_at = NULL WHERE id = ?1", file.source.table()))
+            .bind(file.id)
+            .execute(pool)
+            .await
+            .map_err(db_err)?
+            .rows_affected(),
+    )
 }
 
 /// Removes a deleted file for good. A file not deleted first is refused (by the schema too).
@@ -353,7 +364,11 @@ pub async fn files_to_send(pool: &SqlitePool, kind: crate::forms::FormKind, docu
 }
 
 fn one_row(affected: u64) -> Result<(), String> {
-    if affected == 1 { Ok(()) } else { Err("ATTACH_NOT_FOUND: that attachment does not exist".into()) }
+    if affected == 1 {
+        Ok(())
+    } else {
+        Err("ATTACH_NOT_FOUND: that attachment does not exist".into())
+    }
 }
 
 #[cfg(test)]

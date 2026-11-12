@@ -136,15 +136,13 @@ pub struct ChainHead {
 
 type AuditRow = (i64, String, String, i64, Option<String>, String, Option<String>, Option<String>);
 
-const ROW_SELECT: &str =
-    "SELECT id, timestamp, action_type, target_entity_id, actor, payload_snapshot, prev_hash, row_hash FROM ledger_audit_log";
+const ROW_SELECT: &str = "SELECT id, timestamp, action_type, target_entity_id, actor, payload_snapshot, prev_hash, row_hash FROM ledger_audit_log";
 
 /// Seals every unsealed audit row, in id order, inside the caller's transaction. Returns the chain
 /// head, or `None` when the file has no audit rows yet.
 pub async fn seal(conn: &mut SqliteConnection) -> Result<Option<ChainHead>, String> {
     let file_id: String = sqlx::query_scalar("SELECT file_id FROM ledger_chain WHERE id = 1").fetch_one(&mut *conn).await.map_err(db_err)?;
-    let unsealed: Vec<AuditRow> =
-        sqlx::query_as(&format!("{ROW_SELECT} WHERE row_hash IS NULL ORDER BY id")).fetch_all(&mut *conn).await.map_err(db_err)?;
+    let unsealed: Vec<AuditRow> = sqlx::query_as(&format!("{ROW_SELECT} WHERE row_hash IS NULL ORDER BY id")).fetch_all(&mut *conn).await.map_err(db_err)?;
     for (id, timestamp, action, target, row_actor, payload, _, _) in unsealed {
         let prev: Option<String> = sqlx::query_scalar("SELECT row_hash FROM ledger_audit_log WHERE id < ?1 ORDER BY id DESC LIMIT 1")
             .bind(id)
@@ -175,11 +173,10 @@ pub async fn seal(conn: &mut SqliteConnection) -> Result<Option<ChainHead>, Stri
             .await
             .map_err(db_err)?;
     }
-    let head: Option<(i64, String)> =
-        sqlx::query_as("SELECT id, row_hash FROM ledger_audit_log WHERE row_hash IS NOT NULL ORDER BY id DESC LIMIT 1")
-            .fetch_optional(&mut *conn)
-            .await
-            .map_err(db_err)?;
+    let head: Option<(i64, String)> = sqlx::query_as("SELECT id, row_hash FROM ledger_audit_log WHERE row_hash IS NOT NULL ORDER BY id DESC LIMIT 1")
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(db_err)?;
     Ok(head.map(|(row_id, row_hash)| ChainHead { file_id, row_id, row_hash }))
 }
 
@@ -189,12 +186,8 @@ pub async fn seal(conn: &mut SqliteConnection) -> Result<Option<ChainHead>, Stri
 pub async fn continues_record(conn: &mut SqliteConnection, head: &Option<ChainHead>) -> Result<bool, String> {
     let Some(head) = head else { return Ok(true) };
     let Some(Record { row_id, row_hash, .. }) = recorded_cached(&head.file_id).await? else { return Ok(true) };
-    let current: Option<String> = sqlx::query_scalar("SELECT row_hash FROM ledger_audit_log WHERE id = ?1")
-        .bind(row_id)
-        .fetch_optional(&mut *conn)
-        .await
-        .map_err(db_err)?
-        .flatten();
+    let current: Option<String> =
+        sqlx::query_scalar("SELECT row_hash FROM ledger_audit_log WHERE id = ?1").bind(row_id).fetch_optional(&mut *conn).await.map_err(db_err)?.flatten();
     Ok(current.as_deref() == Some(row_hash.as_str()))
 }
 

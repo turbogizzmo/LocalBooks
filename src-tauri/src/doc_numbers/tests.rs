@@ -19,7 +19,16 @@ fn invoice(number: Option<i64>, customer: &str, income: i64) -> InvoiceInput {
         customer_name: customer.into(),
         issue_date: d(4),
         due_date: d(30),
-        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents::from(5_000), income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+        lines: vec![InvoiceLineInput {
+            description: "Work".into(),
+            quantity_e4: 10_000,
+            rate_cents: Cents::from(5_000),
+            income_account_id: income,
+            product_service_id: None,
+            class_id: None,
+            is_taxable: false,
+            service_date: None,
+        }],
         currency: None,
         tax_rate_id: None,
         discount_cents: Cents::ZERO,
@@ -92,11 +101,30 @@ async fn each_sales_form_takes_a_typed_number() {
     let pool = test_pool().await;
     let income = services(&pool).await;
     let checking: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(&pool).await.unwrap();
-    let line = crate::sales::SalesLineInput { product_service_id: None, description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(2_000), income_account_id: income, class_id: None, is_taxable: false, service_date: None };
+    let line = crate::sales::SalesLineInput {
+        product_service_id: None,
+        description: "Work".into(),
+        quantity_e4: 10_000,
+        rate_cents: Cents(2_000),
+        income_account_id: income,
+        class_id: None,
+        is_taxable: false,
+        service_date: None,
+    };
 
     let estimate = crate::estimates::create_estimate(
         &pool,
-        crate::estimates::EstimateInput { estimate_number: Some(77), customer_name: "Acme".into(), estimate_date: d(4), expiration_date: None, memo: None, lines: vec![line.clone()], tax_rate_id: None, discount_cents: Cents::ZERO, details: Default::default() },
+        crate::estimates::EstimateInput {
+            estimate_number: Some(77),
+            customer_name: "Acme".into(),
+            estimate_date: d(4),
+            expiration_date: None,
+            memo: None,
+            lines: vec![line.clone()],
+            tax_rate_id: None,
+            discount_cents: Cents::ZERO,
+            details: Default::default(),
+        },
     )
     .await
     .unwrap();
@@ -166,10 +194,12 @@ async fn an_edited_invoice_keeps_its_number_and_a_duplicate_takes_the_next() {
     let income = services(&pool).await;
     let first = create_and_post_invoice(&pool, invoice(Some(1200), "Acme", income)).await.unwrap();
     let edited = crate::edits::replace_invoice(&pool, first.id, invoice(None, "Acme", income)).await.unwrap();
-    let (number, voided): (i64, bool) = sqlx::query_as("SELECT invoice_number, is_voided FROM invoices WHERE id = ?1").bind(edited).fetch_one(&pool).await.unwrap();
+    let (number, voided): (i64, bool) =
+        sqlx::query_as("SELECT invoice_number, is_voided FROM invoices WHERE id = ?1").bind(edited).fetch_one(&pool).await.unwrap();
     assert_eq!((number, voided), (1200, false), "the corrected invoice keeps the number");
     // The original keeps it too, voided and marked replaced; edited again, the number still holds.
-    let (old_number, old_voided, replaced): (i64, bool, bool) = sqlx::query_as("SELECT invoice_number, is_voided, is_replaced FROM invoices WHERE id = ?1").bind(first.id).fetch_one(&pool).await.unwrap();
+    let (old_number, old_voided, replaced): (i64, bool, bool) =
+        sqlx::query_as("SELECT invoice_number, is_voided, is_replaced FROM invoices WHERE id = ?1").bind(first.id).fetch_one(&pool).await.unwrap();
     assert_eq!((old_number, old_voided, replaced), (1200, true, true));
     let again = crate::edits::replace_invoice(&pool, edited, invoice(None, "Acme", income)).await.unwrap();
     let number: i64 = sqlx::query_scalar("SELECT invoice_number FROM invoices WHERE id = ?1").bind(again).fetch_one(&pool).await.unwrap();
@@ -196,7 +226,17 @@ async fn a_part_paid_invoice_keeps_its_number_and_its_payment_when_edited() {
     let first = create_and_post_invoice(&pool, input).await.unwrap();
     crate::invoices::record_payment(
         &pool,
-        crate::invoices::PaymentInput { invoice_id: first.id, deposit_account_id: checking, payment_date: d(10), amount_cents: Cents::from(4_000), payment_method: "CHECK".into(), payment_method_id: None, reference: None, exchange_rate_e6: None, discount_cents: Cents::ZERO },
+        crate::invoices::PaymentInput {
+            invoice_id: first.id,
+            deposit_account_id: checking,
+            payment_date: d(10),
+            amount_cents: Cents::from(4_000),
+            payment_method: "CHECK".into(),
+            payment_method_id: None,
+            reference: None,
+            exchange_rate_e6: None,
+            discount_cents: Cents::ZERO,
+        },
     )
     .await
     .unwrap();
@@ -206,7 +246,10 @@ async fn a_part_paid_invoice_keeps_its_number_and_its_payment_when_edited() {
     let after = crate::invoices::get_summary(&pool, edited).await.unwrap();
     assert_eq!((after.invoice_number, after.amount_paid_cents, after.status.as_str()), (first.invoice_number, 4_000, "PARTIAL"));
     // The payment, Receive Payments and the customer's open invoices all name the same number.
-    let paid_on: i64 = sqlx::query_scalar("SELECT i.invoice_number FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.is_voided = 0").fetch_one(&pool).await.unwrap();
+    let paid_on: i64 = sqlx::query_scalar("SELECT i.invoice_number FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.is_voided = 0")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(paid_on, first.invoice_number);
 }
 
@@ -216,7 +259,16 @@ async fn a_changed_sales_order_keeps_its_number() {
     let income = services(&pool).await;
     let line = crate::sales_orders::SalesOrderLineInput {
         id: None,
-        line: crate::sales::SalesLineInput { product_service_id: None, description: "Work".into(), quantity_e4: 10_000, rate_cents: Cents(2_000), income_account_id: income, class_id: None, is_taxable: false, service_date: None },
+        line: crate::sales::SalesLineInput {
+            product_service_id: None,
+            description: "Work".into(),
+            quantity_e4: 10_000,
+            rate_cents: Cents(2_000),
+            income_account_id: income,
+            class_id: None,
+            is_taxable: false,
+            service_date: None,
+        },
     };
     let order = |number: Option<i64>, lines: Vec<crate::sales_orders::SalesOrderLineInput>| crate::sales_orders::SalesOrderInput {
         customer_name: "Acme".into(),

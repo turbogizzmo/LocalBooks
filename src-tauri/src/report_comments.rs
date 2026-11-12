@@ -128,32 +128,36 @@ pub async fn add_comment(pool: &SqlitePool, input: &CommentInput, author: &str) 
                 (id, serde_json::from_str::<Value>(&text).map_err(|_| "COMMENT_BAD_REPORT: the kept report is damaged".to_string())?)
             }
             None => {
-                let title = input.title.as_deref().map(str::trim).filter(|t| !t.is_empty()).ok_or_else(|| "COMMENT_BAD_REPORT: the report has no title".to_string())?;
+                let title =
+                    input.title.as_deref().map(str::trim).filter(|t| !t.is_empty()).ok_or_else(|| "COMMENT_BAD_REPORT: the report has no title".to_string())?;
                 let snapshot = input.snapshot.clone().ok_or_else(|| "COMMENT_BAD_REPORT: the report could not be kept".to_string())?;
                 shape(&snapshot)?;
-                let id: i64 = sqlx::query_scalar("INSERT INTO commented_reports (title, subtitle, snapshot_json, created_by) VALUES (?1, ?2, ?3, ?4) RETURNING id")
-                    .bind(title.chars().take(200).collect::<String>())
-                    .bind(input.subtitle.as_deref().unwrap_or_default().chars().take(500).collect::<String>())
-                    .bind(snapshot.to_string())
-                    .bind(author)
-                    .fetch_one(&mut *tx)
-                    .await
-                    .map_err(db_err)?;
+                let id: i64 =
+                    sqlx::query_scalar("INSERT INTO commented_reports (title, subtitle, snapshot_json, created_by) VALUES (?1, ?2, ?3, ?4) RETURNING id")
+                        .bind(title.chars().take(200).collect::<String>())
+                        .bind(input.subtitle.as_deref().unwrap_or_default().chars().take(500).collect::<String>())
+                        .bind(snapshot.to_string())
+                        .bind(author)
+                        .fetch_one(&mut *tx)
+                        .await
+                        .map_err(db_err)?;
                 (id, snapshot)
             }
         };
         let line = cell(&snapshot, input.row, input.col)?;
-        sqlx::query("INSERT INTO report_comments (commented_report_id, row_index, col_index, figure, line_label, body, author) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
-            .bind(report_id)
-            .bind(input.row)
-            .bind(input.col)
-            .bind(&figure)
-            .bind(line)
-            .bind(body)
-            .bind(author)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_err)?;
+        sqlx::query(
+            "INSERT INTO report_comments (commented_report_id, row_index, col_index, figure, line_label, body, author) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        )
+        .bind(report_id)
+        .bind(input.row)
+        .bind(input.col)
+        .bind(&figure)
+        .bind(line)
+        .bind(body)
+        .bind(author)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
         Ok(report_id)
     }
     .await;

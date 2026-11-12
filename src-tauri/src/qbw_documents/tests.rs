@@ -208,7 +208,12 @@ fn explores_purchase_tables() {
     let mut signs: BTreeMap<(&str, bool), usize> = BTreeMap::new();
     let types: HashMap<i64, &str> = ledger.accounts.iter().map(|a| (a.id, a.account_type)).collect();
     for t in &ledger.transactions {
-        let side: i64 = t.lines.iter().filter(|l| matches!(types.get(&l.account_id), Some(&"ACCOUNTS_PAYABLE") | Some(&"CREDIT_CARD") | Some(&"BANK"))).map(|l| l.cents).sum();
+        let side: i64 = t
+            .lines
+            .iter()
+            .filter(|l| matches!(types.get(&l.account_id), Some(&"ACCOUNTS_PAYABLE") | Some(&"CREDIT_CARD") | Some(&"BANK")))
+            .map(|l| l.cents)
+            .sum();
         *signs.entry((t.kind, side > 0)).or_default() += 1;
     }
     println!("kind, pays out (credit to bank/card/AP): {signs:?}");
@@ -221,8 +226,11 @@ fn explores_transfers_estimates_and_orders() {
     use crate::qbw_company::{read_pages, rows_of};
     let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
     let (pages, catalog, _, _) = read_pages(std::path::Path::new(&path)).unwrap();
-    let mut names: Vec<&String> =
-        catalog.names.values().filter(|n| n.starts_with("abmc_") && (n.contains("transfer") || n.contains("estimate") || n.contains("purchase_order") || n.contains("sales_order"))).collect();
+    let mut names: Vec<&String> = catalog
+        .names
+        .values()
+        .filter(|n| n.starts_with("abmc_") && (n.contains("transfer") || n.contains("estimate") || n.contains("purchase_order") || n.contains("sales_order")))
+        .collect();
     names.sort();
     for name in names {
         let id = catalog.table_id(name).unwrap();
@@ -242,7 +250,11 @@ fn form_lines_too_large_for_the_books_are_counted() {
             ("account_id".to_string(), crate::qbw_records::Value::Int(40)),
             (
                 "amount_amt".to_string(),
-                crate::qbw_records::Value::Numeric(crate::qbw_records::Numeric { coefficient: cents.unsigned_abs() as u128, exponent: -1, negative: cents < 0 }),
+                crate::qbw_records::Value::Numeric(crate::qbw_records::Numeric {
+                    coefficient: cents.unsigned_abs() as u128,
+                    exponent: -1,
+                    negative: cents < 0,
+                }),
             ),
         ]
         .into_iter()

@@ -2,11 +2,7 @@ use super::*;
 use crate::db::test_pool;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
-    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
-        .bind(number)
-        .fetch_one(pool)
-        .await
-        .expect("seeded account exists")
+    sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.expect("seeded account exists")
 }
 
 #[test]
@@ -35,8 +31,20 @@ fn parses_amounts_to_exact_cents() {
 fn parses_common_date_formats() {
     let expected = NaiveDate::from_ymd_opt(2026, 3, 7).unwrap();
     for raw in [
-        "2026-03-07", "03/07/2026", "3/7/2026", "3/7/26", "Mar 07, 2026", "2026-03-07 00:00:00", "2026-03-07T09:30:00Z",
-        "2026/03/07", "03-07-2026", "7 Mar 2026", "07-Mar-2026", "March 7, 2026", "20260307", "20260307120000.000[-5:EST]",
+        "2026-03-07",
+        "03/07/2026",
+        "3/7/2026",
+        "3/7/26",
+        "Mar 07, 2026",
+        "2026-03-07 00:00:00",
+        "2026-03-07T09:30:00Z",
+        "2026/03/07",
+        "03-07-2026",
+        "7 Mar 2026",
+        "07-Mar-2026",
+        "March 7, 2026",
+        "20260307",
+        "20260307120000.000[-5:EST]",
     ] {
         assert_eq!(parse_date(raw), Ok(expected), "{raw}");
     }
@@ -320,11 +328,7 @@ async fn import_dedupes_and_approval_posts_and_learns() {
     let dir = std::env::temp_dir().join(format!("localbooks-test-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("feed.csv");
-    std::fs::write(
-        &path,
-        "Date,Description,Amount\n2026-10-01,JOES DINER 0042,-18.75\n2026-10-01,JOES DINER 0042,-18.75\n2026-10-02,TRANSFER,0.00\n",
-    )
-    .unwrap();
+    std::fs::write(&path, "Date,Description,Amount\n2026-10-01,JOES DINER 0042,-18.75\n2026-10-01,JOES DINER 0042,-18.75\n2026-10-02,TRANSFER,0.00\n").unwrap();
 
     let first = import_file(&pool, &path, checking, None).await.expect("imports");
     assert_eq!(first, ImportSummary { imported: 2, matched: 0, duplicates: 0, skipped_zero: 1 });
@@ -353,26 +357,23 @@ async fn import_dedupes_and_approval_posts_and_learns() {
     let learned = remaining[0].suggestion.as_ref().expect("suggestion");
     assert_eq!((learned.account_id, learned.origin.as_str()), (meals, "LEARNED"));
 
-    let err = approve(&pool, &Suggester::default(), "test", pending[0].id, Approval { category_account_id: meals, ..Approval::default() }).await.expect_err("already approved");
+    let err = approve(&pool, &Suggester::default(), "test", pending[0].id, Approval { category_account_id: meals, ..Approval::default() })
+        .await
+        .expect_err("already approved");
     assert!(err.starts_with("BANK_TXN_NOT_PENDING"), "{err}");
 
     exclude(&pool, remaining[0].id).await.expect("excludes");
     assert!(list_pending(&pool, &Suggester::default(), "test").await.unwrap().is_empty());
 
     // The approval is a real Expense document; voiding it sends the line back for review.
-    let entry_id: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM expenses WHERE kind = 'EXPENSE'")
-        .fetch_one(&pool)
-        .await
-        .expect("approval created an expense");
+    let entry_id: i64 =
+        sqlx::query_scalar("SELECT journal_entry_id FROM expenses WHERE kind = 'EXPENSE'").fetch_one(&pool).await.expect("approval created an expense");
     crate::ledger::void_transaction(&pool, entry_id).await.expect("voids");
     let back = list_pending(&pool, &Suggester::default(), "test").await.unwrap();
     assert_eq!(back.len(), 1);
     assert_eq!(back[0].id, pending[0].id);
-    let checking_after: i64 = sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1")
-        .bind(checking)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let checking_after: i64 =
+        sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1").bind(checking).fetch_one(&pool).await.unwrap();
     assert_eq!(checking_after, 0);
 }
 

@@ -264,7 +264,8 @@ pub async fn apply_credits(pool: &SqlitePool, input: &ApplyCreditsInput) -> Resu
         let mut total: i64 = 0;
         let mut rows = Vec::with_capacity(input.applications.len());
         for a in &input.applications {
-            let apply = ApplyCreditInput { credit_id: a.credit_id, document_id: a.document_id, amount_cents: Cents(a.amount_cents), applied_date: input.applied_date };
+            let apply =
+                ApplyCreditInput { credit_id: a.credit_id, document_id: a.document_id, amount_cents: Cents(a.amount_cents), applied_date: input.applied_date };
             match a.kind {
                 PartyKind::Customer => apply_customer_credit_in_tx(tx, &apply).await?,
                 PartyKind::Vendor => apply_vendor_credit_in_tx(tx, &apply).await?,
@@ -387,13 +388,16 @@ pub async fn undeposited(pool: &SqlitePool) -> Result<UndepositedReview, String>
                 .chain(unnamed.iter().map(|l| (*l).clone()))
                 .filter(|l| l.available_cents >= smallest)
                 .collect();
-            UndepositedCustomer { customer_name: name.clone(), total_cents: payments.iter().map(|p| p.amount_cents).sum(), payments: payments.clone(), candidates }
+            UndepositedCustomer {
+                customer_name: name.clone(),
+                total_cents: payments.iter().map(|p| p.amount_cents).sum(),
+                payments: payments.clone(),
+                candidates,
+            }
         })
         .collect();
-    let matches = sqlx::query_as::<_, UndepositedMatch>(&format!("{MATCHES_SELECT} WHERE m.is_voided = 0 ORDER BY m.id DESC"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?;
+    let matches =
+        sqlx::query_as::<_, UndepositedMatch>(&format!("{MATCHES_SELECT} WHERE m.is_voided = 0 ORDER BY m.id DESC")).fetch_all(pool).await.map_err(db_err)?;
     Ok(UndepositedReview { customers, matches })
 }
 
@@ -636,7 +640,9 @@ pub async fn write_off(pool: &SqlitePool, input: &WriteOffInput) -> Result<Write
                 return Err(format!("WO_FOREIGN: invoice #{number} is in {}; write-offs are in the home currency", currency.unwrap_or_default()));
             }
             let description = format!("Write-off of invoice #{number}");
-            let credit = CreditMemoInput { credit_number: None, form_lines: Vec::new(),
+            let credit = CreditMemoInput {
+                credit_number: None,
+                form_lines: Vec::new(),
                 customer_name: customer.clone(),
                 credit_date: input.write_off_date,
                 memo: Some(memo.map_or_else(|| description.clone(), |m| format!("{description}: {m}"))),
@@ -648,16 +654,23 @@ pub async fn write_off(pool: &SqlitePool, input: &WriteOffInput) -> Result<Write
                     rate_cents: Cents(open),
                     income_account_id: input.account_id,
                     class_id: None,
-                    is_taxable: false, service_date: None,
+                    is_taxable: false,
+                    service_date: None,
                 }],
                 tax_rate_id: None,
                 header: Default::default(),
             };
             let memo_id = write_credit_memo(tx, &credit, true).await?;
-            apply_customer_credit_in_tx(tx, &ApplyCreditInput { credit_id: memo_id, document_id: invoice_id, amount_cents: Cents(open), applied_date: input.write_off_date }).await?;
+            apply_customer_credit_in_tx(
+                tx,
+                &ApplyCreditInput { credit_id: memo_id, document_id: invoice_id, amount_cents: Cents(open), applied_date: input.write_off_date },
+            )
+            .await?;
             total += open;
             memos.push(memo_id);
-            rows.push(serde_json::json!({ "invoiceId": invoice_id, "invoiceNumber": number, "customer": customer, "creditMemoId": memo_id, "amountCents": open }));
+            rows.push(
+                serde_json::json!({ "invoiceId": invoice_id, "invoiceNumber": number, "customer": customer, "creditMemoId": memo_id, "amountCents": open }),
+            );
         }
         let payload = serde_json::json!({
             "event": "WRITE_OFF_INVOICES", "accountId": input.account_id, "date": input.write_off_date, "totalCents": total, "invoices": rows,
@@ -748,7 +761,15 @@ pub async fn list_changes(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -
     .map_err(db_err)?;
     let mut out: Vec<ListChange> = added
         .into_iter()
-        .map(|(list, record_id, name, occurred_at)| ListChange { list, record_id, name, change: "ADDED".into(), occurred_at, actor: None, details: String::new() })
+        .map(|(list, record_id, name, occurred_at)| ListChange {
+            list,
+            record_id,
+            name,
+            change: "ADDED".into(),
+            occurred_at,
+            actor: None,
+            details: String::new(),
+        })
         .collect();
 
     let edits: Vec<(String, i64, String, Option<String>, String)> = sqlx::query_as(
@@ -884,22 +905,22 @@ pub async fn compare_inventory(pool: &SqlitePool, as_of: NaiveDate) -> Result<In
     // Every differing entry's header in one query.
     let ids = serde_json::to_string(&differing.iter().map(|d| d.0).collect::<Vec<_>>()).map_err(|e| e.to_string())?;
     type HeaderRow = (i64, String, String, Option<String>, Option<String>);
-    let headers: HashMap<i64, HeaderRow> =
-        sqlx::query_as::<_, (i64, i64, String, String, Option<String>, Option<String>)>(
-            "SELECT e.id, e.entry_number, e.entry_date, e.source_type, e.memo, p.party_name
+    let headers: HashMap<i64, HeaderRow> = sqlx::query_as::<_, (i64, i64, String, String, Option<String>, Option<String>)>(
+        "SELECT e.id, e.entry_number, e.entry_date, e.source_type, e.memo, p.party_name
              FROM journal_entries e LEFT JOIN v_entry_party p ON p.journal_entry_id = e.id
              WHERE e.id IN (SELECT value FROM json_each(?1))",
-        )
-        .bind(ids)
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?
-        .into_iter()
-        .map(|(id, number, date, source, memo, party)| (id, (number, date, source, memo, party)))
-        .collect();
+    )
+    .bind(ids)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?
+    .into_iter()
+    .map(|(id, number, date, source, memo, party)| (id, (number, date, source, memo, party)))
+    .collect();
     let mut differences = Vec::with_capacity(differing.len());
     for (entry, account, l, s) in differing {
-        let (entry_number, entry_date, source_type, memo, party_name) = headers.get(&entry).cloned().ok_or_else(|| format!("CLEANUP_NO_ENTRY: entry {entry} is missing"))?;
+        let (entry_number, entry_date, source_type, memo, party_name) =
+            headers.get(&entry).cloned().ok_or_else(|| format!("CLEANUP_NO_ENTRY: entry {entry} is missing"))?;
         differences.push(InventoryDifference {
             journal_entry_id: entry,
             entry_number,

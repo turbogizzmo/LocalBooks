@@ -55,12 +55,14 @@ async fn category_rules_are_listed_as_words_and_can_be_repointed_or_removed() {
         sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(&pool).await.unwrap(),
     );
     let pattern = crate::bank::learned_pattern("SQ *BLUE BOTTLE #123").unwrap();
-    let id: i64 = sqlx::query_scalar("INSERT INTO bank_rules (pattern, direction, account_id, origin, priority) VALUES (?1, 'OUTFLOW', ?2, 'LEARNED', 1000) RETURNING id")
-        .bind(&pattern)
-        .bind(rent)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO bank_rules (pattern, direction, account_id, origin, priority) VALUES (?1, 'OUTFLOW', ?2, 'LEARNED', 1000) RETURNING id",
+    )
+    .bind(&pattern)
+    .bind(rent)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     let listed = list_category_rules(&pool).await.unwrap();
     assert_eq!(listed.iter().find(|r| r.id == id).unwrap().words, "BLUE BOTTLE");
     assert!(set_category_rule_account(&pool, id, checking).await.unwrap_err().starts_with("BANK_RULE_BAD_ACCOUNT"));

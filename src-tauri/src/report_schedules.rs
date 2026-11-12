@@ -224,10 +224,42 @@ fn check(s: &Schedule) -> Result<(), String> {
     Ok(())
 }
 
-type ScheduleRow = (i64, String, String, String, NaiveDate, Option<NaiveDate>, Option<NaiveDate>, String, Option<String>, Option<String>, String, bool, Option<String>, Option<String>, Option<String>);
+type ScheduleRow = (
+    i64,
+    String,
+    String,
+    String,
+    NaiveDate,
+    Option<NaiveDate>,
+    Option<NaiveDate>,
+    String,
+    Option<String>,
+    Option<String>,
+    String,
+    bool,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
 
 fn from_row(r: ScheduleRow) -> Schedule {
-    let (id, name, reports_json, frequency, start_date, end_date, next_run, destination, recipients, folder, format, is_active, last_run_at, last_result, pdf_password_key) = r;
+    let (
+        id,
+        name,
+        reports_json,
+        frequency,
+        start_date,
+        end_date,
+        next_run,
+        destination,
+        recipients,
+        folder,
+        format,
+        is_active,
+        last_run_at,
+        last_result,
+        pdf_password_key,
+    ) = r;
     Schedule {
         id,
         name,
@@ -423,7 +455,16 @@ fn custom_sheet(company: &str, title: &str, report: &crate::custom_reports::Cust
                 .collect(),
         })
         .collect();
-    Sheet { company: company.to_string(), title: title.to_string(), subtitle: period.to_string(), notes: Vec::new(), columns, rows, indent_column: 0, footer: None }
+    Sheet {
+        company: company.to_string(),
+        title: title.to_string(),
+        subtitle: period.to_string(),
+        notes: Vec::new(),
+        columns,
+        rows,
+        indent_column: 0,
+        footer: None,
+    }
 }
 
 fn long_date(d: NaiveDate) -> String {
@@ -438,20 +479,35 @@ pub async fn sheet_for(pool: &SqlitePool, report: &ScheduledReport, run: NaiveDa
             crate::xlsx_export::report_sheet(pool, report, Some(start), Some(end), Some(end), None).await
         }
         ScheduledReport::Preset { id, period } => {
-            let preset = crate::custom_reports::presets().into_iter().find(|p| p.id == id).ok_or_else(|| format!("SCHEDULE_REPORT: the report '{id}' no longer exists"))?;
+            let preset = crate::custom_reports::presets()
+                .into_iter()
+                .find(|p| p.id == id)
+                .ok_or_else(|| format!("SCHEDULE_REPORT: the report '{id}' no longer exists"))?;
             let as_of = matches!(preset.date_mode, crate::custom_reports::DateMode::AsOf);
             run_custom(pool, preset.title, preset.settings, *period, as_of, run).await
         }
         ScheduledReport::Saved { id, period } => {
-            let saved = crate::custom_reports::list_saved(pool).await?.into_iter().find(|s| s.id == *id).ok_or_else(|| "SCHEDULE_REPORT: a memorized report on this schedule was deleted".to_string())?;
-            let settings: crate::custom_reports::ReportSettings = serde_json::from_value(saved.settings.clone()).map_err(|e| format!("SCHEDULE_REPORT: {e}"))?;
+            let saved = crate::custom_reports::list_saved(pool)
+                .await?
+                .into_iter()
+                .find(|s| s.id == *id)
+                .ok_or_else(|| "SCHEDULE_REPORT: a memorized report on this schedule was deleted".to_string())?;
+            let settings: crate::custom_reports::ReportSettings =
+                serde_json::from_value(saved.settings.clone()).map_err(|e| format!("SCHEDULE_REPORT: {e}"))?;
             let as_of = saved.settings.get("dateMode").and_then(Value::as_str) == Some("asOf");
             run_custom(pool, &saved.name, settings, *period, as_of, run).await
         }
     }
 }
 
-async fn run_custom(pool: &SqlitePool, title: &str, mut settings: crate::custom_reports::ReportSettings, period: Period, as_of: bool, run: NaiveDate) -> Result<Sheet, String> {
+async fn run_custom(
+    pool: &SqlitePool,
+    title: &str,
+    mut settings: crate::custom_reports::ReportSettings,
+    period: Period,
+    as_of: bool,
+    run: NaiveDate,
+) -> Result<Sheet, String> {
     let (start, end) = period.range(run);
     settings.start_date = (!as_of).then_some(start);
     settings.end_date = Some(end);
@@ -470,9 +526,12 @@ const XLSX_TYPE: &str = "application/vnd.openxmlformats-officedocument.spreadshe
 pub async fn files_for(pool: &SqlitePool, schedule: &Schedule, run: NaiveDate, passwords: &SecretStore) -> Result<Vec<ReportFile>, String> {
     let symbol = crate::preferences::currency_symbol(pool).await?;
     let password = match (&schedule.pdf_password_key, schedule.format) {
-        (Some(key), FileFormat::Pdf) => Some(passwords.get(key).await?.ok_or(
-            "SCHEDULE_PDF_PASSWORD: this schedule's PDF password isn't on this computer. Open the schedule and enter it again",
-        )?),
+        (Some(key), FileFormat::Pdf) => Some(
+            passwords
+                .get(key)
+                .await?
+                .ok_or("SCHEDULE_PDF_PASSWORD: this schedule's PDF password isn't on this computer. Open the schedule and enter it again")?,
+        ),
         _ => None,
     };
     let mut out = Vec::with_capacity(schedule.reports.len());

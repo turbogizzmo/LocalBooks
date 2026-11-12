@@ -28,7 +28,13 @@ where
     let pool = fill(pool).await;
     crate::preferences::set(&pool, "company_name", MARKER).await.unwrap();
     let (ann, _) = users::turn_on(&pool, "ann", None, "ann password 1").await.unwrap();
-    users::add(&pool, &ann, NewUserInput { username: "bob".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "bob password 1".into() }).await.unwrap();
+    users::add(
+        &pool,
+        &ann,
+        NewUserInput { username: "bob".into(), display_name: None, role: Role::Standard, can_see_sensitive: false, password: "bob password 1".into() },
+    )
+    .await
+    .unwrap();
     crate::db::close_pool(&pool).await;
     let config = DbConfig { config_dir: dir.join("config"), default_path: path.clone(), backups_dir: dir.join("backups") };
     let db = Db::open_at(path, config).await.unwrap();
@@ -59,7 +65,10 @@ async fn turning_encryption_on_and_off() {
 
     // Refused without the tick, without Bob's temporary password, or with a wrong password.
     assert!(encrypt(&db, &ann, EncryptInput { understood: false, ..turn_on("ann password 1", bob) }).await.unwrap_err().starts_with("ENCRYPT_NOT_CONFIRMED"));
-    assert!(encrypt(&db, &ann, EncryptInput { temporary_passwords: vec![], ..turn_on("ann password 1", bob) }).await.unwrap_err().starts_with("ENCRYPT_NEEDS_PASSWORDS"));
+    assert!(encrypt(&db, &ann, EncryptInput { temporary_passwords: vec![], ..turn_on("ann password 1", bob) })
+        .await
+        .unwrap_err()
+        .starts_with("ENCRYPT_NEEDS_PASSWORDS"));
     assert!(encrypt(&db, &ann, turn_on("wrong password", bob)).await.unwrap_err().starts_with("ENCRYPT_WRONG_PASSWORD"));
     let plain_bytes = [std::fs::read(&path).unwrap(), std::fs::read(crate::wal_guard::wal_path(&path)).unwrap_or_default()].concat();
     assert!(!header::is_encrypted(&path) && contains(&plain_bytes, MARKER.as_bytes()), "nothing changed: still a plain file");
@@ -115,7 +124,8 @@ async fn every_kind_of_snapshot_restores_from_an_encrypted_file() {
     let dir = scratch("snapshots");
     let (db, ann) = plain_company(&dir, |pool| async {
         let pool = crate::harness::fixture::harbor_lane_in(pool).await;
-        let lock = crate::closing::ClosingInput { lock_date: Some(chrono::NaiveDate::from_ymd_opt(2025, 3, 31).unwrap()), current_passcode: None, new_passcode: None };
+        let lock =
+            crate::closing::ClosingInput { lock_date: Some(chrono::NaiveDate::from_ymd_opt(2025, 3, 31).unwrap()), current_passcode: None, new_passcode: None };
         crate::closing::set_closing_date(&pool, &lock).await.unwrap();
         pool
     })
@@ -193,7 +203,11 @@ async fn attachments_checkup_and_diagnostics_on_an_encrypted_file() {
     let (db, ann) = plain_company(&dir, |pool| async { crate::harness::fixture::harbor_lane_in(pool).await }).await;
     let entry: i64 = sqlx::query_scalar("SELECT MIN(id) FROM journal_entries").fetch_one(&db.pool().await).await.unwrap();
     let attachment = crate::workflows::add_attachment(&db.pool().await, entry, "receipt.pdf", RECEIPT).await.unwrap();
-    assert!(contains(&std::fs::read(db.path().await.unwrap()).unwrap(), RECEIPT) || contains(&std::fs::read(crate::wal_guard::wal_path(&db.path().await.unwrap())).unwrap_or_default(), RECEIPT), "plain before");
+    assert!(
+        contains(&std::fs::read(db.path().await.unwrap()).unwrap(), RECEIPT)
+            || contains(&std::fs::read(crate::wal_guard::wal_path(&db.path().await.unwrap())).unwrap_or_default(), RECEIPT),
+        "plain before"
+    );
     let bob = bob_id(&db).await;
     encrypt(&db, &ann, turn_on("ann password 1", bob)).await.unwrap();
     let path = db.path().await.unwrap();

@@ -79,10 +79,33 @@ const TIMES_BOLD: [u16; 95] = [
 
 /// Unicode characters WinAnsi places in 0x80..=0x9F.
 const WINANSI_HIGH: [(char, u8); 27] = [
-    ('€', 0x80), ('‚', 0x82), ('ƒ', 0x83), ('„', 0x84), ('…', 0x85), ('†', 0x86), ('‡', 0x87),
-    ('ˆ', 0x88), ('‰', 0x89), ('Š', 0x8A), ('‹', 0x8B), ('Œ', 0x8C), ('Ž', 0x8E), ('\u{2018}', 0x91),
-    ('\u{2019}', 0x92), ('\u{201C}', 0x93), ('\u{201D}', 0x94), ('•', 0x95), ('–', 0x96), ('—', 0x97),
-    ('˜', 0x98), ('™', 0x99), ('š', 0x9A), ('›', 0x9B), ('œ', 0x9C), ('ž', 0x9E), ('Ÿ', 0x9F),
+    ('€', 0x80),
+    ('‚', 0x82),
+    ('ƒ', 0x83),
+    ('„', 0x84),
+    ('…', 0x85),
+    ('†', 0x86),
+    ('‡', 0x87),
+    ('ˆ', 0x88),
+    ('‰', 0x89),
+    ('Š', 0x8A),
+    ('‹', 0x8B),
+    ('Œ', 0x8C),
+    ('Ž', 0x8E),
+    ('\u{2018}', 0x91),
+    ('\u{2019}', 0x92),
+    ('\u{201C}', 0x93),
+    ('\u{201D}', 0x94),
+    ('•', 0x95),
+    ('–', 0x96),
+    ('—', 0x97),
+    ('˜', 0x98),
+    ('™', 0x99),
+    ('š', 0x9A),
+    ('›', 0x9B),
+    ('œ', 0x9C),
+    ('ž', 0x9E),
+    ('Ÿ', 0x9F),
 ];
 
 /// The WinAnsi code for a character, if the standard fonts can show it.
@@ -258,11 +281,40 @@ pub enum Align {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "op", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Op {
-    Text { x: f32, y: f32, text: String, family: FontFamily, bold: bool, size: f32, color: Rgb, align: Align },
-    Rect { x: f32, y: f32, w: f32, h: f32, fill: Option<Rgb>, stroke: Option<Rgb>, line_width: f32 },
-    Line { x1: f32, y1: f32, x2: f32, y2: f32, color: Rgb, width: f32 },
+    Text {
+        x: f32,
+        y: f32,
+        text: String,
+        family: FontFamily,
+        bold: bool,
+        size: f32,
+        color: Rgb,
+        align: Align,
+    },
+    Rect {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        fill: Option<Rgb>,
+        stroke: Option<Rgb>,
+        line_width: f32,
+    },
+    Line {
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        color: Rgb,
+        width: f32,
+    },
     /// The document's image (the company logo), scaled into the box.
-    Image { x: f32, y: f32, w: f32, h: f32 },
+    Image {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -285,7 +337,10 @@ pub struct PdfImage {
 #[derive(Debug, Clone)]
 pub enum ImageData {
     /// A baseline JPEG embedded as is; `gray` for one-channel files.
-    Jpeg { bytes: Vec<u8>, gray: bool },
+    Jpeg {
+        bytes: Vec<u8>,
+        gray: bool,
+    },
     Rgb(Vec<u8>),
 }
 
@@ -303,7 +358,12 @@ impl PdfImage {
             if let Ok(jpeg) = image::codecs::jpeg::JpegDecoder::new(std::io::Cursor::new(bytes)) {
                 let ((w, h), color) = (jpeg.dimensions(), jpeg.color_type());
                 if w > 0 && h > 0 && w.max(h) <= MAX_IMAGE_SIDE && matches!(color, image::ColorType::Rgb8 | image::ColorType::L8) {
-                    return Ok(PdfImage { width: w, height: h, data: ImageData::Jpeg { bytes: bytes.to_vec(), gray: color == image::ColorType::L8 }, alpha: None });
+                    return Ok(PdfImage {
+                        width: w,
+                        height: h,
+                        data: ImageData::Jpeg { bytes: bytes.to_vec(), gray: color == image::ColorType::L8 },
+                        alpha: None,
+                    });
                 }
             }
         }
@@ -474,7 +534,10 @@ fn write(pages: &[Page], image: Option<&PdfImage>, title: &str, protection: Opti
         Some(img) => {
             let smask = img.alpha.as_ref().map(|alpha| {
                 let id = w.reserve();
-                let dict = format!("/Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode", img.width, img.height);
+                let dict = format!(
+                    "/Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode",
+                    img.width, img.height
+                );
                 w.stream(id, &dict, &deflate(alpha));
                 id
             });
@@ -521,7 +584,16 @@ fn write(pages: &[Page], image: Option<&PdfImage>, title: &str, protection: Opti
                         Align::Right => x - width,
                         Align::Center => x - width / 2.0,
                     };
-                    let _ = writeln!(content, "BT /{} {} Tf {} rg {} {} Td {} Tj ET", font_name(*family, *bold), num(*size), color.pdf(), num(left), num(h - y), literal(text));
+                    let _ = writeln!(
+                        content,
+                        "BT /{} {} Tf {} rg {} {} Td {} Tj ET",
+                        font_name(*family, *bold),
+                        num(*size),
+                        color.pdf(),
+                        num(left),
+                        num(h - y),
+                        literal(text)
+                    );
                 }
                 Op::Rect { x, y, w: rw, h: rh, fill, stroke, line_width } => {
                     let rect = format!("{} {} {} {} re", num(*x), num(h - y - rh), num(*rw), num(*rh));

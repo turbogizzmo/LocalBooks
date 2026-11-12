@@ -172,7 +172,8 @@ fn check_code(code: &str) -> Result<String, String> {
 }
 
 pub async fn lookup_enabled(pool: &SqlitePool) -> Result<bool, String> {
-    let value: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(PREF_KEY).fetch_optional(pool).await.map_err(db_err)?;
+    let value: Option<String> =
+        sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(PREF_KEY).fetch_optional(pool).await.map_err(db_err)?;
     Ok(value.as_deref() == Some("true"))
 }
 
@@ -196,7 +197,14 @@ async fn cached(pool: &SqlitePool, base: &str, quote: &str, date: NaiveDate, ear
 
 /// Suggests the rate for one `currency` in `home_currency` on `date` (a future date uses today's).
 /// `today` is the local date, passed in so tests are deterministic.
-pub async fn suggest<H: RateHttp>(pool: &SqlitePool, http: &H, currency: &str, home_currency: &str, date: NaiveDate, today: NaiveDate) -> Result<RateSuggestion, String> {
+pub async fn suggest<H: RateHttp>(
+    pool: &SqlitePool,
+    http: &H,
+    currency: &str,
+    home_currency: &str,
+    date: NaiveDate,
+    today: NaiveDate,
+) -> Result<RateSuggestion, String> {
     if !lookup_enabled(pool).await? {
         return Err("FX_LOOKUP_OFF: turn on “Look up daily exchange rates” in Settings › Preferences Console to suggest rates".into());
     }

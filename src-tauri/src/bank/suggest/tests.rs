@@ -66,9 +66,9 @@ fn suggests_from_similar_lines_with_a_reason_and_payee() {
 #[test]
 fn exact_amounts_identify_recurring_charges_without_words() {
     let model = Model::train(
-        (1..=6).map(|m| ex(&format!("CHECK {}", 1000 + m), -285_000, 40, Some("Riverside Properties"), &format!("2026-0{m}-01"))).chain(
-            (1..=6).map(|m| ex(&format!("CHECK {}", 2000 + m), -(20_000 + m * 3_517), 50, Some("Jane Smith"), &format!("2026-0{m}-17"))),
-        ),
+        (1..=6)
+            .map(|m| ex(&format!("CHECK {}", 1000 + m), -285_000, 40, Some("Riverside Properties"), &format!("2026-0{m}-01")))
+            .chain((1..=6).map(|m| ex(&format!("CHECK {}", 2000 + m), -(20_000 + m * 3_517), 50, Some("Jane Smith"), &format!("2026-0{m}-17")))),
         None,
     );
     let rent = model.predict(&query("CHECK 1107", -285_000, "2026-07-01")).expect("rent");
@@ -113,7 +113,10 @@ fn common_words_still_count_toward_similarity() {
 
 #[test]
 fn confidence_levels() {
-    assert_eq!((confidence_level(95), confidence_level(80), confidence_level(79), confidence_level(50), confidence_level(49)), ("HIGH", "HIGH", "MEDIUM", "MEDIUM", "LOW"));
+    assert_eq!(
+        (confidence_level(95), confidence_level(80), confidence_level(79), confidence_level(50), confidence_level(49)),
+        ("HIGH", "HIGH", "MEDIUM", "MEDIUM", "LOW")
+    );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -187,7 +190,8 @@ async fn expenses_entered_directly_are_history_too() {
     let pool = test_pool().await;
     let checking = account(&pool, "1010").await;
     let software = account(&pool, "6350").await;
-    let expense = crate::expenses::ExpenseInput { form_lines: Vec::new(),
+    let expense = crate::expenses::ExpenseInput {
+        form_lines: Vec::new(),
         payment_method_id: None,
         kind: "EXPENSE".into(),
         payee_name: Some("Canva".into()),
@@ -196,7 +200,14 @@ async fn expenses_entered_directly_are_history_too() {
         check_number: None,
         payment_method: None,
         memo: Some("Canva Pro subscription".into()),
-        lines: vec![crate::expenses::SplitLineInput { account_id: software, amount_cents: Cents(1_499), memo: None, class_id: None, customer_id: None, billable: None }],
+        lines: vec![crate::expenses::SplitLineInput {
+            account_id: software,
+            amount_cents: Cents(1_499),
+            memo: None,
+            class_id: None,
+            customer_id: None,
+            billable: None,
+        }],
         currency: None,
     };
     crate::expenses::post_expense(&pool, expense).await.unwrap();
@@ -389,17 +400,15 @@ impl SimRules {
     async fn load(pool: &SqlitePool) -> Self {
         let rows: Vec<(i64, String, String, i64, String, i64, i64)> =
             sqlx::query_as("SELECT id, pattern, direction, account_id, origin, priority, hit_count FROM bank_rules").fetch_all(pool).await.unwrap();
-        let rules = rows.into_iter().map(|(id, p, d, a, o, pr, h)| (id, RegexBuilder::new(&p).case_insensitive(true).build().unwrap(), d, a, o, pr, h)).collect();
+        let rules =
+            rows.into_iter().map(|(id, p, d, a, o, pr, h)| (id, RegexBuilder::new(&p).case_insensitive(true).build().unwrap(), d, a, o, pr, h)).collect();
         SimRules { rules, uncategorized: (account(pool, "6900").await, account(pool, "4900").await), next_id: 1_000_000 }
     }
 
     fn matching(&mut self, description: &str, amount: i64) -> Option<CategorySuggestion> {
         let direction = if amount < 0 { "OUTFLOW" } else { "INFLOW" };
         self.rules.sort_by(|a, b| b.5.cmp(&a.5).then(b.6.cmp(&a.6)).then(a.0.cmp(&b.0)));
-        self.rules
-            .iter()
-            .find(|r| (r.2 == "ANY" || r.2 == direction) && r.1.is_match(description))
-            .map(|r| CategorySuggestion::plain(r.3, Some(r.0), &r.4))
+        self.rules.iter().find(|r| (r.2 == "ANY" || r.2 == direction) && r.1.is_match(description)).map(|r| CategorySuggestion::plain(r.3, Some(r.0), &r.4))
     }
 
     fn learn(&mut self, description: &str, amount: i64, account_id: i64) {
@@ -421,7 +430,11 @@ impl SimRules {
     }
 
     fn fallback(&self, amount: i64) -> i64 {
-        if amount < 0 { self.uncategorized.0 } else { self.uncategorized.1 }
+        if amount < 0 {
+            self.uncategorized.0
+        } else {
+            self.uncategorized.1
+        }
     }
 }
 
@@ -462,7 +475,14 @@ async fn offline_evaluation_on_synthetic_history() {
         let mut model = Model::default();
         for t in &history[..split] {
             rules.learn(&t.description, t.amount, t.category);
-            model.add(Example { bank_account_id: t.bank, date: t.date, description: t.description.clone(), amount_cents: t.amount, account_id: t.category, payee: t.payee.clone() });
+            model.add(Example {
+                bank_account_id: t.bank,
+                date: t.date,
+                description: t.description.clone(),
+                amount_cents: t.amount,
+                account_id: t.category,
+                payee: t.payee.clone(),
+            });
         }
         for t in &history[split..] {
             let q = Query { bank_account_id: t.bank, date: t.date, description: &t.description, amount_cents: t.amount };
@@ -501,7 +521,14 @@ async fn offline_evaluation_on_synthetic_history() {
             }
 
             rules.learn(&t.description, t.amount, t.category);
-            model.add(Example { bank_account_id: t.bank, date: t.date, description: t.description.clone(), amount_cents: t.amount, account_id: t.category, payee: t.payee.clone() });
+            model.add(Example {
+                bank_account_id: t.bank,
+                date: t.date,
+                description: t.description.clone(),
+                amount_cents: t.amount,
+                account_id: t.category,
+                payee: t.payee.clone(),
+            });
         }
     }
 
@@ -510,11 +537,20 @@ async fn offline_evaluation_on_synthetic_history() {
     println!("  top-1 rules only (today):        {:.1}%", pct(overall.rules_only, overall.total));
     println!("  top-1 rules, then model:         {:.1}%", pct(overall.rules_then_model, overall.total));
     println!("  top-1 model alone (no rules):    {:.1}%", pct(overall.model_only, overall.total));
-    println!("  lines no rule matched:           {} ({:.1}%), model right on {:.1}% of them", overall.no_rule, pct(overall.no_rule, overall.total), pct(overall.no_rule_model_right, overall.no_rule));
+    println!(
+        "  lines no rule matched:           {} ({:.1}%), model right on {:.1}% of them",
+        overall.no_rule,
+        pct(overall.no_rule, overall.total),
+        pct(overall.no_rule_model_right, overall.no_rule)
+    );
     for level in ["HIGH", "MEDIUM", "LOW"] {
         let (n, right) = overall.by_level.get(level).copied().unwrap_or_default();
         let (alone_n, alone_right) = overall.alone_by_level.get(level).copied().unwrap_or_default();
-        println!("  {level:<6} confidence: {n} lines no rule matched, {:.1}% right; model alone {alone_n} lines, {:.1}% right", pct(right, n), pct(alone_right, alone_n));
+        println!(
+            "  {level:<6} confidence: {n} lines no rule matched, {:.1}% right; model alone {alone_n} lines, {:.1}% right",
+            pct(right, n),
+            pct(alone_right, alone_n)
+        );
     }
     println!("  payee right (money out):         {:.1}%", pct(overall.payee_right, overall.payee_total));
 
@@ -536,11 +572,19 @@ fn fast_on_fifty_thousand_rows() {
     let (train, test) = history.split_at(50_000);
     let started = Instant::now();
     let model = Model::train(
-        train.iter().map(|t| Example { bank_account_id: t.bank, date: t.date, description: t.description.clone(), amount_cents: t.amount, account_id: t.category, payee: t.payee.clone() }),
+        train.iter().map(|t| Example {
+            bank_account_id: t.bank,
+            date: t.date,
+            description: t.description.clone(),
+            amount_cents: t.amount,
+            account_id: t.category,
+            payee: t.payee.clone(),
+        }),
         None,
     );
     let trained = started.elapsed();
-    let queries: Vec<Query> = test.iter().map(|t| Query { bank_account_id: t.bank, date: t.date, description: &t.description, amount_cents: t.amount }).collect();
+    let queries: Vec<Query> =
+        test.iter().map(|t| Query { bank_account_id: t.bank, date: t.date, description: &t.description, amount_cents: t.amount }).collect();
     // The best of three runs, so other tests running at the same time don't decide the result.
     let mut batch = std::time::Duration::MAX;
     let mut predictions = Vec::new();
@@ -591,7 +635,9 @@ async fn seed_smart_suggestions_demo() {
         tx.commit().await.unwrap();
         let id: i64 = sqlx::query_scalar("SELECT MAX(id) FROM bank_transactions").fetch_one(&pool).await.unwrap();
         let payee_name = t.payee.clone().filter(|_| t.amount < 0);
-        approve(&pool, &suggester, "demo", id, Approval { category_account_id: t.category, payee_name, ..Approval::default() }).await.unwrap_or_else(|e| panic!("line {i}: {e}"));
+        approve(&pool, &suggester, "demo", id, Approval { category_account_id: t.category, payee_name, ..Approval::default() })
+            .await
+            .unwrap_or_else(|e| panic!("line {i}: {e}"));
     }
     for (date, description, amount, card) in [
         ("2026-10-02", "TARGET T-4471 PFLUGERVILLE TX", -6_412, true),
@@ -612,7 +658,15 @@ async fn seed_smart_suggestions_demo() {
     std::fs::write(dir.join("Smart Suggestions.pending.json"), serde_json::to_string_pretty(&pending).unwrap()).unwrap();
     for t in pending {
         let s = t.suggestion.unwrap();
-        println!("{:<34} {:>9} {:<9} {:>4} payee {:?} similar {:?}", t.description, t.amount_cents, s.origin, s.confidence.map_or(String::new(), |c| c.to_string()), t.payee, s.similar_to.map(|x| x.description));
+        println!(
+            "{:<34} {:>9} {:<9} {:>4} payee {:?} similar {:?}",
+            t.description,
+            t.amount_cents,
+            s.origin,
+            s.confidence.map_or(String::new(), |c| c.to_string()),
+            t.payee,
+            s.similar_to.map(|x| x.description)
+        );
     }
     crate::db::compact(&pool).await.unwrap();
     pool.close().await;

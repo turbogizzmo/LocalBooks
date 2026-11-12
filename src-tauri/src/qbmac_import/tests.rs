@@ -273,8 +273,12 @@ async fn reads_customers_jobs_vendors_and_items() {
     let supplies = &l.vendors[1];
     assert_eq!((supplies.tax_id.as_deref(), supplies.is_1099, supplies.company_name.as_deref()), (Some("12-3456789"), true, Some("Sam Diaz")));
 
-    let items: Vec<(&str, &str, i64, Option<i64>, bool)> = l.items.iter().map(|i| (i.name.as_str(), i.kind, i.rate_cents, i.income_account_id, i.active)).collect();
-    assert_eq!(items, [("Labor", "Service", 7_500, Some(8), true), ("Labor:Install", "Service", 0, Some(8), false), ("Widget", "Inventory part", 2_000, Some(9), true)]);
+    let items: Vec<(&str, &str, i64, Option<i64>, bool)> =
+        l.items.iter().map(|i| (i.name.as_str(), i.kind, i.rate_cents, i.income_account_id, i.active)).collect();
+    assert_eq!(
+        items,
+        [("Labor", "Service", 7_500, Some(8), true), ("Labor:Install", "Service", 0, Some(8), false), ("Widget", "Inventory part", 2_000, Some(9), true)]
+    );
     assert_eq!(l.sales_lists.ship_methods, [("UPS".to_string(), true)]);
 }
 
@@ -283,14 +287,14 @@ async fn transactions_balance_and_carry_their_documents() {
     let l = fixture().await;
     assert!(l.unbalanced.is_empty());
     let kinds: Vec<(i64, &str)> = l.transactions.iter().map(|t| (t.id, t.kind)).collect();
-    assert_eq!(
-        kinds,
-        [(7, "Journal entry"), (1, "Invoice"), (4, "Bill"), (2, "Payment"), (3, "Deposit"), (5, "Bill payment"), (6, "Check"), (8, "Estimate")]
-    );
+    assert_eq!(kinds, [(7, "Journal entry"), (1, "Invoice"), (4, "Bill"), (2, "Payment"), (3, "Deposit"), (5, "Bill payment"), (6, "Check"), (8, "Estimate")]);
 
     // The invoice: debits negative, the subtotal and memo lines left out, the widget's cost posted.
     let invoice = txn(&l, 1);
-    assert_eq!((invoice.date, invoice.doc_num.as_deref(), invoice.name.as_deref(), invoice.memo.as_deref()), (ymd(2024, 3, 1), Some("1001"), Some("Acme Builders:Roof"), Some("Roof job")));
+    assert_eq!(
+        (invoice.date, invoice.doc_num.as_deref(), invoice.name.as_deref(), invoice.memo.as_deref()),
+        (ymd(2024, 3, 1), Some("1001"), Some("Acme Builders:Roof"), Some("Roof job"))
+    );
     let lines: Vec<(i64, i64)> = invoice.lines.iter().map(|l| (l.account_id, l.cents)).collect();
     assert_eq!(lines, [(2, -23_500), (8, 15_000), (9, 8_000), (6, 500), (10, -4_000), (4, 4_000)]);
     let Some(SourceDocument::Invoice { customer_id, number, due_date, lines, sales }) = &invoice.document else { panic!("{:?}", invoice.document) };
@@ -304,7 +308,12 @@ async fn transactions_balance_and_carry_their_documents() {
     assert_eq!(payment.date, ymd(2024, 3, 10));
     assert_eq!(
         payment.document,
-        Some(SourceDocument::Payment { customer_id: 2, reference: Some("555".into()), method: "CHECK".into(), applied_to: vec![Applied { transaction_id: 1, cents: 10_000 }] })
+        Some(SourceDocument::Payment {
+            customer_id: 2,
+            reference: Some("555".into()),
+            method: "CHECK".into(),
+            applied_to: vec![Applied { transaction_id: 1, cents: 10_000 }]
+        })
     );
     assert_eq!(txn(&l, 3).document, Some(SourceDocument::Deposit { payments: vec![Applied { transaction_id: 2, cents: 10_000 }] }));
     assert_eq!(
@@ -315,7 +324,10 @@ async fn transactions_balance_and_carry_their_documents() {
     assert_eq!(*due_date, Some(ymd(2024, 4, 4)));
     // A check to an employee keeps the name but has no vendor.
     let check = txn(&l, 6);
-    assert_eq!((check.name.as_deref(), &check.document), (Some("Pat Lee"), &Some(SourceDocument::Expense { vendor_id: None, number: Some("1043".into()), applied_to: Vec::new() })));
+    assert_eq!(
+        (check.name.as_deref(), &check.document),
+        (Some("Pat Lee"), &Some(SourceDocument::Expense { vendor_id: None, number: Some("1043".into()), applied_to: Vec::new() }))
+    );
 
     let estimate = txn(&l, 8);
     assert!(estimate.lines.is_empty());
@@ -384,7 +396,8 @@ async fn a_full_import_creates_native_documents() {
     let summary = batch_summary(&pool, batch).await.unwrap();
     assert!(summary.fallbacks.is_empty(), "{:?}", summary.fallbacks.iter().map(|f| (&f.kind, &f.reason)).collect::<Vec<_>>());
     assert_eq!((full.invoices, full.payments, full.bills, full.bill_payments, full.checks, full.journal_entries), (1, 1, 1, 1, 1, 1), "{full:?}");
-    let (status, total, paid): (String, i64, i64) = sqlx::query_as("SELECT status, total_cents, amount_paid_cents FROM invoices").fetch_one(&pool).await.unwrap();
+    let (status, total, paid): (String, i64, i64) =
+        sqlx::query_as("SELECT status, total_cents, amount_paid_cents FROM invoices").fetch_one(&pool).await.unwrap();
     assert_eq!((status.as_str(), total, paid), ("PARTIAL", 23_500, 10_000));
     let bill_status: String = sqlx::query_scalar("SELECT status FROM bills").fetch_one(&pool).await.unwrap();
     assert_eq!(bill_status, "PAID");

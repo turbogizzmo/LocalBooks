@@ -34,7 +34,11 @@ pub(crate) async fn stage(tx: &mut Transaction<'_, Sqlite>, batch_id: i64, stock
         .bind(item.stored_qty_e4)
         .bind(item.stored_value_cents)
         .bind(stock.unread_sales.get(&item.item_id).map(|&n| {
-            format!("the cost of {} of it could not be read, so the stock {} took out is missing", count(n as i64, "sale", "sales"), if n == 1 { "it" } else { "they" })
+            format!(
+                "the cost of {} of it could not be read, so the stock {} took out is missing",
+                count(n as i64, "sale", "sales"),
+                if n == 1 { "it" } else { "they" }
+            )
         }))
         .execute(&mut **tx)
         .await
@@ -189,7 +193,9 @@ pub(crate) async fn post(tx: &mut Transaction<'_, Sqlite>, batch_id: i64) -> Res
         let refused = match (item.product_id, item.item_type.as_deref(), item.asset_id) {
             (None, _, _) => Some("it was not brought in as an item".to_string()),
             (Some(_), Some(t), _) if t != "ITEM" => Some("it was brought in as a kind of item Tillhouse doesn't track in stock".to_string()),
-            (Some(_), _, _) if item.already_tracked => Some("Tillhouse already tracked this item before the import, so its stock was left as it was".to_string()),
+            (Some(_), _, _) if item.already_tracked => {
+                Some("Tillhouse already tracked this item before the import, so its stock was left as it was".to_string())
+            }
             (Some(_), _, None) => Some("its inventory account isn't matched to a Tillhouse account".to_string()),
             (Some(_), _, Some(_)) if item.asset_type.as_deref() != Some("OTHER_CURRENT_ASSET") || item.asset_system == Some(true) => {
                 Some("its inventory account isn't an Other Current Asset account in Tillhouse".to_string())

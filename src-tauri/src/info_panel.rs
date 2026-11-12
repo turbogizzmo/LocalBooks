@@ -100,7 +100,8 @@ pub struct ItemSummary {
 
 /// The summary for product or service `product_id`, as of `today`.
 pub async fn item_summary(pool: &SqlitePool, product_id: i64, today: NaiveDate) -> Result<ItemSummary, String> {
-    let item: Option<i64> = sqlx::query_scalar("SELECT id FROM inventory_items WHERE product_id = ?1").bind(product_id).fetch_optional(pool).await.map_err(db_err)?;
+    let item: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM inventory_items WHERE product_id = ?1").bind(product_id).fetch_optional(pool).await.map_err(db_err)?;
     type RecordRow = (i64, Option<i64>, Option<i64>, Option<String>);
     let record: Option<RecordRow> = sqlx::query_as(
         "SELECT p.rate_cents, p.reorder_point_e4, p.preferred_vendor_id, v.name
@@ -142,7 +143,8 @@ pub async fn set_item_purchasing(pool: &SqlitePool, product_id: i64, reorder_poi
         return Err("ITEM_REORDER_NEGATIVE: a reorder point can't be below zero".into());
     }
     if reorder_point_e4.is_some() {
-        let tracked: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM inventory_items WHERE product_id = ?1)").bind(product_id).fetch_one(pool).await.map_err(db_err)?;
+        let tracked: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM inventory_items WHERE product_id = ?1)").bind(product_id).fetch_one(pool).await.map_err(db_err)?;
         if !tracked {
             return Err("ITEM_REORDER_UNTRACKED: track this item's stock first; a reorder point compares with the quantity on hand".into());
         }

@@ -32,10 +32,13 @@ async fn only_records_nothing_uses_are_deleted() {
     // Vendors and items the same way.
     let vendor: i64 = sqlx::query_scalar("INSERT INTO vendors (name) VALUES ('Spare Vendor') RETURNING id").fetch_one(&pool).await.unwrap();
     delete_record(&pool, "vendor", vendor).await.unwrap();
-    let item = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Old item".into(), description: None, rate_cents: Cents(100), income_account_id: income, is_taxable: true })
-        .await
-        .unwrap()
-        .id;
+    let item = crate::sales::create_product(
+        &pool,
+        crate::sales::ProductInput { name: "Old item".into(), description: None, rate_cents: Cents(100), income_account_id: income, is_taxable: true },
+    )
+    .await
+    .unwrap()
+    .id;
     delete_record(&pool, "item", item).await.unwrap();
     assert!(delete_record(&pool, "item", item).await.unwrap_err().starts_with("LIST_NOT_FOUND"));
     assert!(delete_record(&pool, "account", 1).await.unwrap_err().starts_with("LIST_BAD_KIND"));

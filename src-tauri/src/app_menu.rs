@@ -23,8 +23,18 @@ const CMD_PREFIX: &str = "cmd:";
 
 enum Entry {
     /// Opens `view`, optionally with an entry form (`action`) or a report.
-    Go { label: &'static str, view: &'static str, action: Option<&'static str>, report: Option<&'static str>, accel: Option<&'static str> },
-    Cmd { label: &'static str, command: &'static str, accel: Option<&'static str> },
+    Go {
+        label: &'static str,
+        view: &'static str,
+        action: Option<&'static str>,
+        report: Option<&'static str>,
+        accel: Option<&'static str>,
+    },
+    Cmd {
+        label: &'static str,
+        command: &'static str,
+        accel: Option<&'static str>,
+    },
     Sub(&'static str, &'static [Entry]),
     Sep,
 }
@@ -204,7 +214,10 @@ const VENDORS: &[Entry] = &[
     page("Document Inbox", "expenses/inbox"),
     form("Pay Bills", "expenses/bills", "pay-bills"),
     form("Enter Vendor Credits", "expenses/credits", "vendor-credit"),
-    Entry::Sub("Sales Tax", &[page("Manage Sales Tax…", "sales/tax"), form("Pay Sales Tax…", "sales/tax", "pay-sales-tax"), report("Sales Tax Liability", "sales-tax")]),
+    Entry::Sub(
+        "Sales Tax",
+        &[page("Manage Sales Tax…", "sales/tax"), form("Pay Sales Tax…", "sales/tax", "pay-sales-tax"), report("Sales Tax Liability", "sales-tax")],
+    ),
     Entry::Sep,
     form("Create Purchase Orders", "expenses/purchase-orders", "purchase-order"),
     Entry::Sub(
@@ -238,7 +251,13 @@ const EMPLOYEES: &[Entry] = &[
 
 const BANKING: &[Entry] = &[
     // Ctrl+W, as in the classic software; on macOS Cmd+W closes the window.
-    Entry::Go { label: "Write Checks", view: "expenses/expenses", action: Some("check"), report: None, accel: if cfg!(target_os = "macos") { None } else { Some("Ctrl+W") } },
+    Entry::Go {
+        label: "Write Checks",
+        view: "expenses/expenses",
+        action: Some("check"),
+        report: None,
+        accel: if cfg!(target_os = "macos") { None } else { Some("Ctrl+W") },
+    },
     form("Enter Credit Card Charges", "expenses/expenses", "expense"),
     keyed("Use Register", "accounting/register", None, "CmdOrCtrl+R"),
     Entry::Sep,
@@ -448,21 +467,33 @@ const REPORTS: &[Entry] = &[
             report("Commented Reports", "commented"),
         ],
     ),
-    Entry::Sub("Budgets & Forecasts", &[report("Budget Overview", "list:budget-overview"), report("Budget vs. Actual", "bva"), report("Balance Sheet Budget vs. Actual", "bs-bva"), Entry::Sep, report("Budget vs. Actual Graph", "graph-bva")]),
-    Entry::Sub("List", &[
-        report("Account Listing", "list:account-listing"),
-        report("Item Listing", "list:item-listing"),
-        report("Terms Listing", "list:terms-listing"),
-        report("Item Price List", "item-price-list"),
-        Entry::Sep,
-        report("Customer Phone List", "list:customer-phone"),
-        report("Customer Contact List", "list:customer-contact"),
-        report("Vendor Phone List", "list:vendor-phone"),
-        report("Vendor Contact List", "list:vendor-contact"),
-        report("Other Names Phone List", "list:other-phone"),
-        Entry::Sep,
-        report("To Do Notes", "list:todo-notes"),
-    ]),
+    Entry::Sub(
+        "Budgets & Forecasts",
+        &[
+            report("Budget Overview", "list:budget-overview"),
+            report("Budget vs. Actual", "bva"),
+            report("Balance Sheet Budget vs. Actual", "bs-bva"),
+            Entry::Sep,
+            report("Budget vs. Actual Graph", "graph-bva"),
+        ],
+    ),
+    Entry::Sub(
+        "List",
+        &[
+            report("Account Listing", "list:account-listing"),
+            report("Item Listing", "list:item-listing"),
+            report("Terms Listing", "list:terms-listing"),
+            report("Item Price List", "item-price-list"),
+            Entry::Sep,
+            report("Customer Phone List", "list:customer-phone"),
+            report("Customer Contact List", "list:customer-contact"),
+            report("Vendor Phone List", "list:vendor-phone"),
+            report("Vendor Contact List", "list:vendor-contact"),
+            report("Other Names Phone List", "list:other-phone"),
+            Entry::Sep,
+            report("To Do Notes", "list:todo-notes"),
+        ],
+    ),
 ];
 
 /// Added to Help below LocalBooks Help.
@@ -473,8 +504,15 @@ const HELP: &[Entry] = &[
 ];
 
 /// Menus added between View and Window, with the classic Alt-key mnemonics.
-const MENUS: &[(&str, &[Entry])] =
-    &[("&Lists", LISTS), ("&Company", COMPANY), ("C&ustomers", CUSTOMERS), ("Vend&ors", VENDORS), ("E&mployees", EMPLOYEES), ("&Banking", BANKING), ("&Reports", REPORTS)];
+const MENUS: &[(&str, &[Entry])] = &[
+    ("&Lists", LISTS),
+    ("&Company", COMPANY),
+    ("C&ustomers", CUSTOMERS),
+    ("Vend&ors", VENDORS),
+    ("E&mployees", EMPLOYEES),
+    ("&Banking", BANKING),
+    ("&Reports", REPORTS),
+];
 
 /// Builds the items of `entries`, numbering navigation ids so a repeated item keeps a unique id.
 fn build(app: &AppHandle, entries: &[Entry], n: &mut usize) -> tauri::Result<Vec<MenuItemKind<Wry>>> {
@@ -486,7 +524,9 @@ fn build(app: &AppHandle, entries: &[Entry], n: &mut usize) -> tauri::Result<Vec
                 let id = format!("{GO_PREFIX}{view}|{}|{}|{n}", action.unwrap_or(""), report.unwrap_or(""));
                 MenuItemKind::MenuItem(MenuItem::with_id(app, id, literal(label), true, *accel)?)
             }
-            Entry::Cmd { label, command, accel } => MenuItemKind::MenuItem(MenuItem::with_id(app, format!("{CMD_PREFIX}{command}"), literal(label), true, *accel)?),
+            Entry::Cmd { label, command, accel } => {
+                MenuItemKind::MenuItem(MenuItem::with_id(app, format!("{CMD_PREFIX}{command}"), literal(label), true, *accel)?)
+            }
             Entry::Sub(label, children) => MenuItemKind::Submenu(submenu(app, &literal(label), children, n)?),
             Entry::Sep => MenuItemKind::Predefined(PredefinedMenuItem::separator(app)?),
         });
@@ -672,10 +712,7 @@ mod tests {
             assert!(flow.contains(&format!("'{name}'")), "formFlow.jsx has no command {name}");
         }
         found.sort_unstable();
-        assert_eq!(
-            found,
-            ["copy-line", "delete", "delete-line", "duplicate", "goto-transfer", "history", "insert-line", "journal", "memorize", "paste-line"]
-        );
+        assert_eq!(found, ["copy-line", "delete", "delete-line", "duplicate", "goto-transfer", "history", "insert-line", "journal", "memorize", "paste-line"]);
     }
 
     /// Every report the Report Center lists (its own, the presets and the list reports) has a

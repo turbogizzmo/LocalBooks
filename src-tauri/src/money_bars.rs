@@ -54,7 +54,8 @@ fn segment(key: &'static str, label: &'static str, items: Vec<BarItem>) -> Resul
 
 /// Whether a feature switch in Preferences is on (unset means on, as the screens read it).
 async fn feature_on(pool: &SqlitePool, key: &str) -> Result<bool, String> {
-    let value: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(key).fetch_optional(pool).await.map_err(db_err)?;
+    let value: Option<String> =
+        sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(key).fetch_optional(pool).await.map_err(db_err)?;
     Ok(value.as_deref() != Some("false"))
 }
 
@@ -115,20 +116,20 @@ pub async fn bill_segments(pool: &SqlitePool, today: NaiveDate) -> Result<Vec<Ba
     let mut out = Vec::new();
     if feature_on(pool, crate::preferences::tax_time::INVENTORY).await? {
         let orders: Vec<BarItem> = crate::workflows::list_purchase_orders(pool)
-        .await?
-        .into_iter()
-        .filter(|o| o.status == "OPEN")
-        .map(|o| BarItem {
-            kind: "PURCHASE_ORDER",
-            id: o.id,
-            date: Some(o.po_date),
-            name: o.vendor_name,
-            number: Some(o.po_number.to_string()),
-            memo: o.memo,
-            amount_cents: o.total_cents.get(),
-            customer_id: None,
-        })
-        .collect();
+            .await?
+            .into_iter()
+            .filter(|o| o.status == "OPEN")
+            .map(|o| BarItem {
+                kind: "PURCHASE_ORDER",
+                id: o.id,
+                date: Some(o.po_date),
+                name: o.vendor_name,
+                number: Some(o.po_number.to_string()),
+                memo: o.memo,
+                amount_cents: o.total_cents.get(),
+                customer_id: None,
+            })
+            .collect();
         out.push(segment("PURCHASE_ORDERS", "Purchase orders", orders)?);
     }
     let cards: Vec<i64> = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'CREDIT_CARD'").fetch_all(pool).await.map_err(db_err)?;

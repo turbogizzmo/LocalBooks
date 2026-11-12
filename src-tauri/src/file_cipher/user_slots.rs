@@ -140,7 +140,9 @@ pub async fn recover(db: &Db, recovery_key: &str, username: &str, new_password: 
         if was_locked {
             db.relock().await;
         }
-        return Err(format!("FILE_KEY_NOT_SAVED: the new password was saved but couldn't be added to the encrypted company file ({e}); use the recovery key again"));
+        return Err(format!(
+            "FILE_KEY_NOT_SAVED: the new password was saved but couldn't be added to the encrypted company file ({e}); use the recovery key again"
+        ));
     }
     Ok(session)
 }
@@ -158,7 +160,9 @@ pub async fn add_user(db: &Db, admin: &Session, input: NewUserInput) -> Result<U
         Ok::<(), String>(())
     }
     .await;
-    added.map_err(|e| format!("USER_NO_FILE_KEY: {} was added but can't open the encrypted company file yet ({e}); set a new temporary password for them", user.username))?;
+    added.map_err(|e| {
+        format!("USER_NO_FILE_KEY: {} was added but can't open the encrypted company file yet ({e}); set a new temporary password for them", user.username)
+    })?;
     Ok(user)
 }
 
@@ -175,7 +179,8 @@ pub async fn update_user(db: &Db, admin: &Session, id: i64, input: UserUpdate) -
     }
     let user = match input.new_password.clone() {
         Some(password) if input.is_active => {
-            let username = users::list(&pool).await?.into_iter().find(|u| u.id == id).map(|u| u.username).ok_or_else(|| "USER_NOT_FOUND: no such user".to_string())?;
+            let username =
+                users::list(&pool).await?.into_iter().find(|u| u.id == id).map(|u| u.username).ok_or_else(|| "USER_NOT_FOUND: no such user".to_string())?;
             with_new_password(db, id, &username, &password, users::update(&pool, admin, id, input)).await?
         }
         _ => users::update(&pool, admin, id, input).await?,

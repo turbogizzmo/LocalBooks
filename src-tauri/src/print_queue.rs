@@ -137,12 +137,7 @@ async fn set_in_tx(tx: &mut Transaction<'_, Sqlite>, form: Form, id: i64, queued
         Some((_, false)) => return Err(format!("PRINT_NOT_POSTED: that {noun} is not saved yet")),
         _ => {}
     }
-    sqlx::query(&format!("UPDATE {table} SET to_be_printed = ?1 WHERE id = ?2"))
-        .bind(queued)
-        .bind(id)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    sqlx::query(&format!("UPDATE {table} SET to_be_printed = ?1 WHERE id = ?2")).bind(queued).bind(id).execute(&mut **tx).await.map_err(db_err)?;
     Ok(())
 }
 
@@ -172,7 +167,13 @@ pub async fn post_expense(pool: &SqlitePool, mut input: ExpenseInput, to_be_prin
 /// on it when `paid` is given, and billing the costs and time in `billable` (chosen on the form with
 /// Add billable costs…; `billable_costs::write_invoice_with_costs`). One transaction: a payment or
 /// a cost that can't be recorded saves nothing.
-pub async fn create_invoice(pool: &SqlitePool, input: InvoiceInput, billable: &crate::billable_costs::OnInvoice, to_be_printed: bool, paid: Option<&PaidNow>) -> Result<InvoiceSummary, String> {
+pub async fn create_invoice(
+    pool: &SqlitePool,
+    input: InvoiceInput,
+    billable: &crate::billable_costs::OnInvoice,
+    to_be_printed: bool,
+    paid: Option<&PaidNow>,
+) -> Result<InvoiceSummary, String> {
     // Read before the write transaction starts.
     let billing = if billable.is_empty() { None } else { Some(crate::billable_costs::billing_settings(pool, billable.markup_percent.as_deref()).await?) };
     let id = run(pool, async |tx| {
@@ -228,11 +229,12 @@ pub async fn mark_checks_printed_on(pool: &SqlitePool, mut printed: Vec<PrintedC
     run(pool, async |tx| {
         if redate {
             for check in printed.iter_mut().filter(|c| c.bill_check_id.is_none()) {
-                let date: Option<(chrono::NaiveDate, bool)> = sqlx::query_as("SELECT expense_date, to_be_printed FROM expenses WHERE id = ?1 AND kind = 'CHECK' AND is_voided = 0")
-                    .bind(check.expense_id)
-                    .fetch_optional(&mut **tx)
-                    .await
-                    .map_err(db_err)?;
+                let date: Option<(chrono::NaiveDate, bool)> =
+                    sqlx::query_as("SELECT expense_date, to_be_printed FROM expenses WHERE id = ?1 AND kind = 'CHECK' AND is_voided = 0")
+                        .bind(check.expense_id)
+                        .fetch_optional(&mut **tx)
+                        .await
+                        .map_err(db_err)?;
                 if !matches!(date, Some((d, true)) if d != today) {
                     continue;
                 }
@@ -333,9 +335,17 @@ async fn redate_bill_check(tx: &mut Transaction<'_, Sqlite>, group: i64, today: 
     }
     let mut new_ids = Vec::with_capacity(payments.len());
     for &(old_id, bill_id, amount, account, _, old_entry) in &payments {
-        let input = crate::expenses::BillPaymentInput { bill_id, payment_account_id: account, payment_date: today, amount_cents: crate::money::Cents(amount), reference: None, to_be_printed: true };
+        let input = crate::expenses::BillPaymentInput {
+            bill_id,
+            payment_account_id: account,
+            payment_date: today,
+            amount_cents: crate::money::Cents(amount),
+            reference: None,
+            to_be_printed: true,
+        };
         let new_id = crate::expenses::write_bill_payment(tx, &input, "STANDARD").await?;
-        let new_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM bill_payments WHERE id = ?1").bind(new_id).fetch_one(&mut **tx).await.map_err(db_err)?;
+        let new_entry: i64 =
+            sqlx::query_scalar("SELECT journal_entry_id FROM bill_payments WHERE id = ?1").bind(new_id).fetch_one(&mut **tx).await.map_err(db_err)?;
         crate::edits::record_replacement(tx, "BILL_PAYMENT", (old_id, old_entry.unwrap_or_default()), (new_id, new_entry)).await?;
         new_ids.push(new_id);
     }

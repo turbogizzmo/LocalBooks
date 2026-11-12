@@ -245,12 +245,17 @@ const ORIGINATOR_COLUMNS: &str =
     "account_id, immediate_destination, immediate_destination_name, immediate_origin, immediate_origin_name, company_name, company_id, entry_description";
 
 pub async fn get_ach_originator(pool: &SqlitePool, account_id: i64) -> Result<Option<OriginatorDetails>, String> {
-    sqlx::query_as(&format!("SELECT {ORIGINATOR_COLUMNS} FROM ach_originators WHERE account_id = ?1")).bind(account_id).fetch_optional(pool).await.map_err(db_err)
+    sqlx::query_as(&format!("SELECT {ORIGINATOR_COLUMNS} FROM ach_originators WHERE account_id = ?1"))
+        .bind(account_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)
 }
 
 /// Saves a bank account's ACH originator details, as the bank gave them.
 pub async fn set_ach_originator(pool: &SqlitePool, input: OriginatorDetails) -> Result<OriginatorDetails, String> {
-    let kind: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1").bind(input.account_id).fetch_optional(pool).await.map_err(db_err)?;
+    let kind: Option<String> =
+        sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1").bind(input.account_id).fetch_optional(pool).await.map_err(db_err)?;
     if kind.as_deref() != Some("BANK") {
         return Err("ACH_NOT_BANK: ACH files are paid from a Bank account".into());
     }
@@ -409,7 +414,8 @@ pub async fn pay_bills_by_ach(pool: &SqlitePool, input: AchPaymentInput, access:
         return Err("ACH_BAD_REQUEST: a request ID is 8 to 64 characters".into());
     }
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
-    let existing: Option<i64> = sqlx::query_scalar("SELECT id FROM ach_files WHERE request_id = ?1").bind(request_id).fetch_optional(&mut *tx).await.map_err(db_err)?;
+    let existing: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM ach_files WHERE request_id = ?1").bind(request_id).fetch_optional(&mut *tx).await.map_err(db_err)?;
     if let Some(id) = existing {
         let view = file_view(&mut tx, id).await;
         let _ = tx.rollback().await;
@@ -424,7 +430,13 @@ pub async fn pay_bills_by_ach(pool: &SqlitePool, input: AchPaymentInput, access:
     }
 }
 
-async fn write_ach_payments(tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>, input: &AchPaymentInput, request_id: &str, access: Access<'_>, now: NaiveDateTime) -> Result<i64, String> {
+async fn write_ach_payments(
+    tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>,
+    input: &AchPaymentInput,
+    request_id: &str,
+    access: Access<'_>,
+    now: NaiveDateTime,
+) -> Result<i64, String> {
     if input.bills.is_empty() {
         return Err("BILL_NOTHING_TO_PAY: select at least one bill".into());
     }
@@ -463,7 +475,8 @@ async fn write_ach_payments(tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>, i
             .fetch_optional(&mut **tx)
             .await
             .map_err(db_err)?;
-            let bank = bank.ok_or_else(|| format!("ACH_NO_BANK_DETAILS: {vendor_name} has no bank details; add them on the vendor, or pay this bill another way"))?;
+            let bank =
+                bank.ok_or_else(|| format!("ACH_NO_BANK_DETAILS: {vendor_name} has no bank details; add them on the vendor, or pay this bill another way"))?;
             vendors.insert(vendor_name.clone(), Pending { vendor_id, vendor_name: vendor_name.clone(), bank, bills: vec![] });
         }
         vendors.get_mut(&vendor_name).expect("inserted").bills.push((bill.clone(), bill_number));
@@ -490,7 +503,8 @@ async fn write_ach_payments(tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>, i
         .fetch_one(&mut **tx)
         .await
         .map_err(db_err)?;
-    let modifier = MODIFIERS.chars().nth(same_day as usize).ok_or("ACH_TOO_MANY_FILES: banks accept at most 36 files a day from one company; try again tomorrow")?;
+    let modifier =
+        MODIFIERS.chars().nth(same_day as usize).ok_or("ACH_TOO_MANY_FILES: banks accept at most 36 files a day from one company; try again tomorrow")?;
 
     let total: i64 = input.bills.iter().map(|b| b.amount_cents).sum();
     let file_id: i64 = sqlx::query_scalar(
@@ -518,7 +532,11 @@ async fn write_ach_payments(tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>, i
     .await
     .map_err(|e| {
         let msg = db_err(e);
-        if msg.contains("total_cents") { "BILL_BAD_AMOUNT: payment amount must be greater than zero".into() } else { msg }
+        if msg.contains("total_cents") {
+            "BILL_BAD_AMOUNT: payment amount must be greater than zero".into()
+        } else {
+            msg
+        }
     })?;
 
     for vendor in ordered {

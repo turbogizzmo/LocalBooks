@@ -64,7 +64,11 @@ pub fn run_from_args() -> Option<i32> {
                     return Some(1);
                 }
             }
-            if output.ok { 0 } else { 1 }
+            if output.ok {
+                0
+            } else {
+                1
+            }
         }
         Err(message) => {
             eprintln!("{message}\nusage: Tillhouse --check-file <company file> [--backups-dir <folder>] [--output <file.json>]");

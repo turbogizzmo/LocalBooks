@@ -100,7 +100,10 @@ fn writes_each_field_in_its_place() {
     assert_eq!(l[4], format!("622011000015{:<17}0000004999{:<15}{:<22}  0121042880000002", "98-7654", "V2", "JOE'S PLUMBING"));
     // Batch control: count (entries and addenda), entry hash 02100002 + 01100001, debits, credits,
     // company ID, message authentication code and reserved (blank), ODFI, batch.
-    assert_eq!(l[5], format!("8220000003000320000300000000000000000012999912345678900{}", blank(0)).replace("12345678900", "1234567890") + &blank(25) + "121042880000001");
+    assert_eq!(
+        l[5],
+        format!("8220000003000320000300000000000000000012999912345678900{}", blank(0)).replace("12345678900", "1234567890") + &blank(25) + "121042880000001"
+    );
     assert_eq!(l[6], batch("PPD", 2));
     assert_eq!(l[7], format!("622231380104{:<17}0000030000{:<15}{:<22}  0121042880000003", "55554444", "V3", "PAT SMITH"));
     assert_eq!(l[8], "822000000100231380100000000000000000000300001234567890".to_string() + &blank(25) + "121042880000002");

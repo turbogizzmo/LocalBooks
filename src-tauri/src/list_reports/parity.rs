@@ -49,7 +49,13 @@ pub(super) async fn terms_listing(pool: &SqlitePool, today: NaiveDate) -> Result
             row(
                 RowKind::Detail,
                 0,
-                vec![json!(name), json!(net), if *ppm == 0 { Value::Null } else { json!(percent(*ppm)) }, days.map_or(Value::Null, |d| json!(d)), json!(if *active { "Yes" } else { "No" })],
+                vec![
+                    json!(name),
+                    json!(net),
+                    if *ppm == 0 { Value::Null } else { json!(percent(*ppm)) },
+                    days.map_or(Value::Null, |d| json!(d)),
+                    json!(if *active { "Yes" } else { "No" }),
+                ],
             )
         })
         .collect();
@@ -63,8 +69,12 @@ pub(super) async fn terms_listing(pool: &SqlitePool, today: NaiveDate) -> Result
 
 pub(super) async fn unbilled_costs_by_job(pool: &SqlitePool, today: NaiveDate) -> Result<AccountantReport, String> {
     let costs = crate::billable_costs::list_unbilled(pool, None).await?;
-    let names: BTreeMap<i64, String> =
-        sqlx::query_as::<_, (i64, String)>(&format!("{CUSTOMER_NAMES} SELECT id, full_name FROM cn")).fetch_all(pool).await.map_err(db_err)?.into_iter().collect();
+    let names: BTreeMap<i64, String> = sqlx::query_as::<_, (i64, String)>(&format!("{CUSTOMER_NAMES} SELECT id, full_name FROM cn"))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?
+        .into_iter()
+        .collect();
     // (job's full name, lower-cased for sorting; job id) → its costs, oldest first.
     let mut jobs: BTreeMap<(String, i64), Vec<&crate::billable_costs::UnbilledCost>> = BTreeMap::new();
     for c in &costs {
@@ -263,7 +273,16 @@ pub(super) async fn closing_date_exceptions(pool: &SqlitePool, start: NaiveDate,
         let mut r = row(
             RowKind::Detail,
             0,
-            vec![json!(x.entry_date), json!(type_label(&x.source_type)), json!(x.entry_number), json!(x.memo), json!(shown(&x.created_at)), json!(x.entered_by), json!(shown(&x.closed_at)), json!(x.amount_cents)],
+            vec![
+                json!(x.entry_date),
+                json!(type_label(&x.source_type)),
+                json!(x.entry_number),
+                json!(x.memo),
+                json!(shown(&x.created_at)),
+                json!(x.entered_by),
+                json!(shown(&x.closed_at)),
+                json!(x.amount_cents),
+            ],
         );
         r.journal_entry_id = Some(x.id);
         rows.push(r);
@@ -280,4 +299,3 @@ pub(super) async fn closing_date_exceptions(pool: &SqlitePool, start: NaiveDate,
     }];
     Ok(done(Some(start), end, columns, rows, found.len(), notes))
 }
-

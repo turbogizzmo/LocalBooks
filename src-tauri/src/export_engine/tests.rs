@@ -14,18 +14,28 @@ async fn exports_statements_as_quoted_indented_csv() {
     let pool = test_pool().await;
     let id = |n: &'static str| {
         let pool = pool.clone();
-        async move {
-            sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_one(&pool).await.unwrap()
-        }
+        async move { sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_one(&pool).await.unwrap() }
     };
     let (checking, services) = (id("1010").await, id("4100").await);
     let date = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
-    post_journal_entry(&pool, JournalEntry { id: None, date, description: String::new(), lines: vec![JournalLine::debit(checking, 123_456), JournalLine::credit(services, 123_456)], currency: None })
-        .await
-        .unwrap();
+    post_journal_entry(
+        &pool,
+        JournalEntry {
+            id: None,
+            date,
+            description: String::new(),
+            lines: vec![JournalLine::debit(checking, 123_456), JournalLine::credit(services, 123_456)],
+            currency: None,
+        },
+    )
+    .await
+    .unwrap();
     crate::preferences::set(&pool, "company_name", "Acme, \"Widgets\" & Co").await.unwrap();
 
-    let csv = render(&pool, "profit_and_loss", Some(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()), Some(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()), None, None).await.unwrap();
+    let csv =
+        render(&pool, "profit_and_loss", Some(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()), Some(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()), None, None)
+            .await
+            .unwrap();
     assert!(csv.starts_with('\u{feff}'));
     let mut reader = csv::ReaderBuilder::new().has_headers(false).flexible(true).from_reader(csv.trim_start_matches('\u{feff}').as_bytes());
     let rows: Vec<Vec<String>> = reader.records().map(|r| r.unwrap().iter().map(String::from).collect()).collect();

@@ -152,7 +152,11 @@ impl crate::file_cipher::header::Store for RealStore {
                 None => ffi::SQLITE_IOERR,
             }
         };
-        if rc == ffi::SQLITE_OK { Ok(()) } else { Err(format!("FILE_HEADER: cannot read the key header ({rc})")) }
+        if rc == ffi::SQLITE_OK {
+            Ok(())
+        } else {
+            Err(format!("FILE_HEADER: cannot read the key header ({rc})"))
+        }
     }
 
     fn write_at(&mut self, _: u64, _: &[u8]) -> Result<(), String> {
@@ -290,7 +294,11 @@ unsafe extern "C" fn x_open(_: *mut ffi::sqlite3_vfs, name: ffi::sqlite3_filenam
         return rc;
     }
     // Only a main database and its log need the name.
-    let path = if name.is_null() || flags & (ffi::SQLITE_OPEN_MAIN_DB | ffi::SQLITE_OPEN_WAL) == 0 { None } else { CStr::from_ptr(name).to_str().ok().map(str::to_string) };
+    let path = if name.is_null() || flags & (ffi::SQLITE_OPEN_MAIN_DB | ffi::SQLITE_OPEN_WAL) == 0 {
+        None
+    } else {
+        CStr::from_ptr(name).to_str().ok().map(str::to_string)
+    };
     if flags & ffi::SQLITE_OPEN_MAIN_DB != 0 {
         let mut head = [0u8; 16];
         let read = match (*(*real).pMethods).xRead {
@@ -470,7 +478,11 @@ unsafe extern "C" fn x_dl_error(_: *mut ffi::sqlite3_vfs, n: c_int, out: *mut c_
     inner_call!(xDlError, (), n, out)
 }
 
-unsafe extern "C" fn x_dl_sym(_: *mut ffi::sqlite3_vfs, handle: *mut c_void, name: *const c_char) -> Option<unsafe extern "C" fn(*mut ffi::sqlite3_vfs, *mut c_void, *const c_char)> {
+unsafe extern "C" fn x_dl_sym(
+    _: *mut ffi::sqlite3_vfs,
+    handle: *mut c_void,
+    name: *const c_char,
+) -> Option<unsafe extern "C" fn(*mut ffi::sqlite3_vfs, *mut c_void, *const c_char)> {
     inner_call!(xDlSym, None, handle, name)
 }
 

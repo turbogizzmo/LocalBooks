@@ -460,7 +460,8 @@ pub fn ledger(book: &Book) -> Ledger {
     // Accounts in path order, so parents come before their children.
     let mut ordered: Vec<(String, &Account)> = book.accounts.iter().filter(|a| !a.kind.eq_ignore_ascii_case("ROOT")).map(|a| (path(a), a)).collect();
     ordered.sort_by_key(|a| a.0.to_lowercase());
-    let mut targets: HashMap<&str, Target> = book.accounts.iter().filter(|a| a.kind.eq_ignore_ascii_case("ROOT")).map(|a| (a.guid.as_str(), Target::Root)).collect();
+    let mut targets: HashMap<&str, Target> =
+        book.accounts.iter().filter(|a| a.kind.eq_ignore_ascii_case("ROOT")).map(|a| (a.guid.as_str(), Target::Root)).collect();
     let mut accounts: Vec<SourceAccount> = Vec::new();
     let mut names: Vec<&str> = Vec::new();
     let mut depth: Vec<usize> = Vec::new();
@@ -595,7 +596,12 @@ pub fn ledger(book: &Book) -> Ledger {
         for (s, c) in t.splits.iter().zip(&cents) {
             let (Some(account_id), Some(c)) = (cx.account(&s.account), *c) else { continue };
             if c != 0 {
-                lines.push(SourceLine { account_id, cents: -c, memo: s.memo.as_deref().map(str::trim).filter(|m| !m.is_empty()).map(str::to_string), class: None });
+                lines.push(SourceLine {
+                    account_id,
+                    cents: -c,
+                    memo: s.memo.as_deref().map(str::trim).filter(|m| !m.is_empty()).map(str::to_string),
+                    class: None,
+                });
             }
         }
         // A transaction that leaves every account where it was (a lot link, a zero-value entry)
@@ -630,7 +636,19 @@ pub fn ledger(book: &Book) -> Ledger {
 
     let (transactions, unbalanced): (Vec<_>, Vec<_>) = transactions.into_iter().partition(|t| t.imbalance_cents() == 0);
     let (customers, vendors) = cx.parties.into_lists();
-    Ledger { accounts, customers, vendors, items: Vec::new(), transactions, unbalanced, unreadable, quality, sales_lists: Default::default(), classes: Vec::new(), stock: Default::default() }
+    Ledger {
+        accounts,
+        customers,
+        vendors,
+        items: Vec::new(),
+        transactions,
+        unbalanced,
+        unreadable,
+        quality,
+        sales_lists: Default::default(),
+        classes: Vec::new(),
+        stock: Default::default(),
+    }
 }
 
 /// The book's customers (with their jobs as sub-customers) and vendors, as ledger parties.
@@ -678,7 +696,11 @@ impl Parties {
                 Some(Payee::Customer(parent)) => {
                     let parent_name = p.customers.iter().find(|c| c.id == parent).map(|c| c.name.clone()).unwrap_or_default();
                     next += 1;
-                    p.customers.push(SourceParty { parent_id: Some(parent), active: j.active, ..blank_party(next, &format!("{parent_name}:{}", j.name.trim())) });
+                    p.customers.push(SourceParty {
+                        parent_id: Some(parent),
+                        active: j.active,
+                        ..blank_party(next, &format!("{parent_name}:{}", j.name.trim()))
+                    });
                     p.by_guid.insert(j.guid.clone(), Payee::Customer(next));
                 }
                 // A vendor's job only groups bills; the bills belong to the vendor.
@@ -713,7 +735,16 @@ impl Parties {
 
 /// A form line for a posted split, one unit at its amount.
 fn split_line(l: &SourceLine) -> DocumentLine {
-    DocumentLine { item_id: None, description: l.memo.clone(), quantity_e4: 10_000, rate_cents: l.cents.abs(), cents: l.cents, account_id: l.account_id, class: None, subtotal: false }
+    DocumentLine {
+        item_id: None,
+        description: l.memo.clone(),
+        quantity_e4: 10_000,
+        rate_cents: l.cents.abs(),
+        cents: l.cents,
+        account_id: l.account_id,
+        class: None,
+        subtotal: false,
+    }
 }
 
 /// The form lines of an invoice or bill: its entries when they add up, per account, to what the
@@ -827,7 +858,8 @@ fn plain_document(cx: &Context, st: &mut SourceTransaction, t: &Transaction) {
         st.kind = "Payment";
         if let Some(payee @ Payee::Customer(customer_id)) = lot_payee {
             st.name = cx.parties.name(payee).or(st.name.take());
-            st.document = Some(SourceDocument::Payment { customer_id, reference: st.doc_num.clone(), method: payment_method(None).to_string(), applied_to: Vec::new() });
+            st.document =
+                Some(SourceDocument::Payment { customer_id, reference: st.doc_num.clone(), method: payment_method(None).to_string(), applied_to: Vec::new() });
         }
         return;
     }

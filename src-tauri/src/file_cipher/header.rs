@@ -88,7 +88,10 @@ impl Store for File {
     }
 
     fn write_at(&mut self, at: u64, buf: &[u8]) -> Result<(), String> {
-        self.seek(SeekFrom::Start(at)).and_then(|_| self.write_all(buf)).and_then(|()| self.sync_all()).map_err(|e| format!("FILE_HEADER: cannot write the key header: {e}"))
+        self.seek(SeekFrom::Start(at))
+            .and_then(|_| self.write_all(buf))
+            .and_then(|()| self.sync_all())
+            .map_err(|e| format!("FILE_HEADER: cannot write the key header: {e}"))
     }
 }
 
@@ -97,12 +100,7 @@ struct OpenDb(std::ptr::NonNull<ffi::sqlite3>);
 
 impl OpenDb {
     fn io(&mut self, write: bool, at: u64, buf: *mut c_void, len: usize) -> Result<(), String> {
-        let mut io = HeaderIo {
-            write,
-            offset: i64::try_from(at).map_err(|e| e.to_string())?,
-            len: c_int::try_from(len).map_err(|e| e.to_string())?,
-            buf,
-        };
+        let mut io = HeaderIo { write, offset: i64::try_from(at).map_err(|e| e.to_string())?, len: c_int::try_from(len).map_err(|e| e.to_string())?, buf };
         // SAFETY: the handle is a live connection (held locked by the caller), `io` and `buf` live
         // for the call, and the VFS reads or writes exactly `len` bytes of `buf`.
         let rc = unsafe { ffi::sqlite3_file_control(self.0.as_ptr(), c"main".as_ptr(), FCNTL_HEADER_IO, std::ptr::addr_of_mut!(io).cast::<c_void>()) };

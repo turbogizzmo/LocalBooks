@@ -32,23 +32,36 @@ fn periods_cover_the_right_days() {
 #[tokio::test]
 async fn every_widget_ties_out_to_its_report() {
     let pool = test_pool().await;
-    let (checking, services, rent, contractors) = (account(&pool, "1010").await, account(&pool, "4100").await, account(&pool, "6300").await, account(&pool, "6400").await);
+    let (checking, services, rent, contractors) =
+        (account(&pool, "1010").await, account(&pool, "4100").await, account(&pool, "6300").await, account(&pool, "6400").await);
     // Sales to seven customers (so the top five fold the rest into Others), and some expenses.
     for (i, name) in ["Alder", "Birch", "Cedar", "Dogwood", "Elm", "Fir", "Gum"].iter().enumerate() {
         let cents = 10_000 * (i as i64 + 1);
         let input: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
             "customerName": name, "issueDate": "2026-03-02", "dueDate": "2026-03-16",
-            "lines": [{ "description": "Design", "quantityE4": 10_000, "rateCents": cents, "incomeAccountId": services }] })).unwrap();
+            "lines": [{ "description": "Design", "quantityE4": 10_000, "rateCents": cents, "incomeAccountId": services }] }))
+        .unwrap();
         crate::invoices::create_and_post_invoice(&pool, input).await.unwrap();
     }
     for (vendor, account_id, cents) in [("Harbor Leasing", rent, 150_000), ("Ridgeline Carpentry", contractors, 80_000)] {
-        let check: ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": vendor, "paymentAccountId": checking, "expenseDate": "2026-04-01",
-            "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": account_id, "amountCents": cents, "memo": null }] })).unwrap();
+        let check: ExpenseInput =
+            serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": vendor, "paymentAccountId": checking, "expenseDate": "2026-04-01",
+            "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": account_id, "amountCents": cents, "memo": null }] }))
+            .unwrap();
         crate::expenses::post_expense(&pool, check).await.unwrap();
     }
-    post_journal_entry(&pool, JournalEntry { id: None, date: d(2026, 1, 5), description: "Owner money".into(), lines: vec![JournalLine::debit(checking, 1_000_000), JournalLine::credit(account(&pool, "3000").await, 1_000_000)], currency: None })
-        .await
-        .unwrap();
+    post_journal_entry(
+        &pool,
+        JournalEntry {
+            id: None,
+            date: d(2026, 1, 5),
+            description: "Owner money".into(),
+            lines: vec![JournalLine::debit(checking, 1_000_000), JournalLine::credit(account(&pool, "3000").await, 1_000_000)],
+            currency: None,
+        },
+    )
+    .await
+    .unwrap();
 
     for kind in [WidgetKind::TopItems, WidgetKind::TopVendors] {
         add(&pool, kind).await.unwrap();
@@ -119,26 +132,46 @@ async fn widgets_are_added_removed_moved_and_given_a_period() {
 #[tokio::test]
 async fn the_newer_widgets_tie_out_to_the_profit_and_loss_and_the_to_dos() {
     let pool = test_pool().await;
-    let (checking, services, rent, contractors) = (account(&pool, "1010").await, account(&pool, "4100").await, account(&pool, "6300").await, account(&pool, "6400").await);
+    let (checking, services, rent, contractors) =
+        (account(&pool, "1010").await, account(&pool, "4100").await, account(&pool, "6300").await, account(&pool, "6400").await);
     // Income from seven customers this year and one last year; two kinds of expense this year.
-    for (i, (name, date)) in [("Alder", "2026-03-02"), ("Birch", "2026-03-03"), ("Cedar", "2026-03-04"), ("Dogwood", "2026-03-05"), ("Elm", "2026-03-06"), ("Fir", "2026-03-07"), ("Gum", "2025-03-08")]
-        .iter()
-        .enumerate()
+    for (i, (name, date)) in [
+        ("Alder", "2026-03-02"),
+        ("Birch", "2026-03-03"),
+        ("Cedar", "2026-03-04"),
+        ("Dogwood", "2026-03-05"),
+        ("Elm", "2026-03-06"),
+        ("Fir", "2026-03-07"),
+        ("Gum", "2025-03-08"),
+    ]
+    .iter()
+    .enumerate()
     {
         let input: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
             "customerName": name, "issueDate": date, "dueDate": date,
-            "lines": [{ "description": "Design", "quantityE4": 10_000, "rateCents": 10_000 * (i as i64 + 1), "incomeAccountId": services }] })).unwrap();
+            "lines": [{ "description": "Design", "quantityE4": 10_000, "rateCents": 10_000 * (i as i64 + 1), "incomeAccountId": services }] }))
+        .unwrap();
         crate::invoices::create_and_post_invoice(&pool, input).await.unwrap();
     }
     for (account_id, cents, date) in [(rent, 150_000, "2026-04-01"), (contractors, 80_000, "2026-04-02"), (rent, 120_000, "2025-04-01")] {
-        let check: ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": "Harbor Leasing", "paymentAccountId": checking, "expenseDate": date,
-            "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": account_id, "amountCents": cents, "memo": null }] })).unwrap();
+        let check: ExpenseInput =
+            serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": "Harbor Leasing", "paymentAccountId": checking, "expenseDate": date,
+            "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": account_id, "amountCents": cents, "memo": null }] }))
+            .unwrap();
         crate::expenses::post_expense(&pool, check).await.unwrap();
     }
     // Two open to-dos due by May, one later, one undated, one done.
     let nobody = crate::reminders::Viewer { user_id: None, role: None };
     let todo = |title: &str, due: Option<NaiveDate>| crate::reminders::TodoInput {
-        title: title.into(), note: String::new(), due_date: due, customer_id: None, vendor_id: None, employee_id: None, link_kind: None, link_id: None, assigned_user_id: None,
+        title: title.into(),
+        note: String::new(),
+        due_date: due,
+        customer_id: None,
+        vendor_id: None,
+        employee_id: None,
+        link_kind: None,
+        link_id: None,
+        assigned_user_id: None,
     };
     for (title, due) in [("Call Alder", Some(d(2026, 5, 2))), ("Order paper", Some(d(2026, 4, 20))), ("Plan party", Some(d(2026, 12, 1))), ("Someday", None)] {
         crate::reminders::save_todo(&pool, None, &todo(title, due), nobody).await.unwrap();
@@ -203,7 +236,15 @@ async fn the_to_dos_widget_hides_other_users_to_dos() {
     };
     let (ann, bob) = (user("ann").await, user("bob").await);
     let todo = |title: &str, assigned: Option<i64>| crate::reminders::TodoInput {
-        title: title.into(), note: String::new(), due_date: None, customer_id: None, vendor_id: None, employee_id: None, link_kind: None, link_id: None, assigned_user_id: assigned,
+        title: title.into(),
+        note: String::new(),
+        due_date: None,
+        customer_id: None,
+        vendor_id: None,
+        employee_id: None,
+        link_kind: None,
+        link_id: None,
+        assigned_user_id: assigned,
     };
     for (title, assigned) in [("Ann's", Some(ann)), ("Bob's", Some(bob)), ("Anyone's", None)] {
         crate::reminders::save_todo(&pool, None, &todo(title, assigned), Viewer::default()).await.unwrap();

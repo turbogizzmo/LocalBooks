@@ -46,7 +46,11 @@ impl LevelKind {
         }
     }
     fn from_code(code: &str) -> Self {
-        if code == "PER_ITEM" { LevelKind::PerItem } else { LevelKind::FixedPercent }
+        if code == "PER_ITEM" {
+            LevelKind::PerItem
+        } else {
+            LevelKind::FixedPercent
+        }
     }
 }
 
@@ -292,7 +296,8 @@ async fn one(conn: &mut SqliteConnection, id: i64) -> Result<PriceLevel, String>
 async fn snapshot(conn: &mut SqliteConnection, level: &PriceLevel) -> Result<serde_json::Value, String> {
     let mut items = Vec::with_capacity(level.items.len());
     for i in &level.items {
-        let name: Option<String> = sqlx::query_scalar("SELECT name FROM products_services WHERE id = ?1").bind(i.product_id).fetch_optional(&mut *conn).await.map_err(db_err)?;
+        let name: Option<String> =
+            sqlx::query_scalar("SELECT name FROM products_services WHERE id = ?1").bind(i.product_id).fetch_optional(&mut *conn).await.map_err(db_err)?;
         items.push(serde_json::json!({
             "productId": i.product_id, "name": name, "basis": i.basis, "priceCents": i.price_cents, "percentMilli": i.percent_milli,
         }));
@@ -303,7 +308,14 @@ async fn snapshot(conn: &mut SqliteConnection, level: &PriceLevel) -> Result<ser
     }))
 }
 
-async fn audit(conn: &mut SqliteConnection, level_id: i64, event: &str, before: Option<serde_json::Value>, after: Option<serde_json::Value>, extra: serde_json::Value) -> Result<i64, String> {
+async fn audit(
+    conn: &mut SqliteConnection,
+    level_id: i64,
+    event: &str,
+    before: Option<serde_json::Value>,
+    after: Option<serde_json::Value>,
+    extra: serde_json::Value,
+) -> Result<i64, String> {
     let mut payload = serde_json::json!({ "event": event, "priceLevelId": level_id, "before": before, "after": after });
     if let (Some(p), serde_json::Value::Object(more)) = (payload.as_object_mut(), extra) {
         p.extend(more);
@@ -319,14 +331,19 @@ async fn audit(conn: &mut SqliteConnection, level_id: i64, event: &str, before: 
 fn duplicate(name: &str) -> impl Fn(sqlx::Error) -> String + '_ {
     move |e| {
         let msg = db_err(e);
-        if msg.contains("UNIQUE") { format!("PRICE_LEVEL_DUPLICATE: there is already a price level named '{name}'") } else { msg }
+        if msg.contains("UNIQUE") {
+            format!("PRICE_LEVEL_DUPLICATE: there is already a price level named '{name}'")
+        } else {
+            msg
+        }
     }
 }
 
 async fn write_items(conn: &mut SqliteConnection, id: i64, items: &[LevelItem]) -> Result<(), String> {
     sqlx::query("DELETE FROM price_level_items WHERE price_level_id = ?1").bind(id).execute(&mut *conn).await.map_err(db_err)?;
     for i in items {
-        let exists: Option<i64> = sqlx::query_scalar("SELECT id FROM products_services WHERE id = ?1").bind(i.product_id).fetch_optional(&mut *conn).await.map_err(db_err)?;
+        let exists: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM products_services WHERE id = ?1").bind(i.product_id).fetch_optional(&mut *conn).await.map_err(db_err)?;
         if exists.is_none() {
             return Err(format!("PRICE_LEVEL_UNKNOWN_ITEM: product {} does not exist", i.product_id));
         }
@@ -501,10 +518,8 @@ pub struct PriceList {
 pub async fn price_list(pool: &SqlitePool) -> Result<PriceList, String> {
     let levels = list(pool).await?;
     let items = item_prices::list_items(pool).await?;
-    let customer_levels: Vec<(i64, i64)> = sqlx::query_as("SELECT id, price_level_id FROM customers WHERE price_level_id IS NOT NULL")
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?;
+    let customer_levels: Vec<(i64, i64)> =
+        sqlx::query_as("SELECT id, price_level_id FROM customers WHERE price_level_id IS NOT NULL").fetch_all(pool).await.map_err(db_err)?;
     Ok(PriceList {
         items: items
             .into_iter()

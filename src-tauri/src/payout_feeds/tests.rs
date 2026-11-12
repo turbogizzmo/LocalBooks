@@ -11,7 +11,13 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 async fn new_account(pool: &SqlitePool, number: &str, name: &str, kind: &str) -> i64 {
-    sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES (?1, ?2, ?3) RETURNING id").bind(number).bind(name).bind(kind).fetch_one(pool).await.unwrap()
+    sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES (?1, ?2, ?3) RETURNING id")
+        .bind(number)
+        .bind(name)
+        .bind(kind)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 /// A payout of $243.05: two sales ($200.00 and $100.00) with their fees, a $20.00 refund (its fee
@@ -44,7 +50,17 @@ async fn setup(pool: &SqlitePool) -> (FeedInput, i64) {
     let fees = new_account(pool, "6870", "Card Processing Fees", "EXPENSE").await;
     let refunds = new_account(pool, "4871", "Refunds", "INCOME").await;
     let chargebacks = new_account(pool, "6871", "Chargebacks", "EXPENSE").await;
-    (FeedInput { name: "Stripe".into(), bank_account_id: bank, sales_account_id: sales, fee_account_id: fees, refund_account_id: refunds, chargeback_account_id: chargebacks }, bank)
+    (
+        FeedInput {
+            name: "Stripe".into(),
+            bank_account_id: bank,
+            sales_account_id: sales,
+            fee_account_id: fees,
+            refund_account_id: refunds,
+            chargeback_account_id: chargebacks,
+        },
+        bank,
+    )
 }
 
 async fn balance(pool: &SqlitePool, id: i64) -> i64 {
@@ -72,11 +88,14 @@ async fn mock_stripe(requests: Arc<Mutex<Vec<String>>>) -> String {
                 } else if line.starts_with("GET /v1/balance ") || line.starts_with("GET /v1/balance?") {
                     (200, json!({ "object": "balance" }))
                 } else if line.starts_with("GET /v1/payouts") {
-                    (200, json!({ "data": [
+                    (
+                        200,
+                        json!({ "data": [
                         { "id": "po_1", "amount": 24_305, "currency": "usd", "arrival_date": 1_773_014_400, "status": "paid" },
                         { "id": "po_eur", "amount": 5_000, "currency": "eur", "arrival_date": 1_773_014_400, "status": "paid" },
                         { "id": "po_bad", "amount": 999, "currency": "usd", "arrival_date": 1_773_014_400, "status": "paid" }
-                    ], "has_more": false }))
+                    ], "has_more": false }),
+                    )
                 } else if line.contains("payout=po_1") {
                     (200, json!({ "data": transactions(), "has_more": false }))
                 } else if line.contains("payout=po_bad") {
@@ -142,7 +161,8 @@ async fn a_fetched_payout_is_recorded_as_a_gross_deposit_that_lands_at_the_net()
     assert_eq!(balance(&pool, input.chargeback_account_id).await, 1_500);
     let lines: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM deposit_lines WHERE deposit_id = ?1").bind(deposit).fetch_one(&pool).await.unwrap();
     assert_eq!(lines, 3, "two sales and the adjustment back");
-    let kinds: Vec<String> = sqlx::query_scalar("SELECT kind FROM deposit_deductions WHERE deposit_id = ?1 ORDER BY line_number").bind(deposit).fetch_all(&pool).await.unwrap();
+    let kinds: Vec<String> =
+        sqlx::query_scalar("SELECT kind FROM deposit_deductions WHERE deposit_id = ?1 ORDER BY line_number").bind(deposit).fetch_all(&pool).await.unwrap();
     assert_eq!(kinds, vec!["REFUND", "CHARGEBACK", "FEE"]);
 
     // Without the key on this computer, fetching says so.
@@ -162,12 +182,22 @@ async fn deposits_refuse_deductions_that_leave_nothing_in_the_bank() {
         deposit_date: NaiveDate::from_ymd_opt(2026, 3, 9).unwrap(),
         memo: None,
         items: Vec::new(),
-        other_lines: vec![DepositOtherLine { account_id: input.sales_account_id, amount_cents: Cents(1_000), memo: None, class_id: None, customer_id: None, vendor_id: None }],
+        other_lines: vec![DepositOtherLine {
+            account_id: input.sales_account_id,
+            amount_cents: Cents(1_000),
+            memo: None,
+            class_id: None,
+            customer_id: None,
+            vendor_id: None,
+        }],
         cash_back: None,
         deductions,
     };
     let fee = |a: i64, account: i64, kind: &str| DepositDeduction { account_id: account, amount_cents: Cents(a), memo: None, kind: kind.into() };
-    assert!(crate::banking::post_bank_deposit(&pool, deposit(vec![fee(1_000, input.fee_account_id, "FEE")])).await.unwrap_err().starts_with("DEP_NOTHING_BANKED"));
+    assert!(crate::banking::post_bank_deposit(&pool, deposit(vec![fee(1_000, input.fee_account_id, "FEE")]))
+        .await
+        .unwrap_err()
+        .starts_with("DEP_NOTHING_BANKED"));
     assert!(crate::banking::post_bank_deposit(&pool, deposit(vec![fee(0, input.fee_account_id, "FEE")])).await.unwrap_err().starts_with("DEP_BAD_DEDUCTION"));
     assert!(crate::banking::post_bank_deposit(&pool, deposit(vec![fee(10, bank, "FEE")])).await.unwrap_err().starts_with("DEP_DEDUCTION_ACCOUNT"));
     assert!(crate::banking::post_bank_deposit(&pool, deposit(vec![fee(10, input.fee_account_id, "TIP")])).await.unwrap_err().starts_with("DEP_BAD_DEDUCTION"));
@@ -222,13 +252,17 @@ async fn automatic_fetches_wait_for_someone_who_may_change_the_books() {
 
     let (pool, slot) = db.pool_and_session().await.unwrap();
     let (session, _) = crate::users::turn_on(&pool, "Owner", None, "owner password").await.unwrap();
-    let viewer = crate::users::add(&pool, &session, crate::users::NewUserInput {
-        username: "viewer".into(),
-        display_name: None,
-        role: crate::users::Role::ViewOnly,
-        can_see_sensitive: false,
-        password: "viewer temp pw".into(),
-    })
+    let viewer = crate::users::add(
+        &pool,
+        &session,
+        crate::users::NewUserInput {
+            username: "viewer".into(),
+            display_name: None,
+            role: crate::users::Role::ViewOnly,
+            can_see_sensitive: false,
+            password: "viewer temp pw".into(),
+        },
+    )
     .await
     .unwrap();
     db.refresh_gate().await;

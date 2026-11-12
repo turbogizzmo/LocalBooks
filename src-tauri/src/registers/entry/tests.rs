@@ -33,18 +33,25 @@ async fn a_bank_payment_is_recorded_as_a_check_and_shows_in_the_register() {
     let pool = test_pool().await;
     let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
     crate::expenses::create_vendor(&pool, "Landlord LLC", None).await.unwrap();
-    let posted = post_register_entry(&pool, row(checking, RegisterSide::Payment, Some("Landlord LLC"), Some("1042"), vec![split(rent, 120_000)])).await.unwrap();
+    let posted =
+        post_register_entry(&pool, row(checking, RegisterSide::Payment, Some("Landlord LLC"), Some("1042"), vec![split(rent, 120_000)])).await.unwrap();
     assert_eq!(posted.source_type, "CHECK");
 
     // It is an ordinary check: the Write Checks list has it, with its number and its vendor.
     let checks = crate::expenses::list_expenses(&pool).await.unwrap();
     let check = checks.iter().find(|x| x.id == posted.source_id).unwrap();
-    assert_eq!((check.kind.as_str(), check.check_number.as_deref(), check.payee_name.as_deref(), check.total_cents), ("CHECK", Some("1042"), Some("Landlord LLC"), 120_000));
+    assert_eq!(
+        (check.kind.as_str(), check.check_number.as_deref(), check.payee_name.as_deref(), check.total_cents),
+        ("CHECK", Some("1042"), Some("Landlord LLC"), 120_000)
+    );
     assert_eq!(check.journal_entry_id, Some(posted.journal_entry_id));
 
     let reg = account_register(&pool, checking, None, None, false).await.unwrap();
     let r = reg.rows.iter().find(|r| r.journal_entry_id == posted.journal_entry_id).unwrap();
-    assert_eq!((r.source_type.as_str(), r.party_name.as_deref(), r.split.as_deref(), r.credit_cents), ("CHECK", Some("Landlord LLC"), Some("Rent & Lease"), 120_000));
+    assert_eq!(
+        (r.source_type.as_str(), r.party_name.as_deref(), r.split.as_deref(), r.credit_cents),
+        ("CHECK", Some("Landlord LLC"), Some("Rent & Lease"), 120_000)
+    );
     assert_eq!(r.num.as_deref(), Some("1042"), "the register shows the check number");
     assert_eq!(reg.ending_balance_cents, -120_000);
 }
@@ -75,7 +82,11 @@ async fn a_deposit_from_a_customer_or_vendor_shows_them_as_payee_and_in_their_tr
     // Typed in the register: the payee becomes the deposit's Received From, not part of its memo.
     let posted = post_register_entry(&pool, row(checking, RegisterSide::Deposit, Some("harbor cafe"), None, vec![split(sales, 30_000)])).await.unwrap();
     let (memo, named): (Option<String>, Option<i64>) =
-        sqlx::query_as("SELECT d.memo, l.customer_id FROM deposits d JOIN deposit_lines l ON l.deposit_id = d.id WHERE d.id = ?1").bind(posted.source_id).fetch_one(&pool).await.unwrap();
+        sqlx::query_as("SELECT d.memo, l.customer_id FROM deposits d JOIN deposit_lines l ON l.deposit_id = d.id WHERE d.id = ?1")
+            .bind(posted.source_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!((memo.as_deref(), named), (Some("typed in the register"), Some(customer)));
 
     // On the Make Deposits form: a vendor's refund.
@@ -86,7 +97,14 @@ async fn a_deposit_from_a_customer_or_vendor_shows_them_as_payee_and_in_their_tr
             deposit_date: d("2026-03-05"),
             memo: None,
             items: vec![],
-            other_lines: vec![DepositOtherLine { account_id: supplies, amount_cents: Cents(2_500), memo: Some("Returned toner".into()), class_id: None, customer_id: None, vendor_id: Some(vendor) }],
+            other_lines: vec![DepositOtherLine {
+                account_id: supplies,
+                amount_cents: Cents(2_500),
+                memo: Some("Returned toner".into()),
+                class_id: None,
+                customer_id: None,
+                vendor_id: Some(vendor),
+            }],
             cash_back: None,
             deductions: Vec::new(),
         },
@@ -103,7 +121,11 @@ async fn a_deposit_from_a_customer_or_vendor_shows_them_as_payee_and_in_their_tr
     let listed = |kind: NameKind, id: i64| {
         let pool = pool.clone();
         async move {
-            let query = FindQuery { filters: Filters { names: vec![NameRef { kind, id }], ..Default::default() }, end_date: Some(d("2026-12-31")), ..Default::default() };
+            let query = FindQuery {
+                filters: Filters { names: vec![NameRef { kind, id }], ..Default::default() },
+                end_date: Some(d("2026-12-31")),
+                ..Default::default()
+            };
             find(&pool, &query, d("2026-12-31")).await.unwrap().rows.iter().map(|r| r.journal_entry_id).collect::<Vec<_>>()
         }
     };
@@ -111,8 +133,22 @@ async fn a_deposit_from_a_customer_or_vendor_shows_them_as_payee_and_in_their_tr
     assert_eq!(listed(NameKind::Vendor, vendor).await, vec![refund_entry]);
 
     // A line names a customer or a vendor, not both.
-    let both = DepositOtherLine { account_id: sales, amount_cents: Cents(100), memo: None, class_id: None, customer_id: Some(customer), vendor_id: Some(vendor) };
-    let err = crate::banking::post_bank_deposit(&pool, DepositInput { bank_account_id: checking, deposit_date: d("2026-03-06"), memo: None, items: vec![], other_lines: vec![both], cash_back: None, deductions: Vec::new() }).await.unwrap_err();
+    let both =
+        DepositOtherLine { account_id: sales, amount_cents: Cents(100), memo: None, class_id: None, customer_id: Some(customer), vendor_id: Some(vendor) };
+    let err = crate::banking::post_bank_deposit(
+        &pool,
+        DepositInput {
+            bank_account_id: checking,
+            deposit_date: d("2026-03-06"),
+            memo: None,
+            items: vec![],
+            other_lines: vec![both],
+            cash_back: None,
+            deductions: Vec::new(),
+        },
+    )
+    .await
+    .unwrap_err();
     assert!(err.starts_with("DEP_TWO_NAMES"), "{err}");
 }
 
@@ -122,14 +158,36 @@ async fn a_deposit_whose_lines_name_different_people_has_no_payee_and_unknown_na
     let (checking, sales) = (account(&pool, "1010").await, account(&pool, "4000").await);
     let a = crate::sales::create_customer(&pool, "Ann", None).await.unwrap().id;
     let b = crate::sales::create_customer(&pool, "Bo", None).await.unwrap().id;
-    let line = |customer_id| DepositOtherLine { account_id: sales, amount_cents: Cents(1_000), memo: None, class_id: None, customer_id: Some(customer_id), vendor_id: None };
-    let id = crate::banking::post_bank_deposit(&pool, DepositInput { bank_account_id: checking, deposit_date: d("2026-03-05"), memo: None, items: vec![], other_lines: vec![line(a), line(b)], cash_back: None, deductions: Vec::new() }).await.unwrap();
+    let line = |customer_id| DepositOtherLine {
+        account_id: sales,
+        amount_cents: Cents(1_000),
+        memo: None,
+        class_id: None,
+        customer_id: Some(customer_id),
+        vendor_id: None,
+    };
+    let id = crate::banking::post_bank_deposit(
+        &pool,
+        DepositInput {
+            bank_account_id: checking,
+            deposit_date: d("2026-03-05"),
+            memo: None,
+            items: vec![],
+            other_lines: vec![line(a), line(b)],
+            cash_back: None,
+            deductions: Vec::new(),
+        },
+    )
+    .await
+    .unwrap();
     let entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
-    let party: Option<String> = sqlx::query_scalar("SELECT party_name FROM v_entry_party WHERE journal_entry_id = ?1").bind(entry).fetch_one(&pool).await.unwrap();
+    let party: Option<String> =
+        sqlx::query_scalar("SELECT party_name FROM v_entry_party WHERE journal_entry_id = ?1").bind(entry).fetch_one(&pool).await.unwrap();
     assert_eq!(party, None);
 
     let posted = post_register_entry(&pool, row(checking, RegisterSide::Deposit, Some("Walk-in"), None, vec![split(sales, 500)])).await.unwrap();
-    let named: Option<i64> = sqlx::query_scalar("SELECT customer_id FROM deposit_lines WHERE deposit_id = ?1").bind(posted.source_id).fetch_one(&pool).await.unwrap();
+    let named: Option<i64> =
+        sqlx::query_scalar("SELECT customer_id FROM deposit_lines WHERE deposit_id = ?1").bind(posted.source_id).fetch_one(&pool).await.unwrap();
     assert_eq!(named, None);
 }
 
@@ -153,7 +211,9 @@ async fn a_split_row_posts_every_account() {
     let pool = test_pool().await;
     let (checking, rent, card) = (account(&pool, "1010").await, account(&pool, "6300").await, account(&pool, "2100").await);
     crate::expenses::create_vendor(&pool, "Landlord LLC", None).await.unwrap();
-    let posted = post_register_entry(&pool, row(checking, RegisterSide::Payment, Some("Landlord LLC"), None, vec![split(rent, 1_000), split(card, 2_500)])).await.unwrap();
+    let posted = post_register_entry(&pool, row(checking, RegisterSide::Payment, Some("Landlord LLC"), None, vec![split(rent, 1_000), split(card, 2_500)]))
+        .await
+        .unwrap();
     let reg = account_register(&pool, checking, None, None, false).await.unwrap();
     let r = reg.rows.iter().find(|r| r.journal_entry_id == posted.journal_entry_id).unwrap();
     assert_eq!((r.split.as_deref(), r.credit_cents), (Some("-Split-"), 3_500));
@@ -162,7 +222,8 @@ async fn a_split_row_posts_every_account() {
 #[tokio::test]
 async fn rows_that_cannot_be_recorded_are_refused_with_a_reason() {
     let pool = test_pool().await;
-    let (checking, rent, card, sales) = (account(&pool, "1010").await, account(&pool, "6300").await, account(&pool, "2100").await, account(&pool, "4000").await);
+    let (checking, rent, card, sales) =
+        (account(&pool, "1010").await, account(&pool, "6300").await, account(&pool, "2100").await, account(&pool, "4000").await);
     let err = |r: Result<RegisterEntryPosted, String>| r.unwrap_err().split(':').next().unwrap().to_string();
     assert_eq!(err(post_register_entry(&pool, row(checking, RegisterSide::Charge, None, None, vec![split(rent, 100)])).await), "REG_ENTRY_BAD_SIDE");
     assert_eq!(err(post_register_entry(&pool, row(card, RegisterSide::Deposit, None, None, vec![split(rent, 100)])).await), "REG_ENTRY_BAD_SIDE");
@@ -202,15 +263,28 @@ async fn transaction_history_links_an_invoice_its_payment_and_the_deposit() {
     let payment_id = waiting[0].id;
     crate::banking::post_bank_deposit(
         &pool,
-        DepositInput { bank_account_id: checking, deposit_date: d("2026-03-11"), memo: None, items: vec![crate::banking::DepositItemRef { kind: "PAYMENT".into(), id: payment_id }], other_lines: vec![], cash_back: None, deductions: Vec::new() },
+        DepositInput {
+            bank_account_id: checking,
+            deposit_date: d("2026-03-11"),
+            memo: None,
+            items: vec![crate::banking::DepositItemRef { kind: "PAYMENT".into(), id: payment_id }],
+            other_lines: vec![],
+            cash_back: None,
+            deductions: Vec::new(),
+        },
     )
     .await
     .unwrap();
     let entry_of = |t: &'static str| sqlx::query_scalar::<_, i64>("SELECT id FROM journal_entries WHERE source_type = ?1").bind(t);
-    let (invoice_entry, payment_entry, deposit_entry) =
-        (entry_of("INVOICE").fetch_one(&pool).await.unwrap(), entry_of("RECEIVE_PAYMENT").fetch_one(&pool).await.unwrap(), entry_of("DEPOSIT").fetch_one(&pool).await.unwrap());
+    let (invoice_entry, payment_entry, deposit_entry) = (
+        entry_of("INVOICE").fetch_one(&pool).await.unwrap(),
+        entry_of("RECEIVE_PAYMENT").fetch_one(&pool).await.unwrap(),
+        entry_of("DEPOSIT").fetch_one(&pool).await.unwrap(),
+    );
 
-    let links = |h: crate::registers::history::TransactionHistory| h.links.into_iter().map(|l| (l.relation, l.entry.journal_entry_id, l.amount_cents)).collect::<Vec<_>>();
+    let links = |h: crate::registers::history::TransactionHistory| {
+        h.links.into_iter().map(|l| (l.relation, l.entry.journal_entry_id, l.amount_cents)).collect::<Vec<_>>()
+    };
     assert_eq!(links(transaction_history(&pool, invoice_entry).await.unwrap()), [("Payment".to_string(), payment_entry, 20_000)]);
     assert_eq!(
         links(transaction_history(&pool, payment_entry).await.unwrap()),
@@ -248,7 +322,10 @@ async fn a_transaction_journal_report_shows_only_that_entry() {
 async fn another_bank_account_in_the_entry_row_records_a_transfer() {
     let pool = test_pool().await;
     let checking = account(&pool, "1010").await;
-    let savings: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Reserve Savings', 'BANK') RETURNING id").fetch_one(&pool).await.unwrap();
+    let savings: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Reserve Savings', 'BANK') RETURNING id")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     let out = post_register_entry(&pool, row(checking, RegisterSide::Payment, None, Some("1001"), vec![split(savings, 25_000)])).await.unwrap();
     assert_eq!(out.source_type, "TRANSFER");
     let back = post_register_entry(&pool, row(checking, RegisterSide::Deposit, None, None, vec![split(savings, 5_000)])).await.unwrap();
@@ -266,10 +343,13 @@ async fn another_bank_account_in_the_entry_row_records_a_transfer() {
 async fn an_undeposited_funds_deposit_in_the_entry_row_banks_the_waiting_payments() {
     let pool = test_pool().await;
     let (checking, sales) = (account(&pool, "1010").await, account(&pool, "4000").await);
-    let undeposited: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'OTHER_CURRENT_ASSET' AND is_system = 1").fetch_one(&pool).await.unwrap();
+    let undeposited: i64 =
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'OTHER_CURRENT_ASSET' AND is_system = 1").fetch_one(&pool).await.unwrap();
     let receipt = |cents: i64| -> crate::sales::SalesReceiptInput {
-        serde_json::from_value(serde_json::json!({ "customerName": "Walk-in", "receiptDate": "2026-03-01", "depositAccountId": undeposited, "paymentMethod": "CASH",
-            "lines": [{ "description": "Sale", "quantityE4": 10_000, "rateCents": cents, "incomeAccountId": sales, "isTaxable": false }] }))
+        serde_json::from_value(
+            serde_json::json!({ "customerName": "Walk-in", "receiptDate": "2026-03-01", "depositAccountId": undeposited, "paymentMethod": "CASH",
+            "lines": [{ "description": "Sale", "quantityE4": 10_000, "rateCents": cents, "incomeAccountId": sales, "isTaxable": false }] }),
+        )
         .unwrap()
     };
     for cents in [4_000, 6_000, 2_500] {

@@ -54,7 +54,8 @@ pub fn hash_passcode(passcode: &str) -> String {
 
 pub fn verify_passcode(passcode: &str, stored: &str) -> bool {
     let mut parts = stored.split('$');
-    let (Some("pbkdf2-sha256"), Some(iterations), Some(salt), Some(expected), None) = (parts.next(), parts.next(), parts.next(), parts.next(), parts.next()) else {
+    let (Some("pbkdf2-sha256"), Some(iterations), Some(salt), Some(expected), None) = (parts.next(), parts.next(), parts.next(), parts.next(), parts.next())
+    else {
         return false;
     };
     let (Ok(iterations), Some(salt), Some(expected)) = (iterations.parse::<u32>(), unhex(salt), unhex(expected)) else {
@@ -73,10 +74,7 @@ pub fn verify_passcode(passcode: &str, stored: &str) -> bool {
 // ------------------------------------------------------------------------------------------------
 
 async fn current(tx: &mut sqlx::SqliteConnection) -> Result<Option<(Option<NaiveDate>, Option<String>)>, String> {
-    sqlx::query_as("SELECT lock_date, hashed_passcode FROM closing_locks ORDER BY id DESC LIMIT 1")
-        .fetch_optional(tx)
-        .await
-        .map_err(db_err)
+    sqlx::query_as("SELECT lock_date, hashed_passcode FROM closing_locks ORDER BY id DESC LIMIT 1").fetch_optional(tx).await.map_err(db_err)
 }
 
 /// Refuses an entry dated on or before the closing date in force, unless an External Accountant
@@ -118,12 +116,11 @@ pub struct ClosingStatus {
 }
 
 pub async fn status(pool: &SqlitePool) -> Result<ClosingStatus, String> {
-    let history: Vec<ClosingChange> = sqlx::query_as(
-        "SELECT id, lock_date, set_at, hashed_passcode IS NOT NULL AS passcode_protected FROM closing_locks ORDER BY id DESC",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(db_err)?;
+    let history: Vec<ClosingChange> =
+        sqlx::query_as("SELECT id, lock_date, set_at, hashed_passcode IS NOT NULL AS passcode_protected FROM closing_locks ORDER BY id DESC")
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
     let (lock_date, passcode_protected) = history.first().map(|c| (c.lock_date, c.passcode_protected)).unwrap_or((None, false));
     Ok(ClosingStatus { lock_date, passcode_protected, history })
 }

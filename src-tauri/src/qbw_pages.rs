@@ -103,17 +103,17 @@ impl Prepared {
 
     fn r7(&self) -> usize {
         let rot6 = self.rots[6];
-        if self.q == 0 { rot6 } else { (rot6 + SECTOR - 2) % SECTOR }
+        if self.q == 0 {
+            rot6
+        } else {
+            (rot6 + SECTOR - 2) % SECTOR
+        }
     }
 
     fn slot_starts(&self) -> Vec<usize> {
         // A wrong anchor candidate can give any slot count; read only what fits.
         let n = (u16le(&self.head, 22) as usize).min(MAX_SLOTS).min((self.head.len() - SLOT_BASE) / 2);
-        let mut starts: Vec<usize> = (0..n)
-            .map(|i| u16le(&self.head, SLOT_BASE + 2 * i) as usize)
-            .filter(|&v| v != 0)
-            .map(|v| SLOT_BASE + v)
-            .collect();
+        let mut starts: Vec<usize> = (0..n).map(|i| u16le(&self.head, SLOT_BASE + 2 * i) as usize).filter(|&v| v != 0).map(|v| SLOT_BASE + v).collect();
         starts.sort_unstable();
         starts.dedup();
         starts
@@ -130,7 +130,11 @@ impl Prepared {
     }
 
     fn step7_candidates(&self) -> Vec<u8> {
-        if self.q == 0 { vec![self.steps[6]] } else { (0..=255).collect() }
+        if self.q == 0 {
+            vec![self.steps[6]]
+        } else {
+            (0..=255).collect()
+        }
     }
 }
 
@@ -231,13 +235,8 @@ impl PageDecoder {
         Ok(Self { store, model, c_rows: HashMap::new() })
     }
 
-
     fn row_page_numbers(&self) -> Vec<u64> {
-        (1..self.store.page_count())
-            .filter(|&pn| {
-                self.store.page(pn).map(|p| p.trailer().page_type() == PageType::Extent).unwrap_or(false)
-            })
-            .collect()
+        (1..self.store.page_count()).filter(|&pn| self.store.page(pn).map(|p| p.trailer().page_type() == PageType::Extent).unwrap_or(false)).collect()
     }
 
     /// Removes the cipher from sectors 0..6, finds the rotation anchor and pairing phase.
@@ -350,17 +349,7 @@ impl PageDecoder {
             let len = (next - st) as u16;
             rows.push(RowSpan { start: st as u16, len, chained: u16le(&bytes, st) == len });
         }
-        LogicalPage {
-            number: p.number,
-            kind: bytes[17],
-            owner: u32le(&bytes, 24),
-            bytes,
-            rows,
-            sector7,
-            q: p.q as u8,
-            r7: r7_used as u16,
-            c_exact,
-        }
+        LogicalPage { number: p.number, kind: bytes[17], owner: u32le(&bytes, 24), bytes, rows, sector7, q: p.q as u8, r7: r7_used as u16, c_exact }
     }
 
     /// Re-solves sector 7 of `page` when its rows fail a check the caller can make (the typed
@@ -424,12 +413,7 @@ impl PageDecoder {
 }
 
 /// `PageDecoder::refine` for a prepared page and the learned correction rows.
-fn refine_sector7(
-    p: &Prepared,
-    c_rows: &HashMap<usize, (Vec<u8>, bool)>,
-    page: &LogicalPage,
-    score: &dyn Fn(&LogicalPage) -> usize,
-) -> Option<LogicalPage> {
+fn refine_sector7(p: &Prepared, c_rows: &HashMap<usize, (Vec<u8>, bool)>, page: &LogicalPage, score: &dyn Fn(&LogicalPage) -> usize) -> Option<LogicalPage> {
     let r7 = p.r7();
     let raw7 = &p.raw[S7_START..S7_START + S7_LEN];
     let current = score(page);
@@ -443,9 +427,7 @@ fn refine_sector7(
             for (c_row, _) in c_rows.values() {
                 for d in (1..=255u8).step_by(2) {
                     let base7 = raw7[i0].wrapping_sub((i0 as u8).wrapping_mul(step7)).wrapping_sub(d.wrapping_mul(c_row[i0])).wrapping_sub(b0);
-                    let byte = |i: usize| {
-                        raw7[i].wrapping_sub(base7).wrapping_sub((i as u8).wrapping_mul(step7)).wrapping_sub(d.wrapping_mul(c_row[i]))
-                    };
+                    let byte = |i: usize| raw7[i].wrapping_sub(base7).wrapping_sub((i as u8).wrapping_mul(step7)).wrapping_sub(d.wrapping_mul(c_row[i]));
                     if !known.iter().all(|(i, b)| byte(*i) == *b) {
                         continue;
                     }
@@ -490,9 +472,7 @@ fn lay_out(pn: u64, raw: Vec<u8>, dec: Vec<u8>) -> Option<Prepared> {
     // id equal to the page number), so every odd position is a candidate; the one whose
     // header validates and whose rows chain best wins below.
     let anchor = (pn as u32).to_le_bytes();
-    let find_anchors = |dec: &[u8]| -> Vec<usize> {
-        (1..SECTOR).step_by(2).filter(|&i| (0..4).all(|k| dec[(i + k) % SECTOR] == anchor[k])).collect()
-    };
+    let find_anchors = |dec: &[u8]| -> Vec<usize> { (1..SECTOR).step_by(2).filter(|&i| (0..4).all(|k| dec[(i + k) % SECTOR] == anchor[k])).collect() };
     let model_anchors = find_anchors(&dec);
     let (dec, base, steps, anchors) = if model_anchors.is_empty() {
         let (base, steps, dec, r0) = recover_cipher(pn, &raw)?;
@@ -643,9 +623,7 @@ fn best_fit_d(res: &[u8; S7_LEN]) -> u8 {
 /// lengths starting in that sector. Returns base, steps, decoded sectors 0..6 and the anchor.
 fn recover_cipher(pn: u64, raw: &[u8]) -> Option<(u8, [u8; 7], Vec<u8>, usize)> {
     let anchor = (pn as u32).to_le_bytes();
-    let plain = |base: u8, step: u8, lo: usize, i: usize| {
-        raw[lo + i].wrapping_sub(base).wrapping_sub((i as u8).wrapping_mul(step))
-    };
+    let plain = |base: u8, step: u8, lo: usize, i: usize| raw[lo + i].wrapping_sub(base).wrapping_sub((i as u8).wrapping_mul(step));
     let mut found: Option<(u8, u8, usize)> = None;
     for step0 in 0..=255u8 {
         for base in 0..=255u8 {
@@ -740,12 +718,7 @@ fn repair_rotations(p: &mut Prepared, dec: &[u8]) {
             continue;
         }
         let sec = &dec[lo..lo + SECTOR];
-        let matches = |rot: usize| {
-            known
-                .iter()
-                .filter(|(x, len)| u16::from_le_bytes([sec[(x + rot) % SECTOR], sec[(x + 1 + rot) % SECTOR]]) == *len)
-                .count()
-        };
+        let matches = |rot: usize| known.iter().filter(|(x, len)| u16::from_le_bytes([sec[(x + rot) % SECTOR], sec[(x + 1 + rot) % SECTOR]]) == *len).count();
         let predicted = p.rots[s];
         let mut best = (matches(predicted), predicted);
         if best.0 == known.len() {
@@ -765,9 +738,7 @@ fn repair_rotations(p: &mut Prepared, dec: &[u8]) {
                     if s == 6 {
                         p.base7 = base.wrapping_add(1);
                     }
-                    let plain: Vec<u8> = (0..SECTOR)
-                        .map(|i| p.raw[lo + i].wrapping_sub(base).wrapping_sub((i as u8).wrapping_mul(step)))
-                        .collect();
+                    let plain: Vec<u8> = (0..SECTOR).map(|i| p.raw[lo + i].wrapping_sub(base).wrapping_sub((i as u8).wrapping_mul(step))).collect();
                     p.head[lo..lo + SECTOR].copy_from_slice(&[&plain[rot..], &plain[..rot]].concat());
                     continue;
                 }
@@ -795,10 +766,7 @@ fn solve_sector_cipher(raw: &[u8], known: &[(usize, u16)]) -> Option<(usize, u8,
             let step = raw[p1].wrapping_sub(raw[p0]).wrapping_sub(hi_b.wrapping_sub(lo_b));
             let base = raw[p0].wrapping_sub(lo_b).wrapping_sub((p0 as u8).wrapping_mul(step));
             let byte = |i: usize| raw[i].wrapping_sub(base).wrapping_sub((i as u8).wrapping_mul(step));
-            let m = known
-                .iter()
-                .filter(|(x, len)| u16::from_le_bytes([byte((x + rot) % SECTOR), byte((x + 1 + rot) % SECTOR)]) == *len)
-                .count();
+            let m = known.iter().filter(|(x, len)| u16::from_le_bytes([byte((x + rot) % SECTOR), byte((x + 1 + rot) % SECTOR)]) == *len).count();
             if m >= 2 && best.as_ref().is_none_or(|b| m > b.3) {
                 best = Some((rot, step, base, m));
             }

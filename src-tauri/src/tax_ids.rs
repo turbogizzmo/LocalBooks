@@ -63,7 +63,11 @@ pub fn mask(plain: &str) -> String {
                 return c;
             }
             seen += 1;
-            if seen + shown > digits { c } else { '*' }
+            if seen + shown > digits {
+                c
+            } else {
+                '*'
+            }
         })
         .collect()
 }
@@ -116,16 +120,15 @@ async fn clear(conn: &mut SqliteConnection, vendor_id: i64) -> Result<(), String
 /// QuickBooks' own encrypted values ([`is_quickbooks_encrypted`]) are cleared instead, including
 /// ones encrypted before that check existed. Returns how many were encrypted.
 pub async fn protect_all(conn: &mut SqliteConnection, key: &DataKey) -> Result<usize, String> {
-    let encrypted: Vec<(i64, String)> = sqlx::query_as("SELECT id, tax_id FROM vendors WHERE tax_id LIKE 'lb1:%'").fetch_all(&mut *conn).await.map_err(db_err)?;
+    let encrypted: Vec<(i64, String)> =
+        sqlx::query_as("SELECT id, tax_id FROM vendors WHERE tax_id LIKE 'lb1:%'").fetch_all(&mut *conn).await.map_err(db_err)?;
     for (id, stored) in &encrypted {
         if key.decrypt_field(TABLE, COLUMN, *id, stored).is_ok_and(|plain| is_quickbooks_encrypted(&plain)) {
             clear(conn, *id).await?;
         }
     }
-    let plain: Vec<(i64, String)> = sqlx::query_as("SELECT id, tax_id FROM vendors WHERE tax_id IS NOT NULL AND tax_id NOT LIKE 'lb1:%'")
-        .fetch_all(&mut *conn)
-        .await
-        .map_err(db_err)?;
+    let plain: Vec<(i64, String)> =
+        sqlx::query_as("SELECT id, tax_id FROM vendors WHERE tax_id IS NOT NULL AND tax_id NOT LIKE 'lb1:%'").fetch_all(&mut *conn).await.map_err(db_err)?;
     let access = Access { protected: true, key: Some(key) };
     let mut protected = 0;
     for (id, value) in &plain {
@@ -156,9 +159,7 @@ pub async fn protect_all(conn: &mut SqliteConnection, key: &DataKey) -> Result<u
 /// spaces, 4 to 20 of them) rather than that program's own encrypted value.
 pub fn looks_like_tax_id(text: &str) -> bool {
     let text = text.trim();
-    (4..=20).contains(&text.len())
-        && text.chars().any(|c| c.is_ascii_digit())
-        && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == ' ')
+    (4..=20).contains(&text.len()) && text.chars().any(|c| c.is_ascii_digit()) && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == ' ')
 }
 
 #[cfg(test)]

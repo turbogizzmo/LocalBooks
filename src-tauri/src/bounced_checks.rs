@@ -148,10 +148,7 @@ const CANDIDATES: &str = "
       AND NOT EXISTS (SELECT 1 FROM bounced_checks b WHERE b.deposit_line_id = dl.id AND b.is_voided = 0)";
 
 pub async fn candidates(pool: &SqlitePool) -> Result<Vec<BounceCandidate>, String> {
-    sqlx::query_as::<_, BounceCandidate>(&format!("SELECT * FROM ({CANDIDATES}) ORDER BY date DESC, kind, id DESC"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as::<_, BounceCandidate>(&format!("SELECT * FROM ({CANDIDATES}) ORDER BY date DESC, kind, id DESC")).fetch_all(pool).await.map_err(db_err)
 }
 
 const VIEW_SELECT: &str = "
@@ -172,10 +169,7 @@ const VIEW_SELECT: &str = "
     JOIN invoices ci ON ci.id = b.charge_invoice_id)";
 
 pub async fn list(pool: &SqlitePool) -> Result<Vec<BouncedCheckView>, String> {
-    sqlx::query_as::<_, BouncedCheckView>(&format!("{VIEW_SELECT} ORDER BY is_voided, bounce_date DESC, id DESC"))
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)
+    sqlx::query_as::<_, BouncedCheckView>(&format!("{VIEW_SELECT} ORDER BY is_voided, bounce_date DESC, id DESC")).fetch_all(pool).await.map_err(db_err)
 }
 
 /// What bounced, resolved inside the write transaction.
@@ -219,9 +213,8 @@ async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Resul
     match kind {
         "PAYMENT" => {
             type PaymentRow = (i64, i64, Option<i64>, String, Option<String>, Option<i64>, Option<String>, i64, Option<i64>, Option<i64>);
-            let (invoice_id, number, customer_id, customer, reference, ar_relief, currency, took, discount_account, discount): PaymentRow =
-                sqlx::query_as(
-                    "SELECT i.id, i.invoice_number, i.customer_id, COALESCE(c.name, i.customer_name), p.reference, p.ar_relief_cents, i.currency_code,
+            let (invoice_id, number, customer_id, customer, reference, ar_relief, currency, took, discount_account, discount): PaymentRow = sqlx::query_as(
+                "SELECT i.id, i.invoice_number, i.customer_id, COALESCE(c.name, i.customer_name), p.reference, p.ar_relief_cents, i.currency_code,
                             p.discount_cents + p.foreign_discount_cents, d.account_id, d.debit_cents
                      FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id LEFT JOIN customers c ON c.id = i.customer_id
                      -- The one discount line the payment posted (its home, or booked-rate home, amount).
@@ -230,12 +223,12 @@ async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Resul
                          WHERE l.journal_entry_id = p.journal_entry_id AND l.debit_cents > 0 AND l.memo = ?2 || i.invoice_number
                          ORDER BY l.line_number LIMIT 1)
                      WHERE p.id = ?1",
-                )
-                .bind(id)
-                .bind(crate::invoices::DISCOUNT_LINE_MEMO)
-                .fetch_one(&mut **tx)
-                .await
-                .map_err(db_err)?;
+            )
+            .bind(id)
+            .bind(crate::invoices::DISCOUNT_LINE_MEMO)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(db_err)?;
             let ar = system_account(tx, "ACCOUNTS_RECEIVABLE").await?;
             let check = clean(reference.as_deref()).map(|r| format!(" #{r}")).unwrap_or_default();
             let currency_note = currency.map(|c| format!(" ({c})")).unwrap_or_default();
@@ -255,13 +248,21 @@ async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Resul
                     lines.push(JournalLine::credit(account, cents).with_memo(Some("Early-payment discount reversed")));
                     cents
                 }
-                _ => return Err("BOUNCE_NO_DISCOUNT_LINE: the payment took a discount, but its discount line could not be found; void the payment instead".into()),
+                _ => {
+                    return Err(
+                        "BOUNCE_NO_DISCOUNT_LINE: the payment took a discount, but its discount line could not be found; void the payment instead".into()
+                    )
+                }
             };
             let difference = bank_cents + discount - ar_cents;
             if difference != 0 {
                 let fx = system_account(tx, "OTHER_EXPENSE").await?;
                 let memo = Some(if difference > 0 { "Realized exchange gain reversed" } else { "Realized exchange loss reversed" });
-                lines.push(if difference > 0 { JournalLine::debit(fx, difference).with_memo(memo) } else { JournalLine::credit(fx, -difference).with_memo(memo) });
+                lines.push(if difference > 0 {
+                    JournalLine::debit(fx, difference).with_memo(memo)
+                } else {
+                    JournalLine::credit(fx, -difference).with_memo(memo)
+                });
             }
             Ok(Source {
                 date,
@@ -317,11 +318,8 @@ async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Resul
             })
         }
         _ => {
-            let (account, memo): (i64, Option<String>) = sqlx::query_as("SELECT account_id, memo FROM deposit_lines WHERE id = ?1")
-                .bind(id)
-                .fetch_one(&mut **tx)
-                .await
-                .map_err(db_err)?;
+            let (account, memo): (i64, Option<String>) =
+                sqlx::query_as("SELECT account_id, memo FROM deposit_lines WHERE id = ?1").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?;
             let label = clean(memo.as_deref()).map_or_else(|| "Bounced deposit".to_string(), |m| format!("Bounced deposit - {m}"));
             Ok(Source {
                 date,
@@ -352,13 +350,11 @@ async fn system_account(tx: &mut Transaction<'_, Sqlite>, account_type: &str) ->
 
 /// The account's classification when it exists and is active.
 async fn classification(tx: &mut Transaction<'_, Sqlite>, account_id: i64) -> Result<Option<String>, String> {
-    sqlx::query_scalar(
-        "SELECT t.classification FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1 AND a.is_active = 1",
-    )
-    .bind(account_id)
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(db_err)
+    sqlx::query_scalar("SELECT t.classification FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1 AND a.is_active = 1")
+        .bind(account_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)
 }
 
 /// Records a bounced check; returns it.
@@ -461,7 +457,11 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, input: &BounceInput) -> Result<
         .await
         .map_err(|e| {
             let msg = db_err(e);
-            if msg.contains("UNIQUE") { "BOUNCE_ALREADY: that check is already recorded as bounced".into() } else { msg }
+            if msg.contains("UNIQUE") {
+                "BOUNCE_ALREADY: that check is already recorded as bounced".into()
+            } else {
+                msg
+            }
         })?;
         return Ok(("SALES_RECEIPT", id));
     }
@@ -496,7 +496,11 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, input: &BounceInput) -> Result<
     .await
     .map_err(|e| {
         let msg = db_err(e);
-        if msg.contains("UNIQUE") { "BOUNCE_ALREADY: that check is already recorded as bounced".into() } else { msg }
+        if msg.contains("UNIQUE") {
+            "BOUNCE_ALREADY: that check is already recorded as bounced".into()
+        } else {
+            msg
+        }
     })?;
 
     if let Some((invoice_id, _)) = source.invoice {

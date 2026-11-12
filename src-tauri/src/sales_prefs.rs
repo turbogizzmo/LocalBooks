@@ -70,8 +70,16 @@ pub fn validate(key: &str, value: &str) -> Option<Result<String, String>> {
         _ => Err("PREF_BAD_FLAG: use true or false".to_string()),
     };
     Some(match key {
-        PRICE_LEVELS | ESTIMATES | SALES_ORDERS | DROP_ZERO_LINES | AUTO_CALCULATE | UNDEPOSITED_DEFAULT | BILL_AUTO_CREDITS | BILL_AUTO_DISCOUNTS
-        | PAYMENT_AUTO_DISCOUNTS | crate::guards::WARN_OVERDUE_CUSTOMER => flag(),
+        PRICE_LEVELS
+        | ESTIMATES
+        | SALES_ORDERS
+        | DROP_ZERO_LINES
+        | AUTO_CALCULATE
+        | UNDEPOSITED_DEFAULT
+        | BILL_AUTO_CREDITS
+        | BILL_AUTO_DISCOUNTS
+        | PAYMENT_AUTO_DISCOUNTS
+        | crate::guards::WARN_OVERDUE_CUSTOMER => flag(),
         // An expense (or asset) account, checked in `check_discount_account`; blank means none.
         BILL_DISCOUNT_ACCOUNT => match v {
             "" => Ok(String::new()),
@@ -80,7 +88,10 @@ pub fn validate(key: &str, value: &str) -> Option<Result<String, String>> {
         // An income (or expense) account, checked in `check_payment_discount_account`; blank means none.
         PAYMENT_DISCOUNT_ACCOUNT => match v {
             "" => Ok(String::new()),
-            _ => v.parse::<i64>().map(|id| id.to_string()).map_err(|_| "PREF_BAD_DISCOUNT_ACCOUNT: choose an income account for discounts, such as Sales Discounts".into()),
+            _ => v
+                .parse::<i64>()
+                .map(|id| id.to_string())
+                .map_err(|_| "PREF_BAD_DISCOUNT_ACCOUNT: choose an income account for discounts, such as Sales Discounts".into()),
         },
         // A shipping method, checked against the list in `check_ship_method`; blank means none.
         DEFAULT_SHIP_METHOD => match v {
@@ -107,7 +118,9 @@ pub fn validate(key: &str, value: &str) -> Option<Result<String, String>> {
         },
         _ => match JOB_STATUSES.iter().find(|(_, k, _)| *k == key) {
             Some(_) if v.is_empty() => Err("PREF_REQUIRED: a job status needs a name".into()),
-            Some(_) if v.chars().count() > MAX_STATUS_LABEL_CHARS => Err(format!("PREF_TOO_LONG: a job status name must be at most {MAX_STATUS_LABEL_CHARS} characters")),
+            Some(_) if v.chars().count() > MAX_STATUS_LABEL_CHARS => {
+                Err(format!("PREF_TOO_LONG: a job status name must be at most {MAX_STATUS_LABEL_CHARS} characters"))
+            }
             Some(_) => Ok(v.to_string()),
             None => return None,
         },
@@ -467,13 +480,12 @@ pub async fn pay_bills_plan(pool: &SqlitePool, bill_ids: &[i64], payment_date: N
     let credits_on = preferences::flag(pool, BILL_AUTO_CREDITS).await?;
     let mut by_vendor: BTreeMap<i64, Vec<Open>> = BTreeMap::new();
     for &id in bill_ids {
-        let bill: Option<(i64, i64)> = sqlx::query_as(
-            "SELECT vendor_id, total_cents - amount_paid_cents FROM bills WHERE id = ?1 AND is_voided = 0 AND status IN ('UNPAID', 'PARTIAL')",
-        )
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+        let bill: Option<(i64, i64)> =
+            sqlx::query_as("SELECT vendor_id, total_cents - amount_paid_cents FROM bills WHERE id = ?1 AND is_voided = 0 AND status IN ('UNPAID', 'PARTIAL')")
+                .bind(id)
+                .fetch_optional(pool)
+                .await
+                .map_err(db_err)?;
         let Some((vendor, balance_cents)) = bill else { continue };
         let discount = if discounts_on { offered_discount(pool, id, payment_date).await?.min(balance_cents) } else { 0 };
         if discount > 0 {
@@ -524,15 +536,29 @@ pub async fn pay_bills_with_credits(
             return Err(format!("BILL_BAD_DISCOUNT: the discount on that bill is at most {}", crate::ledger::format_cents(offered)));
         }
         let (vendor, number): (String, Option<String>) =
-            sqlx::query_as("SELECT v.name, b.bill_number FROM bills b JOIN vendors v ON v.id = b.vendor_id WHERE b.id = ?1").bind(d.bill_id).fetch_one(pool).await.map_err(db_err)?;
+            sqlx::query_as("SELECT v.name, b.bill_number FROM bills b JOIN vendors v ON v.id = b.vendor_id WHERE b.id = ?1")
+                .bind(d.bill_id)
+                .fetch_one(pool)
+                .await
+                .map_err(db_err)?;
         let memo = format!("Early-payment discount{}", number.map(|n| format!(" on bill {n}")).unwrap_or_default());
-        taken.push((d, crate::credits::VendorCreditInput { form_lines: Vec::new(),
-            vendor_name: vendor,
-            reference: Some("Discount".into()),
-            credit_date: payment_date,
-            memo: Some(memo.clone()),
-            lines: vec![crate::credits::VendorCreditLineInput { account_id: account, amount_cents: Cents(d.amount_cents), memo: Some(memo), class_id: None, customer_id: None }],
-        }));
+        taken.push((
+            d,
+            crate::credits::VendorCreditInput {
+                form_lines: Vec::new(),
+                vendor_name: vendor,
+                reference: Some("Discount".into()),
+                credit_date: payment_date,
+                memo: Some(memo.clone()),
+                lines: vec![crate::credits::VendorCreditLineInput {
+                    account_id: account,
+                    amount_cents: Cents(d.amount_cents),
+                    memo: Some(memo),
+                    class_id: None,
+                    customer_id: None,
+                }],
+            },
+        ));
     }
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {

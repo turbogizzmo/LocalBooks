@@ -153,19 +153,23 @@ fn clean(text: &Option<String>) -> Option<String> {
 /// A customer or vendor; a vendor's tax ID as `access` may see it.
 pub async fn get_party(pool: &SqlitePool, kind: &str, id: i64, access: Access<'_>) -> Result<PartyDetails, String> {
     let sql = match table(kind)? {
-        "customers" => "SELECT id, name, company_name, email, phone, billing_address AS address, terms_days, terms_id,
+        "customers" => {
+            "SELECT id, name, company_name, email, phone, billing_address AS address, terms_days, terms_id,
                                customer_type_id, job_type_id, NULL AS vendor_type_id, parent_id IS NOT NULL AS is_job, notes,
                                NULL AS tax_id, NULL AS tax_id_masked, 0 AS is_1099, is_active, tax_rate_id, is_tax_exempt, tax_exemption, form_style_id,
                                sales_rep_id, price_level_id, preferred_delivery, job_status, shipping_address, contact_name, alt_contact_name, alt_phone, fax,
                                website, account_number, credit_limit_cents, resale_number
-                        FROM customers WHERE id = ?1",
-        _ => "SELECT id, name, company_name, email, phone, address, terms_days, terms_id,
+                        FROM customers WHERE id = ?1"
+        }
+        _ => {
+            "SELECT id, name, company_name, email, phone, address, terms_days, terms_id,
                      NULL AS customer_type_id, NULL AS job_type_id, vendor_type_id, 0 AS is_job, notes, tax_id, tax_id_masked, is_1099, is_active,
                      NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id, NULL AS sales_rep_id, NULL AS price_level_id,
                      NULL AS preferred_delivery, NULL AS job_status,
                      NULL AS shipping_address, NULL AS contact_name, NULL AS alt_contact_name, NULL AS alt_phone, NULL AS fax,
                      NULL AS website, NULL AS account_number, NULL AS credit_limit_cents, NULL AS resale_number
-              FROM vendors WHERE id = ?1",
+              FROM vendors WHERE id = ?1"
+        }
     };
     let mut party = sqlx::query_as::<_, PartyDetails>(sql)
         .bind(id)
@@ -216,8 +220,14 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         }
     }
     if let Some(rep) = input.sales_rep_id.filter(|_| t == "customers") {
-        let rep: Option<(String, bool)> = sqlx::query_as("SELECT initials, is_active FROM sales_reps WHERE id = ?1").bind(rep).fetch_optional(pool).await.map_err(db_err)?;
-        let unchanged = sqlx::query_scalar::<_, Option<i64>>("SELECT sales_rep_id FROM customers WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?.flatten()
+        let rep: Option<(String, bool)> =
+            sqlx::query_as("SELECT initials, is_active FROM sales_reps WHERE id = ?1").bind(rep).fetch_optional(pool).await.map_err(db_err)?;
+        let unchanged = sqlx::query_scalar::<_, Option<i64>>("SELECT sales_rep_id FROM customers WHERE id = ?1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?
+            .flatten()
             == input.sales_rep_id;
         match rep {
             None => return Err("PARTY_BAD_REP: that sales rep no longer exists".into()),
@@ -226,8 +236,14 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         }
     }
     if let Some(level) = input.price_level_id.filter(|_| t == "customers") {
-        let active: Option<bool> = sqlx::query_scalar("SELECT is_active FROM price_levels WHERE id = ?1").bind(level).fetch_optional(pool).await.map_err(db_err)?;
-        let unchanged = sqlx::query_scalar::<_, Option<i64>>("SELECT price_level_id FROM customers WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?.flatten()
+        let active: Option<bool> =
+            sqlx::query_scalar("SELECT is_active FROM price_levels WHERE id = ?1").bind(level).fetch_optional(pool).await.map_err(db_err)?;
+        let unchanged = sqlx::query_scalar::<_, Option<i64>>("SELECT price_level_id FROM customers WHERE id = ?1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?
+            .flatten()
             == input.price_level_id;
         match active {
             None => return Err("PARTY_BAD_PRICE_LEVEL: that price level no longer exists".into()),
@@ -299,7 +315,11 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
     };
     let done = query.execute(pool).await.map_err(|e| {
         let msg = db_err(e);
-        if msg.contains("UNIQUE") { format!("PARTY_DUPLICATE: there is already a {kind} named '{name}'") } else { msg }
+        if msg.contains("UNIQUE") {
+            format!("PARTY_DUPLICATE: there is already a {kind} named '{name}'")
+        } else {
+            msg
+        }
     })?;
     if done.rows_affected() == 0 {
         return Err(format!("PARTY_NOT_FOUND: that {kind} does not exist"));
@@ -485,13 +505,12 @@ pub async fn update_item(pool: &SqlitePool, id: i64, input: ProductInput, kind: 
     if input.rate_cents.is_negative() {
         return Err("PRODUCT_BAD_RATE: the rate cannot be negative".into());
     }
-    let income: Option<String> = sqlx::query_scalar(
-        "SELECT t.classification FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
-    )
-    .bind(input.income_account_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(db_err)?;
+    let income: Option<String> =
+        sqlx::query_scalar("SELECT t.classification FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1")
+            .bind(input.income_account_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?;
     if income.as_deref() != Some("INCOME") {
         return Err("PRODUCT_NOT_INCOME_ACCOUNT: products and services must post to an Income account".into());
     }
@@ -506,7 +525,11 @@ pub async fn update_item(pool: &SqlitePool, id: i64, input: ProductInput, kind: 
         .await
         .map_err(|e| {
             let msg = db_err(e);
-            if msg.contains("UNIQUE") { format!("PRODUCT_DUPLICATE: there is already a product named '{name}'") } else { msg }
+            if msg.contains("UNIQUE") {
+                format!("PRODUCT_DUPLICATE: there is already a product named '{name}'")
+            } else {
+                msg
+            }
         })?;
     if done.rows_affected() == 0 {
         return Err("PRODUCT_NOT_FOUND: that product does not exist".into());

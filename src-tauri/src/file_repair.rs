@@ -113,13 +113,7 @@ struct SchemaDrift {
 /// SQL compared without case, quoting or whitespace differences, which SQLite's table renames
 /// can introduce when older files were upgraded by an older SQLite.
 fn normalize(sql: &str) -> String {
-    sql.chars()
-        .filter(|c| !matches!(c, '"' | '`' | '[' | ']'))
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
+    sql.chars().filter(|c| !matches!(c, '"' | '`' | '[' | ']')).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
 }
 
 async fn schema_objects(pool: &SqlitePool) -> Result<Vec<SchemaObject>, String> {
@@ -148,8 +142,7 @@ async fn reference_schema() -> Result<Vec<SchemaObject>, String> {
 
 async fn schema_drift(pool: &SqlitePool) -> Result<SchemaDrift, String> {
     let reference = reference_schema().await?;
-    let live: BTreeMap<(String, String), String> =
-        schema_objects(pool).await?.into_iter().map(|o| ((o.kind, o.name), normalize(&o.sql))).collect();
+    let live: BTreeMap<(String, String), String> = schema_objects(pool).await?.into_iter().map(|o| ((o.kind, o.name), normalize(&o.sql))).collect();
 
     let mut drift = SchemaDrift::default();
     for object in &reference {
@@ -211,7 +204,14 @@ async fn check_schema_steps(pool: &SqlitePool) -> Result<CheckResult, String> {
     }
     let latest = MIGRATOR.iter().map(|m| m.version).max().unwrap_or(0);
     Ok(if problems.is_empty() {
-        check("SCHEMA", "Schema version", CheckStatus::Pass, format!("All {} schema steps match this build (v{latest}).", MIGRATOR.iter().count()), vec![], false)
+        check(
+            "SCHEMA",
+            "Schema version",
+            CheckStatus::Pass,
+            format!("All {} schema steps match this build (v{latest}).", MIGRATOR.iter().count()),
+            vec![],
+            false,
+        )
     } else {
         let summary = format!("{} out of step with this build. Restore a backup.", plural(problems.len(), "schema step is", "schema steps are"));
         check("SCHEMA", "Schema version", CheckStatus::Fail, summary, problems, false)
@@ -241,10 +241,8 @@ fn check_structure(drift: &SchemaDrift) -> CheckResult {
 }
 
 async fn check_links(pool: &SqlitePool) -> Result<CheckResult, String> {
-    let rows: Vec<(String, i64)> = sqlx::query_as("SELECT \"table\", COUNT(*) FROM pragma_foreign_key_check GROUP BY \"table\" ORDER BY \"table\"")
-        .fetch_all(pool)
-        .await
-        .map_err(err)?;
+    let rows: Vec<(String, i64)> =
+        sqlx::query_as("SELECT \"table\", COUNT(*) FROM pragma_foreign_key_check GROUP BY \"table\" ORDER BY \"table\"").fetch_all(pool).await.map_err(err)?;
     let total: i64 = rows.iter().map(|r| r.1).sum();
     Ok(if total == 0 {
         check("LINKS", "Record links", CheckStatus::Pass, "Every record points to data that exists.", vec![], false)
@@ -281,7 +279,8 @@ async fn check_balance(pool: &SqlitePool) -> Result<CheckResult, String> {
             .take(EXAMPLES)
             .map(|(id, number, diff)| format!("Entry {} is off by {} cents", number.map_or(format!("id {id}"), |n| format!("#{n}")), diff))
             .collect();
-        let summary = format!("{} out of balance. Review them on the Audit Log or restore a backup.", plural(rows.len().max(1), "posted entry is", "posted entries are"));
+        let summary =
+            format!("{} out of balance. Review them on the Audit Log or restore a backup.", plural(rows.len().max(1), "posted entry is", "posted entries are"));
         check("BALANCE", "Debits equal credits", CheckStatus::Fail, summary, details, false)
     })
 }

@@ -192,7 +192,9 @@ async fn service_refusals_ask_for_a_manual_rate() {
         ok(r#"{"amount":1.0,"base":"EUR","date":"2024-01-12","rates":{"USD":-1.08}}"#),
         ok(r#"{"amount":1.0,"base":"EUR","date":"2024-01-12","rates":{"USD":"1.08"}}"#),
     ]);
-    for code in ["FX_UNAVAILABLE", "FX_UNAVAILABLE", "FX_SERVICE", "FX_BAD_RESPONSE", "FX_BAD_RESPONSE", "FX_BAD_RESPONSE", "FX_BAD_RESPONSE", "FX_BAD_RESPONSE"] {
+    for code in
+        ["FX_UNAVAILABLE", "FX_UNAVAILABLE", "FX_SERVICE", "FX_BAD_RESPONSE", "FX_BAD_RESPONSE", "FX_BAD_RESPONSE", "FX_BAD_RESPONSE", "FX_BAD_RESPONSE"]
+    {
         let err = suggest(&pool, &http, "EUR", "USD", d("2024-01-12"), d(TODAY)).await.unwrap_err();
         assert!(err.starts_with(code), "{code}: {err}");
         assert!(err.contains("enter the rate yourself"), "{err}");

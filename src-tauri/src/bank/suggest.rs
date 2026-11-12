@@ -97,8 +97,35 @@ pub fn confidence_level(confidence: u8) -> &'static str {
 
 /// Words that say how a payment was made rather than who it was to.
 const NOISE: &[&str] = &[
-    "POS", "DEBIT", "CREDIT", "PURCHASE", "CARD", "CHECKCARD", "ACH", "ONLINE", "RECURRING", "WEB", "PMT", "PPD", "CCD",
-    "SQ", "TST", "VISA", "MC", "INC", "LLC", "CO", "THE", "WWW", "COM", "XX", "XXX", "XXXX", "DES", "INDN", "ORIG",
+    "POS",
+    "DEBIT",
+    "CREDIT",
+    "PURCHASE",
+    "CARD",
+    "CHECKCARD",
+    "ACH",
+    "ONLINE",
+    "RECURRING",
+    "WEB",
+    "PMT",
+    "PPD",
+    "CCD",
+    "SQ",
+    "TST",
+    "VISA",
+    "MC",
+    "INC",
+    "LLC",
+    "CO",
+    "THE",
+    "WWW",
+    "COM",
+    "XX",
+    "XXX",
+    "XXXX",
+    "DES",
+    "INDN",
+    "ORIG",
 ];
 
 /// Description words: uppercase runs of letters (with `&` and `'`), keeping none that contain digits
@@ -256,11 +283,7 @@ impl Model {
         let norms: Vec<f32> = self.rows.iter().map(|r| (r.features.iter().map(|&f| idf[f as usize].powi(2)).sum::<f32>() + fixed).sqrt()).collect();
         let mut dots = vec![0f32; self.rows.len()];
         let mut touched: Vec<u32> = Vec::new();
-        queries
-            .iter()
-            .enumerate()
-            .map(|(i, q)| self.predict_one(q, only_account.get(i).copied().flatten(), &idf, &norms, &mut dots, &mut touched))
-            .collect()
+        queries.iter().enumerate().map(|(i, q)| self.predict_one(q, only_account.get(i).copied().flatten(), &idf, &norms, &mut dots, &mut touched)).collect()
     }
 
     #[cfg(test)]
@@ -340,7 +363,8 @@ impl Model {
             return None;
         }
         // Most similar first; among equals, the most recent.
-        let by_rank = |a: &(f32, u32), b: &(f32, u32)| b.0.total_cmp(&a.0).then(self.rows[b.1 as usize].date.cmp(&self.rows[a.1 as usize].date)).then(b.1.cmp(&a.1));
+        let by_rank =
+            |a: &(f32, u32), b: &(f32, u32)| b.0.total_cmp(&a.0).then(self.rows[b.1 as usize].date.cmp(&self.rows[a.1 as usize].date)).then(b.1.cmp(&a.1));
         if scored.len() > K {
             scored.select_nth_unstable_by(K - 1, by_rank);
             scored.truncate(K);
@@ -375,11 +399,7 @@ impl Model {
                 }
             }
         }
-        let payee = payee_votes
-            .iter()
-            .max_by(|a, b| a.1.total_cmp(&b.1))
-            .filter(|(_, w)| *w >= 0.5 * voters)
-            .map(|(p, _)| self.payees[*p as usize].clone());
+        let payee = payee_votes.iter().max_by(|a, b| a.1.total_cmp(&b.1)).filter(|(_, w)| *w >= 0.5 * voters).map(|(p, _)| self.payees[*p as usize].clone());
 
         let row = &self.rows[best as usize];
         Some(Prediction {
@@ -424,7 +444,14 @@ pub async fn load_examples(pool: &SqlitePool) -> Result<Vec<Example>, String> {
     .map_err(db_err)?;
     Ok(rows
         .into_iter()
-        .map(|(bank_account_id, date, description, amount_cents, account_id, payee)| Example { bank_account_id, date, description, amount_cents, account_id, payee })
+        .map(|(bank_account_id, date, description, amount_cents, account_id, payee)| Example {
+            bank_account_id,
+            date,
+            description,
+            amount_cents,
+            account_id,
+            payee,
+        })
         .collect())
 }
 

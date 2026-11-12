@@ -65,9 +65,11 @@ fn explain(code: HRESULT, description: &str) -> String {
         0x8004_0416 | 0x8004_0417 => "QB_NO_COMPANY: no company file is open in QuickBooks. Open your company file, then try again".to_string(),
         0x8004_0414 => "QB_BUSY: QuickBooks is showing a message or dialog. Close it, then try again".to_string(),
         0x8004_0418 => format!("QB_NOT_ALLOWED: LocalBooks has not been allowed to read this company file yet. {certificate}"),
-        0x8004_041A => "QB_NOT_ALLOWED: LocalBooks is not allowed to read this company file. In QuickBooks, choose Edit › Preferences › Integrated Applications › \
+        0x8004_041A => {
+            "QB_NOT_ALLOWED: LocalBooks is not allowed to read this company file. In QuickBooks, choose Edit › Preferences › Integrated Applications › \
                         Company Preferences, select LocalBooks and allow it access, then try again"
-            .to_string(),
+                .to_string()
+        }
         0x8004_0420 => format!("QB_ACCESS_DENIED: QuickBooks was told not to let LocalBooks in. {certificate}"),
         _ => format!("QB_SDK_FAILED: QuickBooks did not answer LocalBooks ({:#010x})", code.0 as u32),
     };

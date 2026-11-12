@@ -27,11 +27,7 @@ pub fn is_company_file(path: &Path) -> bool {
 pub fn company_file_from_args<I: IntoIterator<Item = std::ffi::OsString>>(args: I) -> Option<PathBuf> {
     args.into_iter().skip(1).find_map(|arg| {
         let text = arg.to_string_lossy();
-        let path = if text.starts_with("file://") {
-            tauri::Url::parse(&text).ok()?.to_file_path().ok()?
-        } else {
-            PathBuf::from(arg)
-        };
+        let path = if text.starts_with("file://") { tauri::Url::parse(&text).ok()?.to_file_path().ok()? } else { PathBuf::from(arg) };
         is_company_file(&path).then_some(path)
     })
 }
@@ -90,8 +86,17 @@ pub fn classify_parts(path: &str, fs_type: Option<&str>) -> StorageInfo {
     if lower.contains("/library/mobile documents/com~apple~clouddocs") {
         return StorageInfo { kind: StorageKind::Synced, detail: "Synced folder (iCloud Drive)".into() };
     }
-    for (marker, provider) in [("dropbox", "Dropbox"), ("onedrive", "OneDrive"), ("google drive", "Google Drive"), ("googledrive", "Google Drive"), ("icloud drive", "iCloud Drive"), ("box sync", "Box"), ("box", "Box")] {
-        if lower.split('/').any(|component| component == marker || component.starts_with(&format!("{marker} ")) || component.starts_with(&format!("{marker}-"))) {
+    for (marker, provider) in [
+        ("dropbox", "Dropbox"),
+        ("onedrive", "OneDrive"),
+        ("google drive", "Google Drive"),
+        ("googledrive", "Google Drive"),
+        ("icloud drive", "iCloud Drive"),
+        ("box sync", "Box"),
+        ("box", "Box"),
+    ] {
+        if lower.split('/').any(|component| component == marker || component.starts_with(&format!("{marker} ")) || component.starts_with(&format!("{marker}-")))
+        {
             return StorageInfo { kind: StorageKind::Synced, detail: format!("Synced folder ({provider})") };
         }
     }
@@ -249,10 +254,7 @@ pub fn config_path(config_dir: &Path) -> PathBuf {
 
 /// Reads `config.json`; a missing or unreadable file means defaults.
 pub fn read_config(config_dir: &Path) -> AppConfig {
-    std::fs::read(config_path(config_dir))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default()
+    std::fs::read(config_path(config_dir)).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default()
 }
 
 pub fn write_config(config_dir: &Path, config: &AppConfig) -> Result<(), String> {
@@ -487,11 +489,8 @@ impl FileLock {
 
         if let Ok(bytes) = std::fs::read(&path) {
             if let Ok(holder) = serde_json::from_slice::<LockRecord>(&bytes) {
-                let heartbeat_age = std::fs::metadata(&path)
-                    .and_then(|m| m.modified())
-                    .ok()
-                    .and_then(|t| SystemTime::now().duration_since(t).ok())
-                    .unwrap_or(Duration::MAX);
+                let heartbeat_age =
+                    std::fs::metadata(&path).and_then(|m| m.modified()).ok().and_then(|t| SystemTime::now().duration_since(t).ok()).unwrap_or(Duration::MAX);
                 let mine = holder.host == me.host && holder.pid == me.pid;
                 let dead_here = holder.host == me.host && !process_alive(holder.pid);
                 if !mine && !dead_here && heartbeat_age < STALE_AFTER {

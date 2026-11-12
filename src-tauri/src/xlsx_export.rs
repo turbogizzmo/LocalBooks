@@ -155,7 +155,9 @@ fn cell_value(kind: ColumnKind, value: &Value) -> CellValue {
         Value::Number(n) => match kind {
             // Cents and basis points are integers; f64 holds every amount the ledger allows exactly
             // enough for a two-decimal display.
-            ColumnKind::Money => n.as_i64().map(|c| CellValue::Number(c as f64 / 100.0)).unwrap_or_else(|| CellValue::Number(n.as_f64().unwrap_or(0.0) / 100.0)),
+            ColumnKind::Money => {
+                n.as_i64().map(|c| CellValue::Number(c as f64 / 100.0)).unwrap_or_else(|| CellValue::Number(n.as_f64().unwrap_or(0.0) / 100.0))
+            }
             ColumnKind::Percent => CellValue::Number(n.as_f64().unwrap_or(0.0) / 10_000.0),
             _ => CellValue::Number(n.as_f64().unwrap_or(0.0)),
         },
@@ -369,7 +371,11 @@ pub fn statement_sheet(company: &str, title: &str, period: &str, notes: Vec<Stri
         columns: vec![Column { label: String::new(), kind: ColumnKind::Text }, Column { label: "Total".into(), kind: ColumnKind::Money }],
         rows: lines
             .iter()
-            .map(|l| Row { kind: l.kind.into(), depth: l.depth.min(15) as u8, cells: vec![Value::from(l.label.clone()), l.amount_cents.map(Value::from).unwrap_or(Value::Null)] })
+            .map(|l| Row {
+                kind: l.kind.into(),
+                depth: l.depth.min(15) as u8,
+                cells: vec![Value::from(l.label.clone()), l.amount_cents.map(Value::from).unwrap_or(Value::Null)],
+            })
             .collect(),
         indent_column: 0,
         footer: None,

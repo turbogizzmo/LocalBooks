@@ -57,8 +57,13 @@ const MENU_WORKSPACE_MANUAL: &str = "workspace-manual";
 const MENU_WORKSPACE_SAVE: &str = "workspace-save";
 
 /// The Window menu's arrangement commands, in QuickBooks' order.
-const ARRANGEMENTS: [(&str, &str); 5] =
-    [("close-all", "Close All"), ("cascade", "Cascade"), ("tile-vertically", "Tile Vertically"), ("tile-horizontally", "Tile Horizontally"), ("arrange-icons", "Arrange Icons")];
+const ARRANGEMENTS: [(&str, &str); 5] = [
+    ("close-all", "Close All"),
+    ("cascade", "Cascade"),
+    ("tile-vertically", "Tile Vertically"),
+    ("tile-horizontally", "Tile Horizontally"),
+    ("arrange-icons", "Arrange Icons"),
+];
 
 /// The smallest a LocalBooks window can be made.
 const MIN_SIZE: (f64, f64) = (760.0, 520.0);
@@ -265,12 +270,7 @@ fn frame_of(window: &WebviewWindow) -> Option<Bounds> {
 /// The LocalBooks window a menu choice is for: the focused one, else the main one, else any.
 pub fn target(app: &AppHandle) -> Option<WebviewWindow> {
     let windows = app.webview_windows();
-    windows
-        .values()
-        .find(|w| w.is_focused().unwrap_or(false))
-        .or_else(|| windows.get(MAIN))
-        .or_else(|| windows.values().next())
-        .cloned()
+    windows.values().find(|w| w.is_focused().unwrap_or(false)).or_else(|| windows.get(MAIN)).or_else(|| windows.values().next()).cloned()
 }
 
 /// Brings `window` forward.
@@ -630,12 +630,27 @@ pub fn add_menus(app: &AppHandle, menu: &Menu<Wry>) -> tauri::Result<()> {
         // After Show or Hide Left Icon Bar (and before macOS's Enter Full Screen), as in QuickBooks.
         let len = view_menu.items()?.len();
         let at = view_menu.items()?.iter().position(|i| matches!(i, MenuItemKind::Predefined(_))).unwrap_or(len);
-        let items: [&dyn IsMenuItem<Wry>; 6] =
-            [&PredefinedMenuItem::separator(app)?, &open_window_list, &PredefinedMenuItem::separator(app)?, &one_window, &multiple_windows, &PredefinedMenuItem::separator(app)?];
+        let items: [&dyn IsMenuItem<Wry>; 6] = [
+            &PredefinedMenuItem::separator(app)?,
+            &open_window_list,
+            &PredefinedMenuItem::separator(app)?,
+            &one_window,
+            &multiple_windows,
+            &PredefinedMenuItem::separator(app)?,
+        ];
         let take = if at == len { 5 } else { 6 };
         view_menu.insert_items(&items[..take], at)?;
     }
-    app.manage(WindowMenus { window_menu, list: Mutex::new(Vec::new()), list_at, listed: Mutex::new(Vec::new()), open_window_list, one_window, multiple_windows, workspace });
+    app.manage(WindowMenus {
+        window_menu,
+        list: Mutex::new(Vec::new()),
+        list_at,
+        listed: Mutex::new(Vec::new()),
+        open_window_list,
+        one_window,
+        multiple_windows,
+        workspace,
+    });
     Ok(())
 }
 
@@ -744,7 +759,10 @@ pub fn on_menu_event(app: &AppHandle, id: &str) {
             tauri::async_runtime::spawn(async move {
                 let current = desktop_view(&app).await;
                 let result = match id.as_str() {
-                    MENU_OPEN_WINDOW_LIST => set_window_preferences(&app, PreferenceChange { show_open_window_list: Some(!current.show_open_window_list), ..Default::default() }).await,
+                    MENU_OPEN_WINDOW_LIST => {
+                        set_window_preferences(&app, PreferenceChange { show_open_window_list: Some(!current.show_open_window_list), ..Default::default() })
+                            .await
+                    }
                     MENU_ONE_WINDOW => set_window_preferences(&app, PreferenceChange { window_mode: Some(WindowMode::One), ..Default::default() }).await,
                     _ => set_window_preferences(&app, PreferenceChange { window_mode: Some(WindowMode::Multiple), ..Default::default() }).await,
                 };

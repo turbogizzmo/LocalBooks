@@ -189,7 +189,11 @@ fn read_one(name: &str, text: &str) -> Ledger {
 }
 
 fn by_kind<'a>(ledger: &'a Ledger, kind: &str) -> &'a SourceTransaction {
-    ledger.transactions.iter().find(|t| t.kind == kind).unwrap_or_else(|| panic!("no {kind}: {:?}", ledger.transactions.iter().map(|t| t.kind).collect::<Vec<_>>()))
+    ledger
+        .transactions
+        .iter()
+        .find(|t| t.kind == kind)
+        .unwrap_or_else(|| panic!("no {kind}: {:?}", ledger.transactions.iter().map(|t| t.kind).collect::<Vec<_>>()))
 }
 
 fn account<'a>(ledger: &'a Ledger, full_name: &str) -> &'a crate::qbw_company::SourceAccount {
@@ -352,7 +356,8 @@ fn rebuilds_transactions_from_a_general_ledger() {
     let check = by_kind(&ledger, "Check");
     assert_eq!(check.lines.iter().map(|l| l.cents).collect::<Vec<_>>(), [7_500, -10_000, 2_500]);
     // Two interest deposits on one day pair up by amount.
-    let interest: Vec<Vec<i64>> = ledger.transactions.iter().filter(|t| t.date == date(2024, 1, 31)).map(|t| t.lines.iter().map(|l| l.cents).collect()).collect();
+    let interest: Vec<Vec<i64>> =
+        ledger.transactions.iter().filter(|t| t.date == date(2024, 1, 31)).map(|t| t.lines.iter().map(|l| l.cents).collect()).collect();
     assert_eq!(interest, [vec![-500, 500], vec![-700, 700]]);
     assert_eq!(account(&ledger, "Construction Income:Labor").parent_id, Some(account(&ledger, "Construction Income").id));
     let Some(SourceDocument::Payment { applied_to, .. }) = &by_kind(&ledger, "Payment").document else { panic!("payment") };
@@ -391,7 +396,12 @@ fn an_unreadable_amount_is_reported_never_guessed() {
 
 #[test]
 fn day_first_dates_are_read_when_the_column_needs_it() {
-    let text = ONLINE_JOURNAL.replace("01/03/2024", "03/01/2024").replace("01/15/2024", "15/01/2024").replace("01/10/2024", "10/01/2024").replace("01/12/2024", "12/01/2024").replace("01/04/2024", "04/01/2024");
+    let text = ONLINE_JOURNAL
+        .replace("01/03/2024", "03/01/2024")
+        .replace("01/15/2024", "15/01/2024")
+        .replace("01/10/2024", "10/01/2024")
+        .replace("01/12/2024", "12/01/2024")
+        .replace("01/04/2024", "04/01/2024");
     let ledger = read_one("Journal.csv", &text);
     assert_eq!(by_kind(&ledger, "Invoice").date, date(2024, 1, 3));
 }
@@ -401,7 +411,8 @@ fn refuses_files_that_are_not_reports() {
     let err = |name: &str, text: &str| read_files(&[(name.to_string(), text.as_bytes().to_vec())]).err().unwrap();
     assert!(err("Bank.csv", "Date,Description,Amount\n1/1/2024,Coffee,-5.00\n").starts_with("REPORT_UNRECOGNISED: Bank.csv"));
     assert!(err("Notes.csv", "").starts_with("REPORT_UNRECOGNISED"));
-    let amount_only = "General Ledger\n\nDate,Transaction Type,Num,Name,Memo/Description,Split,Amount,Balance\n01/03/2024,Invoice,1037,Store,,Sales,362.07,362.07\n";
+    let amount_only =
+        "General Ledger\n\nDate,Transaction Type,Num,Name,Memo/Description,Split,Amount,Balance\n01/03/2024,Invoice,1037,Store,,Sales,362.07,362.07\n";
     let e = err("GL.csv", amount_only);
     assert!(e.starts_with("REPORT_NEEDS_DEBIT_CREDIT: GL.csv") && e.contains("add the Debit and Credit columns"), "{e}");
     assert!(err("Book.xlsx", "not a zip").starts_with("REPORT_UNREADABLE: Book.xlsx"));
@@ -436,7 +447,8 @@ enum X {
 
 fn workbook(rows: &[Vec<Option<X>>]) -> Vec<u8> {
     use std::io::Write;
-    let mut sheet = String::from(r#"<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>"#);
+    let mut sheet =
+        String::from(r#"<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>"#);
     for (r, row) in rows.iter().enumerate() {
         sheet += &format!(r#"<row r="{}">"#, r + 1);
         for (c, value) in row.iter().enumerate() {
@@ -488,16 +500,68 @@ fn workbook(rows: &[Vec<Option<X>>]) -> Vec<u8> {
 #[test]
 fn reads_a_desktop_mac_journal_workbook() {
     use X::*;
-    let header = vec![None, Some(T("Trans #")), None, Some(T("Type")), None, Some(T("Date")), Some(T("Num")), Some(T("Name")), Some(T("Memo")), Some(T("Account")), Some(T("Debit")), Some(T("Credit"))];
+    let header = vec![
+        None,
+        Some(T("Trans #")),
+        None,
+        Some(T("Type")),
+        None,
+        Some(T("Date")),
+        Some(T("Num")),
+        Some(T("Name")),
+        Some(T("Memo")),
+        Some(T("Account")),
+        Some(T("Debit")),
+        Some(T("Credit")),
+    ];
     let rows = vec![
         vec![Some(T("Rock Castle Construction"))],
         vec![Some(T("Journal"))],
         vec![Some(T("January 2024"))],
         header,
-        vec![None, Some(N("1")), None, Some(T("Invoice")), None, Some(Date(45296)), Some(N("1001")), Some(T("Kristy Abercrombie")), None, Some(T("Accounts Receivable")), Some(N("1250")), None],
-        vec![None, None, None, None, None, None, None, Some(T("Kristy Abercrombie")), Some(T("Framing")), Some(T("Construction Income")), None, Some(N("1250"))],
+        vec![
+            None,
+            Some(N("1")),
+            None,
+            Some(T("Invoice")),
+            None,
+            Some(Date(45296)),
+            Some(N("1001")),
+            Some(T("Kristy Abercrombie")),
+            None,
+            Some(T("Accounts Receivable")),
+            Some(N("1250")),
+            None,
+        ],
+        vec![
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(T("Kristy Abercrombie")),
+            Some(T("Framing")),
+            Some(T("Construction Income")),
+            None,
+            Some(N("1250")),
+        ],
         vec![None, None, None, None, None, None, None, None, None, None, Some(N("1250")), Some(N("1250"))],
-        vec![None, Some(N("2")), None, Some(T("Check")), None, Some(N("45317")), Some(N("241")), Some(T("City Water")), None, Some(T("Checking")), None, Some(N("75.5"))],
+        vec![
+            None,
+            Some(N("2")),
+            None,
+            Some(T("Check")),
+            None,
+            Some(N("45317")),
+            Some(N("241")),
+            Some(T("City Water")),
+            None,
+            Some(T("Checking")),
+            None,
+            Some(N("75.5")),
+        ],
         vec![None, None, None, None, None, None, None, Some(T("City Water")), None, Some(T("Utilities")), Some(N("75.5")), None],
         vec![Some(T("TOTAL")), None, None, None, None, None, None, None, None, None, Some(N("1325.5")), Some(N("1325.5"))],
     ];

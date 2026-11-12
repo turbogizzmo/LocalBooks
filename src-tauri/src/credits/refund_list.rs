@@ -63,24 +63,45 @@ mod tests {
                 memo: None,
                 refund_account_id: None,
                 tax_rate_id: None,
-                lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: crate::money::Cents::from(10_000), income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
+                lines: vec![crate::sales::SalesLineInput {
+                    product_service_id: None,
+                    description: "Return".into(),
+                    quantity_e4: 10_000,
+                    rate_cents: crate::money::Cents::from(10_000),
+                    income_account_id: services,
+                    class_id: None,
+                    is_taxable: false,
+                    service_date: None,
+                }],
                 header: Default::default(),
                 form_lines: Vec::new(),
             },
         )
         .await
         .unwrap();
-        refund_customer_credit(&pool, RefundCreditInput { credit_id: memo.id, account_id: checking, refund_date: d(5), amount_cents: Cents(6_000), reference: Some("1042".into()) }).await.unwrap();
-        write_off_customer_credit(&pool, RefundCreditInput { credit_id: memo.id, account_id: services, refund_date: d(6), amount_cents: Cents(4_000), reference: None }).await.unwrap();
+        refund_customer_credit(
+            &pool,
+            RefundCreditInput { credit_id: memo.id, account_id: checking, refund_date: d(5), amount_cents: Cents(6_000), reference: Some("1042".into()) },
+        )
+        .await
+        .unwrap();
+        write_off_customer_credit(
+            &pool,
+            RefundCreditInput { credit_id: memo.id, account_id: services, refund_date: d(6), amount_cents: Cents(4_000), reference: None },
+        )
+        .await
+        .unwrap();
 
         let list = list_customer_credit_refunds(&pool, memo.id).await.unwrap();
-        let rows: Vec<(i64, &str, Option<&str>, bool, bool)> = list.iter().map(|r| (r.amount_cents, r.account_type.as_str(), r.reference.as_deref(), r.is_write_off, r.is_voided)).collect();
+        let rows: Vec<(i64, &str, Option<&str>, bool, bool)> =
+            list.iter().map(|r| (r.amount_cents, r.account_type.as_str(), r.reference.as_deref(), r.is_write_off, r.is_voided)).collect();
         assert_eq!(rows, vec![(6_000, "BANK", Some("1042"), false, false), (4_000, "INCOME", None, true, false)]);
 
         // Voiding the refund from the list gives the credit back.
         crate::ledger::void_transaction(&pool, list[0].journal_entry_id).await.unwrap();
         assert!(list_customer_credit_refunds(&pool, memo.id).await.unwrap()[0].is_voided);
-        let left: i64 = sqlx::query_scalar("SELECT remaining_cents FROM v_credit_memo_balances WHERE credit_memo_id = ?1").bind(memo.id).fetch_one(&pool).await.unwrap();
+        let left: i64 =
+            sqlx::query_scalar("SELECT remaining_cents FROM v_credit_memo_balances WHERE credit_memo_id = ?1").bind(memo.id).fetch_one(&pool).await.unwrap();
         assert_eq!(left, 6_000);
     }
 }

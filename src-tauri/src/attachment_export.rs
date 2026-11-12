@@ -33,13 +33,15 @@ fn source_label(source_type: &str) -> &'static str {
 
 /// A file or folder name without characters that file systems refuse, trimmed to a sane length.
 fn safe_name(text: &str) -> String {
-    let cleaned: String = text
-        .chars()
-        .map(|c| if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c })
-        .collect();
+    let cleaned: String =
+        text.chars().map(|c| if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c }).collect();
     let trimmed = cleaned.trim().trim_matches('.').trim();
     let short: String = trimmed.chars().take(120).collect();
-    if short.is_empty() { "attachment".into() } else { short }
+    if short.is_empty() {
+        "attachment".into()
+    } else {
+        short
+    }
 }
 
 /// "report.pdf" → "report (2).pdf" for the second file of the same name in a folder.
@@ -53,7 +55,11 @@ fn numbered(name: &str, n: usize) -> String {
 /// How many attachments there are to save (one transaction's, or all): a cheap check before
 /// asking where to save them. Deleted ones (in the Attachments Library's Show deleted) are left out.
 pub async fn count(pool: &SqlitePool, entry: Option<i64>) -> Result<usize, String> {
-    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM attachments WHERE (?1 IS NULL OR journal_entry_id = ?1) AND deleted_at IS NULL").bind(entry).fetch_one(pool).await.map_err(db_err)?;
+    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM attachments WHERE (?1 IS NULL OR journal_entry_id = ?1) AND deleted_at IS NULL")
+        .bind(entry)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
     Ok(usize::try_from(n).unwrap_or(0))
 }
 
@@ -160,14 +166,16 @@ mod tests {
         let attach = |entry: i64, name: &'static str, body: &'static [u8]| {
             let pool = pool.clone();
             async move {
-                sqlx::query("INSERT INTO attachments (journal_entry_id, file_name, media_type, size_bytes, content) VALUES (?1, ?2, 'application/pdf', ?3, ?4)")
-                    .bind(entry)
-                    .bind(name)
-                    .bind(body.len() as i64)
-                    .bind(body)
-                    .execute(&pool)
-                    .await
-                    .unwrap();
+                sqlx::query(
+                    "INSERT INTO attachments (journal_entry_id, file_name, media_type, size_bytes, content) VALUES (?1, ?2, 'application/pdf', ?3, ?4)",
+                )
+                .bind(entry)
+                .bind(name)
+                .bind(body.len() as i64)
+                .bind(body)
+                .execute(&pool)
+                .await
+                .unwrap();
             }
         };
         attach(entries[0], "receipt.pdf", b"first").await;

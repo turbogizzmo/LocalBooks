@@ -17,7 +17,8 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 use crate::ledger::{db_err, Cents, EntrySource, JournalEntry, JournalLine};
 
 const FORMAT: &str = "localbooks-accountant-changes-1";
-pub const COPY_LOCKED: &str = "ACCOUNTANT_COPY_LOCKED: an Accountant's Copy is out for this period; post after its dividing date, or import or cancel the copy first";
+pub const COPY_LOCKED: &str =
+    "ACCOUNTANT_COPY_LOCKED: an Accountant's Copy is out for this period; post after its dividing date, or import or cancel the copy first";
 pub const COPY_LIMIT: &str = "ACCOUNTANT_COPY_LIMIT: this is an Accountant's Copy; post only on or before its dividing date";
 
 fn hex(bytes: &[u8]) -> String {
@@ -31,11 +32,13 @@ fn hex(bytes: &[u8]) -> String {
 /// Refuses a posting dated on the wrong side of a dividing date: on or before it in a client file
 /// with a copy out, after it in the copy itself.
 pub async fn check_posting(tx: &mut Transaction<'_, Sqlite>, date: NaiveDate) -> Result<(), String> {
-    let out: Option<NaiveDate> = sqlx::query_scalar("SELECT dividing_date FROM accountants_copies WHERE status = 'OUTSTANDING'").fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let out: Option<NaiveDate> =
+        sqlx::query_scalar("SELECT dividing_date FROM accountants_copies WHERE status = 'OUTSTANDING'").fetch_optional(&mut **tx).await.map_err(db_err)?;
     if out.is_some_and(|d| date <= d) {
         return Err(COPY_LOCKED.into());
     }
-    let copy: Option<NaiveDate> = sqlx::query_scalar("SELECT dividing_date FROM accountants_copy_info WHERE id = 1").fetch_optional(&mut **tx).await.map_err(db_err)?;
+    let copy: Option<NaiveDate> =
+        sqlx::query_scalar("SELECT dividing_date FROM accountants_copy_info WHERE id = 1").fetch_optional(&mut **tx).await.map_err(db_err)?;
     if copy.is_some_and(|d| date > d) {
         return Err(COPY_LIMIT.into());
     }
@@ -80,7 +83,8 @@ pub async fn create(pool: &SqlitePool, live_path: &Path, destination: &Path, div
     if copy_dividing_date(pool).await?.is_some() {
         return Err("ACCOUNTANT_COPY_IN_COPY: this is itself an Accountant's Copy".into());
     }
-    let out: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM accountants_copies WHERE status = 'OUTSTANDING')").fetch_one(pool).await.map_err(db_err)?;
+    let out: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM accountants_copies WHERE status = 'OUTSTANDING')").fetch_one(pool).await.map_err(db_err)?;
     if out {
         return Err("ACCOUNTANT_COPY_OUT: a copy is already out; import or cancel it first".into());
     }
@@ -124,11 +128,13 @@ async fn record(pool: &SqlitePool, id: i64) -> Result<CopyRecord, String> {
 
 /// Lifts the client's lock without importing anything; the copy's changes are then refused.
 pub async fn cancel(pool: &SqlitePool, by: &str) -> Result<(), String> {
-    let done = sqlx::query("UPDATE accountants_copies SET status = 'CANCELLED', closed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), closed_by = ?1 WHERE status = 'OUTSTANDING'")
-        .bind(by)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
+    let done = sqlx::query(
+        "UPDATE accountants_copies SET status = 'CANCELLED', closed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), closed_by = ?1 WHERE status = 'OUTSTANDING'",
+    )
+    .bind(by)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
     if done.rows_affected() == 0 {
         return Err("ACCOUNTANT_COPY_NONE: no Accountant's Copy is out".into());
     }
@@ -246,7 +252,13 @@ pub async fn changes(pool: &SqlitePool) -> Result<ChangesFile, String> {
         .await
         .map_err(db_err)?
         .into_iter()
-        .map(|(account_number, account_full_name, debit_cents, credit_cents, memo)| ChangedLine { account_number, account_full_name, debit_cents, credit_cents, memo })
+        .map(|(account_number, account_full_name, debit_cents, credit_cents, memo)| ChangedLine {
+            account_number,
+            account_full_name,
+            debit_cents,
+            credit_cents,
+            memo,
+        })
         .collect();
         entries.push(ChangedEntry { date, memo, adjusting, lines });
     }
@@ -286,11 +298,17 @@ fn read(bytes: &[u8]) -> Result<ChangesFile, String> {
 }
 
 async fn matching_copy(conn: &mut sqlx::SqliteConnection, file: &ChangesFile) -> Result<i64, String> {
-    let row: Option<(i64, String, NaiveDate)> = sqlx::query_as("SELECT id, status, dividing_date FROM accountants_copies WHERE token = ?1").bind(&file.token).fetch_optional(&mut *conn).await.map_err(db_err)?;
+    let row: Option<(i64, String, NaiveDate)> = sqlx::query_as("SELECT id, status, dividing_date FROM accountants_copies WHERE token = ?1")
+        .bind(&file.token)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(db_err)?;
     match row {
         None => Err("ACCOUNTANT_CHANGES_OTHER: these changes are from a copy of other books".into()),
         Some((_, status, _)) if status == "RETURNED" => Err("ACCOUNTANT_CHANGES_DONE: these changes were already imported".into()),
-        Some((_, status, _)) if status == "CANCELLED" => Err("ACCOUNTANT_CHANGES_CANCELLED: that copy was cancelled; ask the accountant to work on a new one".into()),
+        Some((_, status, _)) if status == "CANCELLED" => {
+            Err("ACCOUNTANT_CHANGES_CANCELLED: that copy was cancelled; ask the accountant to work on a new one".into())
+        }
         Some((_, _, d)) if d != file.dividing_date => Err("ACCOUNTANT_CHANGES_BAD: the file's dividing date doesn't match its copy".into()),
         Some((id, _, _)) => Ok(id),
     }
@@ -298,12 +316,17 @@ async fn matching_copy(conn: &mut sqlx::SqliteConnection, file: &ChangesFile) ->
 
 async fn account_id(conn: &mut sqlx::SqliteConnection, number: Option<&str>, full_name: &str) -> Result<Option<i64>, String> {
     if let Some(n) = number.filter(|n| !n.trim().is_empty()) {
-        let by_number: Option<i64> = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_optional(&mut *conn).await.map_err(db_err)?;
+        let by_number: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_optional(&mut *conn).await.map_err(db_err)?;
         if by_number.is_some() {
             return Ok(by_number);
         }
     }
-    sqlx::query_scalar("SELECT id FROM v_chart_of_accounts WHERE full_name = ?1 COLLATE NOCASE").bind(full_name).fetch_optional(&mut *conn).await.map_err(db_err)
+    sqlx::query_scalar("SELECT id FROM v_chart_of_accounts WHERE full_name = ?1 COLLATE NOCASE")
+        .bind(full_name)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(db_err)
 }
 
 /// Reads a changes file and shows what importing it would do, refusing a file that isn't for the
@@ -318,7 +341,13 @@ pub async fn preview(pool: &SqlitePool, bytes: &[u8]) -> Result<ImportPreview, S
             existing.push(a.full_name.clone());
         }
     }
-    Ok(ImportPreview { dividing_date: file.dividing_date, accounts: file.accounts, accounts_existing: existing, entries: file.entries, left_out: file.left_out })
+    Ok(ImportPreview {
+        dividing_date: file.dividing_date,
+        accounts: file.accounts,
+        accounts_existing: existing,
+        entries: file.entries,
+        left_out: file.left_out,
+    })
 }
 
 /// Imports the accountant's changes: creates their accounts, posts their entries, marks the copy
@@ -337,17 +366,20 @@ pub async fn import(pool: &SqlitePool, bytes: &[u8], by: &str) -> Result<CopyRec
                 continue;
             }
             let parent = match &a.parent_full_name {
-                Some(p) => Some(account_id(&mut tx, None, p).await?.ok_or_else(|| format!("ACCOUNTANT_CHANGES_ACCOUNT: the parent account '{p}' isn't in the books"))?),
+                Some(p) => Some(
+                    account_id(&mut tx, None, p).await?.ok_or_else(|| format!("ACCOUNTANT_CHANGES_ACCOUNT: the parent account '{p}' isn't in the books"))?,
+                ),
                 None => None,
             };
-            let id: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type, parent_id) VALUES (?1, ?2, ?3, ?4) RETURNING id")
-                .bind(a.number.as_deref().filter(|n| !n.trim().is_empty()))
-                .bind(&a.name)
-                .bind(&a.account_type)
-                .bind(parent)
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(|e| format!("ACCOUNTANT_CHANGES_ACCOUNT: the account '{}' couldn't be added ({})", a.full_name, db_err(e)))?;
+            let id: i64 =
+                sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type, parent_id) VALUES (?1, ?2, ?3, ?4) RETURNING id")
+                    .bind(a.number.as_deref().filter(|n| !n.trim().is_empty()))
+                    .bind(&a.name)
+                    .bind(&a.account_type)
+                    .bind(parent)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(|e| format!("ACCOUNTANT_CHANGES_ACCOUNT: the account '{}' couldn't be added ({})", a.full_name, db_err(e)))?;
             created.push(id);
         }
         let mut posted = Vec::new();
@@ -360,7 +392,13 @@ pub async fn import(pool: &SqlitePool, bytes: &[u8], by: &str) -> Result<CopyRec
                 let account = account_id(&mut tx, l.account_number.as_deref(), &l.account_full_name)
                     .await?
                     .ok_or_else(|| format!("ACCOUNTANT_CHANGES_ACCOUNT: the account '{}' isn't in the books", l.account_full_name))?;
-                lines.push(JournalLine { account_id: account, debit: Cents(l.debit_cents), credit: Cents(l.credit_cents), memo: l.memo.clone(), class_id: None });
+                lines.push(JournalLine {
+                    account_id: account,
+                    debit: Cents(l.debit_cents),
+                    credit: Cents(l.credit_cents),
+                    memo: l.memo.clone(),
+                    class_id: None,
+                });
             }
             let memo = if e.memo.trim().is_empty() { "From the accountant".to_string() } else { format!("{} (from the accountant)", e.memo.trim()) };
             let entry = JournalEntry { id: None, date: e.date, description: memo, lines, currency: None };

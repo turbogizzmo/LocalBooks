@@ -12,14 +12,30 @@ fn pdf(text: &[&str]) -> Vec<u8> {
     let ops = text
         .iter()
         .enumerate()
-        .map(|(i, t)| Op::Text { x: 72.0, y: 72.0 + 18.0 * i as f32, text: t.to_string(), family: FontFamily::Helvetica, bold: false, size: 11.0, color: Rgb(0, 0, 0), align: Align::Left })
+        .map(|(i, t)| Op::Text {
+            x: 72.0,
+            y: 72.0 + 18.0 * i as f32,
+            text: t.to_string(),
+            family: FontFamily::Helvetica,
+            bold: false,
+            size: 11.0,
+            color: Rgb(0, 0, 0),
+            align: Align::Left,
+        })
         .collect();
     crate::pdf::write_pdf(&[Page { width: 612.0, height: 792.0, ops }], None, "Bill")
 }
 
 #[test]
 fn hints_read_the_total_the_date_and_the_name() {
-    let h = hints_from_lines(&lines(&["Paper Supply Co", "Invoice 1043   Date 10/23/2026", "Toner   2 x 45.00   90.00", "Subtotal   90.00", "Tax   7.20", "Total   $97.20"]));
+    let h = hints_from_lines(&lines(&[
+        "Paper Supply Co",
+        "Invoice 1043   Date 10/23/2026",
+        "Toner   2 x 45.00   90.00",
+        "Subtotal   90.00",
+        "Tax   7.20",
+        "Total   $97.20",
+    ]));
     assert_eq!(h, Hints { amount_cents: Some(9_720), date: "2026-10-23".parse().ok(), name: Some("Paper Supply Co".into()) });
     // "Amount due" beats "Total"; without either, the largest amount.
     assert_eq!(hints_from_lines(&lines(&["Total 120.00", "Amount due 20.00"])).amount_cents, Some(2_000));
@@ -45,9 +61,10 @@ async fn a_pdf_in_the_inbox_is_read_and_attaches_to_the_expense_it_becomes() {
         sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(&pool).await.unwrap(),
         sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '6300'").fetch_one(&pool).await.unwrap(),
     );
-    let input: crate::expenses::ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "EXPENSE", "payeeName": "Harbor Hardware", "paymentAccountId": checking,
+    let input: crate::expenses::ExpenseInput =
+        serde_json::from_value(serde_json::json!({ "kind": "EXPENSE", "payeeName": "Harbor Hardware", "paymentAccountId": checking,
         "expenseDate": "2026-03-04", "lines": [{ "accountId": supplies, "amountCents": 1_308 }] }))
-    .unwrap();
+        .unwrap();
     let entry = crate::expenses::post_expense(&pool, input).await.unwrap().journal_entry_id.unwrap();
     let attached = attach(&pool, doc.id, entry).await.unwrap();
     assert_eq!((attached.file_name.as_str(), attached.journal_entry_id), ("receipt.pdf", entry));

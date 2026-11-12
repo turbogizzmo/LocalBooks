@@ -94,11 +94,8 @@ async fn received_from(pool: &SqlitePool, name: &str) -> Result<(Option<i64>, Op
 
 /// Records the register row through the form it stands for.
 pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -> Result<RegisterEntryPosted, String> {
-    let account_type: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1")
-        .bind(input.account_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?;
+    let account_type: Option<String> =
+        sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1").bind(input.account_id).fetch_optional(pool).await.map_err(db_err)?;
     let account_type = account_type.ok_or_else(|| format!("REG_NOT_FOUND: account {} does not exist", input.account_id))?;
     let kind = match (account_type.as_str(), input.side) {
         ("BANK", RegisterSide::Payment) => "CHECK",
@@ -106,7 +103,11 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
         ("CREDIT_CARD", RegisterSide::Charge) => "EXPENSE",
         ("CREDIT_CARD", RegisterSide::Credit) => "CARD_CREDIT",
         ("BANK" | "CREDIT_CARD", _) => return Err("REG_ENTRY_BAD_SIDE: that column doesn't belong to this register".into()),
-        _ => return Err("REG_ENTRY_UNSUPPORTED: transactions can be typed into bank and credit card registers; use a form or a journal entry for this account".into()),
+        _ => {
+            return Err(
+                "REG_ENTRY_UNSUPPORTED: transactions can be typed into bank and credit card registers; use a form or a journal entry for this account".into()
+            )
+        }
     };
     if input.lines.is_empty() {
         return Err("REG_ENTRY_NO_ACCOUNT: choose the account this goes to".into());
@@ -129,7 +130,13 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
     if let Some((other, _, _)) = single.as_ref().filter(|(_, t, _)| t == "BANK") {
         let outflow = matches!(input.side, RegisterSide::Payment | RegisterSide::Charge);
         let (from, to) = if outflow { (input.account_id, *other) } else { (*other, input.account_id) };
-        let transfer = TransferInput { from_account_id: from, to_account_id: to, transfer_date: input.entry_date, amount_cents: Cents(input.lines[0].amount_cents), memo: memo.map(str::to_string) };
+        let transfer = TransferInput {
+            from_account_id: from,
+            to_account_id: to,
+            transfer_date: input.entry_date,
+            amount_cents: Cents(input.lines[0].amount_cents),
+            memo: memo.map(str::to_string),
+        };
         let id = crate::banking::post_transfer(pool, transfer).await?;
         let entry: Option<i64> = sqlx::query_scalar("SELECT journal_entry_id FROM transfers WHERE id = ?1").bind(id).fetch_one(pool).await.map_err(db_err)?;
         return Ok(RegisterEntryPosted {
@@ -162,9 +169,18 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
                 }
             };
             let items = chosen.into_iter().map(|w| DepositItemRef { kind: w.kind.clone(), id: w.id }).collect();
-            let deposit = DepositInput { bank_account_id: input.account_id, deposit_date: input.entry_date, memo: memo.map(str::to_string), items, other_lines: Vec::new(), cash_back: None, deductions: Vec::new() };
+            let deposit = DepositInput {
+                bank_account_id: input.account_id,
+                deposit_date: input.entry_date,
+                memo: memo.map(str::to_string),
+                items,
+                other_lines: Vec::new(),
+                cash_back: None,
+                deductions: Vec::new(),
+            };
             let deposit_id = crate::banking::post_bank_deposit(pool, deposit).await?;
-            let entry: Option<i64> = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(deposit_id).fetch_one(pool).await.map_err(db_err)?;
+            let entry: Option<i64> =
+                sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(deposit_id).fetch_one(pool).await.map_err(db_err)?;
             return Ok(RegisterEntryPosted {
                 source_type: kind.into(),
                 source_id: deposit_id,
@@ -189,11 +205,27 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
         let other_lines = input
             .lines
             .iter()
-            .map(|l| DepositOtherLine { account_id: l.account_id, amount_cents: Cents(l.amount_cents), memo: l.memo.clone(), class_id: l.class_id, customer_id, vendor_id })
+            .map(|l| DepositOtherLine {
+                account_id: l.account_id,
+                amount_cents: Cents(l.amount_cents),
+                memo: l.memo.clone(),
+                class_id: l.class_id,
+                customer_id,
+                vendor_id,
+            })
             .collect();
-        let deposit = DepositInput { bank_account_id: input.account_id, deposit_date: input.entry_date, memo, items: Vec::new(), other_lines, cash_back: None, deductions: Vec::new() };
+        let deposit = DepositInput {
+            bank_account_id: input.account_id,
+            deposit_date: input.entry_date,
+            memo,
+            items: Vec::new(),
+            other_lines,
+            cash_back: None,
+            deductions: Vec::new(),
+        };
         let deposit_id = crate::banking::post_bank_deposit(pool, deposit).await?;
-        let entry: Option<i64> = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(deposit_id).fetch_one(pool).await.map_err(db_err)?;
+        let entry: Option<i64> =
+            sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(deposit_id).fetch_one(pool).await.map_err(db_err)?;
         return Ok(RegisterEntryPosted {
             source_type: kind.into(),
             source_id: deposit_id,
@@ -204,7 +236,8 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
     // A check or charge pays a vendor or other name already on the list: a typed name the person
     // hasn't added is refused, not added as a new vendor.
     crate::sales::require_listed_payee(pool, input.payee_name.as_deref()).await?;
-    let expense = ExpenseInput { form_lines: Vec::new(),
+    let expense = ExpenseInput {
+        form_lines: Vec::new(),
         payment_method_id: None,
         kind: kind.into(),
         payee_name: input.payee_name.clone(),
@@ -216,7 +249,14 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
         lines: input
             .lines
             .iter()
-            .map(|l| SplitLineInput { account_id: l.account_id, amount_cents: Cents(l.amount_cents), memo: l.memo.clone(), class_id: l.class_id, customer_id: l.customer_id, billable: None })
+            .map(|l| SplitLineInput {
+                account_id: l.account_id,
+                amount_cents: Cents(l.amount_cents),
+                memo: l.memo.clone(),
+                class_id: l.class_id,
+                customer_id: l.customer_id,
+                billable: None,
+            })
             .collect(),
         currency: None,
     };

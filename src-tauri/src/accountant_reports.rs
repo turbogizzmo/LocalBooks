@@ -283,7 +283,16 @@ pub async fn previous_reconciliation(pool: &SqlitePool, reconciliation_id: i64, 
                     let mut r = row(
                         RowKind::Detail,
                         2,
-                        vec![json!(type_text(&l.source_type, l.is_reversal)), json!(l.date), json!(l.num), json!(l.name), json!(l.memo), json!(status), money(l.amount_cents), money(balance)],
+                        vec![
+                            json!(type_text(&l.source_type, l.is_reversal)),
+                            json!(l.date),
+                            json!(l.num),
+                            json!(l.name),
+                            json!(l.memo),
+                            json!(status),
+                            money(l.amount_cents),
+                            money(balance),
+                        ],
                     );
                     r.journal_entry_id = Some(l.journal_entry_id);
                     rows.push(r);
@@ -808,7 +817,11 @@ pub fn tax_lines() -> Vec<TaxLine> {
     add("990", FORM_990);
     for (form, owners, equity) in [
         ("1065", "partners", &[("L-capital", "Partners' capital accounts")][..]),
-        ("1120S", "shareholders", &[("L-capital-stock", "Capital stock"), ("L-retained-earnings", "Retained earnings"), ("L-distributions", "Shareholder distributions")][..]),
+        (
+            "1120S",
+            "shareholders",
+            &[("L-capital-stock", "Capital stock"), ("L-retained-earnings", "Retained earnings"), ("L-distributions", "Shareholder distributions")][..],
+        ),
         ("1120", "shareholders", &[("L-capital-stock", "Capital stock"), ("L-retained-earnings", "Retained earnings")][..]),
     ] {
         for (key, label, kind) in SCHEDULE_L.iter().copied().chain(equity.iter().map(|(k, l)| (*k, *l, B))) {
@@ -1055,7 +1068,12 @@ pub async fn income_tax(pool: &SqlitePool, form: &str, start: NaiveDate, end: Na
         let total: i64 = accts.iter().map(|a| side(kind.or(kind_of(a)), a, a.net_cents)).sum();
         if !detail {
             let mut r = labeled(RowKind::Detail, 1, w, title, &[json!(total)]);
-            r.drill = Some(crate::custom_reports::Drill { account_ids: accts.iter().map(|a| a.account_id).collect(), start_date: Some(start), end_date: Some(end), ..Default::default() });
+            r.drill = Some(crate::custom_reports::Drill {
+                account_ids: accts.iter().map(|a| a.account_id).collect(),
+                start_date: Some(start),
+                end_date: Some(end),
+                ..Default::default()
+            });
             rows.push(r);
             return;
         }
@@ -1073,7 +1091,15 @@ pub async fn income_tax(pool: &SqlitePool, form: &str, start: NaiveDate, end: Na
                 let mut r = row(
                     RowKind::Detail,
                     2,
-                    vec![json!(type_text(&l.source_type, l.is_reversal)), json!(l.date), json!(l.num), json!(l.name), json!(l.memo), json!(a.account_name), json!(side(k, a, l.net_cents))],
+                    vec![
+                        json!(type_text(&l.source_type, l.is_reversal)),
+                        json!(l.date),
+                        json!(l.num),
+                        json!(l.name),
+                        json!(l.memo),
+                        json!(a.account_name),
+                        json!(side(k, a, l.net_cents)),
+                    ],
                 );
                 r.journal_entry_id = Some(l.journal_entry_id);
                 rows.push(r);
@@ -1084,7 +1110,8 @@ pub async fn income_tax(pool: &SqlitePool, form: &str, start: NaiveDate, end: Na
     };
     let balance_sheet = if form == "990" { "Balance sheet (Part X)" } else { "Balance sheet (Schedule L)" };
     for (heading, kind) in [("Income", TaxLineKind::Income), ("Deductions", TaxLineKind::Deduction), (balance_sheet, TaxLineKind::BalanceSheet)] {
-        let blocks: Vec<(&usize, &Vec<&TaxAccount>)> = by_line.iter().filter(|(i, _)| lines[**i].kind == kind && keep(Some(lines[**i].code.as_str()))).collect();
+        let blocks: Vec<(&usize, &Vec<&TaxAccount>)> =
+            by_line.iter().filter(|(i, _)| lines[**i].kind == kind && keep(Some(lines[**i].code.as_str()))).collect();
         if blocks.is_empty() {
             continue;
         }
@@ -1264,7 +1291,11 @@ pub async fn open_purchase_orders(pool: &SqlitePool, as_of: NaiveDate) -> Result
         let mut sub = 0;
         while i < pos.len() && pos[i].vendor_id == vendor.vendor_id {
             let p = &pos[i];
-            rows.push(row(RowKind::Detail, 1, vec![json!("Purchase Order"), json!(p.po_date), json!(p.po_number.to_string()), json!(p.memo), json!(p.expected_date), json!(p.total_cents)]));
+            rows.push(row(
+                RowKind::Detail,
+                1,
+                vec![json!("Purchase Order"), json!(p.po_date), json!(p.po_number.to_string()), json!(p.memo), json!(p.expected_date), json!(p.total_cents)],
+            ));
             sub += p.total_cents;
             i += 1;
         }
@@ -1274,7 +1305,8 @@ pub async fn open_purchase_orders(pool: &SqlitePool, as_of: NaiveDate) -> Result
     if !pos.is_empty() {
         rows.push(labeled(RowKind::Total, 0, w, "TOTAL", &[json!(total)]));
     }
-    let notes = vec![format!("{} open purchase order{} as of {as_of}. Purchase orders do not post to the books.", pos.len(), if pos.len() == 1 { "" } else { "s" })];
+    let notes =
+        vec![format!("{} open purchase order{} as of {as_of}. Purchase orders do not post to the books.", pos.len(), if pos.len() == 1 { "" } else { "s" })];
     let mut out = report(None, as_of, columns, rows, notes);
     out.report.line_count = pos.len();
     Ok(out)

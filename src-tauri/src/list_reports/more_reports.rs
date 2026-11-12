@@ -37,8 +37,11 @@ fn plus_months(first: NaiveDate, n: u32) -> NaiveDate {
 /// income first, then expenses, with net income, as the budget was entered (Accounting › Budgets).
 pub(super) async fn budget_overview(pool: &SqlitePool, as_of: NaiveDate) -> Result<AccountantReport, String> {
     let (fy_start, _) = crate::preferences::fiscal_year_bounds(as_of, crate::preferences::fiscal_start_month(pool).await?);
-    let budgets: Vec<(i64, String)> =
-        sqlx::query_as("SELECT id, name FROM budgets WHERE fiscal_year_start = ?1 ORDER BY name COLLATE NOCASE").bind(fy_start).fetch_all(pool).await.map_err(db_err)?;
+    let budgets: Vec<(i64, String)> = sqlx::query_as("SELECT id, name FROM budgets WHERE fiscal_year_start = ?1 ORDER BY name COLLATE NOCASE")
+        .bind(fy_start)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
     let months: Vec<NaiveDate> = (0..12).map(|n| plus_months(fy_start, n)).collect();
     let mut columns: Vec<ColumnHead> = vec![head("Account", ColumnKind::Text)];
     columns.extend(months.iter().map(|m| head(&month_label(*m), ColumnKind::Money)));
@@ -134,12 +137,11 @@ pub(super) async fn sales_tax_revenue(pool: &SqlitePool, start: NaiveDate, end: 
 /// Every memorized (recurring) transaction: name, type, how often, the next date and when it ends.
 pub(super) async fn memorized_transactions(pool: &SqlitePool, today: NaiveDate) -> Result<AccountantReport, String> {
     type ListRow = (String, String, String, i64, String, Option<String>, bool);
-    let list: Vec<ListRow> = sqlx::query_as(
-        "SELECT name, kind, frequency, every, next_date, end_date, is_active FROM recurring_templates ORDER BY name COLLATE NOCASE",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(db_err)?;
+    let list: Vec<ListRow> =
+        sqlx::query_as("SELECT name, kind, frequency, every, next_date, end_date, is_active FROM recurring_templates ORDER BY name COLLATE NOCASE")
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
     let columns = vec![
         head("Name", ColumnKind::Text),
         head("Type", ColumnKind::Text),
@@ -167,7 +169,11 @@ pub(super) async fn memorized_transactions(pool: &SqlitePool, today: NaiveDate) 
                 _ => ("year", "years"),
             };
             let how = if *every == 1 { format!("Every {}", unit.0) } else { format!("Every {every} {}", unit.1) };
-            row(RowKind::Detail, 0, vec![json!(name), json!(kind_label(kind)), json!(how), json!(next), json!(ends), json!(if *active { "Active" } else { "Paused" })])
+            row(
+                RowKind::Detail,
+                0,
+                vec![json!(name), json!(kind_label(kind)), json!(how), json!(next), json!(ends), json!(if *active { "Active" } else { "Paused" })],
+            )
         })
         .collect();
     let notes = vec![format!("{} in Accounting › Recurring Transactions.", plural(list.len(), "memorized transaction", "memorized transactions"))];

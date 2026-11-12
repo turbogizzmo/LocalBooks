@@ -10,7 +10,14 @@ fn store(name: &str) -> SecretStore {
 }
 
 fn account() -> SmtpSettings {
-    SmtpSettings { enabled: true, host: "Smtp.Example.com".into(), username: "billing@example.com".into(), from_email: "billing@example.com".into(), from_name: "Acme  Billing".into(), ..SmtpSettings::default() }
+    SmtpSettings {
+        enabled: true,
+        host: "Smtp.Example.com".into(),
+        username: "billing@example.com".into(),
+        from_email: "billing@example.com".into(),
+        from_name: "Acme  Billing".into(),
+        ..SmtpSettings::default()
+    }
 }
 
 #[test]
@@ -48,7 +55,13 @@ async fn passwords_stay_out_of_the_company_file() {
     save_settings(&pool, &secrets, SmtpSettings { port: 2525, ..account() }, Some("hunter2".into())).await.unwrap();
     let cleared = save_settings(&pool, &secrets, SmtpSettings { port: 2525, ..account() }, Some(String::new())).await.unwrap();
     assert!(!cleared.has_password);
-    let err = send(&pool, &secrets, Outgoing { to: vec!["a@x.com".into()], subject: "s".into(), body: "b".into(), file_name: "f.pdf".into(), pdf: vec![], more: Vec::new() }).await.unwrap_err();
+    let err = send(
+        &pool,
+        &secrets,
+        Outgoing { to: vec!["a@x.com".into()], subject: "s".into(), body: "b".into(), file_name: "f.pdf".into(), pdf: vec![], more: Vec::new() },
+    )
+    .await
+    .unwrap_err();
     assert!(err.starts_with("SMTP_NO_PASSWORD"), "{err}");
 }
 
@@ -114,7 +127,14 @@ async fn sends_the_pdf_through_the_server() {
     send(
         &pool,
         &secrets,
-        Outgoing { to: vec!["ap@initech.test".into()], subject: "Invoice 1001 from Acme".into(), body: "Please find attached.".into(), file_name: "Invoice 1001.pdf".into(), pdf: b"%PDF-1.4 test".to_vec(), more: vec![("Signed quote.png".into(), b"png bytes".to_vec(), "image/png")] },
+        Outgoing {
+            to: vec!["ap@initech.test".into()],
+            subject: "Invoice 1001 from Acme".into(),
+            body: "Please find attached.".into(),
+            file_name: "Invoice 1001.pdf".into(),
+            pdf: b"%PDF-1.4 test".to_vec(),
+            more: vec![("Signed quote.png".into(), b"png bytes".to_vec(), "image/png")],
+        },
     )
     .await
     .unwrap();
@@ -130,7 +150,20 @@ async fn sends_the_pdf_through_the_server() {
     assert!(text.contains("Content-Type: application/pdf"));
 
     // Turned off, nothing is sent.
-    save_settings(&pool, &secrets, SmtpSettings { enabled: false, host: "127.0.0.1".into(), port, security: Security::None, username: String::new(), ..account() }, None).await.unwrap();
-    let off = send(&pool, &secrets, Outgoing { to: vec!["a@x.com".into()], subject: "s".into(), body: "b".into(), file_name: "f.pdf".into(), pdf: vec![], more: Vec::new() }).await.unwrap_err();
+    save_settings(
+        &pool,
+        &secrets,
+        SmtpSettings { enabled: false, host: "127.0.0.1".into(), port, security: Security::None, username: String::new(), ..account() },
+        None,
+    )
+    .await
+    .unwrap();
+    let off = send(
+        &pool,
+        &secrets,
+        Outgoing { to: vec!["a@x.com".into()], subject: "s".into(), body: "b".into(), file_name: "f.pdf".into(), pdf: vec![], more: Vec::new() },
+    )
+    .await
+    .unwrap_err();
     assert!(off.starts_with("SMTP_OFF"));
 }

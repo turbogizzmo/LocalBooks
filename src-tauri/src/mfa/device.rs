@@ -162,16 +162,23 @@ pub async fn add(pool: &SqlitePool, store: &SecretStore, session: &Session, kind
         if let Some(old) = &replaced {
             sqlx::query("DELETE FROM user_device_factors WHERE id = ?1").bind(old.id).execute(&mut *tx).await.map_err(db_err)?;
         }
-        let id: i64 = sqlx::query_scalar("INSERT INTO user_device_factors (user_id, credential_id, label, kind, secret_hash) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id")
-            .bind(user_id)
-            .bind(&credential_id[..])
-            .bind(&label)
-            .bind(kind)
-            .bind(secret_hash(user_id, &credential_id, &secret[..]))
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(db_err)?;
-        crate::users::record(&mut tx, user_id, "MFA_DEVICE_ADDED", serde_json::json!({ "username": username, "computer": label, "kind": kind, "replaced": replaced.is_some() })).await?;
+        let id: i64 =
+            sqlx::query_scalar("INSERT INTO user_device_factors (user_id, credential_id, label, kind, secret_hash) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id")
+                .bind(user_id)
+                .bind(&credential_id[..])
+                .bind(&label)
+                .bind(kind)
+                .bind(secret_hash(user_id, &credential_id, &secret[..]))
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(db_err)?;
+        crate::users::record(
+            &mut tx,
+            user_id,
+            "MFA_DEVICE_ADDED",
+            serde_json::json!({ "username": username, "computer": label, "kind": kind, "replaced": replaced.is_some() }),
+        )
+        .await?;
         crate::ledger::commit_write(tx).await.map_err(db_err)?;
         Ok::<_, String>((id, replaced))
     }
@@ -200,7 +207,11 @@ pub async fn check(pool: &SqlitePool, store: &SecretStore, user_id: i64) -> Resu
         row_here(&mut conn, store, user_id).await?.ok_or_else(|| NOT_HERE.to_string())?
     };
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
-    sqlx::query("UPDATE user_device_factors SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1").bind(row.id).execute(&mut *tx).await.map_err(db_err)?;
+    sqlx::query("UPDATE user_device_factors SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1")
+        .bind(row.id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
     crate::ledger::commit_write(tx).await.map_err(db_err)
 }
 

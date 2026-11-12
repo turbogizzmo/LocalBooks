@@ -118,7 +118,18 @@ pub async fn label_rows(pool: &SqlitePool, names: LabelNames) -> Result<Vec<Labe
 
 /// A US Letter sheet of 30 address labels, 2⅝ × 1 inch, three across and ten down (the common
 /// 1-inch address label sheet sold by several makers).
-pub const LETTER_30: LabelSheet = LabelSheet { width: 612.0, height: 792.0, columns: 3, rows: 10, left: 13.5, top: 36.0, label_width: 189.0, label_height: 72.0, pitch_x: 198.0, pitch_y: 72.0 };
+pub const LETTER_30: LabelSheet = LabelSheet {
+    width: 612.0,
+    height: 792.0,
+    columns: 3,
+    rows: 10,
+    left: 13.5,
+    top: 36.0,
+    label_width: 189.0,
+    label_height: 72.0,
+    pitch_x: 198.0,
+    pitch_y: 72.0,
+};
 
 /// The geometry of a label sheet, in points.
 #[derive(Debug, Clone, Copy)]
@@ -274,8 +285,10 @@ mod tests {
         crate::expenses::create_vendor(&pool, "Alder Supply", None).await.unwrap();
         let mut bills = Vec::new();
         for (number, cents) in [("A-1", 10_000), ("A-2", 5_000), ("A-3", 2_500)] {
-            let input: crate::expenses::BillInput = serde_json::from_value(serde_json::json!({ "vendorName": "Alder Supply", "billNumber": number, "billDate": "2026-09-01", "dueDate": "2026-09-30",
-                "totalCents": cents, "lines": [{ "accountId": rent, "amountCents": cents }] }))
+            let input: crate::expenses::BillInput = serde_json::from_value(
+                serde_json::json!({ "vendorName": "Alder Supply", "billNumber": number, "billDate": "2026-09-01", "dueDate": "2026-09-30",
+                "totalCents": cents, "lines": [{ "accountId": rent, "amountCents": cents }] }),
+            )
             .unwrap();
             bills.push(crate::expenses::post_vendor_bill(&pool, input).await.unwrap().id);
         }
@@ -288,7 +301,9 @@ mod tests {
             to_be_printed: false,
         };
         // Two bills on check 2001, one paid by itself without a reference.
-        crate::expenses::pay_vendor_bills(&pool, vec![pay(bills[0], 10_000, "2026-10-05", Some("2001")), pay(bills[1], 5_000, "2026-10-05", Some("2001"))]).await.unwrap();
+        crate::expenses::pay_vendor_bills(&pool, vec![pay(bills[0], 10_000, "2026-10-05", Some("2001")), pay(bills[1], 5_000, "2026-10-05", Some("2001"))])
+            .await
+            .unwrap();
         crate::expenses::pay_vendor_bills(&pool, vec![pay(bills[2], 2_500, "2026-10-06", None)]).await.unwrap();
         let rows = list(&pool, BatchKind::BillPayment, day("2026-10-01"), day("2026-10-31")).await.unwrap();
         assert_eq!(rows.len(), 2, "one row per check: {rows:?}");

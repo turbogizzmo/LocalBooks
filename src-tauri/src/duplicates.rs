@@ -204,12 +204,13 @@ pub async fn copy_source(pool: &SqlitePool, kind: &str, id: i64) -> Result<CopyS
             .await?;
         }
         "TRANSFER" => {
-            let head: (i64, i64, i64, Option<String>) = sqlx::query_as("SELECT from_account_id, to_account_id, amount_cents, memo FROM transfers WHERE id = ?1")
-                .bind(id)
-                .fetch_optional(pool)
-                .await
-                .map_err(db_err)?
-                .ok_or_else(missing)?;
+            let head: (i64, i64, i64, Option<String>) =
+                sqlx::query_as("SELECT from_account_id, to_account_id, amount_cents, memo FROM transfers WHERE id = ?1")
+                    .bind(id)
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(db_err)?
+                    .ok_or_else(missing)?;
             copy.account_id = Some(head.0);
             copy.to_account_id = Some(head.1);
             copy.amount_cents = Some(head.2);

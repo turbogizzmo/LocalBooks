@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::ledger::{
-    convert_lines, db_err, format_cents, mul_div_round, post_entry_in_tx, quantity_amount, rollback, to_home_cents,
-    EntrySource, ForeignCurrency, JournalEntry, JournalLine, MAX_LINE_CENTS, QUANTITY_SCALE,
+    convert_lines, db_err, format_cents, mul_div_round, post_entry_in_tx, quantity_amount, rollback, to_home_cents, EntrySource, ForeignCurrency, JournalEntry,
+    JournalLine, MAX_LINE_CENTS, QUANTITY_SCALE,
 };
 use crate::money::Cents;
 
@@ -314,12 +314,7 @@ pub(crate) async fn statement_charge_summaries(pool: &SqlitePool, customer_id: i
 }
 
 pub(crate) async fn get_summary(pool: &SqlitePool, invoice_id: i64) -> Result<InvoiceSummary, String> {
-    sqlx::query_as::<_, InvoiceSummary>(&format!("{SUMMARY_SELECT} WHERE i.id = ?1"))
-        .bind(invoice_id)
-        .fetch_one(pool)
-        .await
-        .map(with_discount)
-        .map_err(db_err)
+    sqlx::query_as::<_, InvoiceSummary>(&format!("{SUMMARY_SELECT} WHERE i.id = ?1")).bind(invoice_id).fetch_one(pool).await.map(with_discount).map_err(db_err)
 }
 
 /// Creates the invoice and posts it to the ledger atomically; the invoice comes back UNPAID.
@@ -339,14 +334,23 @@ pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &Invo
 
 /// Writes an invoice that takes over `carried` details from an estimate or the invoice it
 /// replaces (see `sales_lists::write_details_carrying`).
-pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput, carried: &crate::sales_lists::SalesDetails) -> Result<i64, String> {
+pub(crate) async fn write_invoice_carrying(
+    tx: &mut Transaction<'_, Sqlite>,
+    input: &InvoiceInput,
+    carried: &crate::sales_lists::SalesDetails,
+) -> Result<i64, String> {
     write_invoice_reimbursing(tx, input, carried, &[]).await
 }
 
 /// [`write_invoice_carrying`], where lines may also credit the expense accounts in `reimbursed`:
 /// billable expenses invoiced back to the customer reduce the expense unless Preferences › Time &
 /// Expenses counts them as income (`billable_costs`).
-pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput, carried: &crate::sales_lists::SalesDetails, reimbursed: &[i64]) -> Result<i64, String> {
+pub(crate) async fn write_invoice_reimbursing(
+    tx: &mut Transaction<'_, Sqlite>,
+    input: &InvoiceInput,
+    carried: &crate::sales_lists::SalesDetails,
+    reimbursed: &[i64],
+) -> Result<i64, String> {
     validate_invoice(input)?;
     let amounts = input
         .lines
@@ -619,7 +623,9 @@ pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &Paym
         }
         let offered = crate::sales_prefs::offered_invoice_discount(&mut **tx, input.invoice_id, input.payment_date).await?;
         if offered == 0 {
-            return Err(format!("INV_NO_DISCOUNT: invoice #{number}'s terms offer no discount on this date, a discount was already taken on it, or nothing is left to discount"));
+            return Err(format!(
+                "INV_NO_DISCOUNT: invoice #{number}'s terms offer no discount on this date, a discount was already taken on it, or nothing is left to discount"
+            ));
         }
         if discount > offered {
             return Err(format!("INV_BAD_DISCOUNT: the discount on invoice #{number} is at most {}", format_cents(offered)));
@@ -655,9 +661,9 @@ pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &Paym
     let fx = match (&currency_code, invoice_rate) {
         (Some(code), Some(_)) => {
             // No silent default to the booked rate: that would zero the realized gain or loss.
-            let rate = input.exchange_rate_e6.ok_or_else(|| {
-                format!("FX_RATE_REQUIRED: invoice #{number} is in {code}; enter the exchange rate on the payment date")
-            })?;
+            let rate = input
+                .exchange_rate_e6
+                .ok_or_else(|| format!("FX_RATE_REQUIRED: invoice #{number} is in {code}; enter the exchange rate on the payment date"))?;
             if rate <= 0 {
                 return Err("FX_BAD_RATE: the exchange rate must be greater than zero".into());
             }
@@ -670,9 +676,7 @@ pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &Paym
             let relieved_after = if new_paid == total {
                 home_total
             } else {
-                mul_div_round(home_total, new_paid, total)
-                    .ok_or_else(|| "FX_OVERFLOW: amount out of range".to_string())?
-                    .clamp(relieved_before, home_total)
+                mul_div_round(home_total, new_paid, total).ok_or_else(|| "FX_OVERFLOW: amount out of range".to_string())?.clamp(relieved_before, home_total)
             };
             Some((rate, home_amount, relieved_after - relieved_before))
         }
@@ -763,12 +767,7 @@ pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &Paym
     };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::ReceivePayment(payment_id)).await?;
 
-    sqlx::query("UPDATE invoice_payments SET journal_entry_id = ?1 WHERE id = ?2")
-        .bind(entry_id)
-        .bind(payment_id)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    sqlx::query("UPDATE invoice_payments SET journal_entry_id = ?1 WHERE id = ?2").bind(entry_id).bind(payment_id).execute(&mut **tx).await.map_err(db_err)?;
 
     let new_status = if new_paid == total { "PAID" } else { "PARTIAL" };
     sqlx::query("UPDATE invoices SET amount_paid_cents = ?1, status = ?2 WHERE id = ?3")

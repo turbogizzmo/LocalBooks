@@ -74,14 +74,11 @@ pub fn hints_from_lines(lines: &[String]) -> Hints {
     if hints.amount_cents.is_none() {
         hints.amount_cents = lines.iter().flat_map(|l| amounts(l)).max();
     }
-    hints.date = lines.iter().flat_map(|l| l.split_whitespace().map(|w| w.trim_matches(|c: char| c == ',' || c == ':'))).find_map(|w| {
-        (w.chars().filter(char::is_ascii_digit).count() >= 4).then(|| crate::bank::parse_date(w).ok()).flatten()
-    });
-    hints.name = lines
+    hints.date = lines
         .iter()
-        .map(|l| l.trim())
-        .find(|l| l.chars().filter(|c| c.is_alphabetic()).count() >= 3)
-        .map(|l| l.chars().take(100).collect::<String>());
+        .flat_map(|l| l.split_whitespace().map(|w| w.trim_matches(|c: char| c == ',' || c == ':')))
+        .find_map(|w| (w.chars().filter(char::is_ascii_digit).count() >= 4).then(|| crate::bank::parse_date(w).ok()).flatten());
+    hints.name = lines.iter().map(|l| l.trim()).find(|l| l.chars().filter(|c| c.is_alphabetic()).count() >= 3).map(|l| l.chars().take(100).collect::<String>());
     hints
 }
 
