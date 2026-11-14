@@ -202,21 +202,48 @@ async fn auto_backup_runs_daily_and_prunes() {
     let tmp = TempDir::new("auto");
     let live = tmp.0.join("live.db");
     let db = Db::open_at(live.clone(), db::test_config(&tmp.0)).await.unwrap();
-    assert!(auto_backup(&db).await.unwrap().is_some(), "first run backs up");
+    let first = auto_backup(&db).await.unwrap().expect("first run backs up");
     assert!(auto_backup(&db).await.unwrap().is_none(), "second run the same day is skipped");
 
+    // Older copies of this company, and one from before backups were named by company.
+    let prefix = first.file_name.rsplitn(3, '-').nth(2).unwrap().to_string();
+    assert!(prefix.starts_with("auto-") && prefix.len() > "auto-".len(), "{}", first.file_name);
     crate::preferences::set(&db.pool().await, "auto_backup_keep", "2").await.unwrap();
     for i in 0..3 {
-        std::fs::write(db.backups_dir().join(format!("auto-20000101-00000{i}.db")), b"old").unwrap();
+        std::fs::write(db.backups_dir().join(format!("{prefix}-20000101-00000{i}.db")), b"old").unwrap();
     }
+    let unnamed = db.backups_dir().join("auto-20000101-000009.db");
+    std::fs::write(&unnamed, b"old, of some company").unwrap();
     auto_backup(&db).await.unwrap();
-    assert_eq!(list_backups(db.backups_dir()).unwrap().iter().filter(|b| b.kind == "AUTO").count(), 2);
+    let kept: Vec<String> = list_backups(db.backups_dir()).unwrap().into_iter().filter(|b| b.kind == "AUTO").map(|b| b.file_name).collect();
+    assert_eq!(kept.iter().filter(|n| n.starts_with(&format!("{prefix}-"))).count(), 2, "{kept:?}");
+    assert!(kept.contains(&first.file_name), "the newest copy is one of the two kept: {kept:?}");
+    assert!(unnamed.exists(), "a copy that can't be tied to a company is never removed");
 
     crate::preferences::set(&db.pool().await, "auto_backup_enabled", "false").await.unwrap();
     for f in list_backups(db.backups_dir()).unwrap() {
         std::fs::remove_file(f.path).unwrap();
     }
     assert!(auto_backup(&db).await.unwrap().is_none());
+}
+
+/// The backups folder is shared by every company on this computer. One company's backup today must
+/// not stop another's, and pruning one must never remove the other's copies.
+#[tokio::test]
+async fn each_company_gets_its_own_daily_backup_and_keeps_its_own_copies() {
+    let tmp = TempDir::new("auto-two");
+    let a = Db::open_at(tmp.0.join("a.db"), db::test_config(&tmp.0)).await.unwrap();
+    let of_a = auto_backup(&a).await.unwrap().expect("company A is backed up");
+    a.shutdown().await;
+
+    let b = Db::open_at(tmp.0.join("b.db"), db::test_config(&tmp.0)).await.unwrap();
+    assert_eq!(a.backups_dir(), b.backups_dir(), "both companies share one backups folder");
+    crate::preferences::set(&b.pool().await, "auto_backup_keep", "1").await.unwrap();
+    let of_b = auto_backup(&b).await.unwrap().expect("company B is backed up the same day");
+    assert_ne!(of_a.file_name, of_b.file_name);
+    assert!(std::path::Path::new(&of_a.path).exists(), "keeping one copy of B leaves A's copy alone");
+    assert!(auto_backup(&b).await.unwrap().is_none(), "B is not backed up twice in a day");
+    b.shutdown().await;
 }
 
 /// Windows refuses to move or remove a file that is still open, so a handle left open at swap time

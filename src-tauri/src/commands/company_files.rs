@@ -104,6 +104,21 @@ pub async fn company_changed(app: &AppHandle) {
     }
     crate::file_menu::refresh(app, &recent_companies(&db), status.is_some());
     windows::refresh_menus(app).await;
+    auto_backup_soon(app);
+}
+
+/// Makes today's automatic backup of the open company, if it is due, without holding anything up.
+/// Run whenever a company opens and after a sign-in: at launch alone, a company opened later or one
+/// still locked would never be backed up. A failure goes to the diagnostics log.
+pub(super) fn auto_backup_soon(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some(db) = app.try_state::<Db>() else { return };
+        if let Err(err) = crate::backup::auto_backup(db.inner()).await {
+            eprintln!("automatic backup failed: {err}");
+            crate::diagnostics::log(&format!("automatic backup failed: {err}"));
+        }
+    });
 }
 
 fn recent_companies(db: &Db) -> Vec<RecentCompanyView> {

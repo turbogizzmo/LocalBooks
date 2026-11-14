@@ -399,19 +399,42 @@ pub async fn backup_now(db: &Db) -> Result<BackupFile, String> {
     describe(&path, "MANUAL")
 }
 
+/// One automatic backup runs at a time, so two triggers close together (a company opening and a
+/// sign-in) make one copy, not two.
+static AUTO_BACKUP: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// The part of an automatic backup's name that says which company it is of: `auto-<tag>-<time>.db`.
+/// The backups folder is shared by every company opened on this computer, so the daily check and
+/// the pruning must only ever look at this company's own copies.
+async fn auto_tag(pool: &SqlitePool) -> Result<String, String> {
+    let file_id: String = sqlx::query_scalar("SELECT file_id FROM ledger_chain WHERE id = 1").fetch_one(pool).await.map_err(|e| format!("BACKUP_AUTO: {e}"))?;
+    let tag: String = file_id.chars().filter(char::is_ascii_alphanumeric).take(12).collect::<String>().to_lowercase();
+    if tag.is_empty() {
+        return Err("BACKUP_AUTO: this company file has no id to name its backups by".into());
+    }
+    Ok(tag)
+}
+
 /// Daily automatic backup, honouring the `auto_backup_*` preferences. Returns the new file, if any.
+///
+/// Called at launch, whenever a company opens, and after a sign-in (an encrypted company is locked
+/// until then, so nothing can be read from it earlier). Automatic backups from before they were
+/// named by company (`auto-<time>.db`) can't be told apart, so they are never removed here.
 pub async fn auto_backup(db: &Db) -> Result<Option<BackupFile>, String> {
-    if !db.is_open().await {
+    if !db.is_open().await || db.is_locked().await {
         return Ok(None);
     }
+    let _one_at_a_time = AUTO_BACKUP.lock().await;
     let pool = db.pool().await;
     if preferences::get(&pool, "auto_backup_enabled").await? != "true" {
         return Ok(None);
     }
     let keep: usize = preferences::get(&pool, "auto_backup_keep").await?.parse().unwrap_or(7);
-    let existing: Vec<BackupFile> = list_backups(db.backups_dir())?.into_iter().filter(|b| b.kind == "AUTO").collect();
+    let prefix = format!("auto-{}-", auto_tag(&pool).await?);
     let dir = db.backups_dir();
-    let newest_age = existing
+    let mine =
+        || -> Result<Vec<BackupFile>, String> { Ok(list_backups(dir)?.into_iter().filter(|b| b.kind == "AUTO" && b.file_name.starts_with(&prefix)).collect()) };
+    let newest_age = mine()?
         .iter()
         .filter_map(|b| std::fs::metadata(&b.path).and_then(|m| m.modified()).ok())
         .filter_map(|t| SystemTime::now().duration_since(t).ok())
@@ -419,12 +442,12 @@ pub async fn auto_backup(db: &Db) -> Result<Option<BackupFile>, String> {
     let created = if newest_age.is_some_and(|age| age < AUTO_BACKUP_INTERVAL) {
         None
     } else {
-        let path = dir.join(format!("auto-{}.db", stamp()));
+        let path = dir.join(format!("{prefix}{}.db", stamp()));
         snapshot(&pool, &db.path().await?, &path).await?;
         Some(describe(&path, "AUTO")?)
     };
 
-    let mut autos: Vec<BackupFile> = list_backups(db.backups_dir())?.into_iter().filter(|b| b.kind == "AUTO").collect();
+    let mut autos = mine()?;
     autos.sort_by(|a, b| b.file_name.cmp(&a.file_name));
     for old in autos.iter().skip(keep) {
         let _ = std::fs::remove_file(&old.path);

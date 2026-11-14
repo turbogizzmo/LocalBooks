@@ -98,7 +98,7 @@ Asset, are added the first time you use that feature.
 ## Make sure backups are on
 
 1. In **Preferences › General › Company Preferences**, under **Automatic backups**, keep **Daily backup** turned on. A backup is taken when Tillhouse
-   starts, at most once a day.
+   starts, when you open a company and when you sign in, at most once a day for each company.
 2. Set **Keep** to how many daily backups to keep (1–60).
 
 ## Track classes

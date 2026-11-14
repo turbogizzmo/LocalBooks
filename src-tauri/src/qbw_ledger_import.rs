@@ -1360,6 +1360,8 @@ pub struct PostLedgerResult {
     pub lines_posted: i64,
     pub skipped_unbalanced: i64,
     pub skipped_already_posted: i64,
+    /// Transactions with no amounts at all (a voided check exported as 0.00): nothing to post.
+    pub skipped_zero_amount: i64,
     /// What a full import made of the transactions.
     pub full: Option<FullImportCounts>,
     /// For a file of lists only: the accounts, and the customers, vendors and items, it added.
@@ -1616,7 +1618,18 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
             result.skipped_already_posted += 1;
             continue;
         }
-        let source_lines = lines.remove(&t.source_id).unwrap_or_default();
+        let mut source_lines = lines.remove(&t.source_id).unwrap_or_default();
+        // A journal entry has no 0.00 lines, and a source file often does (a voided check, a
+        // description-only split). They are left out; a transaction of nothing else is counted and
+        // skipped, so one of them never stops the whole import. A full import keeps the lines as
+        // they are for its documents and drops them where it posts a plain entry.
+        if input.mode == ImportMode::Journal && !source_lines.is_empty() {
+            source_lines.retain(|line| line.1 != 0);
+            if source_lines.is_empty() {
+                result.skipped_zero_amount += 1;
+                continue;
+            }
+        }
         let date: NaiveDate = t.date.parse().map_err(|_| format!("QBW_BAD_DATE: staged date '{}' is not a date", t.date))?;
         let document = match (input.mode, &t.document) {
             (ImportMode::Full, Some(json)) => serde_json::from_str(json).ok(),

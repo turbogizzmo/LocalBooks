@@ -271,6 +271,11 @@ pub async fn connect_shopify(
 /// them up, and keeps the ones not seen before.
 pub(super) async fn fetch(pool: &SqlitePool, f: &PayoutFeed, api: Option<&str>, token: &str, since: DateTime<Utc>) -> Result<FetchResult, String> {
     let shop = f.account_ref.as_deref().ok_or("PAYOUT_SHOP: the feed has no store address; connect it again")?;
+    // The address is kept in the company file, which can come from someone else, and the token
+    // goes wherever it says: it must still be a store's own address, exactly as it was at connect.
+    if shop_domain(shop).ok().as_deref() != Some(shop) {
+        return Err("PAYOUT_SHOP: the feed's store address is not a Shopify store address; connect it again".into());
+    }
     let base = endpoint(api, shop);
     let http = client()?;
     let payouts = walk(&http, &base, token, PAYOUTS_QUERY, "payouts", |n| issued(n).is_some_and(|t| t < since)).await?;

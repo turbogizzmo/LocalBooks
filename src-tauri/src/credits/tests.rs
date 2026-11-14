@@ -340,3 +340,51 @@ fn credit_amounts_arrive_as_bare_integers() {
         "a fractional amount is refused"
     );
 }
+
+/// Applying a credit, or taking one back, posts nothing, but it changes what was owed as of that
+/// date. Once the period is closed, neither is allowed in it.
+#[tokio::test]
+async fn credits_are_not_applied_or_taken_back_in_a_closed_period() {
+    let pool = test_pool().await;
+    let services = account(&pool, "4100").await;
+    let first = invoice(&pool, "Acme", services, 30_000).await;
+    let second = invoice(&pool, "Acme", services, 20_000).await;
+    let memo = create_credit_memo(
+        &pool,
+        CreditMemoInput {
+            credit_number: None,
+            form_lines: Vec::new(),
+            customer_name: "Acme".into(),
+            credit_date: d(5),
+            memo: None,
+            refund_account_id: None,
+            lines: vec![line(services, 40_000)],
+            tax_rate_id: None,
+            header: Default::default(),
+        },
+    )
+    .await
+    .unwrap();
+    apply_customer_credit(&pool, ApplyCreditInput { credit_id: memo.id, document_id: first, amount_cents: Cents(30_000), applied_date: d(6) }).await.unwrap();
+    let applied = list_customer_credit_applications(&pool, memo.id).await.unwrap()[0].id;
+
+    // The books are closed through June 30.
+    let close = crate::closing::ClosingInput { lock_date: Some(d(30)), current_passcode: None, new_passcode: None };
+    crate::closing::set_closing_date(&pool, &close).await.unwrap();
+
+    let err = remove_customer_credit(&pool, applied).await.unwrap_err();
+    assert!(err.starts_with("PERIOD_CLOSED"), "{err}");
+    assert_eq!(invoice_state(&pool, first).await, (30_000, "PAID".into(), 0), "the closed period's invoice is as it was");
+    let in_june = ApplyCreditInput { credit_id: memo.id, document_id: second, amount_cents: Cents(10_000), applied_date: d(10) };
+    let err = apply_customer_credit(&pool, in_june).await.unwrap_err();
+    assert!(err.starts_with("PERIOD_CLOSED"), "{err}");
+    assert_eq!(invoice_state(&pool, second).await, (0, "UNPAID".into(), 20_000));
+    let err = apply_open_credits_to_invoice(&pool, second, d(10)).await.unwrap_err();
+    assert!(err.starts_with("PERIOD_CLOSED"), "{err}");
+
+    // Dated after the closing date, the rest of the credit applies.
+    let in_july =
+        ApplyCreditInput { credit_id: memo.id, document_id: second, amount_cents: Cents(10_000), applied_date: NaiveDate::from_ymd_opt(2026, 7, 1).unwrap() };
+    apply_customer_credit(&pool, in_july).await.unwrap();
+    assert_eq!(invoice_state(&pool, second).await, (10_000, "PARTIAL".into(), 10_000));
+}

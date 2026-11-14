@@ -178,8 +178,8 @@ message again".
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Daily backup** | On | **Back up the company file automatically** when Tillhouse starts, at most once a day. |
-| **Keep** | 7 | How many daily backups to keep (1 to 60). Older ones are removed. |
+| **Daily backup** | On | **Back up the company file automatically** when Tillhouse starts, when a company opens and when you sign in, at most once a day for each company. |
+| **Keep** | 7 | How many daily backups of this company to keep (1 to 60). Older ones are removed; another company's backups are never touched. |
 
 See [Back up, restore and open company files](backups-and-company-files.md). Signing out after a
 period of no use is in **Settings › Users & Passwords**.

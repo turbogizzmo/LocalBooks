@@ -578,3 +578,48 @@ INVITEM\tMulch\tPART\tBark mulch, per yard\tMulch from the yard supplier\tSales\
     let mulch = &ledger.items[0];
     assert_eq!((mulch.purchase_description.as_deref(), mulch.purchase_cost_cents), (Some("Mulch from the yard supplier"), Some(2_250)));
 }
+
+/// A file's 0.00 rows (a voided check, a description-only split) are not journal lines. They are
+/// left out and counted; one of them must never stop the rest of the file from importing.
+#[tokio::test]
+async fn zero_amount_rows_are_left_out_and_do_not_stop_an_import() {
+    use crate::qbw_ledger_import::{auto_map_accounts, post_batch, stage, ImportMode, PostLedgerInput};
+    const ZEROS: &str = "!ACCNT\tNAME\tACCNTTYPE\r
+ACCNT\tChecking\tBANK\r
+ACCNT\tSupplies\tEXP\r
+ACCNT\tPostage\tEXP\r
+!TRNS\tTRNSID\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tDOCNUM\tMEMO\r
+!SPL\tSPLID\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tDOCNUM\tMEMO\r
+!ENDTRNS\r
+TRNS\t\tCHECK\t3/1/2024\tChecking\t\t-100\t101\tPaper\r
+SPL\t\tCHECK\t3/1/2024\tSupplies\t\t100\t\t\r
+ENDTRNS\r
+TRNS\t\tCHECK\t3/2/2024\tChecking\t\t0\t102\tVOID\r
+SPL\t\tCHECK\t3/2/2024\tSupplies\t\t0\t\t\r
+ENDTRNS\r
+TRNS\t\tCHECK\t3/3/2024\tChecking\t\t-40\t103\tToner\r
+SPL\t\tCHECK\t3/3/2024\tSupplies\t\t40\t\t\r
+SPL\t\tCHECK\t3/3/2024\tPostage\t\t0\t\tsee receipt\r
+ENDTRNS\r
+";
+    let debits = async |pool: &sqlx::SqlitePool| -> i64 {
+        sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents), 0) FROM v_posted_lines").fetch_one(pool).await.unwrap()
+    };
+    let ledger = read(ZEROS.as_bytes()).unwrap();
+
+    let pool = crate::db::test_pool().await;
+    let batch = stage(&pool, std::path::Path::new("/exports/Zeros.iif"), ZEROS.len() as i64, &ledger).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Journal }).await.unwrap();
+    assert_eq!((posted.entries_posted, posted.skipped_zero_amount, posted.skipped_unbalanced), (2, 1, 0));
+    assert_eq!(debits(&pool).await, 14_000);
+    let lines: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM v_posted_lines").fetch_one(&pool).await.unwrap();
+    assert_eq!(lines, 4, "the 0.00 split is not a journal line");
+
+    // A full import of the same file posts the same money and does not stop either.
+    let pool = crate::db::test_pool().await;
+    let batch = stage(&pool, std::path::Path::new("/exports/Zeros.iif"), ZEROS.len() as i64, &ledger).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap();
+    assert_eq!(debits(&pool).await, 14_000);
+}

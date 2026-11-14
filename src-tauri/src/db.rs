@@ -921,14 +921,31 @@ async fn remove_replaced(aside: &Path) {
 }
 
 /// Removes replaced copies of `path` that an earlier swap could not remove (see [`put_in_place`]).
+///
+/// If the company file itself is missing, a swap was cut short between its two renames (a crash or
+/// power loss): the newest replaced copy is the company file, so it is moved back instead of
+/// removed, and any older ones are left alone.
 fn remove_stale_replaced(path: &Path) {
     let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else { return };
     let prefix = format!("{}{REPLACED_INFIX}", name.to_string_lossy());
     let Ok(entries) = std::fs::read_dir(dir) else { return };
-    for entry in entries.flatten() {
-        if entry.file_name().to_string_lossy().starts_with(&prefix) {
-            let _ = std::fs::remove_file(entry.path());
+    let mut replaced: Vec<PathBuf> = entries.flatten().filter(|e| e.file_name().to_string_lossy().starts_with(&prefix)).map(|e| e.path()).collect();
+    if replaced.is_empty() {
+        return;
+    }
+    if !path.exists() {
+        // `<file>.replaced-<pid>-<nanos>`: the highest time is the copy moved aside last.
+        let moved_at = |p: &PathBuf| p.to_string_lossy().rsplit('-').next().and_then(|n| n.parse::<u128>().ok()).unwrap_or(0);
+        replaced.sort_by_key(moved_at);
+        if let Some(newest) = replaced.last() {
+            if let Err(e) = std::fs::rename(newest, path) {
+                eprintln!("could not move {} back to {}: {e}", newest.display(), path.display());
+            }
         }
+        return;
+    }
+    for stale in replaced {
+        let _ = std::fs::remove_file(stale);
     }
 }
 
