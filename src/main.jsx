@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 import StartupFailure from './components/StartupFailure.jsx';
 import NoCompanyOpen from './components/CompanyFiles.jsx';
 import SignIn from './components/Users.jsx';
@@ -50,8 +51,12 @@ function start() {
   firstScreen().then((screen) =>
     root.render(
       <React.StrictMode>
-        {screen}
-        {screen.type !== OpeningScreen && <OpeningOverlay />}
+        {/* A failure outside any one window (the menus, the sidebar, the sign-in screen) says so
+            and offers a reload, instead of leaving a blank window. */}
+        <ErrorBoundary where="its main window">
+          {screen}
+          {screen.type !== OpeningScreen && <OpeningOverlay />}
+        </ErrorBoundary>
       </React.StrictMode>,
     ),
   );

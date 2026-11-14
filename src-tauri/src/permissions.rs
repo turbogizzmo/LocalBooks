@@ -67,6 +67,8 @@ const OPEN: &[&str] = &[
     "restore_backup_as",
     "open_window",
     "report_child_windows",
+    // A screen that failed to draw notes it in the diagnostics log, signed in or not.
+    "log_screen_error",
     "arrange_windows",
     "take_desktop",
     "set_desktop_view",

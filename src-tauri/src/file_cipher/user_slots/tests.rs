@@ -248,6 +248,8 @@ async fn a_locked_file_refuses_every_command_except_unlock() {
         "restore_backup_as",
         "open_window",
         "report_child_windows",
+        // Writes one line to the diagnostics log; it never reads the company file.
+        "log_screen_error",
         "arrange_windows",
         "take_desktop",
         "set_desktop_view",

@@ -114,6 +114,35 @@ fn every_page_has_a_screen_for_its_window() {
 /// The screens' own unit tests (`src/lib/*.test.js`, Node's built-in runner): exact money parsing,
 /// the decimal-point preference, hours and year display. They need only Node, which building the
 /// app needs anyway.
+/// A render error must stay in the window it happened in (gap A24): every window inside Tillhouse
+/// and the app itself are drawn inside an `ErrorBoundary`, so nothing leaves a blank window.
+#[test]
+fn every_window_and_the_app_are_drawn_inside_an_error_boundary() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../src");
+    let read = |name: &str| std::fs::read_to_string(src.join(name)).unwrap_or_else(|e| panic!("{name}: {e}"));
+    let squeezed = |text: String| text.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    let manager = squeezed(read("components/WindowManager.jsx"));
+    assert_eq!(manager.matches("renderScreen(w)").count(), 1, "one place draws a window's screen");
+    let at = manager.find("renderScreen(w)").unwrap();
+    let (before, after) = manager.split_at(at);
+    let opened = before.rfind("<ErrorBoundary").expect("a window's screen is drawn inside an ErrorBoundary");
+    assert!(before.rfind("</ErrorBoundary>").is_none_or(|closed| closed < opened), "the boundary is still open where the screen is drawn");
+    assert!(after.contains("</ErrorBoundary>"), "and closes after it");
+    assert!(before[opened..].contains("onClose="), "a window's boundary can close its window");
+
+    let main = squeezed(read("main.jsx"));
+    assert_eq!(main.matches("root.render(").count(), 1, "one place draws the app");
+    let (_, drawn) = main.split_once("root.render(").unwrap();
+    let boundary = drawn.find("<ErrorBoundary").expect("the app is drawn inside an ErrorBoundary");
+    assert!(boundary < drawn.find("{screen}").expect("the screen is drawn"), "the boundary is around the screen");
+
+    let boundary = read("components/ErrorBoundary.jsx");
+    for needed in ["getDerivedStateFromError", "componentDidCatch", "crashLogLine", "role=\"alert\""] {
+        assert!(boundary.contains(needed), "ErrorBoundary.jsx has {needed}");
+    }
+}
+
 #[test]
 fn screen_library_unit_tests_pass() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");

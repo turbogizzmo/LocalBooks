@@ -3,9 +3,18 @@
 use super::prelude::*;
 
 handlers![
+    log_screen_error,
     preview_diagnostics,
     save_diagnostics,
 ];
+
+/// Notes in the diagnostics log that a screen failed to draw (`ErrorBoundary.jsx`): which window,
+/// the kind of error and the components involved. The screen leaves the error's message out,
+/// since the log holds no business data; the line is cut and flattened here whatever is sent.
+#[tauri::command]
+pub fn log_screen_error(line: String) {
+    crate::diagnostics::log(&crate::diagnostics::screen_error_line(&line));
+}
 
 async fn files(app: &AppHandle, db: &Db) -> Result<Vec<(String, String)>, String> {
     let path = db.path().await.ok();
