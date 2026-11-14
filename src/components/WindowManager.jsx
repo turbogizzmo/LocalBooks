@@ -8,6 +8,8 @@ import { ChildContext, confirmClose, forgetUnsaved, WINDOW_COMMAND, WINDOW_REPOR
 import { useMyPreferences } from '../lib/myPreferences.js';
 import { NORMAL_TEXT_SIZE, textSizeFor, windowKind } from '../lib/textSize.js';
 import { trapTab } from '../lib/tabTrap.js';
+import ErrorBoundary from './ErrorBoundary.jsx';
+import { logPlace } from '../lib/crash.js';
 
 /**
  * Windows inside the Tillhouse window, the way QuickBooks Desktop for Windows shows forms,
@@ -245,7 +247,10 @@ export default function WindowManager({ manager, windowMode, renderScreen, backg
             z={z.get(w.id) ?? 1}
             manager={manager}
           >
-            <ChildContext.Provider value={childContext(w.id)}>{renderScreen(w)}</ChildContext.Provider>
+            {/* One window's failure stays in that window: the others, and their forms, carry on. */}
+            <ErrorBoundary where={`the ${windowName(w)} window`} logWhere={logPlace(w.view)} onClose={() => manager.close(w.id)}>
+              <ChildContext.Provider value={childContext(w.id)}>{renderScreen(w)}</ChildContext.Provider>
+            </ErrorBoundary>
           </ChildFrame>
         );
       })}

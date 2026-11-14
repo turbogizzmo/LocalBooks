@@ -55,6 +55,16 @@ pub fn log(line: &str) {
     write_line(dir, line, LOG_LIMIT);
 }
 
+/// Longest note a screen can leave in the log about a failure to draw.
+const SCREEN_ERROR_LIMIT: usize = 1500;
+
+/// The log line for a screen that failed to draw: one line, of bounded length, whatever was sent.
+pub fn screen_error_line(sent: &str) -> String {
+    let flat: String = sent.split_whitespace().collect::<Vec<_>>().join(" ");
+    let cut: String = flat.chars().filter(|c| !c.is_control()).take(SCREEN_ERROR_LIMIT).collect();
+    format!("screen error: {}", if cut.is_empty() { "(no details)" } else { &cut })
+}
+
 fn write_line(dir: &Path, line: &str, limit: u64) {
     let _guard = WRITING.lock();
     let path = log_path(dir);
@@ -251,6 +261,18 @@ mod tests {
             startup_line(16_400, &[("settings", 12), ("open company", 15_900), ("hand-off check", 400), ("access gate", 88)]),
             "startup took 16400 ms: open company 15900 ms, hand-off check 400 ms, access gate 88 ms"
         );
+    }
+
+    #[test]
+    fn a_screen_error_is_one_bounded_line() {
+        assert_eq!(
+            screen_error_line("window Invoices: TypeError in InvoiceList < Invoices"),
+            "screen error: window Invoices: TypeError in InvoiceList < Invoices"
+        );
+        assert_eq!(screen_error_line("first\nsecond\r\n\tthird\u{7}"), "screen error: first second third");
+        assert_eq!(screen_error_line("  \n "), "screen error: (no details)");
+        let long = screen_error_line(&"x".repeat(10_000));
+        assert_eq!(long.chars().count(), "screen error: ".len() + SCREEN_ERROR_LIMIT);
     }
 
     #[test]

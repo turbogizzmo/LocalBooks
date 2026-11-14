@@ -32,6 +32,10 @@ becomes its release notes on GitHub and in the app's update window (see
   each time it fetches, so a changed company file can't send your key elsewhere. Scheduled
   reports are emailed only while someone who may change the books is signed in, and never
   through a server set to send a password without encryption.
+- **A problem in one window no longer blanks Tillhouse.** If a window could not be drawn, the whole
+  of Tillhouse used to go blank, taking every open window and half-entered form with it. Now only
+  that window shows **This window ran into a problem**, with **Try again**, **Close window** and
+  **Copy details**; your other windows carry on as they were.
 
 ## [0.16.3]
 

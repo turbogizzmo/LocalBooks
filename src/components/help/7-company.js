@@ -73,8 +73,8 @@ export const topics = [
   {
     id: 'save-diagnostics', area: 'company', views: ['settings/diagnostics', 'settings/updates'],
     title: 'Save diagnostics for whoever is helping you',
-    body: 'Help › Save Diagnostics… (or Settings › Diagnostics) saves a zip file where you choose: Tillhouse’s version, your operating system, the company file’s size, schema version and integrity check, how many rows each table has, and Tillhouse’s log of when it started, stopped, which file it opened and any crash. It holds no customers, vendors or amounts, and Tillhouse never sends it anywhere. Show what’s in it lets you read it first.',
-    keywords: 'diagnostics crash log support bug report troubleshoot version help send logs',
+    body: 'Help › Save Diagnostics… (or Settings › Diagnostics) saves a zip file where you choose: Tillhouse’s version, your operating system, the company file’s size, schema version and integrity check, how many rows each table has, and Tillhouse’s log of when it started, stopped, which file it opened and any crash or window that could not be shown. It holds no customers, vendors or amounts, and Tillhouse never sends it anywhere. Show what’s in it lets you read it first. If a window shows “This window ran into a problem”, your other windows and your books are not affected: click Try again or Close window, and use Copy details to say what went wrong.',
+    keywords: 'diagnostics crash log support bug report troubleshoot version help send logs window ran into a problem blank error try again copy details',
     go: { label: 'Go to Diagnostics', view: 'settings/diagnostics' },
     guide: 'troubleshooting',
   },

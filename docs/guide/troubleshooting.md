@@ -110,6 +110,19 @@ If a new version of Tillhouse has a problem, choose **Help › Reinstall Previou
 
 Only an Admin can reinstall an older version.
 
+## "This window ran into a problem"
+
+If Tillhouse can't draw a window, that window shows **This window ran into a problem** instead of
+going blank. Your books are safe, and your other windows and anything typed in them are not
+affected; only what was typed into that one window and not yet saved is lost.
+
+- **Try again** opens the window afresh.
+- **Close window** closes it; open it again from the menus.
+- **Copy details** copies what went wrong, to send to whoever helps you with Tillhouse.
+
+If the whole of Tillhouse shows **Tillhouse ran into a problem**, click **Reload Tillhouse**. In
+either case, if it keeps happening, save diagnostics (below) and send them with the details.
+
 ## Save diagnostics for whoever is helping you
 
 Choose **Help › Save Diagnostics…** (or **Settings › Diagnostics**) and click **Save
@@ -119,8 +132,8 @@ diagnostics…**. Tillhouse saves a zip file where you choose. It holds:
 - the company file's name and size, which schema updates it has, its integrity check, and how many
   rows each table holds (counts only);
 - Tillhouse's own log: when it started and quit, how long starting took (and which steps were
-  slow, such as opening the company file), which company file it opened, and any crash with where
-  in the program it happened.
+  slow, such as opening the company file), which company file it opened, and any crash or window that
+  failed to draw, with where in the program it happened.
 
 It holds no customers, vendors, amounts or other business data. **Show what's in it** lets you read
 everything before you save. Tillhouse never sends it anywhere; send the file yourself to whoever
