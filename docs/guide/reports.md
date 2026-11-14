@@ -63,7 +63,11 @@ and only to the addresses on the schedule. **Run now** on a schedule sends it fo
 changing its next run; the list shows when each runs next and how its last run went.
 
 Schedules run only while Tillhouse is open: it checks shortly after it starts and every few
-minutes after that. If a run fell due while Tillhouse was closed, it happens once, soon after
+minutes after that. If the company has users, they run only while someone who may change the books
+is signed in; while the company is locked, signed out or signed out for being idle, nothing is
+sent, and a due schedule runs soon after the next sign-in. A schedule is also not sent if the
+email server is set to use a user name without encryption (STARTTLS or TLS): its last run shows
+why. If a run fell due while Tillhouse was closed, it happens once, soon after
 Tillhouse next opens, for the latest date that was due; earlier missed dates are not sent one by
 one.
 
