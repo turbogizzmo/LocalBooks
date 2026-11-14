@@ -358,11 +358,36 @@ async fn replaced_copies_left_behind_are_removed_at_the_next_open() {
     let path = tmp.0.join("Company.localbooks");
     let stale = PathBuf::from(format!("{}{REPLACED_INFIX}1-2", path.display()));
     let unrelated = tmp.0.join("Other.localbooks.replaced-1-2");
+    Db::open_at(path.clone(), test_config(&tmp.0)).await.unwrap().shutdown().await;
     std::fs::write(&stale, b"old").unwrap();
     std::fs::write(&unrelated, b"keep").unwrap();
     let db = Db::open_at(path, test_config(&tmp.0)).await.unwrap();
     assert!(!stale.exists());
     assert!(unrelated.exists());
+    db.shutdown().await;
+}
+
+/// A swap cut short between its two renames (a crash or power loss) leaves no company file, only
+/// the copy that was moved aside. The next open moves that copy back; it must never remove it and
+/// start an empty company.
+#[tokio::test]
+async fn a_swap_cut_short_gets_the_company_file_back_at_the_next_open() {
+    let tmp = TempDir::new("swap-cut-short");
+    let path = tmp.0.join("Company.localbooks");
+    let db = Db::open_at(path.clone(), test_config(&tmp.0)).await.unwrap();
+    crate::preferences::set(&db.pool().await, "company_name", "Kept Books Co").await.unwrap();
+    db.shutdown().await;
+    // As `put_in_place` leaves things after its first rename: an older leftover, and the books.
+    let older = PathBuf::from(format!("{}{REPLACED_INFIX}7-100", path.display()));
+    let aside = PathBuf::from(format!("{}{REPLACED_INFIX}7-200", path.display()));
+    std::fs::write(&older, b"an earlier leftover").unwrap();
+    std::fs::rename(&path, &aside).unwrap();
+
+    let db = Db::open_at(path.clone(), test_config(&tmp.0)).await.unwrap();
+    let name = crate::preferences::get(&db.pool().await, "company_name").await.unwrap();
+    assert_eq!(name, "Kept Books Co", "the books that were moved aside are the company file again");
+    assert!(!aside.exists());
+    assert!(older.exists(), "nothing is removed while the company file is missing");
     db.shutdown().await;
 }
 

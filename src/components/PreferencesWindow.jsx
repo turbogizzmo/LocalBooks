@@ -374,7 +374,7 @@ function GeneralCompany({ field }) {
       </Group>
       <CompanyInfo field={field} />
       <Group title="Automatic backups">
-        {field({ label: 'Daily backup', prefKey: 'auto_backup_enabled', hint: 'Taken when Tillhouse starts, at most once a day', children: flag('Back up the company file automatically') })}
+        {field({ label: 'Daily backup', prefKey: 'auto_backup_enabled', hint: 'Taken when Tillhouse starts, a company opens or you sign in, at most once a day', children: flag('Back up the company file automatically') })}
         {field({ label: 'Keep', prefKey: 'auto_backup_keep', hint: 'Number of daily backups to keep (1–60)', children: textInput({ inputMode: 'numeric', className: 'qb-input num w-[70px]' }) })}
       </Group>
     </>

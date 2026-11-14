@@ -808,6 +808,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
           (f?.notImported ? ` ${countOf(f.notImported, ['estimate or purchase order', 'estimates and purchase orders'])} could not be brought in (listed in step 3; they post nothing).` : '') +
           (r.skippedUnbalanced ? ` ${r.skippedUnbalanced} incomplete transactions were left out; enter them by hand.` : '') +
           (r.skippedAlreadyPosted ? ` ${r.skippedAlreadyPosted} were already posted.` : '') +
+          (r.skippedZeroAmount ? ` ${r.skippedZeroAmount} with no amounts (0.00) were left out.` : '') +
           classesNote(r.classes)
         );
       },
@@ -1300,7 +1301,8 @@ export default function QbwImporter({ accounts }) {
         `Posted ${r.entriesPosted.toLocaleString()} balanced entries (${formatCents(r.totalCents)}).` +
         (r.skippedUndated ? ` ${r.skippedUndated} invoices without a date were skipped.` : '') +
         (r.skippedZeroTotal ? ` ${r.skippedZeroTotal} zero-total invoices skipped.` : '') +
-        (r.skippedAlreadyPosted ? ` ${r.skippedAlreadyPosted} were already posted.` : ''),
+        (r.skippedAlreadyPosted ? ` ${r.skippedAlreadyPosted} were already posted.` : '') +
+          (r.skippedZeroAmount ? ` ${r.skippedZeroAmount} with no amounts (0.00) were left out.` : ''),
     );
   };
 

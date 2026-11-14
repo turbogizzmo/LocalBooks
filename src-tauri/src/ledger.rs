@@ -903,8 +903,10 @@ pub struct AuditEntry {
 
 /// SQL condition, on a journal entry aliased `e`: a journal entry typed in Make General Journal
 /// Entries, not one another screen posted (a refund, write-off, bounced check, sales tax payment,
-/// reclassification, item receipt or currency revaluation) or a reversal. Only these are edited
-/// or duplicated from the Journal Entries list; the others belong to the screen that made them.
+/// reclassification, item receipt, currency revaluation, inventory adjustment, Clean Up Books match
+/// or account merge) or a reversal. Only these are edited or duplicated from the Journal Entries
+/// list; the others belong to the screen that made them, which keeps more than the entry (stock
+/// on hand, a match, a merge): editing the entry alone would leave that behind.
 pub const MANUAL_JOURNAL: &str = "(e.source_type = 'JOURNAL' AND e.reverses_entry_id IS NULL
     AND NOT EXISTS (SELECT 1 FROM class_reclassifications WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM credit_refunds WHERE journal_entry_id = e.id)
@@ -914,6 +916,9 @@ pub const MANUAL_JOURNAL: &str = "(e.source_type = 'JOURNAL' AND e.reverses_entr
     AND NOT EXISTS (SELECT 1 FROM bounced_checks WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM bounced_sales_receipts WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM item_receipts WHERE journal_entry_id = e.id)
+    AND NOT EXISTS (SELECT 1 FROM stock_ledger_entries WHERE journal_entry_id = e.id)
+    AND NOT EXISTS (SELECT 1 FROM undeposited_fund_matches WHERE journal_entry_id = e.id)
+    AND NOT EXISTS (SELECT 1 FROM name_merges WHERE journal_entry_id = e.id)
     AND NOT EXISTS (SELECT 1 FROM fx_revaluations WHERE journal_entry_id = e.id OR reversal_entry_id = e.id))";
 
 pub async fn list_journal_entries(pool: &SqlitePool, limit: i64) -> Result<Vec<JournalEntryView>, String> {

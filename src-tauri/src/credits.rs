@@ -292,7 +292,12 @@ pub struct CreditApplicationView {
 
 /// Uses `amount_cents` of a credit memo against one of the same customer's open invoices.
 pub async fn apply_customer_credit(pool: &SqlitePool, input: ApplyCreditInput) -> Result<CreditMemoSummary, String> {
-    run(pool, async |tx| apply_customer_credit_in_tx(tx, &input).await).await?;
+    run(pool, async |tx| {
+        // Applying posts nothing, but it changes what is owed as of that date: a closed period stays closed.
+        crate::closing::check_open(tx, input.applied_date).await?;
+        apply_customer_credit_in_tx(tx, &input).await
+    })
+    .await?;
     credit_memo(pool, input.credit_id).await
 }
 
@@ -361,6 +366,7 @@ pub struct AppliedCredits {
 /// them are one transaction.
 pub async fn apply_open_credits_to_invoice(pool: &SqlitePool, invoice_id: i64, applied_date: NaiveDate) -> Result<AppliedCredits, String> {
     run(pool, async |tx| {
+        crate::closing::check_open(tx, applied_date).await?;
         let invoice: Option<(Option<i64>, i64, i64)> = sqlx::query_as("SELECT customer_id, total_cents, amount_paid_cents FROM invoices WHERE id = ?1")
             .bind(invoice_id)
             .fetch_optional(&mut **tx)
@@ -411,12 +417,14 @@ pub async fn list_customer_credit_applications(pool: &SqlitePool, credit_memo_id
 /// Takes an applied credit back off its invoice.
 pub async fn remove_customer_credit(pool: &SqlitePool, application_id: i64) -> Result<(), String> {
     run(pool, async |tx| {
-        let invoice: Option<i64> = sqlx::query_scalar("SELECT invoice_id FROM credit_applications WHERE id = ?1 AND is_voided = 0")
+        let applied: Option<(i64, NaiveDate)> = sqlx::query_as("SELECT invoice_id, applied_date FROM credit_applications WHERE id = ?1 AND is_voided = 0")
             .bind(application_id)
             .fetch_optional(&mut **tx)
             .await
             .map_err(db_err)?;
-        let invoice = invoice.ok_or("CM_APPLICATION_NOT_FOUND: that credit is not applied")?;
+        let (invoice, applied_date) = applied.ok_or("CM_APPLICATION_NOT_FOUND: that credit is not applied")?;
+        // Taking it back changes what was owed from that date on: a closed period stays closed.
+        crate::closing::check_open(tx, applied_date).await?;
         sqlx::query("UPDATE credit_applications SET is_voided = 1 WHERE id = ?1").bind(application_id).execute(&mut **tx).await.map_err(db_err)?;
         recompute_paid(tx, "invoices", "invoice_payments", "invoice_id", invoice).await
     })
@@ -805,7 +813,12 @@ pub(crate) async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input:
 
 /// Uses `amount_cents` of a vendor credit against one of the same vendor's open bills.
 pub async fn apply_vendor_credit(pool: &SqlitePool, input: ApplyCreditInput) -> Result<VendorCreditSummary, String> {
-    run(pool, async |tx| apply_vendor_credit_in_tx(tx, &input).await).await?;
+    run(pool, async |tx| {
+        // As for a customer's credit: a closed period's payables stay as they were.
+        crate::closing::check_open(tx, input.applied_date).await?;
+        apply_vendor_credit_in_tx(tx, &input).await
+    })
+    .await?;
     vendor_credit(pool, input.credit_id).await
 }
 
@@ -865,12 +878,13 @@ pub async fn list_vendor_credit_applications(pool: &SqlitePool, vendor_credit_id
 
 pub async fn remove_vendor_credit(pool: &SqlitePool, application_id: i64) -> Result<(), String> {
     run(pool, async |tx| {
-        let bill: Option<i64> = sqlx::query_scalar("SELECT bill_id FROM vendor_credit_applications WHERE id = ?1 AND is_voided = 0")
+        let applied: Option<(i64, NaiveDate)> = sqlx::query_as("SELECT bill_id, applied_date FROM vendor_credit_applications WHERE id = ?1 AND is_voided = 0")
             .bind(application_id)
             .fetch_optional(&mut **tx)
             .await
             .map_err(db_err)?;
-        let bill = bill.ok_or("VC_APPLICATION_NOT_FOUND: that credit is not applied")?;
+        let (bill, applied_date) = applied.ok_or("VC_APPLICATION_NOT_FOUND: that credit is not applied")?;
+        crate::closing::check_open(tx, applied_date).await?;
         sqlx::query("UPDATE vendor_credit_applications SET is_voided = 1 WHERE id = ?1").bind(application_id).execute(&mut **tx).await.map_err(db_err)?;
         recompute_paid(tx, "bills", "bill_payments", "bill_id", bill).await
     })

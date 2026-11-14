@@ -5,9 +5,13 @@ Controls**.
 
 ## Back up
 
-- **Automatic:** a backup is taken when Tillhouse starts, at most once a day, and listed under
-  **Snapshots on this computer**. Set how many to keep in **Settings › Preferences Console ›
-  General › Company Preferences**, under **Automatic backups**.
+- **Automatic:** a backup is taken when Tillhouse starts, when you open a company and when you
+  sign in, at most once a day for each company, and listed under **Snapshots on this computer**.
+  Set how many to keep in **Settings › Preferences Console › General › Company Preferences**,
+  under **Automatic backups**. Each company keeps its own automatic backups (`auto-<id>-<time>.db`);
+  one company's are never removed to make room for another's. Automatic backups made by
+  earlier versions (`auto-<time>.db`) are not removed automatically: remove them from the backups
+  folder when you no longer need them.
 - **Right now:** click **Back up now**.
 - **To a file you choose** (a USB drive or cloud folder): click **Backup Company File…** and pick
   where to save it. It's saved as a `.localbooks` file and checked after writing. This copy is

@@ -273,6 +273,9 @@ pub async fn send(pool: &SqlitePool, secrets: &SecretStore, outgoing: Outgoing) 
     if !settings.enabled {
         return Err("SMTP_OFF: sending from Tillhouse is turned off in Settings › Email".into());
     }
+    // The settings are read from the company file, which can come from someone else: they are
+    // checked again here, so a file can't have the saved password offered without encryption.
+    let settings = settings.validated()?;
     let transport = transport(&settings, secrets, None).await?;
     let message = build_message(&settings, outgoing)?;
     transport.send(message).await.map(|_| ()).map_err(|e| send_error(&e))

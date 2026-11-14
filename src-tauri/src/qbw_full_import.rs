@@ -177,6 +177,8 @@ async fn load_books(tx: &mut Transaction<'_, Sqlite>, batch_id: i64) -> Result<B
 fn entry_lines(lines: &[Line]) -> Vec<JournalLine> {
     lines
         .iter()
+        // A journal entry has no 0.00 lines; a source file's (a description-only split) are left out.
+        .filter(|line| line.1 != 0)
         .map(|(account, cents, memo, class)| {
             let line = if *cents < 0 { JournalLine::debit(*account, -cents) } else { JournalLine::credit(*account, *cents) };
             line.with_memo(memo.as_deref()).with_class(*class)
@@ -1182,6 +1184,13 @@ pub(crate) async fn post_all(
         }};
     }
     async fn fallback(tx: &mut Transaction<'_, Sqlite>, t: &Staged, reason: Option<String>, counts: &mut FullImportCounts) -> Result<Outcome, String> {
+        // Nothing but 0.00 lines (a voided check): there is no entry to post, and that must not
+        // stop the rest of the import.
+        if t.lines.iter().all(|line| line.1 == 0) {
+            let reason = reason.unwrap_or_else(|| "it has no amounts (0.00), so there is nothing to post".to_string());
+            counts.not_imported += 1;
+            return Ok(Outcome { source_id: t.source_id, entry_id: None, posted_as: "NOT_IMPORTED", fallback_reason: Some(reason), entries: 0 });
+        }
         let entry = post(tx, t, describe(t), &t.lines, EntrySource::Journal).await.map_err(|e| format!("{e} (imported {})", describe(t)))?;
         counts.journal_entries += 1;
         counts.fell_back += reason.is_some() as i64;

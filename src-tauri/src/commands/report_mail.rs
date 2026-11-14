@@ -145,6 +145,11 @@ fn schedule_words(s: &Schedule) -> &'static str {
 /// minutes while LocalBooks is open; without an open company it does nothing.
 pub async fn run_due_schedules(app: &AppHandle) {
     let Some(db) = app.try_state::<Db>() else { return };
+    // As for fetching payouts: reports are only emailed while someone who may change the books is
+    // signed in (or the file has no users), never from a file nobody has signed in to.
+    if !crate::payout_feeds::may_auto_fetch(&db).await {
+        return;
+    }
     let pool = db.pool().await;
     let today = Local::now().date_naive();
     let due = match report_schedules::due(&pool, today).await {

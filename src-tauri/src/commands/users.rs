@@ -251,6 +251,8 @@ pub(super) async fn complete_sign_in(app: &AppHandle, db: &Db, session: Session,
     // As in QuickBooks, each user's desktop is their own: theirs reopens, not the last user's windows.
     windows::restore_on_next_load(app, true);
     signed_in_changed(app);
+    // An encrypted company is locked until now, so its daily backup could not run earlier.
+    super::company_files::auto_backup_soon(app);
     Ok(user)
 }
 

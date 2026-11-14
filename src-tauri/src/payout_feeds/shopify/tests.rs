@@ -190,6 +190,15 @@ async fn a_shopify_payout_is_recorded_as_a_gross_deposit_that_lands_at_the_net()
     assert!(requests.lock().unwrap().iter().all(|r| r.contains("/graphql.json")), "only the store's Admin API");
     assert_eq!(crate::payout_feeds::fetch(&pool, &store, &apis, f.id, now).await.unwrap().new_payouts, 0, "a payout is kept once");
 
+    // The store address is in the company file. Changed there to another host (one the table's own
+    // check lets through), the feed is refused before anything is sent: the token never leaves.
+    let asked = requests.lock().unwrap().len();
+    sqlx::query("UPDATE payout_feeds SET account_ref = 'evil.example/x?.myshopify.com' WHERE id = ?1").bind(f.id).execute(&pool).await.unwrap();
+    let err = crate::payout_feeds::fetch(&pool, &store, &apis, f.id, now).await.unwrap_err();
+    assert!(err.starts_with("PAYOUT_SHOP"), "{err}");
+    assert_eq!(requests.lock().unwrap().len(), asked, "nothing was sent");
+    sqlx::query("UPDATE payout_feeds SET account_ref = 'quill-studio.myshopify.com' WHERE id = ?1").bind(f.id).execute(&pool).await.unwrap();
+
     let listed = list_payouts(&pool, f.id).await.unwrap();
     assert_eq!(listed.len(), 1, "the scheduled payout and the one before the 90 days aren't kept");
     assert_eq!((listed[0].processor_payout_id.as_str(), listed[0].net_cents, listed[0].gross_cents), ("501", 24_305, 30_000));

@@ -330,6 +330,25 @@ pub fn stage_attachment(outgoing_dir: &Path, file_name: &str, bytes: &[u8]) -> R
     Ok(staged.remove(0))
 }
 
+/// A file name safe to write inside a staging folder: the last part of `name` (after any `/` or
+/// `\`), without characters file systems refuse, never empty, `.` or `..`.
+pub fn staged_name(name: &str) -> String {
+    let last = name.rsplit(['/', '\\']).next().unwrap_or("");
+    let cleaned: String = last.chars().map(|c| if c.is_control() || matches!(c, ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c }).collect();
+    let trimmed = cleaned.trim().trim_start_matches('.').trim_end_matches(['.', ' ']).trim_start();
+    // Keep the extension when a long name is cut.
+    let (stem, ext) = match trimmed.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() && ext.chars().count() <= 10 => (stem, format!(".{ext}")),
+        _ => (trimmed, String::new()),
+    };
+    let stem: String = stem.chars().take(120).collect();
+    if stem.is_empty() {
+        format!("attachment{ext}")
+    } else {
+        format!("{stem}{ext}")
+    }
+}
+
 /// Stages several files for one message in one fresh folder, as [`stage_attachment`] does. A name
 /// already used in the folder gets " (2)", " (3)" and so on before its extension.
 pub fn stage_files(outgoing_dir: &Path, files: &[(&str, &[u8])]) -> Result<Vec<PathBuf>, String> {
@@ -340,6 +359,9 @@ pub fn stage_files(outgoing_dir: &Path, files: &[(&str, &[u8])]) -> Result<Vec<P
     std::fs::create_dir_all(&dir).map_err(|e| format!("MAIL_STAGE: cannot create {}: {e}", dir.display()))?;
     let mut paths: Vec<PathBuf> = Vec::with_capacity(files.len());
     for (name, bytes) in files {
+        // An attachment's name is stored in the company file, which may have come from someone
+        // else: it is only ever a name inside `dir`, never a path out of it.
+        let name = &staged_name(name);
         let mut path = dir.join(name);
         let mut n = 2;
         while paths.contains(&path) {

@@ -167,3 +167,24 @@ async fn sends_the_pdf_through_the_server() {
     .unwrap_err();
     assert!(off.starts_with("SMTP_OFF"));
 }
+
+/// Settings are checked when saved, but they live in the company file, which can be changed
+/// outside Tillhouse or come from someone else. Sending checks them again: a server with a user
+/// name and no encryption is refused before the saved password is read.
+#[tokio::test]
+async fn settings_changed_in_the_file_are_checked_again_before_sending() {
+    let pool = test_pool().await;
+    let secrets = store("tampered");
+    save_settings(&pool, &secrets, account(), Some("app-password".into())).await.unwrap();
+    let tampered = serde_json::to_string(&SmtpSettings { security: Security::None, host: "smtp.example.com".into(), ..account() }).unwrap();
+    sqlx::query("UPDATE system_preferences SET value = ?2 WHERE key = ?1").bind(SETTINGS_KEY).bind(tampered).execute(&pool).await.unwrap();
+
+    let err = send(
+        &pool,
+        &secrets,
+        Outgoing { to: vec!["a@x.com".into()], subject: "s".into(), body: "b".into(), file_name: "f.pdf".into(), pdf: vec![], more: Vec::new() },
+    )
+    .await
+    .unwrap_err();
+    assert!(err.starts_with("SMTP_INSECURE"), "{err}");
+}

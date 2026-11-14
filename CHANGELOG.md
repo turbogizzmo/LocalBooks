@@ -6,6 +6,33 @@ becomes its release notes on GitHub and in the app's update window (see
 
 ## [Unreleased]
 
+- **Daily backups now cover every company.** The automatic backup used to run only when Tillhouse
+  started, so a company you opened afterwards, or one that asks for a password, was never backed
+  up automatically. It now also runs when a company opens and when you sign in. Each company is
+  backed up once a day and keeps its own copies: backing up one company no longer skips another
+  that day or removes its backups. Automatic backups made before this update are left in the
+  backups folder; remove them yourself when you no longer need them.
+- **Safer after an interrupted restore.** If the computer lost power or Tillhouse was closed at the
+  wrong moment during a restore, condense or turning encryption on or off, the next start could
+  open an empty company. It now puts your books back.
+- **Imports no longer stop on a 0.00 transaction.** An IIF, QIF or report file with a voided check
+  or a 0.00 split used to fail with "line has neither a debit nor a credit" and import nothing.
+  Those rows are now left out, and the import tells you how many.
+- **Closed periods stay closed for credits.** Applying a credit memo or vendor credit, or taking
+  one back, with a date on or before the closing date is now refused, as other changes are.
+- **Inventory adjustments are not edited as journal entries.** The Journal Entries list offered
+  Edit on an inventory adjustment, a Clean Up Books match and an account merge; saving the edit
+  left stock on hand, the match or the merge out of step with the ledger. Void them and enter
+  them again from their own screens instead.
+- **Security: attachment names.** A file attached to a transaction is sent with its form by its
+  name, and a company file from someone else could carry a name that put the file somewhere else
+  on your computer when you emailed the form through your mail app. Names are now always kept
+  inside Tillhouse's own outgoing folder.
+- **Security: saved keys and passwords.** A Shopify payout feed checks its store address again
+  each time it fetches, so a changed company file can't send your key elsewhere. Scheduled
+  reports are emailed only while someone who may change the books is signed in, and never
+  through a server set to send a password without encryption.
+
 ## [0.16.3]
 
 - **Bill freight and other charges on to a job.** A discount or charge under the lines of a bill,

@@ -347,3 +347,45 @@ async fn costs_round_without_drift_and_rules_hold() {
         .unwrap_err()
         .starts_with("STOCK_ALREADY_TRACKED"));
 }
+
+/// An inventory adjustment is a journal entry with stock behind it. Editing it as a plain journal
+/// entry would void the stock and repost only the ledger lines, so the Journal Entries list does
+/// not offer to, and the edit is refused.
+#[tokio::test]
+async fn an_inventory_adjustment_is_not_edited_as_a_plain_journal_entry() {
+    let s = shop().await;
+    let obe: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Opening Balance Equity'").fetch_one(&s.pool).await.unwrap();
+    adjust(
+        &s.pool,
+        &AdjustInput {
+            item_id: s.item,
+            date: "2026-04-01".parse().unwrap(),
+            qty_change_e4: 100_000,
+            total_cost_cents: Some(10_000),
+            offset_account_id: obe,
+            memo: Some("Opening stock".into()),
+        },
+    )
+    .await
+    .unwrap();
+    let entry: i64 =
+        sqlx::query_scalar("SELECT journal_entry_id FROM stock_ledger_entries WHERE journal_entry_id IS NOT NULL").fetch_one(&s.pool).await.unwrap();
+
+    let listed = crate::ledger::list_journal_entries(&s.pool, 50).await.unwrap();
+    let row = listed.iter().find(|e| e.id == entry).expect("the adjustment is in the journal");
+    assert_eq!((row.source_type.as_str(), row.is_manual), ("JOURNAL", false));
+
+    let retyped = crate::ledger::JournalEntry {
+        id: None,
+        date: "2026-04-01".parse().unwrap(),
+        description: "Opening stock, reworded".into(),
+        lines: vec![crate::ledger::JournalLine::debit(s.inventory, 10_000), crate::ledger::JournalLine::credit(obe, 10_000)],
+        currency: None,
+    };
+    let err = crate::edits::replace_journal_entry(&s.pool, entry, retyped).await.unwrap_err();
+    assert!(err.starts_with("EDIT_NOT_MANUAL"), "{err}");
+    // Stock and the ledger still agree.
+    let on_hand = item(&s.pool, s.item).await;
+    assert_eq!(on_hand.qty_on_hand_e4, 100_000);
+    assert_eq!(gl(&s.pool, s.inventory).await, 10_000);
+}
