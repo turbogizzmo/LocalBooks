@@ -572,7 +572,7 @@ zeroize 1.9.1  [Apache-2.0 OR MIT]  https://github.com/RustCrypto/utils
 zerotrie 0.2.5  [Unicode-3.0]  https://github.com/unicode-org/icu4x
 zerovec 0.11.8  [Unicode-3.0]  https://github.com/unicode-org/icu4x
 zerovec-derive 0.11.6  [Unicode-3.0]  https://github.com/unicode-org/icu4x
-zip 9.3.0  [MIT]  https://github.com/zip-rs/zip2
+zip 9.4.0  [MIT]  https://github.com/zip-rs/zip2
 zlib-rs 0.6.8  [Zlib]  https://github.com/trifectatechfoundation/zlib-rs
 zmij 1.0.23  [MIT]  https://github.com/dtolnay/zmij
 zopfli 0.8.4  [Apache-2.0]  https://github.com/zopfli-rs/zopfli
@@ -15407,7 +15407,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
------ Used by: spin 0.9.9 (LICENSE), zip 9.3.0 (LICENSE) -----
+----- Used by: spin 0.9.9 (LICENSE), zip 9.4.0 (LICENSE) -----
 
 The MIT License (MIT)
 
