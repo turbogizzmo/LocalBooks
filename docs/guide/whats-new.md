@@ -4,6 +4,15 @@ The newest changes first, in plain words, with a link to the steps for each. Til
 new version when it starts (or check in **Settings › Updates**). The full list, including fixes, is in
 the [release notes](https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md).
 
+## 0.16.3
+
+- **Bill freight and other charges on to a job**: a charge line on a bill, check or expense can
+  name a Customer:Job and be marked billable, then shows in Sales › Bill Costs.
+- **QuickBooks Desktop files come in more completely**: more transactions and item quantities
+  import, and the import says when part of a file can't be read.
+  [What a company file brings over](desktop-migration.md#what-a-company-file-brings-over)
+- **Security**: a newer SQLite database engine (3.54.1) inside Tillhouse.
+
 ## 0.16.2
 
 - **Mac: Tillhouse in your Applications folder.** A copy updated from LocalBooks renames itself to

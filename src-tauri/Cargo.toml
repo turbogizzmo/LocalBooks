@@ -1,6 +1,6 @@
 [package]
 name = "localbooks"
-version = "0.16.2"
+version = "0.16.3"
 description = "Tillhouse: local-first double-entry accounting"
 edition = "2021"
 license = "MIT"
