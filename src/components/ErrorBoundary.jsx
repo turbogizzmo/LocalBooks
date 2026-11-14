@@ -10,7 +10,9 @@ import { crashDetails, crashLogLine } from '../lib/crash.js';
  * draws the window afresh and **Close window** closes it. Around the whole app, the only way on is
  * to reload. What was typed into the failed screen is gone either way, and the message says so.
  *
- * `where`: what failed, in words ("the Invoices window"), for the message and the diagnostics log.
+ * `where`: what failed, in words ("the Invoices window"), for the message and Copy details. It
+ * can hold a record's name (a window opened on a customer is titled with it), so it never goes to
+ * the diagnostics log: `logWhere` does, a page id from `logPlace` or fixed text.
  */
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -27,7 +29,7 @@ export default class ErrorBoundary extends Component {
     this.setState({ details: crashDetails(where, error, info?.componentStack) });
     // The log holds no business data: the kind of error and the components, not its message.
     try {
-      api.logScreenError(crashLogLine(where, error, info?.componentStack)).catch(() => {});
+      api.logScreenError(crashLogLine(this.props.logWhere ?? 'app', error, info?.componentStack)).catch(() => {});
     } catch {
       // Outside the app shell there is no log to write to.
     }

@@ -130,6 +130,8 @@ fn every_window_and_the_app_are_drawn_inside_an_error_boundary() {
     assert!(before.rfind("</ErrorBoundary>").is_none_or(|closed| closed < opened), "the boundary is still open where the screen is drawn");
     assert!(after.contains("</ErrorBoundary>"), "and closes after it");
     assert!(before[opened..].contains("onClose="), "a window's boundary can close its window");
+    // The diagnostics log holds no business data, and a window's title can be a customer's name.
+    assert!(before[opened..].contains("logWhere={logPlace(w.view)}"), "the log is given the window's page id, not its title");
 
     let main = squeezed(read("main.jsx"));
     assert_eq!(main.matches("root.render(").count(), 1, "one place draws the app");
@@ -138,6 +140,7 @@ fn every_window_and_the_app_are_drawn_inside_an_error_boundary() {
     assert!(boundary < drawn.find("{screen}").expect("the screen is drawn"), "the boundary is around the screen");
 
     let boundary = read("components/ErrorBoundary.jsx");
+    assert!(!squeezed(boundary.clone()).contains("crashLogLine(where"), "the window's title never goes to the log");
     for needed in ["getDerivedStateFromError", "componentDidCatch", "crashLogLine", "role=\"alert\""] {
         assert!(boundary.contains(needed), "ErrorBoundary.jsx has {needed}");
     }

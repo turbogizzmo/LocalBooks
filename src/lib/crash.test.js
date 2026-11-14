@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { componentTrail, crashDetails, crashLogLine, LOG_LIMIT } from './crash.js';
+import { componentTrail, crashDetails, crashLogLine, logPlace, LOG_LIMIT } from './crash.js';
 
 const STACK = '\n    at InvoiceList (http://localhost/src/components/Invoices.jsx:781:3)\n    at Invoices\n    at Screen\n    at ChildFrame';
 
@@ -26,8 +26,8 @@ test('details cope with something thrown that is not an Error', () => {
 
 test('the log line leaves the message out: it can quote what was on the screen', () => {
   const error = new RangeError('Invalid amount for customer Acme Roofing: 12,50');
-  const line = crashLogLine('window Invoices', error, STACK);
-  assert.equal(line, 'window Invoices: RangeError in InvoiceList < Invoices < Screen < ChildFrame');
+  const line = crashLogLine(logPlace('sales/invoices'), error, STACK);
+  assert.equal(line, 'window sales/invoices: RangeError in InvoiceList < Invoices < Screen < ChildFrame');
   assert.ok(!line.includes('Acme'));
 });
 
@@ -35,4 +35,16 @@ test('the log line is one line and bounded', () => {
   const line = crashLogLine(`window ${'x'.repeat(5000)}\nsecond`, new Error('e'), STACK);
   assert.ok(line.length <= LOG_LIMIT);
   assert.ok(!line.includes('\n'));
+});
+
+test('the log names the page, not the window title, which can be a customer or an invoice', () => {
+  // A window opened on a record is titled "Invoice 1001 · Acme Roofing"; its page is sales/invoices.
+  const win = { view: 'sales/invoices', content: { name: 'Invoice 1001 · Acme Roofing' } };
+  const line = crashLogLine(logPlace(win.view), new Error('x'), STACK);
+  assert.ok(line.startsWith('window sales/invoices: Error'));
+  assert.ok(!line.includes('Acme') && !line.includes('1001'));
+  assert.equal(logPlace('accounting/chart-of-accounts'), 'window accounting/chart-of-accounts');
+  assert.equal(logPlace(undefined), 'window');
+  assert.equal(logPlace('sales/inv oices\n<b>'), 'window sales/invoicesb');
+  assert.ok(logPlace('x'.repeat(500)).length <= 'window '.length + 60);
 });

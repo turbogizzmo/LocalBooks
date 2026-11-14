@@ -53,7 +53,7 @@ function start() {
       <React.StrictMode>
         {/* A failure outside any one window (the menus, the sidebar, the sign-in screen) says so
             and offers a reload, instead of leaving a blank window. */}
-        <ErrorBoundary where="its main window">
+        <ErrorBoundary where="its main window" logWhere="app">
           {screen}
           {screen.type !== OpeningScreen && <OpeningOverlay />}
         </ErrorBoundary>
