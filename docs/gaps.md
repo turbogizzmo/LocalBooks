@@ -6,7 +6,8 @@ columns below in this order, so tools can read it.
 
 - **id:** stable; never reuse one. `R*` rows come from `docs/requirements-gap-review.md` (its
   summary number), `A*` rows from the 2026-10-26 architecture audit (`A23` on: the 2026-11-14
-  code review of 0.16.3), `T*` rows from testers' feedback on how the screens work.
+  code review of 0.16.3), `T*` rows from testers' feedback on how the screens work, `C*` rows from
+  the 2026-11-28 code comparison with two other local-first desktop accounting apps.
 - **status:** `open`, `partial`, `in-progress` (claimed by an open PR), `done` (link the PR), or
   `wontfix` (say why in the notes).
 - **size:** S ≈ a day or two, M ≈ a week, L ≈ several weeks, XL ≈ a project of its own.
@@ -38,7 +39,7 @@ re-check one against the code before you start it.
 | R12 | done (#247) | S–M | No crash reporting or diagnostics bundle (no telemetry) | Help › Save diagnostics writes a local bundle (logs, versions, no business data) the user can send |
 | R13 | partial | M | Updates: no rollback; macOS not notarized; Windows not signed | Previous version can be reinstalled from the app; installers are signed and notarized |
 | R14 | done (#292) | L | Accountant workflows: no Accountant's Copy or review mode | An accountant can work on a copy and the changes merge back with an audit record (`accountants_copy::tests`; design in `docs/plans/accountants-copy.md`). Not in it: an External Accountant user role and a closing-date exceptions report, now row R25 |
-| R15 | wontfix | XL | Multi-user access (one user at a time by design) | Revisit only if testers ask; would change the storage model |
+| R15 | wontfix | XL | Multi-user access (one user at a time by design) | Revisit only if testers ask; would change the storage model. The 2026-11-28 comparison found one comparable app that offers a multi-user server mode from the same install |
 | R16 | done (#254) | M | Payroll: nothing posts a payroll service's results | Imports a payroll service's journal export into balanced entries (`payroll_import::tests`) |
 | R17 | done (#250) | M | Tax software export (TXF / tax-line mapping) | Accounts map to tax lines; TXF export imports into a tax program. Done: TXF v042 for Schedule C (`txf::tests`); TXF defines no codes for 1065/1120-S/1120/990 returns, so those export the Income Tax Summary instead |
 | R18 | done (#107) | L | No condensing or archiving of old years | Old years condense to opening balances with an archive copy; reports from the archive still tie out. Done by Condense Data: monthly summaries rather than one opening entry, checked against the archive before it switches (`condense::tests`); see `docs/plans/condense-old-years.md` |
@@ -134,6 +135,31 @@ re-check one against the code before you start it.
 | T83 | done (this PR) | M | Editing a posted invoice voided it and posted the corrected one under the next number, because the voided original kept its number and numbers were unique; a customer then saw a new number for the same sale | An edited invoice keeps its number, also when part-paid; numbers are unique among invoices no edit has replaced (migration 0162) (`doc_numbers::tests::an_edited_invoice_keeps_its_number_and_a_duplicate_takes_the_next`, `a_part_paid_invoice_keeps_its_number_and_its_payment_when_edited`). Sales orders are changed in place and keep theirs; estimates, sales receipts and credit memos have no edit |
 | T75 | done (#400) | S | Approval rules now hold a bill made from a purchase order (Create Bill), but the PO's bill dialog can't submit it for approval: the person enters the bill in Enter Bills and closes the purchase order by hand, so nothing links the approved bill to the order | When an approval rule holds a bill from a purchase order, Create Bill submits it for approval; approving it posts the bill and marks the order billed with the bill's id; rejecting it leaves the order open |
 | T84 | done (#424, migration 0178) | S | A purchase form's discount and charge lines have no Customer:Job or Billable column, so freight on a bill can't be billed on to a job (Sales › Bill Costs lists split lines only), and the Item column of custom reports is blank for discount and charge lines on sales and purchase forms (`custom_reports::ITEM_LINES` reads only the item tables). Found while closing T21 | A charge line on a bill can name a Customer:Job and be marked billable, then appears in Bill Costs; a custom report by item lists the discount and charge items' lines |
+
+## Compared with other apps (2026-11-28)
+
+Features found in the code of two other local-first desktop accounting apps that LocalBooks lacks.
+Gaps the comparison confirmed but that already have a row are not repeated: 1099 forms (R10),
+sales tax by agency (R11), multi-user access (R15), report coverage (T9). Each row was checked
+against the README and a search of `src-tauri/src`, not a full read; re-check before starting.
+
+Suggested order, judged against what the project is for (replacing a desktop accounting program,
+with ledger integrity and reading its files as the strengths): C9 and C7 first, then C6 and C3;
+C2 and C8 later. C1, C4, C5 and C10 are `wontfix` for now, each with its reason and what would
+reopen it.
+
+| id | status | size | gap | accept |
+|---|---|---|---|---|
+| C1 | wontfix | XL | No payroll: no paychecks, withholding, employer taxes or payroll forms (W-2, 940, 941) | Not planned: withholding tables change every year for every state and errors carry real liability. R16 (import a payroll service's journal) is the fitting answer. Revisit only if testers can't work with a payroll service |
+| C2 | open | L | Later: no fixed asset register or depreciation: the starter charts have the accounts, but nothing tracks an asset's cost, in-service date, method and life or posts its depreciation | An asset posts a depreciation entry per period by its method; a schedule report's accumulated total equals the Accumulated Depreciation balance; disposing of an asset posts the gain or loss |
+| C3 | open | M | No progress invoicing: an estimate becomes one invoice for its whole amount, so it can't be invoiced in parts | An estimate is invoiced by percentage or by line in several invoices, the remainder is tracked, and Progress Invoices vs. Estimates shows each part |
+| C4 | wontfix | L | No nonprofit support: no net assets with and without donor restrictions, no statement of functional expenses, no pledges | Not planned: a separate market, and class tracking covers most small nonprofits. Revisit if nonprofit testers ask |
+| C5 | wontfix | M | Migration covers QuickBooks, QIF and GnuCash only: exports from Xero, Sage 50, MYOB, Wave and Zoho Books are not read | Not planned: the project exists to replace a desktop program. Revisit if testers arrive from one of these products |
+| C6 | open | M | QuickBooks Online comes in only as Journal or General Ledger reports, which lose document detail and payment links; the Export data archive of workbooks is not read | The export archive imports invoices, bills and payments as documents with their links, and balances match the source's Balance Sheet |
+| C7 | open | S–M | No one-step tie-out of subledgers to the ledger: nothing compares A/R aging, A/P aging and inventory valuation with their control accounts and lists the differences (Verify ledger integrity checks entries, Clean Up Books compares inventory only) | A check reports each control account's balance beside its subledger total, lists the transactions behind any difference, and a test seeds a difference and finds it |
+| C8 | open | M | Later: invoices carry no way to pay online (card or bank payment link); off by default if built, since it sends data to a processor | With a processor turned on, an emailed invoice has a payment link and the payment is recorded against the invoice; with it off, nothing is sent and no secret is stored outside the OS credential store |
+| C9 | open | S | Docs disagree with the product: R18 is `open` although Condense Data ships (README feature table), and README Known limitations says the `.qbw` import reads invoice line items only, which may predate the fuller decoder | R18's status matches the code, and each line of README Known limitations is re-checked against the code or a test |
+| C10 | wontfix | L | Construction job costing: no cost codes, change orders, pay applications with a schedule of values, or retainage (split from C3) | Not planned: specific to one trade. Revisit if a tester in construction asks; C3 comes first |
 
 ## Engineering (from the 2026-10-26 audit)
 
